@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>DF Download Manager</title>
+
+    <link rel="stylesheet" href="styles/style.css" />
+    <script defer src="js/script.js"></script>
+  </head>
+  <!-- 
+    This HTML is terrible but I don't have much time so just need something that will work
+  -->
+  <body>
+    <h1>DF Downloader</h1>
+    <div class="download-management">
+      <h2 class="heading-secondary">Download Content</h2>
+      <form
+        class="df-download-add"
+        id="addContent"
+        action="/addContent"
+        method="post"
+      >
+        <input
+          type="text"
+          id="contentName"
+          name="contentName"
+          placeholder="Enter DF content name or URL here"
+          required
+        />
+        <input type="submit" />
+      </form>
+    </div>
+    <div class="settings">
+      <h2 class="heading-secondary">Set session ID</h2>
+      <p class="note">
+        Note: You can find this in DigitalFoundry cookies under sessionid (not
+        session_id)
+      </p>
+      <form
+        class="df-download-update-sessionid"
+        id="updateSessionId"
+        action="/updateSessionId"
+        method="post"
+      >
+        <input
+          type="text"
+          id="sessionId"
+          name="sessionId"
+          placeholder="Enter DF login session id here"
+          required
+        />
+        <input type="submit" />
+      </form>
+    </div>
+  </body>
+</html>

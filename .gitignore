@@ -1,0 +1,6 @@
+*.env
+node_modules
+config
+dist
+*.bat
+update_remote.sh
