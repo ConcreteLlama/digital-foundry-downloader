@@ -88,9 +88,9 @@ export class DigitalFoundryFetcher {
     const mediaInfos = videoInfoElements.map((videoInfoElement): MediaInfo => {
       const duration = this.getBody(".duration", videoInfoElement);
       const size = this.getBody(".size", videoInfoElement);
-      const videoEncoding = this.getBody("encoding_video", videoInfoElement);
-      const mediaType = this.getBody("name", videoInfoElement) || "";
-      const audioEncoding = this.getBody("encoding_audio", videoInfoElement);
+      const videoEncoding = this.getBody(".encoding_video", videoInfoElement);
+      const mediaType = this.getBody(".name", videoInfoElement) || "";
+      const audioEncoding = this.getBody(".encoding_audio", videoInfoElement);
       const aElements = CSSSelect.selectAll("a", videoInfoElement);
       let url: string | undefined = undefined;
       for (const aElement of aElements) {
