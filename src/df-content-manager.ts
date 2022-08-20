@@ -109,7 +109,7 @@ export class DigitalFoundryContentManager {
               this.logger.log(LogLevel.DEBUG, `File moved from ${downloadLocation} to ${destination}`);
             }
             await this.dfMetaInjector.setDate(destination, dfContent.publishedDate);
-            fs.appendFileSync(this.ignoreFileLocation, `${dfContent.name}`);
+            fs.appendFileSync(this.ignoreFileLocation, `\n${dfContent.name}`);
             this.ignoreSet.add(dfContent.name);
             pendingInfo!.contentStatus = ContentStatus.DONE;
             this.pendingContent.delete(dfContent.name);
@@ -143,7 +143,7 @@ export class DigitalFoundryContentManager {
     if (config.ignoreOldContentOnFirstRun) {
       if (!fs.existsSync(this.ignoreFileLocation)) {
         // TODO: Switch to fetching historical from
-        const contentList = (await this.dfFetcher.fetchFeed()).map(({ link }) => sanitizeContentName(link)).sort();
+        const contentList = (await this.dfFetcher.fetchFeed()).map(({ link }) => sanitizeContentName(link)).reverse();
         this.logger.log(
           LogLevel.INFO,
           `First run - IGNORE_OLD_CONTENT set, adding ${contentList.length} videos to ignore list`
