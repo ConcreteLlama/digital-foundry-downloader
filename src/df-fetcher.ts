@@ -16,7 +16,7 @@ type PageMeta = {
   publishedDate: Date;
   tags: string[];
   title: string;
-  description: string;
+  // description: string;
 };
 type FeedResult = {
   title: string;
@@ -52,7 +52,6 @@ export class DigitalFoundryFetcher {
   extractMeta(elements: Element[]): PageMeta {
     const toReturn: PageMeta = {
       title: "",
-      description: "",
       publishedDate: new Date(),
       tags: [],
     };
@@ -63,8 +62,6 @@ export class DigitalFoundryFetcher {
           element.attribs["content"] && toReturn.publishedDate === new Date(Date.parse(element.attribs["content"]));
         } else if (prop === "article:tag") {
           toReturn.tags.push(element.attribs["content"]);
-        } else if (prop === "og:description") {
-          toReturn.description = element.attribs["content"];
         } else if (prop === "og:title") {
           toReturn.title = element.attribs["content"];
         }
@@ -84,6 +81,8 @@ export class DigitalFoundryFetcher {
     const dom = htmlparser2.parseDocument(response.body);
     const metaElements = CSSSelect.selectAll("meta", dom);
     const meta = this.extractMeta(metaElements.filter((element) => element instanceof Element) as Element[]);
+    const description =
+      this.getBody("p", CSSSelect.selectOne("#content_above .article .article_body .article_body_content", dom)) || "";
     const videoInfoElements = CSSSelect.selectAll("#content_above .article .article_body .video_data_file", dom);
     const mediaInfos = videoInfoElements.map((videoInfoElement): MediaInfo => {
       const duration = this.getBody(".duration", videoInfoElement);
@@ -108,7 +107,7 @@ export class DigitalFoundryFetcher {
         url,
       };
     });
-    return new DfContent(name, meta.title, meta.description, mediaInfos, meta.publishedDate, meta.tags);
+    return new DfContent(name, meta.title, description, mediaInfos, meta.publishedDate, meta.tags);
   }
 
   extractMormontMeta(document: string) {
