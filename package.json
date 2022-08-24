@@ -8,7 +8,7 @@
     "test": "echo \"Error: no test specified\" && exit 1",
     "watch": "tsc --watch",
     "build": "tsc",
-    "dev": "env-cmd -f dev.env nodemon dist/index.js"
+    "dev": "env-cmd -f dev.env nodemon --watch dist dist/index.js"
   },
   "author": "",
   "license": "ISC",
@@ -19,6 +19,8 @@
     "ffmpeg-static": "5.0.0",
     "got": "12.0.2",
     "htmlparser2": "7.2.0",
+    "lodash": "^4.17.21",
+    "lowdb": "^3.0.0",
     "mv": "2.1.1",
     "pretty-bytes": "6.0.0",
     "utimes": "5.1.1"
@@ -29,6 +31,7 @@
     "@types/ffmpeg-static": "3.0.1",
     "@types/fluent-ffmpeg": "2.1.20",
     "@types/got": "9.6.12",
+    "@types/lodash": "^4.14.184",
     "@types/mv": "2.1.2",
     "@types/shell-escape": "0.2.0",
     "env-cmd": "10.1.0",

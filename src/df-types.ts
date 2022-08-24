@@ -19,6 +19,7 @@ export class DfContent {
     public title: string,
     public description: string | undefined,
     public mediaInfo: MediaInfo[],
+    public dataPaywalled: boolean,
     publishedDate?: Date,
     public tags?: string[]
   ) {

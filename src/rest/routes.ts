@@ -1,8 +1,7 @@
-import path, { dirname } from "path";
 import express, { Request, Response } from "express";
-import { DigitalFoundryContentManager, sanitizeContentName } from "./df-content-manager.js";
-import { Logger, LogLevel } from "./logger.js";
-import { Config } from "./config.js";
+import { Config } from "../config/config.js";
+import { DigitalFoundryContentManager, sanitizeContentName } from "../df-content-manager.js";
+import { LogLevel } from "../logger.js";
 
 export function makeRoutes(config: Config, contentManager: DigitalFoundryContentManager) {
   const logger = config.logger;

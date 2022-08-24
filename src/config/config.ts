@@ -1,12 +1,12 @@
 import {
-  ensureDirectory,
   ensureEnvBoolean,
   ensureEnvInteger,
   ensureEnvString,
   ensureEnvStringArray,
   ScoreMap,
-} from "./helper.js";
-import { Logger, LogLevel } from "./logger.js";
+} from "../utils/env-utils.js";
+import { Logger, LogLevel } from "../logger.js";
+import { ensureDirectory } from "../utils/file-utils.js";
 
 const logLevelStr = process.env.LOG_LEVEL || "DEBUG";
 const logLevel = LogLevel[<keyof typeof LogLevel>logLevelStr];
@@ -26,9 +26,9 @@ const maxSimultaneousDownloads = ensureEnvInteger("MAX_SIMULTANEOUS_DOWNLOADS");
 const downloadDelay = ensureEnvInteger("DOWNLOAD_DELAY", 60000);
 const httpPort = ensureEnvInteger("HTTP_PORT", 44556);
 const httpEnabled = ensureEnvBoolean("HTTP_ENABLED", true);
-const checkInterval = ensureEnvInteger("CONTENT_CHECK_INTERVAL", 60000);
-if (checkInterval < 30000) {
-  throw new Error("Check interval is too low - must be at least 30000");
+const contentCheckInterval = ensureEnvInteger("CONTENT_CHECK_INTERVAL", 60000);
+if (contentCheckInterval < 30000) {
+  throw new Error("Content check interval is too low - must be at least 30000");
 }
 
 const mediaTypeScores = ensureEnvStringArray("MEDIA_TYPE_PRIORITIES", [
@@ -54,7 +54,7 @@ export const config = {
   mediaTypeScoreMap,
   failureRetryIntervalBase: 60000,
   maxRetries: 10,
-  checkInterval,
+  contentCheckInterval,
 };
 
 export type Config = typeof config;

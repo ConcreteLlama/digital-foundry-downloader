@@ -3,8 +3,8 @@ import { DfContent } from "./df-types.js";
 import { exec } from "child_process";
 import ffmpegPath from "ffmpeg-static";
 import { utimes } from "utimes";
-import { Config } from "./config.js";
-import { moveFile } from "./helper.js";
+import { Config } from "./config/config.js";
+import { moveFile } from "./utils/file-utils.js";
 import { Logger, LogLevel } from "./logger.js";
 
 let filenameIter = 0;

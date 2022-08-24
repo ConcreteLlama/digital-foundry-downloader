@@ -1,6 +1,6 @@
 *.env
 node_modules
-config
+/config
 dist
 *.bat
 update_remote.sh

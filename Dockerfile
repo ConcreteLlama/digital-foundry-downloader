@@ -19,7 +19,9 @@ COPY package*.json ./
 RUN npm install
 
 # Bundle app source
-COPY . .
+COPY src ./src
+COPY public ./public
+COPY tsconfig.json ./
 
 RUN npm run build
 

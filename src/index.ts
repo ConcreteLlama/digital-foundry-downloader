@@ -1,12 +1,15 @@
-import { config } from "./config.js";
+import { config } from "./config/config.js";
 import { DigitalFoundryContentManager } from "./df-content-manager.js";
 import { AllNotifications, DfNotificationType, LoggerDfNotifier, PushBulletNotifier } from "./df-notifier.js";
-import { ensureEnvStringArray } from "./helper.js";
+import { ensureEnvStringArray } from "./utils/env-utils.js";
 import { LogLevel } from "./logger.js";
-import { makeRoutes } from "./routes.js";
+import { makeRoutes } from "./rest/routes.js";
+import { DfLowDb } from "./db/df-operational-db-lowdb.js";
 
 async function start() {
-  const dfVideoManager = new DigitalFoundryContentManager(config);
+  const db = await DfLowDb.create();
+  const firstRun = await db.init();
+  const dfVideoManager = new DigitalFoundryContentManager(config, db);
   const loggerNotifier = new LoggerDfNotifier(config, LogLevel.INFO, ...AllNotifications);
   dfVideoManager.addNotifier(loggerNotifier);
 
@@ -26,7 +29,7 @@ async function start() {
   if (config.httpEnabled) {
     makeRoutes(config, dfVideoManager);
   }
-  dfVideoManager.start();
+  await dfVideoManager.start(firstRun);
 }
 
 start();

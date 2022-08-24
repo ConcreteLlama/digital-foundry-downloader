@@ -1,5 +1,5 @@
 import got from "got";
-import { Config } from "./config.js";
+import { Config } from "./config/config.js";
 import { DfContent, MediaInfo } from "./df-types.js";
 import { DownloadProgressReport, downloadProgressToString } from "./downloader.js";
 import { Logger, LogLevel } from "./logger.js";
@@ -10,6 +10,8 @@ export enum DfNotificationType {
   DOWNLOAD_STARTING,
   NEW_CONTENT_DETECTED,
   DOWNLOAD_QUEUED,
+  USER_NOT_SIGNED_IN,
+  USER_SIGNED_IN,
 }
 
 export const AllNotifications: DfNotificationType[] = [
@@ -18,6 +20,8 @@ export const AllNotifications: DfNotificationType[] = [
   DfNotificationType.DOWNLOAD_STARTING,
   DfNotificationType.NEW_CONTENT_DETECTED,
   DfNotificationType.DOWNLOAD_QUEUED,
+  DfNotificationType.USER_NOT_SIGNED_IN,
+  DfNotificationType.USER_SIGNED_IN,
 ];
 
 export abstract class DfNotifier {
@@ -53,6 +57,17 @@ export abstract class DfNotifier {
       this.notifyDownloadQueued(...args);
     }
   }
+  userNotSignedIn(): void {
+    if (this.subscribedNotifications.has(DfNotificationType.USER_NOT_SIGNED_IN)) {
+      this.notifyUserNotSignedIn();
+    }
+  }
+  userSignedIn(username: string, tier: string): void {
+    if (this.subscribedNotifications.has(DfNotificationType.USER_SIGNED_IN)) {
+      this.notifyUserSignedIn(username, tier);
+    }
+  }
+
   abstract downloadProgressUpdate(
     dfContent: DfContent,
     mediaInfo: MediaInfo,
@@ -64,6 +79,8 @@ export abstract class DfNotifier {
   abstract notifyNewContentDetected(contentName: string): void;
   abstract notifyDownloadQueued(dfContent: DfContent): void;
   abstract downloadEnded(dfContentName: string): void;
+  abstract notifyUserNotSignedIn(): void;
+  abstract notifyUserSignedIn(username: string, tier: string): void;
 
   toSummary(dfContent: DfContent, mediaInfo: MediaInfo) {
     return `Title:       ${dfContent.title}
@@ -103,6 +120,12 @@ export class LoggerDfNotifier extends DfNotifier {
     this.logger.log(this.logLevel, `Download ${dfContent.name}} progress: ${downloadProgressToString(progressUpdate)}`);
   }
   downloadEnded(dfContentName: string): void {}
+  notifyUserNotSignedIn(): void {
+    this.logger.log(this.logLevel, `User not signed in`);
+  }
+  notifyUserSignedIn(username: string, tier: string): void {
+    this.logger.log(this.logLevel, `DF Downloader user signed in. Username: ${username} Tier: ${tier}`);
+  }
 }
 
 export class PushBulletNotifier extends DfNotifier {
@@ -179,5 +202,21 @@ export class PushBulletNotifier extends DfNotifier {
   downloadProgressUpdate(dfContent: DfContent, mediaInfo: MediaInfo, progressUpdate: DownloadProgressReport): void {}
   downloadEnded(dfContentName: string): void {
     this.contentMap.delete(dfContentName);
+  }
+  notifyUserNotSignedIn(): void {
+    this.sendPush(
+      "",
+      `DF Downloader User not signed in`,
+      "User not signed in on DF downloader - likely sessionid expired",
+      false
+    );
+  }
+  notifyUserSignedIn(username: string, tier: string): void {
+    this.sendPush(
+      "",
+      `DF Downloader User signed in`,
+      `DF Downloader user signed in. Username: ${username} Tier: ${tier}`,
+      false
+    );
   }
 }
