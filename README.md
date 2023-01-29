@@ -2,7 +2,7 @@
 
 DF Downloader is an application designed to download the latest Digital Foundry videos when they are available. This will only work in any useful manner if you are a Patreon subscriber.
 
-_NOTE - It's pretty likely there will be some bugs, I rapidly updated this when the DF site changed but right now it certainly seems to be working_
+_NOTE - This is a personal project that I developed for my own use and has been consistently working for me for some time. I thought I'd put it out there as I found it so useful. I don't get much time to actually work on it but try to keep it updated if it breaks or doesn't work quite as expected._
 
 # Features
 
@@ -11,12 +11,12 @@ _NOTE - It's pretty likely there will be some bugs, I rapidly updated this when 
 - Has a download queue to limit the number of simultaneous downloads
 - If a download fails, it will attempt to continue from the point it failed (e.g. if 50% through will continue from 50%)
 - Can send pushbullet notifications when various events occur
-- Has a really terrible web UI for adding videos manually and updating the sessionid cookie (won't persist on a restart), I just knocked something together to be functional for my own personal use
+- Has a really terrible web UI for adding videos manually and updating the sessionid cookie (won't persist on a restart), I just knocked something together so I can easily add videos that are either old or didn't show in the feed.
+- Stores download history in a very simple "DB" using lowdb (so basically it just writes to a JSON file) so it doesn't keep redownloading the same content on restart.
 
 # Limitations
 
-- Can't login using Patreon credentials - you have to go to the DF website in your browser and get the sessionid cookie
-- There's no database backing this and it tracks whether or not you've downloaded something in a really basic way - by appending to a file
+- Can't login using Patreon credentials - you have to go to the DF website in your browser and get the sessionid cookie - however this does seem to last indefinitely unless you log in from somewhere else.
 - There are some unhandled promise rejections. If you run on a version of node that explodes when this happens without the appropriate flags set, this could be a problem. For the record I've been running this on node 14.
 
 ## Configuration
@@ -31,7 +31,7 @@ See dev.env.sample for a list of configurable options
 
 **REQUIRED**
 
-Your session ID cookie. I haven't implemented Patreon login, so you'll have to use your browser, login to digitalfoundry.net then use your browser's dev tools to grab your sessionid cookie. Seems to expire after about 2 weeks.
+Your session ID cookie. I haven't implemented Patreon login, so you'll have to use your browser, login to digitalfoundry.net then use your browser's dev tools to grab your sessionid cookie. ~~Seems to expire after about 2 weeks.~~
 
 ### DESTINATION_DIR
 
@@ -43,7 +43,7 @@ The path to move the downloaded and tagged media to once it's finished
 
 **REQUIRED**
 
-This is currently only used for the ignorelist.
+Currently the only thing stored here is the DB json.
 
 ### MAX_SIMULTANEOUS_DOWNLOADS
 
@@ -97,7 +97,7 @@ Set the log level. Valid levels (although not all are used) are:
 
 DEFAULT: HEVC,h.264 (4K),h.264 (1080p),h.264,MP3
 
-Sets media type priorities. It'll always download SOMETHING if it's available but this is the priority (from highest to lowest). In the below example, HEVC is the most preferred media type.
+Sets media type priorities. It'll always download _something_ if it's available but this is the priority (from highest to lowest). In the below example, HEVC is the most preferred media type.
 
 ```
 MEDIA_TYPE_PRIORITIES=HEVC,h.264
@@ -172,3 +172,15 @@ Usage:
 ```
 ./update_container.sh "concretellama/df-downloader-node" "127.0.0.1:5000"
 ```
+
+If like me you run this in a container on a server and you're using an insecure local registry, don't forget to add your local registry to the list of insecure registries in your docker daemon config json (/etc/docker/daemon.json).
+
+```
+{
+   "insecure-registries": [
+     "<server_ip>:5000"
+   ]
+}
+```
+
+In the case of Unraid, that file will not persist on restart.
