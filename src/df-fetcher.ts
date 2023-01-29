@@ -1,6 +1,6 @@
 import * as CSSSelect from "css-select";
 import { Document, Element } from "domhandler";
-import got from "got";
+import got, { HTTPError } from "got";
 import htmlparser2 from "htmlparser2";
 import { config } from "./config/config.js";
 import { UserInfo } from "./db/df-operational-db.js";
@@ -15,10 +15,9 @@ type PageMeta = {
   title: string;
   // description: string;
 };
-type FeedResult = {
+type ContentReference = {
   title: string;
   link: string;
-  pubDate: Date;
 };
 //TODO: Make this configurable
 const progressReportInterval = 60000;
@@ -99,7 +98,7 @@ export async function downloadMedia(dfContent: DfContent, mediaInfo: MediaInfo, 
   return downloadDestination;
 }
 
-export async function fetchFeed() {
+export async function fetchFeedContentList() {
   const response = await got.get(`${dfBaseUrl}/feed`, {
     headers: {
       ...makeAuthHeaders(),
@@ -114,11 +113,69 @@ export async function fetchFeed() {
       arr.push({
         link: cur.link!,
         title: cur.title!,
-        pubDate: cur.pubDate!,
       });
     }
     return arr;
-  }, [] as FeedResult[]);
+  }, [] as ContentReference[]);
+}
+
+export async function fetchArchiveContentList(from: number = 1, to: number = Infinity) {
+  const fullContentList: ContentReference[] = [];
+  let page = from;
+  while (page <= to) {
+    try {
+      const pageContentList = await fetchArchivePageContentList(page);
+      if (!pageContentList || pageContentList.length === 0) {
+        return fullContentList;
+      }
+      fullContentList.push(...pageContentList);
+      page++;
+    } catch (e) {
+      logger.log(LogLevel.ERROR, `Unexpected HTTP error when fetching archive page content list page ${page}`, e);
+      return fullContentList;
+    }
+  }
+  return fullContentList;
+}
+
+export async function fetchArchivePageContentList(page: number = 1) {
+  logger.log(LogLevel.VERBOSE, `Fetching list archive page ${page}`);
+  const archivePageUrl = `${dfBaseUrl}/archive?page=${page}`;
+  let response;
+  try {
+    response = await got.get(archivePageUrl, {
+      headers: {
+        ...makeAuthHeaders(),
+      },
+    });
+  } catch (e) {
+    if (e instanceof HTTPError) {
+      if (e.response.statusCode === 404) {
+        logger.log(LogLevel.INFO, `No archive content on page ${page} - must have reached end of content list`);
+      } else {
+        logger.log(LogLevel.ERROR, "Unexpected HTTP error when fetching archive page content list", e);
+      }
+      return [];
+    }
+    logger.log(LogLevel.ERROR, "Unexpected error when fetching archive page content list", e);
+    return [];
+  }
+  const dom = htmlparser2.parseDocument(response.body);
+  const contentList = CSSSelect.selectAll(".archive_list > .summary_list li > .summary > a", dom);
+  return contentList.reduce((toReturn, current) => {
+    if (!(current instanceof Element)) {
+      return toReturn;
+    }
+    const { href, title } = current.attribs;
+    if (!href || !title) {
+      return toReturn;
+    }
+    toReturn.push({
+      title,
+      link: href,
+    });
+    return toReturn;
+  }, [] as ContentReference[]);
 }
 
 export async function getMediaInfo(name: string): Promise<DfContent> {

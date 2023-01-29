@@ -1,6 +1,6 @@
 import Queue from "better-queue";
 import { Config, config } from "./config/config.js";
-import { downloadMedia, fetchFeed, getMediaInfo } from "./df-fetcher.js";
+import { downloadMedia, fetchArchivePageContentList, getMediaInfo } from "./df-fetcher.js";
 import { DfMetaInjector } from "./df-mpeg-meta.js";
 import { DfNotifier } from "./df-notifier.js";
 import { DfContent, MediaInfo } from "./df-types.js";
@@ -152,7 +152,7 @@ export class DigitalFoundryContentManager {
 
   async start(firstRun: boolean) {
     if (config.ignoreOldContentOnFirstRun && firstRun) {
-      const contentList = (await fetchFeed()).map(({ link }) => sanitizeContentName(link)).reverse();
+      const contentList = (await fetchArchivePageContentList()).map(({ link }) => sanitizeContentName(link)).reverse();
       await this.db.ignoreContents(contentList);
     }
     this.logger.log(
@@ -162,7 +162,7 @@ export class DigitalFoundryContentManager {
 
     const downloadFromFeed = async () => {
       await this.dfUserManager.checkUserInfo();
-      const available = await fetchFeed();
+      const available = await fetchArchivePageContentList();
       const ignored = await this.db.getIgnoredInfos(available.map((item) => sanitizeContentName(item.link)));
       const toDownload = available.filter((item, index) => !ignored[index]);
       for (const content of toDownload) {
