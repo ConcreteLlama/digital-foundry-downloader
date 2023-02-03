@@ -3,11 +3,12 @@ import { Document, Element } from "domhandler";
 import got, { HTTPError } from "got";
 import htmlparser2 from "htmlparser2";
 import { config } from "./config/config.js";
-import { UserInfo } from "./db/df-operational-db.js";
-import { DfContent, MediaInfo } from "./df-types.js";
+import { DfContent, MediaInfo, UserInfo } from "./df-types.js";
 import { download, ProgressListener } from "./downloader.js";
 import { LogLevel } from "./logger.js";
+import { sanitizeContentName } from "./utils/df-utils.js";
 import { getBody } from "./utils/dom-utils.js";
+import { extractFilenameFromUrl, fileSizeStringToBytes } from "./utils/file-utils.js";
 
 type PageMeta = {
   publishedDate: Date;
@@ -15,12 +16,13 @@ type PageMeta = {
   title: string;
   // description: string;
 };
-type ContentReference = {
+export type DfContentReference = {
   title: string;
+  name: string;
   link: string;
+  thumbnail: string;
 };
-//TODO: Make this configurable
-const progressReportInterval = 60000;
+
 const dfBaseUrl = "https://www.digitalfoundry.net";
 const logger = config.logger;
 
@@ -34,7 +36,7 @@ function extractMeta(elements: Element[]): PageMeta {
     if (element instanceof Element) {
       const prop = element.attribs["property"];
       if (prop === "article:published_time") {
-        element.attribs["content"] && toReturn.publishedDate === new Date(Date.parse(element.attribs["content"]));
+        if (element.attribs["content"]) toReturn.publishedDate = new Date(Date.parse(element.attribs["content"]));
       } else if (prop === "article:tag") {
         toReturn.tags.push(element.attribs["content"]);
       } else if (prop === "og:title") {
@@ -109,38 +111,59 @@ export async function fetchFeedContentList() {
     return [];
   }
   return feed.items.reduce((arr, cur) => {
+    const thumbnail = cur.media.find((item) => item.type === "image/jpeg")?.url || "";
     if (cur.link && cur.title && cur.pubDate) {
       arr.push({
         link: cur.link!,
+        name: sanitizeContentName(cur.link!),
         title: cur.title!,
+        thumbnail,
       });
     }
     return arr;
-  }, [] as ContentReference[]);
+  }, [] as DfContentReference[]);
 }
 
 export async function fetchArchiveContentList(from: number = 1, to: number = Infinity) {
-  const fullContentList: ContentReference[] = [];
+  const fullContentList: DfContentReference[] = [];
+  await forEachArchivePage(
+    (contentReferences) => {
+      fullContentList.push(...contentReferences);
+      return true;
+    },
+    to,
+    from
+  );
+}
+
+export async function forEachArchivePage<T>(
+  fn: (contentReferences: DfContentReference[], pageIdx: number) => boolean | Promise<boolean>,
+  from: number = 1,
+  to: number = Infinity
+) {
   let page = from;
   while (page <= to) {
     try {
       const pageContentList = await fetchArchivePageContentList(page);
       if (!pageContentList || pageContentList.length === 0) {
-        return fullContentList;
+        return;
       }
-      fullContentList.push(...pageContentList);
+      const cont = await fn(pageContentList, page);
+      if (!cont) {
+        return;
+      }
       page++;
     } catch (e) {
       logger.log(LogLevel.ERROR, `Unexpected HTTP error when fetching archive page content list page ${page}`, e);
-      return fullContentList;
+      return;
     }
   }
-  return fullContentList;
 }
 
 export async function fetchArchivePageContentList(page: number = 1) {
-  logger.log(LogLevel.VERBOSE, `Fetching list archive page ${page}`);
   const archivePageUrl = `${dfBaseUrl}/archive?page=${page}`;
+  logger.log(LogLevel.VERBOSE, `Fetching list archive page ${page}: ${archivePageUrl}`);
+
   let response;
   try {
     response = await got.get(archivePageUrl, {
@@ -161,21 +184,26 @@ export async function fetchArchivePageContentList(page: number = 1) {
     return [];
   }
   const dom = htmlparser2.parseDocument(response.body);
-  const contentList = CSSSelect.selectAll(".archive_list > .summary_list li > .summary > a", dom);
+  const contentList = CSSSelect.selectAll(".archive_list > .summary_list li", dom);
   return contentList.reduce((toReturn, current) => {
-    if (!(current instanceof Element)) {
+    const summaryElement = CSSSelect.selectOne(".summary > a", current);
+    if (!(summaryElement instanceof Element)) {
       return toReturn;
     }
-    const { href, title } = current.attribs;
+    const thumbElement = CSSSelect.selectOne(".thumbnail > img", current);
+    const thumbnail = thumbElement instanceof Element ? thumbElement.attribs.src : "";
+    const { href, title } = summaryElement.attribs;
     if (!href || !title) {
       return toReturn;
     }
     toReturn.push({
       title,
       link: href,
+      name: sanitizeContentName(href),
+      thumbnail,
     });
     return toReturn;
-  }, [] as ContentReference[]);
+  }, [] as DfContentReference[]);
 }
 
 export async function getMediaInfo(name: string): Promise<DfContent> {
@@ -194,9 +222,15 @@ export async function getMediaInfo(name: string): Promise<DfContent> {
   const article = CSSSelect.selectOne("#content_above .article", dom);
   const dataPaywalled = (article as Element).attribs["data-paywalled"] === "false" ? false : true;
   const videoInfoElements = CSSSelect.selectAll(".article_body .video_data_file", article);
-  const mediaInfos = videoInfoElements.map((videoInfoElement): MediaInfo => {
+  const mediaInfos: MediaInfo[] = [];
+  for (const videoInfoElement of videoInfoElements) {
     const duration = getBody(".duration", videoInfoElement);
-    const size = getBody(".size", videoInfoElement);
+    let size = getBody(".size", videoInfoElement);
+    try {
+      fileSizeStringToBytes(size!);
+    } catch (e) {
+      size = "0";
+    }
     const videoEncoding = getBody(".encoding_video", videoInfoElement);
     const mediaType = getBody(".name", videoInfoElement) || "";
     const audioEncoding = getBody(".encoding_audio", videoInfoElement);
@@ -208,15 +242,18 @@ export async function getMediaInfo(name: string): Promise<DfContent> {
         if (href) url = href;
       }
     }
-    return {
+    if (!url || extractFilenameFromUrl(url).trim().length === 0) {
+      continue;
+    }
+    mediaInfos.push({
       duration,
       size,
       mediaType,
       videoEncoding,
       audioEncoding,
       url,
-    };
-  });
+    });
+  }
   return new DfContent(name, meta.title, description, mediaInfos, dataPaywalled, meta.publishedDate, meta.tags);
 }
 

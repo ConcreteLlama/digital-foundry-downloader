@@ -1,10 +1,11 @@
+import "reflect-metadata";
 import { config } from "./config/config.js";
+import { DfLowDb } from "./db/df-operational-db-lowdb.js";
 import { DigitalFoundryContentManager } from "./df-content-manager.js";
 import { AllNotifications, DfNotificationType, LoggerDfNotifier, PushBulletNotifier } from "./df-notifier.js";
-import { ensureEnvStringArray } from "./utils/env-utils.js";
 import { LogLevel } from "./logger.js";
 import { makeRoutes } from "./rest/routes.js";
-import { DfLowDb } from "./db/df-operational-db-lowdb.js";
+import { ensureEnvStringArray } from "./utils/env-utils.js";
 
 async function start() {
   const db = await DfLowDb.create();
@@ -31,5 +32,4 @@ async function start() {
   }
   await dfVideoManager.start(firstRun);
 }
-
 start();

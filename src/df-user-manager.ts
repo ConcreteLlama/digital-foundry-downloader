@@ -1,6 +1,7 @@
-import { DfDownloaderOperationalDb, UserInfo } from "./db/df-operational-db.js";
-import { getUserInfo } from "./df-fetcher.js";
 import _ from "lodash";
+import { DfDownloaderOperationalDb } from "./db/df-operational-db.js";
+import { getUserInfo } from "./df-fetcher.js";
+import { UserInfo } from "./df-types.js";
 
 export type UserTierChangeListener = (newTier: string) => void | Promise<void>;
 

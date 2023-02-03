@@ -1,4 +1,5 @@
 import got from "got";
+import prettyBytes from "pretty-bytes";
 import { Config } from "./config/config.js";
 import { DfContent, MediaInfo } from "./df-types.js";
 import { DownloadProgressReport, downloadProgressToString } from "./downloader.js";
@@ -30,7 +31,14 @@ export abstract class DfNotifier {
     this.subscribedNotifications = new Set<DfNotificationType>(subscribedNotifications);
   }
 
-  downloadComplete(...args: [dfContent: DfContent, mediaInfo: MediaInfo, fileLocation: string]): void {
+  downloadComplete(
+    ...args: [
+      dfContent: DfContent,
+      mediaInfo: MediaInfo,
+      fileLocation: string,
+      finalProgressReport: DownloadProgressReport | undefined
+    ]
+  ): void {
     if (this.subscribedNotifications.has(DfNotificationType.DOWNLOAD_COMPLETE)) {
       this.notifyDownloadComplete(...args);
     }
@@ -73,7 +81,12 @@ export abstract class DfNotifier {
     mediaInfo: MediaInfo,
     progressUpdate: DownloadProgressReport
   ): void;
-  abstract notifyDownloadComplete(dfContent: DfContent, mediaInfo: MediaInfo, fileLocation: string): void;
+  abstract notifyDownloadComplete(
+    dfContent: DfContent,
+    mediaInfo: MediaInfo,
+    fileLocation: string,
+    currentProgress: DownloadProgressReport | undefined
+  ): void;
   abstract notifyDownloadFailed(dfContent: DfContent, err: any): void;
   abstract notifyDownloadStarting(dfContent: DfContent, mediaInfo: MediaInfo): void;
   abstract notifyNewContentDetected(contentName: string): void;
@@ -82,12 +95,17 @@ export abstract class DfNotifier {
   abstract notifyUserNotSignedIn(): void;
   abstract notifyUserSignedIn(username: string, tier: string): void;
 
-  toSummary(dfContent: DfContent, mediaInfo: MediaInfo) {
-    return `Title:       ${dfContent.title}
-Published:   ${dfContent.publishedDate}
-Media type:  ${mediaInfo.mediaType}
-Size:        ${mediaInfo.size}
-Description: ${dfContent.description}`;
+  toSummary(dfContent: DfContent, mediaInfo: MediaInfo, finalProgressReport?: DownloadProgressReport) {
+    let toReturn = `Title:          ${dfContent.title}
+Published:      ${dfContent.publishedDate}
+Media type:     ${mediaInfo.mediaType}
+Size:           ${mediaInfo.size}
+Description:    ${dfContent.description};`;
+    if (finalProgressReport) {
+      toReturn += `
+Average speed:  ${prettyBytes(finalProgressReport.averageBytesPerSecond)}/s`;
+    }
+    return toReturn;
   }
 }
 
@@ -98,10 +116,19 @@ export class LoggerDfNotifier extends DfNotifier {
     this.logger = config.logger;
   }
 
-  notifyDownloadComplete(dfContent: DfContent, mediaInfo: MediaInfo, fileLocation: string): void {
+  notifyDownloadComplete(
+    dfContent: DfContent,
+    mediaInfo: MediaInfo,
+    fileLocation: string,
+    finalProgressReport: DownloadProgressReport | undefined
+  ): void {
     this.logger.log(
       this.logLevel,
-      `Download success ${dfContent.name}, downloaded to ${fileLocation}:\n\n${this.toSummary(dfContent, mediaInfo)}`
+      `Download success ${dfContent.name}, downloaded to ${fileLocation}:\n\n${this.toSummary(
+        dfContent,
+        mediaInfo,
+        finalProgressReport
+      )}`
     );
   }
   notifyDownloadFailed(dfContent: DfContent, err: any): void {
@@ -117,7 +144,7 @@ export class LoggerDfNotifier extends DfNotifier {
     this.logger.log(this.logLevel, `Download queued for ${dfContent.name}}`);
   }
   downloadProgressUpdate(dfContent: DfContent, mediaInfo: MediaInfo, progressUpdate: DownloadProgressReport): void {
-    this.logger.log(this.logLevel, `Download ${dfContent.name}} progress: ${downloadProgressToString(progressUpdate)}`);
+    this.logger.log(this.logLevel, `Download ${dfContent.name} progress: ${downloadProgressToString(progressUpdate)}`);
   }
   downloadEnded(dfContentName: string): void {}
   notifyUserNotSignedIn(): void {
@@ -168,11 +195,20 @@ export class PushBulletNotifier extends DfNotifier {
       });
   }
 
-  notifyDownloadComplete(dfContent: DfContent, mediaInfo: MediaInfo, fileLocation: string): void {
+  notifyDownloadComplete(
+    dfContent: DfContent,
+    mediaInfo: MediaInfo,
+    fileLocation: string,
+    finalProgressReport: DownloadProgressReport | undefined
+  ): void {
     this.sendPush(
       dfContent.name,
       `DF Downloaded: ${dfContent.title}`,
-      `${dfContent.name}, downloaded to ${fileLocation}:\n\n${this.toSummary(dfContent, mediaInfo)}`,
+      `${dfContent.name}, downloaded to ${fileLocation}:\n\n${this.toSummary(
+        dfContent,
+        mediaInfo,
+        finalProgressReport
+      )}`,
       false
     );
     this.contentMap.delete(dfContent.name);

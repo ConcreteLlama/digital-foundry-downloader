@@ -1,5 +1,11 @@
-export function ensureEnvString(envName: string, defaultVal?: string) {
-  return ensureEnvVar(envName, defaultVal);
+export function ensureEnvString(envName: string, defaultVal?: string, validOptions?: string[] | readonly any[]) {
+  const toReturn = ensureEnvVar(envName, defaultVal);
+  if (validOptions) {
+    if (!validOptions.includes(toReturn)) {
+      throw new Error(`${toReturn} is not a valid option for ${envName} - valid options are ${validOptions}`);
+    }
+  }
+  return toReturn;
 }
 
 export function ensureEnvVar<T>(envName: string, defaultVal?: T) {
@@ -27,12 +33,22 @@ export function ensureEnvBoolean(envName: string, defaultVal?: boolean) {
   return envVar;
 }
 
-export function ensureEnvStringArray(envName: string, defaultVal?: string[]) {
+export function ensureEnvStringArray(envName: string, defaultVal?: string[], validOptions?: string[]) {
   const envVar = ensureEnvVar(envName, defaultVal);
+  let toReturn: string[];
   if (typeof envVar === "string") {
-    return envVar.split(",").map((value) => value.trim());
+    toReturn = envVar.split(",").map((value) => value.trim());
+  } else {
+    toReturn = envVar;
   }
-  return envVar;
+  if (validOptions) {
+    toReturn.forEach((val) => {
+      if (!validOptions.includes(val)) {
+        throw new Error(`${val} is not a valid option for ${envName} - valid options are ${validOptions}`);
+      }
+    });
+  }
+  return toReturn;
 }
 
 export function ensureEnvInteger(envName: string, defaultVal?: number) {

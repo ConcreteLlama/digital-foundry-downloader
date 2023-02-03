@@ -1,3 +1,5 @@
+import { ContentListFetchMode, ContentListFetchModes } from "../df-types.js";
+import { Logger, LogLevel } from "../logger.js";
 import {
   ensureEnvBoolean,
   ensureEnvInteger,
@@ -5,7 +7,6 @@ import {
   ensureEnvStringArray,
   ScoreMap,
 } from "../utils/env-utils.js";
-import { Logger, LogLevel } from "../logger.js";
 import { ensureDirectory } from "../utils/file-utils.js";
 
 const logLevelStr = process.env.LOG_LEVEL || "DEBUG";
@@ -19,7 +20,6 @@ const workDir = process.env.WORK_DIR || "work_dir";
 ensureDirectory(workDir);
 const destinationDir = ensureEnvString("DESTINATION_DIR");
 ensureDirectory(destinationDir);
-const ignoreOldContentOnFirstRun = ensureEnvBoolean("IGNORE_OLD_CONTENT", true);
 const configDir = ensureEnvString("CONFIG_DIR");
 ensureDirectory(configDir);
 const maxSimultaneousDownloads = ensureEnvInteger("MAX_SIMULTANEOUS_DOWNLOADS");
@@ -40,12 +40,21 @@ const mediaTypeScores = ensureEnvStringArray("MEDIA_TYPE_PRIORITIES", [
 ]);
 const mediaTypeScoreMap = new ScoreMap(mediaTypeScores);
 
+const contentListSource = ensureEnvString(
+  "CONTENT_LIST_SOURCE",
+  "ARCHIVE",
+  ContentListFetchModes
+) as ContentListFetchMode;
+
+const maxArchiveDepth = ensureEnvInteger("MAX_ARCHIVE_DEPTH", Infinity);
+
+const scanForExistingFiles = ensureEnvBoolean("SCAN_FOR_EXISTING_FILES", true);
+
 export const config = {
   logger,
   sessionId,
   workDir,
   destinationDir,
-  ignoreOldContentOnFirstRun,
   configDir,
   maxSimultaneousDownloads,
   downloadDelay,
@@ -55,6 +64,9 @@ export const config = {
   failureRetryIntervalBase: 60000,
   maxRetries: 10,
   contentCheckInterval,
+  contentListSource,
+  maxArchiveDepth,
+  scanForExistingFiles,
 };
 
 export type Config = typeof config;

@@ -1,7 +1,11 @@
 import express, { Request, Response } from "express";
 import { Config } from "../config/config.js";
-import { DigitalFoundryContentManager, sanitizeContentName } from "../df-content-manager.js";
+import { DigitalFoundryContentManager } from "../df-content-manager.js";
+import { ContentInfoStatus, DfContentInfo } from "../df-types.js";
 import { LogLevel } from "../logger.js";
+import { sanitizeContentName } from "../utils/df-utils.js";
+import { queryParamToInteger, queryParamToString, queryParamToStringArray } from "../utils/query-utils.js";
+import { secondsToHHMMSS } from "../utils/time-utils.js";
 
 export function makeRoutes(config: Config, contentManager: DigitalFoundryContentManager) {
   const logger = config.logger;
@@ -31,7 +35,39 @@ export function makeRoutes(config: Config, contentManager: DigitalFoundryContent
     return res.send(Array.from(pendingContent.values()));
   });
 
-  app.post("/addContent", async (req: Request, res: Response) => {
+  app.get("/queryContent", async (req: Request, res: Response) => {
+    const query = req.query;
+    const limit = queryParamToInteger(query.limit);
+    const page = queryParamToInteger(query.page);
+    const status = queryParamToStringArray(query.status)?.map(
+      (value) => ContentInfoStatus[value as keyof typeof ContentInfoStatus]
+    );
+    const tags = queryParamToStringArray(query.tags);
+    const search = queryParamToString(query.search);
+    const result = await contentManager.db.query({
+      page,
+      limit,
+      status,
+      tags,
+      search,
+    });
+    return res.send({
+      params: result.params,
+      resultsOnPage: result.queryResult.length,
+      pageDuration: secondsToHHMMSS(DfContentInfo.getTotalDuration(result.queryResult)),
+      totalResults: result.totalResults,
+      totalDuration: secondsToHHMMSS(result.totalDurationSeconds),
+      content: result.queryResult,
+    });
+  });
+
+  app.get("/tags", async (req: Request, res: Response) => {
+    return res.send({
+      tags: await contentManager.db.getAllTags(),
+    });
+  });
+
+  app.post("/downloadContent", async (req: Request, res: Response) => {
     let contentName: string = req.body.contentName;
     if (!contentName) {
       return res.status(400).send({
@@ -39,7 +75,7 @@ export function makeRoutes(config: Config, contentManager: DigitalFoundryContent
       });
     }
     contentName = sanitizeContentName(contentName);
-    logger.log(LogLevel.INFO, `addContent ${req.body.contentName} - ${contentName}`);
+    logger.log(LogLevel.INFO, `downloadContent ${req.body.contentName} - ${contentName}`);
     try {
       const contentInfo = await contentManager.getContent(contentName);
       return res.send(contentInfo);

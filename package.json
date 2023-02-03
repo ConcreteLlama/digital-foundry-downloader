@@ -14,6 +14,8 @@
   "license": "ISC",
   "dependencies": {
     "better-queue": "3.8.10",
+    "chalk": "^5.2.0",
+    "class-transformer": "^0.5.1",
     "css-select": "4.2.1",
     "express": "^4.18.1",
     "ffmpeg-static": "5.0.0",
@@ -23,6 +25,7 @@
     "lowdb": "^3.0.0",
     "mv": "2.1.1",
     "pretty-bytes": "6.0.0",
+    "reflect-metadata": "^0.1.13",
     "utimes": "5.1.1"
   },
   "devDependencies": {

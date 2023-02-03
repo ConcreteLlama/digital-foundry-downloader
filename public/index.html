@@ -16,12 +16,7 @@
     <h1>DF Downloader</h1>
     <div class="download-management">
       <h2 class="heading-secondary">Download Content</h2>
-      <form
-        class="df-download-add"
-        id="addContent"
-        action="/addContent"
-        method="post"
-      >
+      <form class="df-download-add" id="downloadContent" action="/downloadContent" method="post">
         <input
           type="text"
           id="contentName"
@@ -34,23 +29,9 @@
     </div>
     <div class="settings">
       <h2 class="heading-secondary">Set session ID</h2>
-      <p class="note">
-        Note: You can find this in DigitalFoundry cookies under sessionid (not
-        session_id)
-      </p>
-      <form
-        class="df-download-update-sessionid"
-        id="updateSessionId"
-        action="/updateSessionId"
-        method="post"
-      >
-        <input
-          type="text"
-          id="sessionId"
-          name="sessionId"
-          placeholder="Enter DF login session id here"
-          required
-        />
+      <p class="note">Note: You can find this in DigitalFoundry cookies under sessionid (not session_id)</p>
+      <form class="df-download-update-sessionid" id="updateSessionId" action="/updateSessionId" method="post">
+        <input type="text" id="sessionId" name="sessionId" placeholder="Enter DF login session id here" required />
         <input type="submit" />
       </form>
     </div>

@@ -1,9 +1,9 @@
-import got, { Headers, Request, Response, Progress, OptionsInit } from "got";
+import got, { Headers, OptionsInit, Progress, Request, Response } from "got";
 import fs from "node:fs";
-import { Logger, LogLevel } from "./logger.js";
 import stream from "node:stream";
 import { promisify } from "node:util";
 import prettyBytes from "pretty-bytes";
+import { Logger, LogLevel } from "./logger.js";
 
 const pipeline = promisify(stream.pipeline);
 const truncate = promisify(fs.truncate);
@@ -16,6 +16,9 @@ export type DownloadProgressReport = {
   retries: number;
   percentComplete: number;
   bytesPerSecond: number;
+  startTime: Date;
+  durationMillis: number;
+  averageBytesPerSecond: number;
 };
 
 class DownloadProgress {
@@ -26,16 +29,24 @@ class DownloadProgress {
   totalBytes: number = 0;
   retries: number = 0;
 
+  startTime: Date = new Date();
+
   lastReportTime: Date = new Date();
   lastReportBytes: number = 0;
 
   generateProgressReport(): DownloadProgressReport {
+    const now = new Date();
+    const durationMillis = now.getTime() - this.startTime.getTime();
+    const averageBytesPerSecond = this.calculateBytesPerSecond(this.totalBytes, durationMillis);
     const toReturn = {
       totalBytesDownloaded: this.totalBytesDownloaded,
       totalBytes: this.totalBytes,
       retries: this.retries,
       percentComplete: this.getPercent(),
       bytesPerSecond: this.getBytesPerSecond(),
+      startTime: this.startTime,
+      durationMillis,
+      averageBytesPerSecond,
     };
     this.lastReportTime = new Date();
     this.lastReportBytes = this.totalBytesDownloaded;
@@ -47,8 +58,7 @@ class DownloadProgress {
       this.totalBytes = progress.total || 0;
     }
     this.currentAttemptBytesDownloaded = progress.transferred;
-    const currentDownlodedBytes =
-      this.currentAttemptBytesDownloaded + this.currentAttemptBaseBytes;
+    const currentDownlodedBytes = this.currentAttemptBytesDownloaded + this.currentAttemptBaseBytes;
     this.totalBytesDownloaded = currentDownlodedBytes;
   }
 
@@ -63,14 +73,16 @@ class DownloadProgress {
   }
 
   getBytesPerSecond() {
-    const bytesSinceLastUpdate =
-      this.totalBytesDownloaded - this.lastReportBytes;
-    const timeSinceLastUpdate =
-      new Date().getTime() - this.lastReportTime.getTime();
-    if (timeSinceLastUpdate === 0) {
+    const bytesSinceLastUpdate = this.totalBytesDownloaded - this.lastReportBytes;
+    const timeSinceLastUpdate = new Date().getTime() - this.lastReportTime.getTime();
+    return this.calculateBytesPerSecond(bytesSinceLastUpdate, timeSinceLastUpdate);
+  }
+
+  calculateBytesPerSecond(bytes: number, timeMillis: number) {
+    if (timeMillis === 0) {
       return 0;
     }
-    return (bytesSinceLastUpdate / timeSinceLastUpdate) * 1000;
+    return (bytes / timeMillis) * 1000;
   }
 }
 
@@ -117,10 +129,7 @@ export class DownloadInstance {
           },
         });
       stream.on("response", (res: Response) => {
-        this.logger.log(
-          LogLevel.DEBUG,
-          `Got response ${res.statusCode} ${JSON.stringify(res.headers)}`
-        );
+        this.logger.log(LogLevel.DEBUG, `Got response ${res.statusCode} ${JSON.stringify(res.headers)}`);
       });
       let lastProgressTime = 0;
       stream.on("downloadProgress", (progress: Progress) => {
@@ -134,25 +143,17 @@ export class DownloadInstance {
           lastProgressTime = now.getTime();
           this.logger.log(
             LogLevel.DEBUG,
-            `Download progress for ${this.url}: ${downloadProgressToString(
-              progressReport
-            )}`
+            `Download progress for ${this.url}: ${downloadProgressToString(progressReport)}`
           );
         }
       });
       stream.once(
         "retry",
-        (
-          retryCount: number,
-          error: any,
-          createRetryStream: (updatedOptions?: OptionsInit) => Request
-        ) => {
+        (retryCount: number, error: any, createRetryStream: (updatedOptions?: OptionsInit) => Request) => {
           this.currentProgress.retryAttempt();
           this.logger.log(
             LogLevel.INFO,
-            `Download retry for ${this.url}. ${downloadProgressToString(
-              this.currentProgress.generateProgressReport()
-            )}`
+            `Download retry for ${this.url}. ${downloadProgressToString(this.currentProgress.generateProgressReport())}`
           );
           this.downloadInternal(
             createRetryStream({
@@ -172,25 +173,15 @@ export class DownloadInstance {
       );
       stream.on("error", (e: any) => {
         reject(e);
-        this.logger.log(
-          LogLevel.ERROR,
-          `Download of ${this.url} to ${this.destination} failed:`,
-          e
-        );
+        this.logger.log(LogLevel.ERROR, `Download of ${this.url} to ${this.destination} failed:`, e);
       });
       stream.on("end", (e: any) => {
         resolve(this.destination);
-        this.logger.log(
-          LogLevel.INFO,
-          `Download of ${this.url} to ${this.destination} succeeded`
-        );
+        this.logger.log(LogLevel.INFO, `Download of ${this.url} to ${this.destination} succeeded`);
       });
       if (this.currentWriteStream) {
         this.currentWriteStream.destroy();
-        await truncate(
-          this.destination,
-          this.currentProgress.currentAttemptBaseBytes
-        );
+        await truncate(this.destination, this.currentProgress.currentAttemptBaseBytes);
         this.currentWriteStream = fs.createWriteStream(this.destination, {
           start: this.currentProgress.currentAttemptBaseBytes,
           flags: "r+",
@@ -203,32 +194,18 @@ export class DownloadInstance {
   }
 }
 
-export async function download(
-  logger: Logger,
-  url: string,
-  destination: string,
-  downloadOptions: DownloadOptions
-) {
-  const downloadInstance = new DownloadInstance(
-    logger,
-    url,
-    destination,
-    downloadOptions
-  );
+export async function download(logger: Logger, url: string, destination: string, downloadOptions: DownloadOptions) {
+  const downloadInstance = new DownloadInstance(logger, url, destination, downloadOptions);
   return await downloadInstance.download();
 }
 
-export function downloadProgressToString(
-  downloadProgress: DownloadProgressReport
-) {
+export function downloadProgressToString(downloadProgress: DownloadProgressReport) {
   return (
     `${(downloadProgress.percentComplete * 100).toFixed(2)}% (${prettyBytes(
       downloadProgress.totalBytesDownloaded
     )} / ${prettyBytes(downloadProgress.totalBytes)})` +
     ` ${prettyBytes(downloadProgress.bytesPerSecond)} per second${
-      downloadProgress.retries > 0
-        ? ` with ${downloadProgress.retries} retries`
-        : ""
+      downloadProgress.retries > 0 ? ` with ${downloadProgress.retries} retries` : ""
     }`
   );
 }

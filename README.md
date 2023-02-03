@@ -19,6 +19,70 @@ _NOTE - This is a personal project that I developed for my own use and has been 
 - Can't login using Patreon credentials - you have to go to the DF website in your browser and get the sessionid cookie - however this does seem to last indefinitely unless you log in from somewhere else.
 - There are some unhandled promise rejections. If you run on a version of node that explodes when this happens without the appropriate flags set, this could be a problem. For the record I've been running this on node 14.
 
+# Notes on behaviour
+
+On first run, this will scan the entire DF archive and build up a DB of all available content. On future runs, it will check every archive page at the beginning to see if it's missing anything. The first run can take quite a while - it does fetch multiple pages simultaenously but the last thing I want is for this tool to hammer the DF site unnecessarily. Maybe I've been a little over-cautious in this regard.
+
+Either way, currently the size of the DB after first run is upward of 3.5MB.
+
+If you want to limit the impact of this, set MAX_ARCHIVE_DEPTH
+
+It will also scan your destination dir for existing downloaded content. This behaviour can be disabled with SCAN_EXISTING_FILES=false
+
+# REST API
+
+Currently there's a very basic REST API that's not really properly utilised as I haven't had the time to develop a web frontend for this. However if you're interested:
+
+_Note: These are all liable to change_
+
+## GET /queryContent
+
+Gets a list of content from the DB. Valid URL parameters are:
+
+- limit: The maximum number of results
+- page: The page number (takes you to item page\*limit)
+- search: Search the titles for a given string. Case insensitive, partial match. e.g. "f irect" will get all DF Direct results
+- status: A list of valid statuses (AVAILABLE, CONTENT_PAYWALLED or DOWNLOADED). Either separated by a comma or by supplying the status query parameter multiple
+- times in the query string.
+- tags: A list of content tags to match. Either separated by a comma or by supplying the status query parameter multiple times in the query string.
+
+Returns JSON object with:
+
+- params: The params used for the search
+- resultsOnPage: Number of results on this page
+- pageDuration: Total duration of content on this page
+- totalResults: Total number of results that matched the query
+- totalDuration: Total duration of all results that matched the query
+- content: An array of all content that matched the query
+
+## GET /tags
+
+Returns a JSON object containing
+
+- tags: An array of objects containing the tag name ("tag") and number of content items with that tag ("count")
+
+## POST /downloadContent
+
+Starts downloading content with a given contentName (specified in request body), e.g.
+
+```
+{
+  "contentName": "free-download-gran-turismo-sport-hdr-sampler"
+}
+```
+
+Note that the full URL to the DF page can also be supplied, this will be sanitized on the backend.
+
+## POST /updateSessionId
+
+Updates the in-memory DF session ID (this will not persist on restart it's just there for convenience)
+
+```
+{
+  "sessionId": "<your session id here>"
+}
+```
+
 ## Configuration
 
 This is configured using environment variables. The reason for this is that it is designed to run in a container.
@@ -103,9 +167,18 @@ Sets media type priorities. It'll always download _something_ if it's available 
 MEDIA_TYPE_PRIORITIES=HEVC,h.264
 ```
 
-### IGNORE_OLD_CONTENT
+### MAX_ARCHIVE_DEPTH
 
-If set to true (which is the default), on first run (if ${CONFIG_DIR}/ignorelist.txt doesn't exist) the downloader will populate the ignore list with all existing DF videos to ensure it only fetches future videos. I highly recommend leaving this set to true and if you want to download older videos, have the downloader generate the list, manually remove the ones you want to download, then restart the downloader
+DEFAULT: Infinity
+
+Sets the maximum depth to go through the DF archive pages when scanning for content
+
+### SCAN_FOR_EXISTING_FILES
+
+DEFAULT: true
+
+Sets whether or not to scan your filesystem for existing files + update the db. If your destination is a network drive and you're
+experiencing a slow startup it's probably worth setting this to false.
 
 ### PUSHBULLET_API_KEY
 
