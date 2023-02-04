@@ -43,7 +43,7 @@ Gets a list of content from the DB. Valid URL parameters are:
 - page: The page number (takes you to item page\*limit)
 - search: Search the titles for a given string. Case insensitive, partial match. e.g. "f irect" will get all DF Direct results
 - status: A list of valid statuses (AVAILABLE, CONTENT_PAYWALLED or DOWNLOADED). Either separated by a comma or by supplying the status query parameter multiple
-- times in the query string.
+  times in the query string.
 - tags: A list of content tags to match. Either separated by a comma or by supplying the status query parameter multiple times in the query string.
 
 Returns JSON object with:
