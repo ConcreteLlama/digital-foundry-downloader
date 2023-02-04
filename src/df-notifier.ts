@@ -100,7 +100,7 @@ export abstract class DfNotifier {
 Published:      ${dfContent.publishedDate}
 Media type:     ${mediaInfo.mediaType}
 Size:           ${mediaInfo.size}
-Description:    ${dfContent.description};`;
+Description:    ${dfContent.description}`;
     if (finalProgressReport) {
       toReturn += `
 Average speed:  ${prettyBytes(finalProgressReport.averageBytesPerSecond)}/s`;
