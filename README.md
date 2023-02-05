@@ -29,59 +29,69 @@ If you want to limit the impact of this, set MAX_ARCHIVE_DEPTH
 
 It will also scan your destination dir for existing downloaded content. This behaviour can be disabled with SCAN_EXISTING_FILES=false
 
-# REST API
+## Installation
 
-Currently there's a very basic REST API that's not really properly utilised as I haven't had the time to develop a web frontend for this. However if you're interested:
+### Local
 
-_Note: These are all liable to change_
+Ensure you have npm installed. Then run
 
-## GET /queryContent
+```
+npm i
+```
 
-Gets a list of content from the DB. Valid URL parameters are:
+to install all modules then
 
-- limit: The maximum number of results
-- page: The page number (takes you to item page\*limit)
-- search: Search the titles for a given string. Case insensitive, partial match. e.g. "f irect" will get all DF Direct results
-- status: A list of valid statuses (AVAILABLE, CONTENT_PAYWALLED or DOWNLOADED). Either separated by a comma or by supplying the status query parameter multiple
-  times in the query string.
-- tags: A list of content tags to match. Either separated by a comma or by supplying the status query parameter multiple times in the query string.
+```
+npm run build
+```
 
-Returns JSON object with:
+to build the TypeScript ready to run
 
-- params: The params used for the search
-- resultsOnPage: Number of results on this page
-- pageDuration: Total duration of content on this page
-- totalResults: Total number of results that matched the query
-- totalDuration: Total duration of all results that matched the query
-- content: An array of all content that matched the query
+### In a Docker container
 
-## GET /tags
+If you have docker installed, you can run
 
-Returns a JSON object containing
+```
+docker build . -t  concretellama/df-downloader-node
+```
 
-- tags: An array of objects containing the tag name ("tag") and number of content items with that tag ("count")
+## Usage
 
-## POST /downloadContent
+### Running locally
 
-Starts downloading content with a given contentName (specified in request body), e.g.
+You can run it locally by setting all the config in dev.env then running:
+
+`npm run dev`
+
+### Running in docker
+
+Alternatively you can build this into a docker container and deploy it somewhere. Ensure you have volumes mapped for /config, /working_dir and /destination_dir and all environment variables setup.
+
+If you have docker ready to go then here's an example command to get you going (obviously replace all the paths with paths relevant to your setup):
+
+```
+docker run -d --env-file ./dev.env --env WORK_DIR=/working_dir --env DESTINATION_DIR=/destination_dir --env CONFIG_DIR=/config -v C:/Users/concretellama/Downloads:/working_dir -v C:/Users/concretellama/Videos:/destination_dir -v C:/Users/concretellama/df-downloader/config:/config docker.io/concretellama/df-downloader-node
+```
+
+I've also supplied a bash script to build and deploy the container to a supplied registry. I have this setup to go to a private registry on my local network.
+
+Usage:
+
+```
+./update_container.sh "concretellama/df-downloader-node" "127.0.0.1:5000"
+```
+
+If like me you run this in a container on a server and you're using an insecure local registry, don't forget to add your local registry to the list of insecure registries in your docker daemon config json (/etc/docker/daemon.json).
 
 ```
 {
-  "contentName": "free-download-gran-turismo-sport-hdr-sampler"
+   "insecure-registries": [
+     "<server_ip>:5000"
+   ]
 }
 ```
 
-Note that the full URL to the DF page can also be supplied, this will be sanitized on the backend.
-
-## POST /updateSessionId
-
-Updates the in-memory DF session ID (this will not persist on restart it's just there for convenience)
-
-```
-{
-  "sessionId": "<your session id here>"
-}
-```
+In the case of Unraid, that file will not persist on restart.
 
 ## Configuration
 
@@ -206,66 +216,110 @@ Which events to send to pushbullet. Valid options are:
 - NEW_CONTENT_DETECTED
 - DOWNLOAD_QUEUED
 
-## Installation
+# REST API
 
-### Local
+Currently there's a very basic REST API that's not really properly utilised as I haven't had the time to develop a web frontend for this. However if you're interested:
 
-Ensure you have npm installed. Then run
+_Note: These are all liable to change_
 
-```
-npm i
-```
+## GET /queryContent
 
-to install all modules then
+Gets a list of content from the DB. Valid URL parameters are:
 
-```
-npm run build
-```
+- limit: The maximum number of results
+- page: The page number (takes you to item page\*limit)
+- search: Search the titles for a given string. Case insensitive, partial match. e.g. "f irect" will get all DF Direct results
+- status: A list of valid statuses (AVAILABLE, CONTENT_PAYWALLED or DOWNLOADED). Either separated by a comma or by supplying the status query parameter multiple
+  times in the query string.
+- tags: A list of content tags to match. Either separated by a comma or by supplying the status query parameter multiple times in the query string.
 
-to build the TypeScript ready to run
+Returns JSON object with:
 
-### In a Docker container
+- params: The params used for the search
+- resultsOnPage: Number of results on this page
+- pageDuration: Total duration of content on this page
+- totalResults: Total number of results that matched the query
+- totalDuration: Total duration of all results that matched the query
+- content: An array of all content that matched the query
 
-If you have docker installed, you can run
+## GET /tags
 
-```
-docker build . -t  concretellama/df-downloader-node
-```
+Returns a JSON object containing
 
-## Usage
+- tags: An array of objects containing the tag name ("tag") and number of content items with that tag ("count")
 
-### Running locally
+## POST /downloadContent
 
-You can run it locally by setting all the config in dev.env then running:
-
-`npm run dev`
-
-### Running in docker
-
-Alternatively you can build this into a docker container and deploy it somewhere. Ensure you have volumes mapped for /config, /working_dir and /destination_dir and all environment variables setup.
-
-If you have docker ready to go then here's an example command to get you going (obviously replace all the paths with paths relevant to your setup):
-
-```
-docker run -d --env-file ./dev.env --env WORK_DIR=/working_dir --env DESTINATION_DIR=/destination_dir --env CONFIG_DIR=/config -v C:/Users/concretellama/Downloads:/working_dir -v C:/Users/concretellama/Videos:/destination_dir -v C:/Users/concretellama/df-downloader/config:/config docker.io/concretellama/df-downloader-node
-```
-
-I've also supplied a bash script to build and deploy the container to a supplied registry. I have this setup to go to a private registry on my local network.
-
-Usage:
-
-```
-./update_container.sh "concretellama/df-downloader-node" "127.0.0.1:5000"
-```
-
-If like me you run this in a container on a server and you're using an insecure local registry, don't forget to add your local registry to the list of insecure registries in your docker daemon config json (/etc/docker/daemon.json).
+Starts downloading content with a given contentName (specified in request body), e.g.
 
 ```
 {
-   "insecure-registries": [
-     "<server_ip>:5000"
-   ]
+  "contentName": "free-download-gran-turismo-sport-hdr-sampler"
 }
 ```
 
-In the case of Unraid, that file will not persist on restart.
+Note that the full URL to the DF page can also be supplied, this will be sanitized on the backend.
+
+## POST /updateSessionId
+
+Updates the in-memory DF session ID (this will not persist on restart it's just there for convenience)
+
+```
+{
+  "sessionId": "<your session id here>"
+}
+```
+
+# REST API
+
+Currently there's a very basic REST API that's not really properly utilised as I haven't had the time to develop a web frontend for this. However if you're interested:
+
+_Note: These are all liable to change_
+
+## GET /queryContent
+
+Gets a list of content from the DB. Valid URL parameters are:
+
+- limit: The maximum number of results
+- page: The page number (takes you to item page\*limit)
+- search: Search the titles for a given string. Case insensitive, partial match. e.g. "f irect" will get all DF Direct results
+- status: A list of valid statuses (AVAILABLE, CONTENT_PAYWALLED or DOWNLOADED). Either separated by a comma or by supplying the status query parameter multiple
+  times in the query string.
+- tags: A list of content tags to match. Either separated by a comma or by supplying the status query parameter multiple times in the query string.
+
+Returns JSON object with:
+
+- params: The params used for the search
+- resultsOnPage: Number of results on this page
+- pageDuration: Total duration of content on this page
+- totalResults: Total number of results that matched the query
+- totalDuration: Total duration of all results that matched the query
+- content: An array of all content that matched the query
+
+## GET /tags
+
+Returns a JSON object containing
+
+- tags: An array of objects containing the tag name ("tag") and number of content items with that tag ("count")
+
+## POST /downloadContent
+
+Starts downloading content with a given contentName (specified in request body), e.g.
+
+```
+{
+  "contentName": "free-download-gran-turismo-sport-hdr-sampler"
+}
+```
+
+Note that the full URL to the DF page can also be supplied, this will be sanitized on the backend.
+
+## POST /updateSessionId
+
+Updates the in-memory DF session ID (this will not persist on restart it's just there for convenience)
+
+```
+{
+  "sessionId": "<your session id here>"
+}
+```
