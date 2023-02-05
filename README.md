@@ -95,7 +95,12 @@ See dev.env.sample for a list of configurable options
 
 **REQUIRED**
 
-Your session ID cookie. I haven't implemented Patreon login, so you'll have to use your browser, login to digitalfoundry.net then use your browser's dev tools to grab your sessionid cookie. ~~Seems to expire after about 2 weeks.~~
+Your session ID cookie. I haven't implemented Patreon login, so you'll have to use your browser, login to digitalfoundry.net then use your browser's dev tools to grab your sessionid cookie. ~~Seems to expire after about 2 weeks.~~ This used to expire every 2 weeks but now seems to persist indefinitely as long as you don't log in anywhere else.
+
+To get this in Chrome, for example:
+... > More Tools > Developer Tools > Application > Cookies > https://www.digitalfoundry.net > sessionid
+
+Note: It's the sessionid cookie not the session_id one. From what I've seem the sessionid cookie is always lowercase alphanumeric, no special chars.
 
 ### DESTINATION_DIR
 
@@ -179,6 +184,13 @@ DEFAULT: true
 
 Sets whether or not to scan your filesystem for existing files + update the db. If your destination is a network drive and you're
 experiencing a slow startup it's probably worth setting this to false.
+
+### MAX_CONNECTIONS_PER_DOWNLOAD
+
+DEFAULT: 1
+
+Set maximum number of simultaneous connections per download. This is a bit experimental at this stage so.. here there be dragons and all that.
+If your download speeds are slower than expected, try this out. Once I've run this for a while without issues I'll update the default
 
 ### PUSHBULLET_API_KEY
 

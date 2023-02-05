@@ -9,7 +9,7 @@ import { DfMetaInjector } from "./df-mpeg-meta.js";
 import { DfNotifier } from "./df-notifier.js";
 import { DfContent, DownloadedContentInfo, MediaInfo, PaywalledContentInfo } from "./df-types.js";
 import { DfUserManager } from "./df-user-manager.js";
-import { DownloadProgressReport } from "./downloader.js";
+import { DownloadProgressReport, DownloadState } from "./downloader.js";
 import { LogLevel } from "./logger.js";
 import { sanitizeContentName } from "./utils/df-utils.js";
 import { extractFilenameFromUrl, fileSizeStringToBytes, moveFile } from "./utils/file-utils.js";
@@ -76,7 +76,7 @@ export class DigitalFoundryContentManager {
           let currentProgress: DownloadProgressReport;
           try {
             this.notifiers.forEach((notifier) => notifier.downloadStarting(dfContent, mediaInfo));
-            const downloadLocation = await downloadMedia(
+            const downloadResult = await downloadMedia(
               dfContent,
               mediaInfo,
               (progressUpdate: DownloadProgressReport) => {
@@ -84,12 +84,20 @@ export class DigitalFoundryContentManager {
                 this.progressUpdate(dfContent, mediaInfo, progressUpdate);
               }
             );
-            if (!downloadLocation) {
+            if (!downloadResult) {
               err = `Unable to download ${dfContent.name}`;
               return;
             }
+            if (downloadResult.status === DownloadState.STOPPED) {
+              this.logger.log(LogLevel.INFO, `Download for ${dfContent.name} was manually stopped`);
+              return;
+            }
+            if (downloadResult.status === DownloadState.FAILED) {
+              err = downloadResult.error;
+              return;
+            }
             pendingInfo!.contentStatus = ContentStatus.SETTING_METADATA;
-
+            const downloadLocation = downloadResult.destination;
             try {
               await this.dfMetaInjector.setMeta(downloadLocation, dfContent);
               this.logger.log(LogLevel.DEBUG, `Set meta for ${dfContent.name}`);

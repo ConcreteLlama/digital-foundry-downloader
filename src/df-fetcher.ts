@@ -90,14 +90,11 @@ export async function downloadMedia(dfContent: DfContent, mediaInfo: MediaInfo, 
     ...makeAuthHeaders(),
     "User-Agent": "DigitalFounload",
   };
-  await download(logger, mediaInfo.url, downloadDestination, {
+  return await download(logger, mediaInfo.url, downloadDestination, {
     headers: baseHeaders,
     progressListener,
     maxResumeAttempts: 20,
   });
-  logger.log(LogLevel.DEBUG, `Download done for ${dfContent.name}`);
-
-  return downloadDestination;
 }
 
 export async function fetchFeedContentList() {

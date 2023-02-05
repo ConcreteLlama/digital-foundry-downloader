@@ -50,6 +50,8 @@ const maxArchiveDepth = ensureEnvInteger("MAX_ARCHIVE_DEPTH", Infinity);
 
 const scanForExistingFiles = ensureEnvBoolean("SCAN_FOR_EXISTING_FILES", true);
 
+const maxConnectionsPerDownload = ensureEnvInteger("MAX_CONNECTIONS_PER_DOWNLOAD", 1);
+
 export const config = {
   logger,
   sessionId,
@@ -67,6 +69,7 @@ export const config = {
   contentListSource,
   maxArchiveDepth,
   scanForExistingFiles,
+  maxConnectionsPerDownload,
 };
 
 export type Config = typeof config;
