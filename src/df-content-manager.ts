@@ -11,6 +11,7 @@ import { DfContent, DownloadedContentInfo, MediaInfo, PaywalledContentInfo } fro
 import { DfUserManager } from "./df-user-manager.js";
 import { DownloadProgressReport, DownloadState } from "./downloader.js";
 import { LogLevel } from "./logger.js";
+import { SubtitleGenerator } from "./media-utils/subtitles.js";
 import { sanitizeContentName } from "./utils/df-utils.js";
 import { extractFilenameFromUrl, fileSizeStringToBytes, moveFile } from "./utils/file-utils.js";
 import { dfFetchWorkerQueue, fileScannerQueue } from "./utils/queue-utils.js";
@@ -47,6 +48,7 @@ export class DigitalFoundryContentManager {
   private dfMetaInjector: DfMetaInjector;
   private dfUserManager: DfUserManager;
   notifiers: DfNotifier[] = [];
+  subtitleGenerator?: SubtitleGenerator;
   pendingContent: Map<string, PendingContent> = new Map<string, PendingContent>();
 
   workQueue: Queue<DfContent, any>;
@@ -56,6 +58,9 @@ export class DigitalFoundryContentManager {
     this.dfMetaInjector = new DfMetaInjector(config);
     this.dfUserManager = new DfUserManager(db);
     this.dfUserManager.addUserTierChangeListener((tier) => this.userTierChanged(tier));
+    if (process.env.DEEPGRAM_API_KEY) {
+      this.subtitleGenerator = new SubtitleGenerator(process.env.DEEPGRAM_API_KEY);
+    }
     this.workQueue = new Queue<DfContent, any>(
       async (dfContent: DfContent, cb) => {
         const pendingInfo = this.pendingContent.get(dfContent.name);
@@ -103,6 +108,14 @@ export class DigitalFoundryContentManager {
               this.logger.log(LogLevel.DEBUG, `Set meta for ${dfContent.name}`);
             } catch (e) {
               this.logger.log(LogLevel.ERROR, `Unable to inject metadata for ${dfContent.name} - continuing anyway`, e);
+            }
+            if (this.subtitleGenerator) {
+              try {
+                const subInfo = await this.subtitleGenerator.getSubs(downloadLocation, "eng");
+                await this.dfMetaInjector.injectSubs(downloadLocation, subInfo);
+              } catch (e) {
+                this.logger.log(LogLevel.ERROR, `Unable to get subs for ${dfContent.name} - continuing anyway`, e);
+              }
             }
 
             const filename = dfContent.makeFileName(mediaInfo);

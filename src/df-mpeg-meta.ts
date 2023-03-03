@@ -1,11 +1,13 @@
 import { DfContent } from "./df-types.js";
 
-import { exec } from "child_process";
+import { exec, spawn } from "child_process";
 import ffmpegPath from "ffmpeg-static";
 import { utimes } from "utimes";
 import { Config } from "./config/config.js";
 import { moveFile } from "./utils/file-utils.js";
 import { Logger, LogLevel } from "./logger.js";
+import { SubtitleInfo } from "./media-utils/subtitles.js";
+import { parseArgsStringToArgv } from "string-argv";
 
 let filenameIter = 0;
 
@@ -15,12 +17,14 @@ export class DfMetaInjector {
     this.logger = config.logger;
   }
 
-  setMeta(mpegFilePath: string, contentInfo: DfContent) {
+  setMeta(mpegFilePath: string, contentInfo: DfContent, subtitles?: SubtitleInfo[]) {
     this.logger.log(LogLevel.INFO, `Setting metadata for ${mpegFilePath}`);
     const workingFilename = `${this.config.workDir}/ffmpeg_${filenameIter++}.mp4`;
-    let ffmpegCommand = `${ffmpegPath} -i "${mpegFilePath}" -codec copy -metadata title="${this.sanitise(
-      contentInfo.title
-    )}"`;
+    let ffmpegCommand = `${ffmpegPath} -i "${mpegFilePath}" -codec copy`;
+    if (subtitles && subtitles.length > 0) {
+      subtitles.forEach((subtitleInfo) => {});
+    }
+    ffmpegCommand = `${ffmpegCommand} -metadata title="${this.sanitise(contentInfo.title)}"`;
     if (contentInfo.publishedDate) {
       ffmpegCommand += ` -metadata year=${contentInfo.publishedDate.getFullYear()}`;
     }
@@ -59,6 +63,33 @@ export class DfMetaInjector {
           }
         }
       });
+    });
+  }
+
+  async injectSubs(mpegFilePath: string, subtitleInfo: SubtitleInfo) {
+    this.logger.log(LogLevel.INFO, `Injecting ${subtitleInfo.language} subs for ${mpegFilePath}`);
+    const workingFilename = `${this.config.workDir}/ffmpeg_${filenameIter++}.mp4`;
+    const ffmpegArgs = parseArgsStringToArgv(
+      `-i ${mpegFilePath} -i pipe: -c copy -c:s mov_text -metadata:s:s:0 language=${subtitleInfo.language} ${workingFilename}`
+    );
+    const process = spawn(ffmpegPath, ffmpegArgs);
+    process.stdin.write(subtitleInfo.srt);
+    process.stdin.end();
+    await new Promise<void>((res, rej) => {
+      let lastErr: any;
+      process.on("close", (rc) => {
+        if (rc !== 0) {
+          return rej(lastErr.toString());
+        }
+        res();
+      });
+      process.on("error", (err) => {
+        rej(err);
+      });
+      process.stderr.on("data", (chunk) => (lastErr = chunk));
+    });
+    await moveFile(workingFilename, mpegFilePath, {
+      clobber: true,
     });
   }
 

@@ -13,6 +13,7 @@ _NOTE - This is a personal project that I developed for my own use and has been 
 - Can send pushbullet notifications when various events occur
 - Has a really terrible web UI for adding videos manually and updating the sessionid cookie (won't persist on a restart), I just knocked something together so I can easily add videos that are either old or didn't show in the feed.
 - Stores download history in a very simple "DB" using lowdb (so basically it just writes to a JSON file) so it doesn't keep redownloading the same content on restart.
+- Ability to automatically generate subtitles for videos using Deepgram (experimental).
 
 # Limitations
 
@@ -215,6 +216,12 @@ Which events to send to pushbullet. Valid options are:
 - DOWNLOAD_STARTING
 - NEW_CONTENT_DETECTED
 - DOWNLOAD_QUEUED
+
+# DEEPGRAM_API_KEY
+
+Set this if you want to automatically generate subtitles for downloaded videos using Deepgram. Note that this feature is kinda new and experimental.
+
+Also you may get some weird results.
 
 # REST API
 
