@@ -46,7 +46,8 @@ export class SubtitleGenerator {
           numbers: true,
           punctuate: true,
           smart_format: true,
-          keywords: ["480p", "720p", "1080p", "1440p", "1800p", "4k", "PS4", "PS5", "DLSS", "FSR", "XeSS"],
+          language: "en",
+          model: "video",
         }
       );
       return {
