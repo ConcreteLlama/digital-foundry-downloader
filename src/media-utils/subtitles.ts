@@ -5,12 +5,57 @@ import ffmpegPath from "ffmpeg-static";
 import { spawn } from "child_process";
 import { config } from "../config/config.js";
 import { LogLevel } from "../logger.js";
+import { Utterance } from "@deepgram/sdk/dist/types/utterance.js";
+import { PrerecordedTranscriptionResponse } from "@deepgram/sdk/dist/types/prerecordedTranscriptionResponse.js";
 
 const logger = config.logger;
 
 export type SubtitleInfo = {
   srt: string;
   language: string;
+};
+
+type Utt = {
+  transcript: string;
+  start: number;
+  end: number;
+};
+
+const generateSrtLine = (idx: number, utt: Utt) => {
+  const start = new Date(utt.start * 1000).toISOString().substring(11, 23).replace(".", ",");
+  const end = new Date(utt.end * 1000).toISOString().substring(11, 23).replace(".", ",");
+  return `${idx}\n${start} --> ${end}\n${utt.transcript}\n`;
+};
+
+const splutterance = (utterance: Utterance, maxWordsPerUtt: number): Utt[] => {
+  if (utterance.words.length <= maxWordsPerUtt) {
+    return [utterance];
+  }
+  let toReturn: Utt[] = [];
+  const chunkSize = utterance.words.length / Math.ceil(utterance.words.length / maxWordsPerUtt);
+  for (let i = 0; i < utterance.words.length; i += chunkSize) {
+    const words = utterance.words.slice(i, i + chunkSize);
+    toReturn.push({
+      transcript: words.map((word) => word.punctuated_word || word.word).join(" "),
+      start: words[0].start,
+      end: words[words.length - 1].end,
+    });
+  }
+  return toReturn;
+};
+
+const generateSrt = (transcript: PrerecordedTranscriptionResponse, maxWordsPerUtt: number) => {
+  const utterances = transcript.results?.utterances;
+  if (!utterances) {
+    return "";
+  }
+  let srtLines: string[] = [];
+  let idx = 1;
+  for (const utterance of utterances) {
+    const split = splutterance(utterance, maxWordsPerUtt);
+    split.forEach((utt) => srtLines.push(generateSrtLine(idx++, utt)));
+  }
+  return srtLines.join("\n");
 };
 
 export class SubtitleGenerator {
@@ -51,7 +96,7 @@ export class SubtitleGenerator {
         }
       );
       return {
-        srt: transcript.toSRT(),
+        srt: generateSrt(transcript, 20),
         language,
       };
     } catch (e) {
