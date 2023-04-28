@@ -6,3 +6,5 @@ dist
 update_remote.sh
 .yalc
 yalc.lock
+TODO.txt
+docker_run.sh

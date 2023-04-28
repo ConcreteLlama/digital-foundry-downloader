@@ -18,6 +18,16 @@ _NOTE - This is a personal project that I developed for my own use and has been 
 # Limitations
 
 - Can't login using Patreon credentials - you have to go to the DF website in your browser and get the sessionid cookie - however this does seem to last indefinitely unless you log in from somewhere else.
+- WebUI is incomplete
+- Can't currently control active downloads in download queue
+
+# Next steps
+
+- Reintroduce notifications config for pushbullet
+- Use the filter schema to add include and exclude config + forms to the automatic download config section
+- Make UI work from paths that aren't / (try refreshing on, say, /downloads)
+- CORS
+- Lock some config fields if running in a container
 
 # Notes on behaviour
 
@@ -33,19 +43,7 @@ It will also scan your destination dir for existing downloaded content. This beh
 
 ### Local
 
-Ensure you have npm installed. Then run
-
-```
-npm i
-```
-
-to install all modules then
-
-```
-npm run build
-```
-
-to build the TypeScript ready to run
+All steps are in the Dockerfile (TODO: Update this with actual help)
 
 ### In a Docker container
 
@@ -59,18 +57,27 @@ docker build . -t  concretellama/df-downloader-node
 
 ### Running locally
 
-You can run it locally by setting all the config in dev.env then running:
-
-`npm run dev`
+TODO: Update this with actual help
 
 ### Running in docker
 
-Alternatively you can build this into a docker container and deploy it somewhere. Ensure you have volumes mapped for /config, /working_dir and /destination_dir and all environment variables setup.
+You can build this into a docker container and deploy it somewhere. Ensure you have volumes mapped for /db /config, /working_dir and /destination_dir and all environment variables setup.
 
-If you have docker ready to go then here's an example command to get you going (obviously replace all the paths with paths relevant to your setup):
+If you have docker ready to go then you can easily run this by checking out the docker_run.sample.sh
 
 ```
-docker run -d --env-file ./dev.env --env WORK_DIR=/working_dir --env DESTINATION_DIR=/destination_dir --env CONFIG_DIR=/config -v C:/Users/concretellama/Downloads:/working_dir -v C:/Users/concretellama/Videos:/destination_dir -v C:/Users/concretellama/df-downloader/config:/config docker.io/concretellama/df-downloader-node
+docker run -d \
+  --env WORK_DIR="//working_dir" \
+  --env DESTINATION_DIR="//destination_dir" \
+  --env CONFIG_DIR="//config" \
+  --env DB_DIR="//db" \
+  --env PUBLIC_ADDRESS=http://127.0.0.1:44556 \
+  -v C:/Users/concretellama/Downloads:/working_dir \
+  -v C:/Users/concretellama/Videos:/destination_dir \
+  -v C:/Users/concretellama/df-downloader/config:/config \
+  -v C:/Users/concretellama/df-downloader/db:/db \
+  -p 44556:44556 \
+  docker.io/concretellama/df-downloader-node
 ```
 
 I've also supplied a bash script to build and deploy the container to a supplied registry. I have this setup to go to a private registry on my local network.
@@ -95,132 +102,25 @@ In the case of Unraid, that file will not persist on restart.
 
 ## Configuration
 
-This is configured using environment variables. The reason for this is that it is designed to run in a container.
+This is partly configured with env vars:
 
 See dev.env.sample for a list of configurable options
 
+The rest is configured in CONFIG_DIR/config.yaml (see config.yaml.sample). You can also configure with the Web UI.
+
 ## Environment variables
-
-### DF_SESSION_ID
-
-**REQUIRED**
-
-Your session ID cookie. I haven't implemented Patreon login, so you'll have to use your browser, login to digitalfoundry.net then use your browser's dev tools to grab your sessionid cookie. ~~Seems to expire after about 2 weeks.~~ This used to expire every 2 weeks but now seems to persist indefinitely as long as you don't log in anywhere else.
-
-To get this in Chrome, for example:
-... > More Tools > Developer Tools > Application > Cookies > https://www.digitalfoundry.net > sessionid
-
-Note: It's the sessionid cookie not the session_id one. From what I've seem the sessionid cookie is always lowercase alphanumeric, no special chars.
-
-### DESTINATION_DIR
-
-**REQUIRED**
-
-The path to move the downloaded and tagged media to once it's finished
 
 ### CONFIG_DIR
 
 **REQUIRED**
 
-Currently the only thing stored here is the DB json.
+Location of the config.yaml
 
-### MAX_SIMULTANEOUS_DOWNLOADS
+### DB_DIR
 
 **REQUIRED**
 
-Total number of simultaneous downloads
-
-### WORK_DIR
-
-Default: work_dir
-
-This is where content is downloaded to and metadata is added
-
-### DOWNLOAD_DELAY
-
-Default: 60000
-
-How long to wait after detecting there's new content to download. This exists because I found that sometimes content was published but the download wasn't quite ready. May no longer be the case but what's a minute, eh? Time specified in milliseconds.
-
-### HTTP_PORT
-
-Default: 44556
-
-The HTTP port for the terrible web UI and API
-
-### HTTP_ENABLED
-
-Default: true
-
-Set this to false if you don't want to host a terrible and unsecured web UI.
-
-### CONTENT_CHECK_INTERVAL
-
-Default: 60000
-Min: 30000
-
-How frequently to check for new content. Time specified in milliseconds.
-
-### LOG_LEVEL
-
-Set the log level. Valid levels (although not all are used) are:
-
-- ERROR
-- WARN
-- INFO
-- VERBOSE
-- DEBUG
-- SILLY
-
-### MEDIA_TYPE_PRIORITIES
-
-DEFAULT: HEVC,h.264 (4K),h.264 (1080p),h.264,MP3
-
-Sets media type priorities. It'll always download _something_ if it's available but this is the priority (from highest to lowest). In the below example, HEVC is the most preferred media type.
-
-```
-MEDIA_TYPE_PRIORITIES=HEVC,h.264
-```
-
-### MAX_ARCHIVE_DEPTH
-
-DEFAULT: Infinity
-
-Sets the maximum depth to go through the DF archive pages when scanning for content
-
-### SCAN_FOR_EXISTING_FILES
-
-DEFAULT: true
-
-Sets whether or not to scan your filesystem for existing files + update the db. If your destination is a network drive and you're
-experiencing a slow startup it's probably worth setting this to false.
-
-### MAX_CONNECTIONS_PER_DOWNLOAD
-
-DEFAULT: 1
-
-Set maximum number of simultaneous connections per download. This is a bit experimental at this stage so.. here there be dragons and all that.
-If your download speeds are slower than expected, try this out. Once I've run this for a while without issues I'll update the default
-
-### PUSHBULLET_API_KEY
-
-If you use pushbullet you can have the downloader send you notifications
-
-### PUSHBULLET_SUBSCRIBED_NOTIFICATIONS
-
-Which events to send to pushbullet. Valid options are:
-
-- DOWNLOAD_COMPLETE
-- DOWNLOAD_FAILED
-- DOWNLOAD_STARTING
-- NEW_CONTENT_DETECTED
-- DOWNLOAD_QUEUED
-
-# DEEPGRAM_API_KEY
-
-Set this if you want to automatically generate subtitles for downloaded videos using Deepgram. Note that this feature is kinda new and experimental.
-
-Also you may get some weird results.
+Location of the db.json
 
 # REST API
 
