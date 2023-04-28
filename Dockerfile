@@ -33,13 +33,13 @@ RUN cd df-downloader-common && npm run build
 RUN cd df-downloader-ui && yalc add df-downloader-common && npm install
 RUN cd df-downloader-service && yalc add df-downloader-common && npm install
 
-RUN cd df-downloader-service && npm run build
 RUN cd df-downloader-ui && npm run build
+RUN cd df-downloader-service && npm run build
 RUN cd df-downloader-service && npm run get-ui
 
 RUN mkdir -p /config
 RUN mkdir -p /working_dir
 RUN mkdir -p /destination_dir
-run mkdir -p /db
+RUN mkdir -p /db
 
 CMD [ "node", "df-downloader-service/dist/index.js" ]
