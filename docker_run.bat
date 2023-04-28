@@ -1,0 +1,1 @@
+docker run -d --env-file ./dev.env --env WORK_DIR=/working_dir --env DESTINATION_DIR=/destination_dir --env CONFIG_DIR=/config -v C:/Users/richa/Downloads:/working_dir -v C:/Users/richa/Videos:/destination_dir -v C:/Users/richa/Nextcloud/Code/nodejs/df-downloader/config:/config docker.io/concretellama/df-downloader-node

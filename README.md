@@ -11,14 +11,13 @@ _NOTE - This is a personal project that I developed for my own use and has been 
 - Has a download queue to limit the number of simultaneous downloads
 - If a download fails, it will attempt to continue from the point it failed (e.g. if 50% through will continue from 50%)
 - Can send pushbullet notifications when various events occur
-- Has a really terrible web UI for adding videos manually and updating the sessionid cookie (won't persist on a restart), I just knocked something together so I can easily add videos that are either old or didn't show in the feed.
 - Stores download history in a very simple "DB" using lowdb (so basically it just writes to a JSON file) so it doesn't keep redownloading the same content on restart.
 - Ability to automatically generate subtitles for videos using Deepgram (experimental).
+- Has a web UI (WIP) to see available content, monitor downloads and configure
 
 # Limitations
 
 - Can't login using Patreon credentials - you have to go to the DF website in your browser and get the sessionid cookie - however this does seem to last indefinitely unless you log in from somewhere else.
-- There are some unhandled promise rejections. If you run on a version of node that explodes when this happens without the appropriate flags set, this could be a problem. For the record I've been running this on node 14.
 
 # Notes on behaviour
 
@@ -229,7 +228,7 @@ Currently there's a very basic REST API that's not really properly utilised as I
 
 _Note: These are all liable to change_
 
-## GET /queryContent
+## GET /api/content/query
 
 Gets a list of content from the DB. Valid URL parameters are:
 
@@ -249,7 +248,7 @@ Returns JSON object with:
 - totalDuration: Total duration of all results that matched the query
 - content: An array of all content that matched the query
 
-## GET /tags
+## GET /api/content/tags
 
 Returns a JSON object containing
 

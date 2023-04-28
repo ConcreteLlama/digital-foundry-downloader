@@ -1,0 +1,35 @@
+digitalFoundry:
+  sessionId: ""
+contentDetection:
+  contentCheckInterval: 59998
+  maxArchivePage: 1000
+automaticDownloads:
+  enabled: true
+  mediaTypes:
+    - h.264 (4K)
+    - HEVC
+    - h.264
+    - h.264 (1080p)
+    - MP3
+  downloadDelay: 20000
+contentManagement:
+  scanForExistingFiles: true
+  destinationDir: df_downloads
+  workDir: work_dir
+downloads:
+  maxSimultaneousDownloads: 2
+  maxConnectionsPerDownload: 5
+  failureRetryIntervalBase: 60000
+  maxRetries: 10
+postProcessing:
+  metadata:
+    injectMetadata: true
+  # subtitles:
+  #   subtitlesService: "deepgram"
+  #   deepgram:
+  #     apiKey: 'xxxxxxxx'
+restApi:
+  http:
+    port: 44556
+logging:
+  logLevel: "INFO"

@@ -1,0 +1,4 @@
+db*.json
+.db.json.tmp
+config.yaml
+public

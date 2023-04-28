@@ -4,3 +4,5 @@ node_modules
 dist
 *.bat
 update_remote.sh
+.yalc
+yalc.lock
