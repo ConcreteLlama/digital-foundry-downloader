@@ -15,6 +15,17 @@ _NOTE - This is a personal project that I developed for my own use and has been 
 - Ability to automatically generate subtitles for videos using Deepgram (experimental).
 - Has a web UI (WIP) to see available content, monitor downloads and configure
 
+# DF Session ID
+
+I haven't implemented Patreon login, so you'll have to use your browser, login to digitalfoundry.net then use your browser's dev tools to grab your sessionid cookie. This used to expire every 2 weeks but now seems to persist indefinitely as long as you don't log in anywhere else.
+
+To get this in Chrome, for example: ... > More Tools > Developer Tools > Application > Cookies > https://www.digitalfoundry.net > sessionid
+
+Note: It's the sessionid cookie not the session_id one. From what I've seem the sessionid cookie is always lowercase alphanumeric, no special chars.
+
+It seems like if you login on another browser, it'll log the downloader out, but if you log back in on the original browser from which you got the session id cookie,
+it'll log you back in.
+
 # Limitations
 
 - Can't login using Patreon credentials - you have to go to the DF website in your browser and get the sessionid cookie - however this does seem to last indefinitely unless you log in from somewhere else.
@@ -121,57 +132,3 @@ Location of the config.yaml
 **REQUIRED**
 
 Location of the db.json
-
-# REST API
-
-Currently there's a very basic REST API that's not really properly utilised as I haven't had the time to develop a web frontend for this. However if you're interested:
-
-_Note: These are all liable to change_
-
-## GET /api/content/query
-
-Gets a list of content from the DB. Valid URL parameters are:
-
-- limit: The maximum number of results
-- page: The page number (takes you to item page\*limit)
-- search: Search the titles for a given string. Case insensitive, partial match. e.g. "f irect" will get all DF Direct results
-- status: A list of valid statuses (AVAILABLE, CONTENT_PAYWALLED or DOWNLOADED). Either separated by a comma or by supplying the status query parameter multiple
-  times in the query string.
-- tags: A list of content tags to match. Either separated by a comma or by supplying the status query parameter multiple times in the query string.
-
-Returns JSON object with:
-
-- params: The params used for the search
-- resultsOnPage: Number of results on this page
-- pageDuration: Total duration of content on this page
-- totalResults: Total number of results that matched the query
-- totalDuration: Total duration of all results that matched the query
-- content: An array of all content that matched the query
-
-## GET /api/content/tags
-
-Returns a JSON object containing
-
-- tags: An array of objects containing the tag name ("tag") and number of content items with that tag ("count")
-
-## POST /downloadContent
-
-Starts downloading content with a given contentName (specified in request body), e.g.
-
-```
-{
-  "contentName": "free-download-gran-turismo-sport-hdr-sampler"
-}
-```
-
-Note that the full URL to the DF page can also be supplied, this will be sanitized on the backend.
-
-## POST /updateSessionId
-
-Updates the in-memory DF session ID (this will not persist on restart it's just there for convenience)
-
-```
-{
-  "sessionId": "<your session id here>"
-}
-```
