@@ -301,7 +301,7 @@ export class DigitalFoundryContentManager {
     //TODO: Reverse so we update the most recent first
     while (requiringUpdate.length > 0) {
       const entryBatch = requiringUpdate.splice(0, 10);
-      const contentInfos = await Promise.all(
+      const contentInfoResults = await Promise.allSettled(
         entryBatch.map((contentInfo) =>
           dfFetchWorkerQueue.addWork(() => {
             logger.log(LogLevel.INFO, `${contentInfo.name} has out of date meta; fetching info and patching`);
@@ -309,11 +309,19 @@ export class DigitalFoundryContentManager {
           })
         )
       );
-      entryBatch.forEach((contentEntry, idx) => {
-        contentEntry.contentInfo = contentInfos[idx];
-        contentEntry.dataVersion = "2.0.0";
+      const toUpdate: DfContentEntry[] = [];
+      contentInfoResults.forEach((result, idx) => {
+        if (result.status === "rejected") {
+          logger.log(LogLevel.ERROR, `Failed to fetch meta for ${result.reason}`);
+        } else {
+          logger.log(LogLevel.INFO, `Successfully fetched meta for ${result.value.name}`);
+          const contentEntry = entryBatch[idx];
+          contentEntry.contentInfo = result.value;
+          contentEntry.dataVersion = "2.0.0";
+          toUpdate.push(contentEntry);
+        }
       });
-      await this.db.addContentInfos(...entryBatch);
+      await this.db.addContentInfos(...toUpdate);
     }
   }
 
