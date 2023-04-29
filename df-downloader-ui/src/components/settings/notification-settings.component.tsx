@@ -1,12 +1,10 @@
 import { DfSettingsSectionForm } from "./df-settings-section-form.component";
 import { Fragment, useState } from "react";
 import { Box, Button, IconButton, Typography, Select, MenuItem, InputLabel } from "@mui/material";
-import { CheckboxElement, MultiSelectElement, useFormContext, useWatch } from "react-hook-form-mui";
-import { ZodTextField } from "../zod-fields/zod-text-field.component";
+import { CheckboxElement, MultiSelectElement, PasswordElement, useFormContext, useWatch } from "react-hook-form-mui";
 import {
   AllNotificationServiceKeys,
   NotificationsConfig,
-  PushbulletNotificationsConfig,
   PushbulletServiceKey,
 } from "df-downloader-common/config/notifications-config";
 import { DfNotificationType } from "df-downloader-common";
@@ -98,12 +96,11 @@ const PushbulletApiKeyField = () => {
   });
   return (
     <Box sx={{ display: "flex", justifyContent: "space-between" }}>
-      <ZodTextField
+      <PasswordElement
         sx={{ width: 400 }}
         name={`${PUSHBULLET_KEY}.apiKey`}
         label="API Key"
         onChange={() => setTestResult(null)}
-        zodString={PushbulletNotificationsConfig.shape.apiKey}
       />
       <Button
         sx={{ bgcolor: testResult === false ? "error.main" : "default", width: 200 }}
