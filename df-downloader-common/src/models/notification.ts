@@ -1,0 +1,19 @@
+export enum DfNotificationType {
+  DOWNLOAD_COMPLETE = "DOWNLOAD_COMPLETE",
+  DOWNLOAD_FAILED = "DOWNLOAD_FAILED",
+  DOWNLOAD_STARTING = "DOWNLOAD_STARTING",
+  NEW_CONTENT_DETECTED = "NEW_CONTENT_DETECTED",
+  DOWNLOAD_QUEUED = "DOWNLOAD_QUEUED",
+  USER_NOT_SIGNED_IN = "USER_NOT_SIGNED_IN",
+  USER_SIGNED_IN = "USER_SIGNED_IN",
+}
+
+export const AllNotifications: DfNotificationType[] = [
+  DfNotificationType.DOWNLOAD_COMPLETE,
+  DfNotificationType.DOWNLOAD_FAILED,
+  DfNotificationType.DOWNLOAD_STARTING,
+  DfNotificationType.NEW_CONTENT_DETECTED,
+  DfNotificationType.DOWNLOAD_QUEUED,
+  DfNotificationType.USER_NOT_SIGNED_IN,
+  DfNotificationType.USER_SIGNED_IN,
+];

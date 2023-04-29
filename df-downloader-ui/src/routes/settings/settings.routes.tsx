@@ -14,6 +14,8 @@ import DownloadingIcon from "@mui/icons-material/Downloading";
 import { SubtitlesSettingsForm } from "../../components/settings/subtitles-settings-form.component";
 import { ContentDetectionSettingsForm } from "../../components/settings/content-detection-settings-form.component";
 import { AutomaticDownloadsSettingsForm } from "../../components/settings/automatic-download-settings-form.component";
+import NotificationsIcon from "@mui/icons-material/Notifications";
+import { NotificationSettingsForm } from "../../components/settings/notification-settings.component";
 
 //TODO: Get a digital foundry icon svg
 
@@ -83,6 +85,12 @@ export const settingsRoutes: SettingsSubRoute = {
       element: <SubtitlesSettingsForm />,
       name: "Subtitles",
       icon: SubtitlesIcon,
+    },
+    {
+      path: "/settings/notifications",
+      element: <NotificationSettingsForm />,
+      name: "Notifications",
+      icon: NotificationsIcon,
     },
   ],
 };

@@ -6,12 +6,12 @@ process.chdir(path.join(__dirname, ".."));
 
 import { DfLowDb } from "./db/df-operational-db-lowdb.js";
 import { DigitalFoundryContentManager } from "./df-content-manager.js";
-import { AllNotifications, DfNotificationType, LoggerDfNotifier, PushBulletNotifier } from "./df-notifier.js";
 import { LogLevel, logger } from "./utils/logger.js";
 import { makeRoutes } from "./rest/routes.js";
 import { ensureEnvString, ensureEnvStringArray } from "./utils/env-utils.js";
 import { FileConfig } from "./config/file-config.js";
 import { serviceLocator } from "./services/service-locator.js";
+import { makeNotificationConsumers } from "./notifiers/notification-manager.js";
 
 process
   .on("unhandledRejection", (reason, p) => {
@@ -30,25 +30,11 @@ async function start() {
   const db = await DfLowDb.create();
   const dbInitInfo = await db.init();
   const dfContentManager = new DigitalFoundryContentManager(db);
-  const loggerNotifier = new LoggerDfNotifier(LogLevel.INFO, ...AllNotifications);
-  dfContentManager.addNotifier(loggerNotifier);
 
-  const pushbulletApiKey = process.env.PUSHBULLET_API_KEY;
-  if (pushbulletApiKey) {
-    const pushbulletSubscribedNotifications = ensureEnvStringArray("PUSHBULLET_SUBSCRIBED_NOTIFICATIONS");
-    const pushbulletNotifier = new PushBulletNotifier(
-      pushbulletApiKey,
-      ...(pushbulletSubscribedNotifications.length === 0
-        ? AllNotifications
-        : pushbulletSubscribedNotifications.map(
-            (notificationType) => DfNotificationType[<keyof typeof DfNotificationType>notificationType]
-          ))
-    );
-    dfContentManager.addNotifier(pushbulletNotifier);
-  }
   if (serviceLocator.config.restApi) {
     makeRoutes(dfContentManager);
   }
+  makeNotificationConsumers(dfContentManager);
   await dfContentManager.start(dbInitInfo);
 }
 start();

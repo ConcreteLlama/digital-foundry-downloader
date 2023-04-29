@@ -5,7 +5,7 @@ import prettyBytes from "pretty-bytes";
 import { DbInitInfo, DfDownloaderOperationalDb, makeDownloadedContentInfo } from "./db/df-operational-db.js";
 import { DfContentInfoReference, downloadMedia, forEachArchivePage, getMediaInfo } from "./df-fetcher.js";
 import { DfMetaInjector } from "./df-mpeg-meta.js";
-import { DfNotifier } from "./df-notifier.js";
+import { DfNotificationConsumer } from "./notifiers/notification-consumer.js";
 import {
   DfContentInfo,
   MediaInfo,
@@ -44,7 +44,7 @@ type DownloadQueueItem = {
 export class DigitalFoundryContentManager {
   private dfMetaInjector: DfMetaInjector;
   private dfUserManager: DfUserManager;
-  notifiers: DfNotifier[] = [];
+  notifiers: DfNotificationConsumer[] = [];
   subtitleGenerator?: SubtitleGenerator;
   queuedContent: Map<string, QueuedContent> = new Map<string, QueuedContent>();
 
@@ -312,7 +312,7 @@ export class DigitalFoundryContentManager {
       const toUpdate: DfContentEntry[] = [];
       contentInfoResults.forEach((result, idx) => {
         if (result.status === "rejected") {
-          logger.log(LogLevel.ERROR, `Failed to fetch meta for ${result.reason}`);
+          logger.log(LogLevel.ERROR, `Failed to fetch meta for ${entryBatch[idx].name} ${result.reason}`);
         } else {
           logger.log(LogLevel.INFO, `Successfully fetched meta for ${result.value.name}`);
           const contentEntry = entryBatch[idx];
@@ -543,7 +543,7 @@ export class DigitalFoundryContentManager {
     }, pendingInfo.currentRetryInterval);
   }
 
-  addNotifier(dfNotifier: DfNotifier) {
+  addNotifier(dfNotifier: DfNotificationConsumer) {
     this.notifiers.push(dfNotifier);
   }
 

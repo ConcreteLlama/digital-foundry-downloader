@@ -2,7 +2,7 @@ import { z } from "zod";
 import { ContentManagementConfig, ContentManagementConfigKey } from "./content-management-config.js";
 import { DownloadsConfig, DownloadsConfigKey } from "./download-config.js";
 import { RestApiConfig, RestApiConfigKey } from "./rest-config.js";
-import { NotificationsConfig, NotificationsConfigKey } from "./notification-config.js";
+import { NotificationsConfig, NotificationsConfigKey } from "./notifications-config.js";
 import { DfConfig, DfConfigKey } from "./df-config.js";
 import { LoggingConfig, LoggingConfigKey } from "./logging-config.js";
 import { MetadataConfig, MetadataConfigKey } from "./metadata-config.js";

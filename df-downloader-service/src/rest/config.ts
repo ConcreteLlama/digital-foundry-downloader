@@ -35,7 +35,7 @@ export const makeConfigRouter = () => {
     //TODO: Remove need for any
     const config = await serviceLocator.configService.updateConfig(toUpdate as any);
     const toReturn = field ? config[field] : config;
-    return sendResponse(res, toReturn);
+    return sendResponse(res, toReturn || {});
   });
   return router;
 };
