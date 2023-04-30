@@ -15,7 +15,7 @@ export class FileConfig extends ConfigService {
     const configFilePath = path.join(dir, "config.yaml");
     let configStr: string | undefined;
     try {
-      fs.readFileSync(configFilePath, "utf-8");
+      configStr = fs.readFileSync(configFilePath, "utf-8");
     } catch (e) {}
     if (!configStr) {
       const sampleFilePath = path.join(code_dir, "config_samples", "config.sample.yaml");
