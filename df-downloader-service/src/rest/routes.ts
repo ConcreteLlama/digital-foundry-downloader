@@ -2,7 +2,7 @@ import express from "express";
 import cors from "cors";
 import { DigitalFoundryContentManager } from "../df-content-manager.js";
 import { makeApiRouter } from "./api.js";
-import { serviceLocator } from "../services/service-locator.js";
+import { configService } from "../config/config.js";
 import { createExpressServer } from "../utils/http.js";
 import path from "node:path";
 import { LogLevel, logger } from "../utils/logger.js";
@@ -13,7 +13,7 @@ import { writeFile } from "node:fs/promises";
 import { readFileSync, writeFileSync } from "node:fs";
 
 export function makeRoutes(contentManager: DigitalFoundryContentManager) {
-  const restConfig = serviceLocator.configService.getConfig().restApi;
+  const restConfig = configService.config.restApi;
   let publicAddress = process.env.PUBLIC_ADDRESS;
   if (publicAddress) {
     logger.log(LogLevel.INFO, `Using public address ${publicAddress} from .env`);

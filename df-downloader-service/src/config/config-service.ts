@@ -19,15 +19,15 @@ export interface ConfigUpdateEvents extends ConfigFieldUpdateEvents {
 
 export abstract class ConfigService extends TypedEventEmitter<ConfigUpdateEvents> {
   async updateConfig(config: Partial<DfDownloaderConfigInput>) {
-    const oldConfig = this.getConfig();
+    const oldConfig = this.config;
     const cleanedConfig = _.pickBy(config, (value) => value !== undefined);
     const newConfig: DfDownloaderConfig = {
       ...oldConfig,
       ...cleanedConfig,
     };
     await this.writeConfig(newConfig);
-    this.emitFieldUpdateEvents(oldConfig, this.getConfig());
-    return this.getConfig();
+    this.emitFieldUpdateEvents(oldConfig, this.config);
+    return this.config;
   }
 
   private emitFieldUpdateEvents(oldConfig: DfDownloaderConfig, newConfig: DfDownloaderConfig) {
@@ -47,30 +47,7 @@ export abstract class ConfigService extends TypedEventEmitter<ConfigUpdateEvents
       }
     });
   }
-
-  abstract getConfig(): DfDownloaderConfig;
+  abstract get config(): DfDownloaderConfig;
   abstract writeConfig(config: DfDownloaderConfig): void | Promise<void>;
-}
-
-export class NullConfigService extends ConfigService {
-  getConfig(): DfDownloaderConfig {
-    throw new Error("Cannot get config; not initialised");
-  }
-  async writeConfig(config: DfDownloaderConfig) {
-    throw new Error("Cannot update config; not initialised");
-  }
-}
-
-// Never actually use this; it's a placeholder for when the config service is not initialised but is useful for testing
-export class InMemoryConfigService extends ConfigService {
-  private config: any = {};
-  constructor() {
-    super();
-  }
-  getConfig(): DfDownloaderConfig {
-    return this.config;
-  }
-  async writeConfig(config: DfDownloaderConfig) {
-    this.config = config;
-  }
+  init(): Promise<void> | void {}
 }

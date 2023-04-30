@@ -1,24 +1,26 @@
 import fs from "fs";
-import fsPromise from "fs/promises";
 import path from "path";
 import YAML from "yaml";
-import { DfDownloaderConfig, DfDownloaderConfigInput } from "df-downloader-common/config/df-downloader-config.js";
+import { DfDownloaderConfig } from "df-downloader-common/config/df-downloader-config.js";
 import { ConfigService } from "./config-service.js";
 import { fromZodError } from "zod-validation-error";
 import { code_dir } from "../utils/file-utils.js";
 
 export class FileConfig extends ConfigService {
-  constructor(private config: DfDownloaderConfig, private path: fs.PathLike) {
+  constructor(private cachedConfig: DfDownloaderConfig, private configFilePath: fs.PathLike) {
     super();
-    this.config = config;
+    this.cachedConfig = cachedConfig;
   }
-  static async create(dir: string) {
+  static create(dir: string) {
     const configFilePath = path.join(dir, "config.yaml");
-    let configStr = await fsPromise.readFile(configFilePath, "utf-8").catch((e) => {});
+    let configStr: string | undefined;
+    try {
+      fs.readFileSync(configFilePath, "utf-8");
+    } catch (e) {}
     if (!configStr) {
       const sampleFilePath = path.join(code_dir, "config_samples", "config.sample.yaml");
-      await fsPromise.copyFile(sampleFilePath, configFilePath);
-      configStr = await fsPromise.readFile(configFilePath, "utf-8");
+      fs.copyFileSync(sampleFilePath, configFilePath);
+      configStr = fs.readFileSync(configFilePath, "utf-8");
     }
 
     const configPlain = YAML.parse(configStr);
@@ -30,11 +32,11 @@ export class FileConfig extends ConfigService {
 
     return new FileConfig(config, configFilePath);
   }
-  getConfig() {
-    return this.config;
+  get config() {
+    return this.cachedConfig;
   }
   async writeConfig(config: DfDownloaderConfig) {
-    this.config = config;
-    await fsPromise.writeFile(this.path, YAML.stringify(this.config));
+    this.cachedConfig = config;
+    await fs.promises.writeFile(this.configFilePath, YAML.stringify(this.cachedConfig));
   }
 }

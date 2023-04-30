@@ -27,7 +27,7 @@ import { ensureDirectory, extractFilenameFromUrl, fileSizeStringToBytes, moveFil
 import { dfFetchWorkerQueue, fileScannerQueue } from "./utils/queue-utils.js";
 import { serviceLocator } from "./services/service-locator.js";
 import { getMostImportantItem } from "./utils/importance-list.js";
-import { SubtitleGenerator, makeSubtitleGenerator } from "./media-utils/subtitles/subtitles.js";
+import { configService } from "./config/config.js";
 
 type DownloadQueueItem = {
   dfContentInfo: DfContentInfo;
@@ -45,7 +45,6 @@ export class DigitalFoundryContentManager {
   private dfMetaInjector: DfMetaInjector;
   private dfUserManager: DfUserManager;
   notifiers: DfNotificationConsumer[] = [];
-  subtitleGenerator?: SubtitleGenerator;
   queuedContent: Map<string, QueuedContent> = new Map<string, QueuedContent>();
 
   workQueue: Queue<DownloadQueueItem, any>;
@@ -54,12 +53,11 @@ export class DigitalFoundryContentManager {
     this.dfMetaInjector = new DfMetaInjector();
     this.dfUserManager = new DfUserManager(db);
     this.dfUserManager.addUserTierChangeListener((tier) => this.userTierChanged(tier));
-    this.subtitleGenerator = makeSubtitleGenerator(serviceLocator.config.subtitles);
-    const downloadsConfig = serviceLocator.config.downloads;
+    const downloadsConfig = configService.config.downloads;
     this.workQueue = new Queue<DownloadQueueItem, any>(
       async (queueItem: DownloadQueueItem, cb) => {
         const { dfContentInfo, mediaInfo } = queueItem;
-        const config = serviceLocator.config;
+        const config = configService.config;
         const contentManagementConfig = config.contentManagement;
         const metaConfig = config.metadata;
         const pendingInfo = this.queuedContent.get(dfContentInfo.name)!;
@@ -108,10 +106,11 @@ export class DigitalFoundryContentManager {
                 );
               }
             }
-            if (this.subtitleGenerator) {
+            const subtitleGenerator = serviceLocator.subtitleGenerator;
+            if (subtitleGenerator) {
               try {
                 pendingInfo.statusInfo = "Fetching subtitles";
-                const subInfo = await this.subtitleGenerator.getSubs(downloadLocation, "eng");
+                const subInfo = await subtitleGenerator.getSubs(downloadLocation, "eng");
                 pendingInfo.statusInfo = "Injecting subtitles";
                 await this.dfMetaInjector.injectSubs(downloadLocation, subInfo);
               } catch (e) {
@@ -172,14 +171,14 @@ export class DigitalFoundryContentManager {
         },
       }
     );
-    serviceLocator.configService.on("configUpdated:downloads", ({ newValue }) => {
+    configService.on("configUpdated:downloads", ({ newValue }) => {
       logger.log(
         LogLevel.INFO,
         `TODO: Write logic to max simultaneous downloads to ${newValue.maxSimultaneousDownloads} on the fly`
       );
     });
     //TODO: Do this on both update and load (maybe make a new event for configLoadOrUpdate)
-    serviceLocator.configService.on("configUpdated:contentManagement", ({ newValue, oldValue }) => {
+    configService.on("configUpdated:contentManagement", ({ newValue, oldValue }) => {
       if (newValue.destinationDir !== oldValue.destinationDir) {
         ensureDirectory(newValue.destinationDir);
       }
@@ -190,8 +189,8 @@ export class DigitalFoundryContentManager {
   }
 
   async start(dbInitInfo: DbInitInfo) {
-    const contentManagementConfig = serviceLocator.config.contentManagement;
-    const contentDetectionConfig = serviceLocator.config.contentDetection;
+    const contentManagementConfig = configService.config.contentManagement;
+    const contentDetectionConfig = configService.config.contentDetection;
     //TODO: Queue all downloads in "ATTEMPTING_DOWNLOAD" state
     await this.dfUserManager.start();
     if (dbInitInfo.firstRun) {
@@ -209,7 +208,7 @@ export class DigitalFoundryContentManager {
       LogLevel.INFO,
       `Starting DF content monitor. Checking for new content every ${contentDetectionConfig.contentCheckInterval}ms`
     );
-    serviceLocator.configService.on("configUpdated:digitalFoundry", ({ oldValue, newValue }) => {
+    configService.on("configUpdated:digitalFoundry", ({ oldValue, newValue }) => {
       const oldSessionId = oldValue.sessionId;
       const newSessionId = newValue.sessionId;
       if (newSessionId !== oldSessionId) {
@@ -227,7 +226,7 @@ export class DigitalFoundryContentManager {
   }
 
   async scanWholeArchive(...ignoreList: string[]) {
-    const contentDetectionConfig = serviceLocator.config.contentDetection;
+    const contentDetectionConfig = configService.config.contentDetection;
     logger.log(LogLevel.INFO, `Scanning whole archive`);
     await forEachArchivePage(
       async (contentList) => {
@@ -326,7 +325,7 @@ export class DigitalFoundryContentManager {
   }
 
   async scanForExistingFiles() {
-    const contentManagementConfig = serviceLocator.config.contentManagement;
+    const contentManagementConfig = configService.config.contentManagement;
     const contentEntries = await this.db.getAllContentEntries();
 
     const notDownloaded = contentEntries.filter((contentEntry) => contentEntry.statusInfo.status !== "DOWNLOADED");
@@ -425,7 +424,7 @@ export class DigitalFoundryContentManager {
   }
 
   async checkForNewContents() {
-    const autoDownloadConfig = serviceLocator.config.automaticDownloads;
+    const autoDownloadConfig = configService.config.automaticDownloads;
     const newContentRefs = await this.getNewContentList();
     const newContentInfos = await this.getContentInfos(newContentRefs);
     if (autoDownloadConfig.enabled) {
@@ -455,8 +454,8 @@ export class DigitalFoundryContentManager {
       mediaType?: string;
     } = {}
   ) {
-    const autoDownloadConfig = serviceLocator.config.automaticDownloads;
-    const downloadConfig = serviceLocator.config.downloads;
+    const autoDownloadConfig = configService.config.automaticDownloads;
+    const downloadConfig = configService.config.downloads;
     let contentName: string, contentInfoArg: DfContentInfo | undefined;
     if (typeof content === "string") {
       contentName = sanitizeContentName(content);
@@ -519,7 +518,7 @@ export class DigitalFoundryContentManager {
   }
 
   setupRetry(contentName: string) {
-    const downloadConfig = serviceLocator.config.downloads;
+    const downloadConfig = configService.config.downloads;
     const pendingInfo = this.queuedContent.get(contentName);
     if (!pendingInfo) {
       logger.log(LogLevel.ERROR, `Failed to get pending info for ${contentName}, unable to retry`);

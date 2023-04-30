@@ -9,6 +9,7 @@ import { sanitizeContentName } from "./utils/df-utils.js";
 import { getBody } from "./utils/dom-utils.js";
 import { extractFilenameFromUrl, fileSizeStringToBytes } from "./utils/file-utils.js";
 import { serviceLocator } from "./services/service-locator.js";
+import { configService } from "./config/config.js";
 
 type PageMeta = {
   publishedDate: Date;
@@ -76,7 +77,7 @@ function extractUserInfo(dom: Document): UserInfo | undefined {
 }
 
 function makeAuthHeaders() {
-  const dfSessionId = serviceLocator.config.digitalFoundry.sessionId;
+  const dfSessionId = configService.config.digitalFoundry.sessionId;
   return dfSessionId
     ? {
         cookie: `sessionid=${dfSessionId};`,
@@ -99,7 +100,7 @@ export async function downloadMedia(
     return;
   }
   const filename = DfContentInfoUtils.makeFileName(dfContent, mediaInfo);
-  const downloadDestination = `${serviceLocator.config.contentManagement.workDir}/${filename}`;
+  const downloadDestination = `${configService.config.contentManagement.workDir}/${filename}`;
   const baseHeaders = {
     ...makeAuthHeaders(),
     "User-Agent": "DigitalFounload",

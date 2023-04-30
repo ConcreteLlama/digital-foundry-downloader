@@ -8,6 +8,7 @@ import { LogLevel, logger } from "./utils/logger.js";
 import { SubtitleInfo } from "./media-utils/subtitles/subtitles.js";
 import { parseArgsStringToArgv } from "string-argv";
 import { serviceLocator } from "./services/service-locator.js";
+import { configService } from "./config/config.js";
 
 let filenameIter = 0;
 
@@ -15,7 +16,7 @@ export class DfMetaInjector {
   constructor() {}
 
   setMeta(mpegFilePath: string, contentInfo: DfContentInfo, subtitles?: SubtitleInfo[]) {
-    const config = serviceLocator.config;
+    const config = configService.config;
     logger.log(LogLevel.INFO, `Setting metadata for ${mpegFilePath}`);
     const workingFilename = `${config.contentManagement.workDir}/ffmpeg_${filenameIter++}.mp4`;
     let ffmpegCommand = `${ffmpegPath} -i "${mpegFilePath}" -codec copy`;
@@ -65,7 +66,7 @@ export class DfMetaInjector {
   }
 
   async injectSubs(mpegFilePath: string, subtitleInfo: SubtitleInfo) {
-    const config = serviceLocator.config;
+    const config = configService.config;
     logger.log(LogLevel.INFO, `Injecting ${subtitleInfo.language} subs for ${mpegFilePath}`);
     const workingFilename = `${config.contentManagement.workDir}/ffmpeg_${filenameIter++}.mp4`;
     const ffmpegArgs = parseArgsStringToArgv(

@@ -101,4 +101,7 @@ export class DeepgramSubtitleGenerator implements SubtitleGenerator {
       throw e;
     }
   }
+  destroy(): void {
+    // Nothing to do
+  }
 }

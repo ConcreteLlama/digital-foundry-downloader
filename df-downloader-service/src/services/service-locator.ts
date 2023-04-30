@@ -1,19 +1,15 @@
-import { ConfigService, NullConfigService } from "../config/config-service.js";
+import { SubtitleGenerator } from "../media-utils/subtitles/subtitles.js";
 
 class ServiceLocator {
   public static instance = new ServiceLocator();
-  private _configService: ConfigService = new NullConfigService();
-  private constructor() {}
+  private _subtitleGenerator?: SubtitleGenerator;
 
-  set configService(config: ConfigService) {
-    this._configService = config;
-  }
-  get configService() {
-    return this._configService;
+  set subtitleGenerator(subtitleGenerator: SubtitleGenerator | undefined) {
+    this._subtitleGenerator = subtitleGenerator;
   }
 
-  get config() {
-    return this._configService.getConfig();
+  get subtitleGenerator() {
+    return this._subtitleGenerator;
   }
 }
 

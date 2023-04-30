@@ -1,6 +1,6 @@
 import { fromZodError } from "zod-validation-error";
 import express from "express";
-import { serviceLocator } from "../services/service-locator.js";
+import { configService } from "../config/config.js";
 import {
   DfDownloaderConfig,
   DfDownloaderConfigKey,
@@ -15,7 +15,7 @@ export const makeConfigRouter = () => {
     if (field && !DfDownloaderConfigKeys.includes(field)) {
       return sendError(res, `Field ${field} not found`, 404);
     }
-    const config = serviceLocator.config;
+    const config = configService.config;
     const toReturn = field ? config[field] : config;
     return sendResponse(res, toReturn || {});
   });
@@ -33,7 +33,7 @@ export const makeConfigRouter = () => {
     }
     const toUpdate = field ? { [field]: parseConfig.data } : parseConfig.data;
     //TODO: Remove need for any
-    const config = await serviceLocator.configService.updateConfig(toUpdate as any);
+    const config = await configService.updateConfig(toUpdate as any);
     const toReturn = field ? config[field] : config;
     return sendResponse(res, toReturn || {});
   });
