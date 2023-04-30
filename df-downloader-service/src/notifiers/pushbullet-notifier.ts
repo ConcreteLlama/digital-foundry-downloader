@@ -4,14 +4,12 @@ import { DfContentInfo, DownloadProgressInfo, MediaInfo, DfNotificationType } fr
 import { PushbulletNotificationsConfig } from "df-downloader-common/config/notifications-config";
 
 export class PushBulletNotifier extends DfNotificationConsumer {
-  contentMap: Map<string, string> = new Map<string, string>();
-
   static fromConfig(config: PushbulletNotificationsConfig) {
     return new PushBulletNotifier(config.apiKey, ...config.subscribedNotifications);
   }
 
   constructor(private apiKey: string, ...subscribedNotifications: DfNotificationType[]) {
-    super(...subscribedNotifications);
+    super("pushbullet", ...subscribedNotifications);
   }
 
   sendPush(dfContentName: string, title: string, body: string, addToMap: boolean = true) {
@@ -29,21 +27,6 @@ export class PushBulletNotifier extends DfNotificationConsumer {
       })
       .catch((e) => {
         console.log(e);
-      })
-      .then((response) => {
-        if (addToMap) {
-          if (
-            response &&
-            response.body &&
-            response.headers["content-type"] &&
-            response.headers["content-type"].toLowerCase().includes("application/json")
-          ) {
-            const obj = JSON.parse(response.body);
-            if (obj.iden) {
-              this.contentMap.set(dfContentName, obj.iden);
-            }
-          }
-        }
       });
   }
 
@@ -63,7 +46,6 @@ export class PushBulletNotifier extends DfNotificationConsumer {
       )}`,
       false
     );
-    this.contentMap.delete(dfContent.name);
   }
   notifyDownloadFailed(dfContent: DfContentInfo, err: any): void {
     this.sendPush(
@@ -72,7 +54,6 @@ export class PushBulletNotifier extends DfNotificationConsumer {
       `Download failed for ${dfContent.name}`,
       false
     );
-    this.contentMap.delete(dfContent.name);
   }
   notifyDownloadStarting(dfContent: DfContentInfo, mediaInfo: MediaInfo): void {
     this.sendPush(
@@ -88,9 +69,7 @@ export class PushBulletNotifier extends DfNotificationConsumer {
     this.sendPush(dfContent.name, `DF Download Queued: ${dfContent.title}`, `DF Download Queued: ${dfContent.title}`);
   }
   downloadProgressUpdate(dfContent: DfContentInfo, mediaInfo: MediaInfo, progressUpdate: DownloadProgressInfo): void {}
-  downloadEnded(dfContentName: string): void {
-    this.contentMap.delete(dfContentName);
-  }
+  downloadEnded(dfContentName: string): void {}
   notifyUserNotSignedIn(): void {
     this.sendPush(
       "",

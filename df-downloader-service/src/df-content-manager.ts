@@ -44,7 +44,6 @@ type DownloadQueueItem = {
 export class DigitalFoundryContentManager {
   private dfMetaInjector: DfMetaInjector;
   private dfUserManager: DfUserManager;
-  notifiers: DfNotificationConsumer[] = [];
   queuedContent: Map<string, QueuedContent> = new Map<string, QueuedContent>();
 
   workQueue: Queue<DownloadQueueItem, any>;
@@ -69,7 +68,9 @@ export class DigitalFoundryContentManager {
           logger.log(LogLevel.INFO, `Fetching ${dfContentInfo.name} with media type ${mediaInfo.mediaType}`);
           let currentProgress: DownloadProgressInfo;
           try {
-            this.notifiers.forEach((notifier) => notifier.downloadStarting(dfContentInfo, mediaInfo));
+            serviceLocator.notificationConsumers.forEach((consumer) =>
+              consumer.downloadStarting(dfContentInfo, mediaInfo)
+            );
             const downloadResult = await downloadMedia(
               dfContentInfo,
               mediaInfo,
@@ -145,8 +146,8 @@ export class DigitalFoundryContentManager {
             pendingInfo!.contentStatus = QueuedContentStatus.DONE;
             this.queuedContent.delete(dfContentInfo.name);
 
-            this.notifiers.forEach((notifier) =>
-              notifier.downloadComplete(dfContentInfo, mediaInfo, destination, currentProgress)
+            serviceLocator.notificationConsumers.forEach((consumer) =>
+              consumer.downloadComplete(dfContentInfo, mediaInfo, destination, currentProgress)
             );
           } catch (e) {
             err = e;
@@ -158,7 +159,7 @@ export class DigitalFoundryContentManager {
             pendingInfo!.contentStatus = QueuedContentStatus.PENDING_RETRY;
             logger.log(LogLevel.WARN, `Unable to fetch ${dfContentInfo.name}`);
             logger.log(LogLevel.WARN, err);
-            this.notifiers.forEach((notifier) => notifier.downloadFailed(dfContentInfo, err));
+            serviceLocator.notificationConsumers.forEach((consumer) => consumer.downloadFailed(dfContentInfo, err));
             this.setupRetry(dfContentInfo.name);
           }
           cb();
@@ -430,7 +431,7 @@ export class DigitalFoundryContentManager {
     if (autoDownloadConfig.enabled) {
       await this.db.addDownloadingContents(newContentInfos);
       for (const content of newContentInfos) {
-        this.notifiers.forEach((notifier) => notifier.newContentDetected(content.title));
+        serviceLocator.notificationConsumers.forEach((consumer) => consumer.newContentDetected(content.title));
         this.getContent(content, {
           delay: autoDownloadConfig.downloadDelay,
         });
@@ -511,7 +512,7 @@ export class DigitalFoundryContentManager {
         dfContentInfo,
         mediaInfo,
       });
-      this.notifiers.forEach((notifier) => notifier.downloadQueued(dfContentInfo!));
+      serviceLocator.notificationConsumers.forEach((consumer) => consumer.downloadQueued(dfContentInfo!));
     }, delay || 0);
 
     return queuedContentInfo;
@@ -542,18 +543,18 @@ export class DigitalFoundryContentManager {
     }, pendingInfo.currentRetryInterval);
   }
 
-  addNotifier(dfNotifier: DfNotificationConsumer) {
-    this.notifiers.push(dfNotifier);
-  }
-
   progressUpdate(dfContent: DfContentInfo, mediaInfo: MediaInfo, progressUpdate: DownloadProgressInfo) {
-    this.notifiers.forEach((notifier) => notifier.downloadProgressUpdate(dfContent, mediaInfo, progressUpdate));
+    serviceLocator.notificationConsumers.forEach((consumer) =>
+      consumer.downloadProgressUpdate(dfContent, mediaInfo, progressUpdate)
+    );
   }
 
   async userTierChanged(newTier?: string) {
     const userInfo = this.dfUserManager.currentUserInfo;
     if (this.dfUserManager.isUserSignedIn() && userInfo) {
-      this.notifiers.forEach((notifier) => notifier.userSignedIn(userInfo.username, userInfo.tier));
+      serviceLocator.notificationConsumers.forEach((consumer) =>
+        consumer.userSignedIn(userInfo.username, userInfo.tier)
+      );
       const allContentEntries = await this.db.getAllContentEntries();
       const ignoredPaywalledContent = allContentEntries.filter((ignoredContent) => {
         if (ignoredContent.statusInfo.status !== "CONTENT_PAYWALLED") {
@@ -568,7 +569,7 @@ export class DigitalFoundryContentManager {
       logger.log(LogLevel.INFO, `Setting all paywalled content to "Available" (may not be accurate)"`);
       await this.db.addContentInfos(...ignoredPaywalledContent);
     } else {
-      this.notifiers.forEach((notifier) => notifier.userNotSignedIn());
+      serviceLocator.notificationConsumers.forEach((consumer) => consumer.userNotSignedIn());
       //TODO: Either find a way to find *which* tier content belongs to or rescan all content to see whether it's still paywalled
       const allContentEntries = await this.db.getAllContentEntries();
       const availableContentEntries = allContentEntries.filter(

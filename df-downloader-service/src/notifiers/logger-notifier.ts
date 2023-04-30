@@ -5,7 +5,7 @@ import { downloadProgressToString } from "../utils/downloader.js";
 
 export class LoggerDfNotifier extends DfNotificationConsumer {
   constructor(private logLevel: LogLevel, ...subscribedNotifications: DfNotificationType[]) {
-    super(...subscribedNotifications);
+    super("logger", ...subscribedNotifications);
   }
 
   notifyDownloadComplete(

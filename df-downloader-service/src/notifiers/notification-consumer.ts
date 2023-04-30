@@ -5,7 +5,7 @@ import { DfContentInfo, MediaInfo, DownloadProgressInfo, DfNotificationType } fr
 
 export abstract class DfNotificationConsumer {
   subscribedNotifications: Set<DfNotificationType>;
-  constructor(...subscribedNotifications: DfNotificationType[]) {
+  constructor(public readonly name: string, ...subscribedNotifications: DfNotificationType[]) {
     this.subscribedNotifications = new Set<DfNotificationType>(subscribedNotifications);
   }
 
