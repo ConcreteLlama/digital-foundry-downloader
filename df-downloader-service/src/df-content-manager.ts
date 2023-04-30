@@ -17,6 +17,7 @@ import {
   DfContentInfoUtils,
   QueuedContentUtils,
   DfContentStatus,
+  filterContentInfos,
 } from "df-downloader-common";
 import { DfUserManager } from "./df-user-manager.js";
 import { DownloadState } from "./utils/downloader.js";
@@ -429,8 +430,16 @@ export class DigitalFoundryContentManager {
     const newContentRefs = await this.getNewContentList();
     const newContentInfos = await this.getContentInfos(newContentRefs);
     if (autoDownloadConfig.enabled) {
-      await this.db.addDownloadingContents(newContentInfos);
-      for (const content of newContentInfos) {
+      const { include, exclude } = autoDownloadConfig.exclusionFilters
+        ? filterContentInfos(autoDownloadConfig.exclusionFilters, newContentInfos, true)
+        : { include: newContentInfos, exclude: [] };
+      logger.log(
+        LogLevel.INFO,
+        `Ignoring ${exclude.map((contentInfo) => contentInfo.name).join(", ")} due to exclusion filters`
+      );
+      await this.db.addAvailableContent(exclude);
+      await this.db.addDownloadingContents(include);
+      for (const content of include) {
         serviceLocator.notificationConsumers.forEach((consumer) => consumer.newContentDetected(content.title));
         this.getContent(content, {
           delay: autoDownloadConfig.downloadDelay,

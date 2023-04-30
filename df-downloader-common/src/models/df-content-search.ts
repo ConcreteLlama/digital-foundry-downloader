@@ -31,8 +31,8 @@ export const DfContentEntrySearchUtils = {
     const { page, limit, filter, sort } = searchParams;
     const { sortBy, sortDirection } = sort;
     const { include, exclude } = filter || {};
-    dfContentEntries = include ? filterContentEntries(include, dfContentEntries) : dfContentEntries;
-    dfContentEntries = exclude ? filterContentEntries(exclude, dfContentEntries, true) : dfContentEntries;
+    dfContentEntries = include ? filterContentEntries(include, dfContentEntries).include : dfContentEntries;
+    dfContentEntries = exclude ? filterContentEntries(exclude, dfContentEntries).exclude : dfContentEntries;
     dfContentEntries = dfContentEntries.sort((a, b) => {
       const aActual = sortDirection === "asc" ? a : b;
       const bActual = sortDirection === "asc" ? b : a;
