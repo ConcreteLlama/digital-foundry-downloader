@@ -43,11 +43,12 @@ export const DfContentInfoItemCard = ({ dfContentName }: DfContentInfoItemCardPr
             columnGap: 2,
           }}
         >
-          <Box sx={{ marginY: 2 }}>
+          <Box sx={{ marginY: 0.5 }}>
             <Image
               src={DfContentInfoUtils.getThumbnailUrl(contentInfo, thumbWidth)}
-              width={thumbWidth}
               duration={500}
+              width="15vw"
+              style={{ borderRadius: 2 }}
             ></Image>
           </Box>
           <Box sx={{ margin: 1, overflow: "hidden" }}>
