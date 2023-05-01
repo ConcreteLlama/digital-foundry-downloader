@@ -430,13 +430,14 @@ export class DigitalFoundryContentManager {
     const newContentRefs = await this.getNewContentList();
     const newContentInfos = await this.getContentInfos(newContentRefs);
     if (autoDownloadConfig.enabled) {
-      const { include, exclude } = autoDownloadConfig.exclusionFilters
+      const { include, exclude } = autoDownloadConfig.exclusionFilters?.length
         ? filterContentInfos(autoDownloadConfig.exclusionFilters, newContentInfos, true)
         : { include: newContentInfos, exclude: [] };
-      logger.log(
-        LogLevel.INFO,
-        `Ignoring ${exclude.map((contentInfo) => contentInfo.name).join(", ")} due to exclusion filters`
-      );
+      exclude.length &&
+        logger.log(
+          LogLevel.INFO,
+          `Ignoring ${exclude.map((contentInfo) => contentInfo.name).join(", ")} due to exclusion filters`
+        );
       await this.db.addAvailableContent(exclude);
       await this.db.addDownloadingContents(include);
       for (const content of include) {

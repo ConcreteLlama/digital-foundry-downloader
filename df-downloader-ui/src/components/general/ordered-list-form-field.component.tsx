@@ -1,20 +1,10 @@
 import { DndContext, DragEndEvent, useDraggable, useDroppable } from "@dnd-kit/core";
 import { arrayMove } from "@dnd-kit/sortable";
-import {
-  Box,
-  Button,
-  Card,
-  FormControl,
-  FormLabel,
-  IconButton,
-  List,
-  Stack,
-  TextField,
-  Typography,
-} from "@mui/material";
+import { Box, Button, Card, FormControl, IconButton, List, Stack, TextField, Typography } from "@mui/material";
 import { useState } from "react";
 import DragIndicatorIcon from "@mui/icons-material/DragIndicator";
 import { Controller, useFormContext } from "react-hook-form";
+import { FormLabelInline } from "./form-label-inline";
 
 interface OrdereableListFormFieldProps {
   extendable?: boolean;
@@ -44,20 +34,7 @@ export const OrderableListFormField = ({ extendable = false, name, label }: Orde
               padding: 1,
             }}
           >
-            <FormLabel
-              sx={{
-                marginTop: "-1.5em",
-                paddingLeft: "0.44em",
-                paddingRight: "0.44em",
-                zIndex: 2,
-                backgroundColor: (theme) => theme.palette.background.default,
-                position: "absolute",
-                fontSize: "0.75em",
-                width: "auto",
-              }}
-            >
-              {label}
-            </FormLabel>
+            <FormLabelInline>{label}</FormLabelInline>
             <OrderableList name={name} possibleValues={value} extendable={extendable} onChange={onChange} />
           </Box>
         );

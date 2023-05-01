@@ -6,12 +6,14 @@ import { useSelector } from "react-redux";
 import { selectConfigError, selectConfigLoading, selectConfigSection } from "../../store/config/config.selector";
 import { store } from "../../store/store";
 import { queryConfigSection, updateConfigSection } from "../../store/config/config.action";
-import { useEffect } from "react";
+import { createContext, useEffect } from "react";
+
+export const CurrentSettingsContext = createContext<Partial<DfDownloaderConfig>>({});
 
 export type DfSettingsFormProps = {
   sectionName: keyof DfDownloaderConfig;
   title: string;
-  children: React.ReactNode[] | React.ReactNode;
+  children: React.ReactNode;
 };
 
 export const DfSettingsSectionForm = (props: DfSettingsFormProps) => {
@@ -29,26 +31,32 @@ export const DfSettingsSectionForm = (props: DfSettingsFormProps) => {
     return <CircularProgress />;
   } else {
     return (
-      <Box sx={{ width: "50rem", height: "100%" }}>
-        <Typography variant="h5">{title}</Typography>
-        <Divider sx={{ marginTop: 2, marginBottom: 4 }} />
-        <FormContainer
-          resolver={zodResolver(zodSchema)}
-          defaultValues={currentSettings as any}
-          onSuccess={(data) => {
-            console.log("dispatching", data);
-            store.dispatch(updateConfigSection.start({ section: sectionName, value: data }));
-          }}
-          onError={(error) => {
-            console.log("error", error);
-          }}
-        >
-          <SettingsStack>
-            {children}
-            <SubmitButton />
-          </SettingsStack>
-        </FormContainer>
-      </Box>
+      <CurrentSettingsContext.Provider
+        value={{
+          [sectionName]: currentSettings,
+        }}
+      >
+        <Box sx={{ width: "50rem", height: "100%" }}>
+          <Typography variant="h5">{title}</Typography>
+          <Divider sx={{ marginTop: 2, marginBottom: 4 }} />
+          <FormContainer
+            resolver={zodResolver(zodSchema)}
+            defaultValues={currentSettings as any}
+            onSuccess={(data) => {
+              console.log("dispatching", data);
+              store.dispatch(updateConfigSection.start({ section: sectionName, value: data }));
+            }}
+            onError={(error) => {
+              console.log("error", error);
+            }}
+          >
+            <SettingsStack>
+              {children}
+              <SubmitButton />
+            </SettingsStack>
+          </FormContainer>
+        </Box>
+      </CurrentSettingsContext.Provider>
     );
   }
 };
