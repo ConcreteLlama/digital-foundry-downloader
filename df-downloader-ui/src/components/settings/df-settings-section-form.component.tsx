@@ -1,5 +1,5 @@
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Box, Button, CircularProgress, Divider, Typography, styled } from "@mui/material";
+import { Box, Button, CircularProgress, Divider, Typography, styled, useMediaQuery } from "@mui/material";
 import { DfDownloaderConfig } from "df-downloader-common/config/df-downloader-config";
 import { FormContainer, useFormState } from "react-hook-form-mui";
 import { useSelector } from "react-redux";
@@ -7,6 +7,7 @@ import { selectConfigError, selectConfigLoading, selectConfigSection } from "../
 import { store } from "../../store/store";
 import { queryConfigSection, updateConfigSection } from "../../store/config/config.action";
 import { createContext, useEffect } from "react";
+import { theme } from "../../themes/theme";
 
 export const CurrentSettingsContext = createContext<Partial<DfDownloaderConfig>>({});
 
@@ -17,6 +18,7 @@ export type DfSettingsFormProps = {
 };
 
 export const DfSettingsSectionForm = (props: DfSettingsFormProps) => {
+  const useMobileLayout = useMediaQuery(theme.breakpoints.down("md"));
   const { sectionName, title, children } = props;
   useEffect(() => {
     store.dispatch(queryConfigSection.start(sectionName));
@@ -36,7 +38,7 @@ export const DfSettingsSectionForm = (props: DfSettingsFormProps) => {
           [sectionName]: currentSettings,
         }}
       >
-        <Box sx={{ width: "50rem", height: "100%" }}>
+        <Box sx={{ width: useMobileLayout ? "80vw" : "50vw", height: "100%" }}>
           <Typography variant="h5">{title}</Typography>
           <Divider sx={{ marginTop: 2, marginBottom: 4 }} />
           <FormContainer
