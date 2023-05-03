@@ -9,7 +9,7 @@ export type FilterListProps = {
 };
 export const FilterList = ({ type }: FilterListProps) => {
   const filterName = type === "exclude" ? "Exclusion" : "Inclusion";
-  const fieldArrayName = type === "exclude" ? "exclusionFilter" : "inclusionFilter";
+  const fieldArrayName = type === "exclude" ? "exclusionFilters" : "inclusionFilters";
   const { control } = useFormContext();
   const { fields, append, remove } = useFieldArray({
     name: fieldArrayName,
