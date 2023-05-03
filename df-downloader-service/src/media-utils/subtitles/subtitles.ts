@@ -34,7 +34,12 @@ export const loadSubtitlesService = () => {
   configService.on("configUpdated:subtitles", (event) => {
     const config = event?.newValue;
     serviceLocator.subtitleGenerator?.destroy();
-    serviceLocator.subtitleGenerator = makeSubtitleGenerator(config);
+    try {
+      serviceLocator.subtitleGenerator = makeSubtitleGenerator(config);
+    } catch (e) {
+      logger.log(LogLevel.ERROR, `Failed to update subtitle generator: ${e}`);
+      return;
+    }
     logger.log(LogLevel.INFO, `Updated subtitle generator to ${config?.subtitlesService}`);
   });
 };

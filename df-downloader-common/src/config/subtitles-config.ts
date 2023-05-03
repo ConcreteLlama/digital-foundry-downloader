@@ -1,7 +1,7 @@
 import { z } from "zod";
 
 export const DeepgramConfig = z.object({
-  apiKey: z.string(),
+  apiKey: z.string().min(30),
 });
 export type DeepgramConfig = z.infer<typeof DeepgramConfig>;
 

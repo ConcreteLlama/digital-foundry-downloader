@@ -1,4 +1,4 @@
-import { Button, Stack } from "@mui/material";
+import { Button, Divider, Stack } from "@mui/material";
 import { Fragment } from "react";
 import { FilterItemField } from "./filter-item-field.component";
 import { useFieldArray, useFormContext } from "react-hook-form";
@@ -19,6 +19,7 @@ export const FilterList = ({ type }: FilterListProps) => {
     <Fragment>
       {fields.map((field, index) => (
         <Stack sx={{ ...formFieldBorder, gap: 1 }} key={field.id}>
+          {index > 0 && <Divider>OR</Divider>}
           <FilterItemField parentFieldName={`${fieldArrayName}.${index}`} remove={() => remove(index)} />
         </Stack>
       ))}

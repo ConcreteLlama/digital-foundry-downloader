@@ -28,7 +28,7 @@ export const TagFilterUtils = {
 };
 
 export const StringFilter = z.object({
-  value: z.string().optional(),
+  value: z.string().min(1),
   mode: z.enum(["contains", "startsWith"]).default("contains"),
   caseSensitive: z.boolean().optional().default(false),
 });

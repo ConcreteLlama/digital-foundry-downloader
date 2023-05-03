@@ -1,5 +1,5 @@
 import DeleteIcon from "@mui/icons-material/Delete";
-import { Box, Button, IconButton, Stack, Typography } from "@mui/material";
+import { Box, Button, Divider, IconButton, Stack, Typography } from "@mui/material";
 import { StringFilter, TagFilter } from "df-downloader-common";
 import { Fragment, useEffect, useState } from "react";
 import { useFormContext } from "react-hook-form";
@@ -21,7 +21,9 @@ export const FilterItemField = ({ parentFieldName, remove }: FilterItemFieldProp
   return (
     <Fragment>
       <StringFilterField fieldName={`${parentFieldName}.title`} label="Title" />
+      <Divider>AND</Divider>
       <StringFilterField fieldName={`${parentFieldName}.description`} label="Description" />
+      <Divider>AND</Divider>
       <TagFilterField fieldName={`${parentFieldName}.tags`} />
       <Button variant="text" onClick={remove} sx={{ color: red[400] }}>
         Remove
@@ -45,7 +47,14 @@ const RemovabeField = ({ fieldName, label, children }: RemovabeFieldProps) => {
       <Fragment>
         <Box sx={{ display: "flex", alignItems: "center" }}>
           <Typography>{label} Filter</Typography>
-          <IconButton onClick={() => setVisible(false)}>
+          <IconButton
+            onClick={() => {
+              setVisible(false);
+              context.setValue(fieldName, undefined, {
+                shouldDirty: true,
+              });
+            }}
+          >
             <DeleteIcon fontSize="small" />
           </IconButton>
         </Box>
@@ -65,7 +74,7 @@ type StringFilterFieldProps = {
 const StringFilterField = ({ fieldName, label }: StringFilterFieldProps) => {
   return (
     <RemovabeField label={label} fieldName={fieldName}>
-      <Stack sx={{ ...formFieldBorder, gap: 1 }}>
+      <Stack sx={{ ...formFieldBorder, gap: 2, padding: 2 }}>
         <ZodTextField name={`${fieldName}.value`} label="Value" zodString={StringFilter.shape.value._def.innerType} />
         <ZodSelectField name={`${fieldName}.mode`} label="Mode" zodEnum={StringFilter.shape.mode._def.innerType} />
         <CheckboxElement name={`${fieldName}.caseSensitive`} label="Case Sensitive" />
