@@ -75,7 +75,7 @@ const StringFilterField = ({ fieldName, label }: StringFilterFieldProps) => {
   return (
     <RemovabeField label={label} fieldName={fieldName}>
       <Stack sx={{ ...formFieldBorder, gap: 2, padding: 2 }}>
-        <ZodTextField name={`${fieldName}.value`} label="Value" zodString={StringFilter.shape.value._def.innerType} />
+        <ZodTextField name={`${fieldName}.value`} label="Value" zodString={StringFilter.shape.value} />
         <ZodSelectField name={`${fieldName}.mode`} label="Mode" zodEnum={StringFilter.shape.mode._def.innerType} />
         <CheckboxElement name={`${fieldName}.caseSensitive`} label="Case Sensitive" />
       </Stack>
