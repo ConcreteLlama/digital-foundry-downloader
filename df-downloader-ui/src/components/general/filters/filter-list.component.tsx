@@ -1,9 +1,20 @@
-import { Accordion, AccordionDetails, AccordionSummary, Button, Divider, Stack } from "@mui/material";
+import {
+  Accordion,
+  AccordionDetails,
+  AccordionSummary,
+  Box,
+  Button,
+  Divider,
+  IconButton,
+  Stack,
+  Typography,
+} from "@mui/material";
 import { Fragment } from "react";
 import { FilterItemField } from "./filter-item-field.component";
 import { useFieldArray, useFormContext } from "react-hook-form";
 import { formFieldBorder } from "../../../utils/props";
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
+import DeleteIcon from "@mui/icons-material/Delete";
 
 export type FilterListProps = {
   type: "exclude" | "include";
@@ -23,7 +34,14 @@ export const FilterList = ({ type }: FilterListProps) => {
           {index > 0 && <Divider>OR</Divider>}
           <Accordion>
             <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-              {filterName} Filter {index + 1}
+              <Box sx={{ width: "100%", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                <Typography>
+                  {filterName} Filter {index + 1}
+                </Typography>
+                <IconButton onClick={() => remove(index)} sx={{ marginRight: 2 }}>
+                  <DeleteIcon fontSize="small" />
+                </IconButton>
+              </Box>
             </AccordionSummary>
             <AccordionDetails>
               <Stack sx={{ ...formFieldBorder, gap: 1 }} key={field.id}>
