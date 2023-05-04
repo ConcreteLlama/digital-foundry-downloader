@@ -59,7 +59,7 @@ export const DfContentInfoItemDetail = ({ dfContentName }: DfContentInfoItemDeta
         </Typography>
         <MediaInfoList
           currentDownloadingType={downloadStatus?.selectedMediaInfo?.mediaType}
-          contentName={contentInfo.name}
+          contentInfo={contentInfo}
           mediaInfo={contentInfo.mediaInfo}
         />
       </Box>

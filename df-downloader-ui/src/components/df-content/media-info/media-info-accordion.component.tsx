@@ -1,13 +1,11 @@
-import DownloadIcon from "@mui/icons-material/Download";
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 import HeadphonesIcon from "@mui/icons-material/Headphones";
 import VideoCameraIcon from "@mui/icons-material/VideoCameraBack";
-import { Accordion, AccordionDetails, AccordionSummary, Box, IconButton, Stack, Typography } from "@mui/material";
-import { startDownload } from "../../../store/download-queue/download-queue.action";
-import { store } from "../../../store/store";
+import { Accordion, AccordionDetails, AccordionSummary, Box, Stack, Typography } from "@mui/material";
 import { MediaInfoListProps } from "./media-info-list.component";
+import { StartDownloadingButton } from "../start-download-dialog.component";
 
-export const MediaInfoAccordion = ({ contentName, currentDownloadingType, mediaInfo }: MediaInfoListProps) => {
+export const MediaInfoAccordion = ({ contentInfo, currentDownloadingType, mediaInfo }: MediaInfoListProps) => {
   return (
     <Stack sx={{ gap: 1 }}>
       {mediaInfo.map((mediaInfo) => {
@@ -18,19 +16,7 @@ export const MediaInfoAccordion = ({ contentName, currentDownloadingType, mediaI
                 <Typography>
                   {mediaInfo.mediaType} ({mediaInfo.size})
                 </Typography>
-                <IconButton
-                  sx={{ marginRight: 2 }}
-                  onClick={() => {
-                    store.dispatch(
-                      startDownload.start({
-                        name: contentName,
-                        mediaType: mediaInfo.mediaType,
-                      })
-                    );
-                  }}
-                >
-                  <DownloadIcon fontSize="small" />
-                </IconButton>
+                <StartDownloadingButton contentInfo={contentInfo} mediaType={mediaInfo.mediaType} />
               </Box>
             </AccordionSummary>
             <AccordionDetails>

@@ -1,10 +1,8 @@
-import DownloadIcon from "@mui/icons-material/Download";
-import { IconButton, Table, TableBody, TableCell, TableHead, TableRow } from "@mui/material";
-import { store } from "../../../store/store";
-import { startDownload } from "../../../store/download-queue/download-queue.action";
+import { Table, TableBody, TableCell, TableHead, TableRow } from "@mui/material";
+import { StartDownloadingButton } from "../start-download-dialog.component";
 import { MediaInfoListProps } from "./media-info-list.component";
 
-export const MediaInfoTable = ({ contentName, currentDownloadingType, mediaInfo }: MediaInfoListProps) => {
+export const MediaInfoTable = ({ contentInfo, currentDownloadingType, mediaInfo }: MediaInfoListProps) => {
   return (
     <Table>
       <TableHead>
@@ -24,19 +22,7 @@ export const MediaInfoTable = ({ contentName, currentDownloadingType, mediaInfo 
             <TableCell>{mediaInfo.videoEncoding}</TableCell>
             <TableCell>{mediaInfo.audioEncoding}</TableCell>
             <TableCell>
-              <IconButton
-                disabled={Boolean(currentDownloadingType)}
-                onClick={() => {
-                  store.dispatch(
-                    startDownload.start({
-                      name: contentName,
-                      mediaType: mediaInfo.mediaType,
-                    })
-                  );
-                }}
-              >
-                <DownloadIcon />
-              </IconButton>
+              <StartDownloadingButton contentInfo={contentInfo} mediaType={mediaInfo.mediaType} />
             </TableCell>
           </TableRow>
         ))}

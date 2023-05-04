@@ -1,27 +1,18 @@
-import { useSelector } from "react-redux";
-import { selectDownloadItem } from "../../store/download-queue/download-queue.selector";
-import { isDownloadedContentStatus, isPaywalledContentStatus } from "../../utils/types";
+import { Typography } from "@mui/material";
 import { DfContentEntry, DfContentStatus } from "df-downloader-common";
-import { Box, Typography } from "@mui/material";
-import { QueuedContentSummary } from "./queued-content-info.component";
-import { DownloadedContentSummary } from "./downloaded-content-info.component";
 import { useState } from "react";
-import { store } from "../../store/store";
+import { useSelector } from "react-redux";
 import { fetchSingleDfContentInfo } from "../../store/df-content/df-content.action";
-import DownloadIcon from "@mui/icons-material/Download";
-import { startDownload } from "../../store/download-queue/download-queue.action";
+import { selectDownloadItem } from "../../store/download-queue/download-queue.selector";
+import { store } from "../../store/store";
+import { isDownloadedContentStatus, isPaywalledContentStatus } from "../../utils/types";
+import { DownloadedContentSummary } from "./downloaded-content-info.component";
+import { QueuedContentSummary } from "./queued-content-info.component";
+import { StartDownloadingButton } from "./start-download-dialog.component";
 
 export type DfContentStatusSummaryProps = {
   content: DfContentEntry;
 };
-
-//Content status
-/*
-    AVAILABLE = "AVAILABLE",
-    CONTENT_PAYWALLED = "CONTENT_PAYWALLED",
-    ATTEMPTING_DOWNLOAD = "ATTEMPTING_DOWNLOAD",
-    DOWNLOADED = "DOWNLOADED"
-  */
 
 export const DfContentStatusSummary = ({ content }: DfContentStatusSummaryProps) => {
   const downloadStatus = useSelector(selectDownloadItem(content.name));
@@ -45,21 +36,7 @@ export const DfContentStatusSummary = ({ content }: DfContentStatusSummaryProps)
     } else if (status === DfContentStatus.ATTEMPTING_DOWNLOAD) {
       return <Typography>Attempting Download</Typography>;
     } else if (status === DfContentStatus.AVAILABLE) {
-      return (
-        <Box
-          sx={{ display: "flex", alignItems: "center", cursor: "pointer", "&:hover": { color: "primary.main" } }}
-          onClick={() =>
-            store.dispatch(
-              startDownload.start({
-                name: content.name,
-              })
-            )
-          }
-        >
-          <Typography>Available</Typography>
-          <DownloadIcon fontSize="small" />
-        </Box>
-      );
+      return <StartDownloadingButton contentInfo={content.contentInfo} label="Available" />;
     }
   }
   return <span>ERROR</span>;

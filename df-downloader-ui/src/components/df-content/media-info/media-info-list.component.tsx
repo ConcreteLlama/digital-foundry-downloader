@@ -1,11 +1,11 @@
 import { useMediaQuery } from "@mui/material";
 import { theme } from "../../../themes/theme";
-import { MediaInfo } from "df-downloader-common";
+import { DfContentInfo, MediaInfo } from "df-downloader-common";
 import { MediaInfoAccordion } from "./media-info-accordion.component";
 import { MediaInfoTable } from "./media-info-table.component";
 
 export type MediaInfoListProps = {
-  contentName: string;
+  contentInfo: DfContentInfo;
   currentDownloadingType?: string;
   mediaInfo: MediaInfo[];
 };
