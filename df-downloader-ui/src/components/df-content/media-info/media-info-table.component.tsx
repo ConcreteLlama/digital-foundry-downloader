@@ -1,16 +1,10 @@
 import DownloadIcon from "@mui/icons-material/Download";
 import { IconButton, Table, TableBody, TableCell, TableHead, TableRow } from "@mui/material";
-import { MediaInfo } from "df-downloader-common";
-import { store } from "../../store/store";
-import { startDownload } from "../../store/download-queue/download-queue.action";
+import { store } from "../../../store/store";
+import { startDownload } from "../../../store/download-queue/download-queue.action";
+import { MediaInfoListProps } from "./media-info-list.component";
 
-type MediaInfoTableProps = {
-  contentName: string;
-  currentDownloadingType?: string;
-  mediaInfo: MediaInfo[];
-};
-
-export const MediaInfoTable = ({ contentName, currentDownloadingType, mediaInfo }: MediaInfoTableProps) => {
+export const MediaInfoTable = ({ contentName, currentDownloadingType, mediaInfo }: MediaInfoListProps) => {
   return (
     <Table>
       <TableHead>

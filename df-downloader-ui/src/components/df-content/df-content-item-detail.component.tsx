@@ -1,15 +1,15 @@
 import { Box, Paper, Typography } from "@mui/material";
-import { DfContentInfoUtils } from "df-downloader-common";
+import { DfContentInfoUtils, secondsToHHMMSS } from "df-downloader-common";
 import { Image } from "mui-image";
 import { useSelector } from "react-redux";
 import { selectDfContentInfoItem } from "../../store/df-content/df-content.selector";
 import { selectDownloadItem } from "../../store/download-queue/download-queue.selector";
-import { MediaInfoTable } from "./media-info-table.component";
-import { DfTagList } from "./df-tag-list.component";
-import { QueuedContentDetail } from "./queued-content-info.component";
-import { DownloadedContentDetail } from "./downloaded-content-info.component";
-import { isDownloadedContentStatus } from "../../utils/types";
 import { formatDate } from "../../utils/date";
+import { isDownloadedContentStatus } from "../../utils/types";
+import { DfTagList } from "./df-tag-list.component";
+import { DownloadedContentDetail } from "./downloaded-content-info.component";
+import { MediaInfoList } from "./media-info/media-info-list.component";
+import { QueuedContentDetail } from "./queued-content-info.component";
 
 export type DfContentInfoItemDetailProps = {
   dfContentName: string;
@@ -42,6 +42,9 @@ export const DfContentInfoItemDetail = ({ dfContentName }: DfContentInfoItemDeta
       </Box>
       <DfTagList tags={contentInfo.tags || []} sx={{ alignSelf: "center" }} />
       <Typography variant="caption">Published on {formatDate(contentInfo.publishedDate)}</Typography>
+      <Typography variant="caption">
+        Duration: {secondsToHHMMSS(DfContentInfoUtils.getDurationSeconds(contentInfo))}
+      </Typography>
       <Typography>{contentInfo.description}</Typography>
       {downloadStatus ? (
         <QueuedContentDetail queuedContent={downloadStatus} />
@@ -51,8 +54,10 @@ export const DfContentInfoItemDetail = ({ dfContentName }: DfContentInfoItemDeta
         contentStatus === "CONTENT_PAYWALLED" && <Typography>Content is paywalled</Typography>
       )}
       <Box>
-        <Typography variant="h6">Available Downloads</Typography>
-        <MediaInfoTable
+        <Typography variant="h6" sx={{ paddingBottom: 2 }}>
+          Available Downloads
+        </Typography>
+        <MediaInfoList
           currentDownloadingType={downloadStatus?.selectedMediaInfo?.mediaType}
           contentName={contentInfo.name}
           mediaInfo={contentInfo.mediaInfo}
