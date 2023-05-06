@@ -9,11 +9,18 @@ export const DownloadQueue = () => {
   return (
     <Stack sx={{ margin: 2, justifyItems: "center", marginTop: 1 }}>
       <List sx={{ display: "flex", flexDirection: "column", justifyContent: "center" }}>
-        {downloadQueue.map((queueItem) => (
-          <ListItem key={`df-download-list-item-${queueItem.name}`} sx={{ display: "flex", justifyContent: "center" }}>
-            <DownloadQueueItem queueItem={queueItem} key={`download-queue-item=${queueItem.name}`} />
-          </ListItem>
-        ))}
+        {downloadQueue.length > 0 ? (
+          downloadQueue.map((queueItem) => (
+            <ListItem
+              key={`df-download-list-item-${queueItem.name}`}
+              sx={{ display: "flex", justifyContent: "center" }}
+            >
+              <DownloadQueueItem queueItem={queueItem} key={`download-queue-item=${queueItem.name}`} />
+            </ListItem>
+          ))
+        ) : (
+          <ListItem sx={{ display: "flex", justifyContent: "center" }}>No items in queue</ListItem>
+        )}
       </List>
     </Stack>
   );

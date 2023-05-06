@@ -31,7 +31,7 @@ export const startListeningDownloadQueue = (startListening: AppStartListening) =
   //   const toReturn: QueuedContent = {
   //     name: dfContentEntry.name,
   //     dfContent: dfContentEntry.contentInfo,
-  //     contentStatus: QueuedContentStatus.DOWNLOADING,
+  //     queuedContentStatus: QueuedContentStatus.DOWNLOADING,
   //     readyForRetry: false,
   //     selectedMediaInfo: dfContentEntry.contentInfo.mediaInfo[0]!,
   //     currentAttempt: 1,

@@ -24,7 +24,7 @@ export const DfContentInfoItemDetail = ({ dfContentName }: DfContentInfoItemDeta
   }
   const { contentInfo } = dfContentEntry;
   const { statusInfo } = dfContentEntry;
-  const contentStatus = statusInfo.status;
+  const queuedContentStatus = statusInfo.status;
   return dfContentEntry ? (
     <Paper
       sx={{
@@ -51,7 +51,7 @@ export const DfContentInfoItemDetail = ({ dfContentName }: DfContentInfoItemDeta
       ) : isDownloadedContentStatus(statusInfo) ? (
         <DownloadedContentDetail content={dfContentEntry} statusInfo={statusInfo} />
       ) : (
-        contentStatus === "CONTENT_PAYWALLED" && <Typography>Content is paywalled</Typography>
+        queuedContentStatus === "CONTENT_PAYWALLED" && <Typography>Content is paywalled</Typography>
       )}
       <Box>
         <Typography variant="h6" sx={{ paddingBottom: 2 }}>

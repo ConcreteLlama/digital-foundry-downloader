@@ -1,4 +1,4 @@
-import { DownloadProgressUtils, QueuedContent, QueuedContentStatus } from "df-downloader-common";
+import { DownloadProgressUtils, QueuedContent, QueuedContentStatus, QueuedContentUtils } from "df-downloader-common";
 import prettyMs from "pretty-ms";
 import { Box, Typography } from "@mui/material";
 import prettyBytes from "pretty-bytes";
@@ -25,16 +25,16 @@ export type QueuedContentComponentProps = {
 export const QueuedContentDetail = ({ queuedContent }: QueuedContentComponentProps) => {
   return (
     <Box>
-      {queuedContent.contentStatus === QueuedContentStatus.QUEUED ? (
+      {queuedContent.queuedContentStatus === QueuedContentStatus.QUEUED ? (
         <QueuedContentDetailQueued queuedContent={queuedContent} />
-      ) : queuedContent.contentStatus === QueuedContentStatus.PENDING_RETRY ? (
+      ) : queuedContent.queuedContentStatus === QueuedContentStatus.PENDING_RETRY ? (
         <QueuedContentDetailPendingRetry queuedContent={queuedContent} />
-      ) : queuedContent.contentStatus === QueuedContentStatus.DOWNLOADING ? (
+      ) : queuedContent.queuedContentStatus === QueuedContentStatus.DOWNLOADING ? (
         <QueuedContentDetailDownloading queuedContent={queuedContent} />
-      ) : queuedContent.contentStatus === QueuedContentStatus.POST_PROCESSING ? (
+      ) : queuedContent.queuedContentStatus === QueuedContentStatus.POST_PROCESSING ? (
         <QueuedContentDetailPostProcessing queuedContent={queuedContent} />
       ) : (
-        <Typography>ERROR: Unrecognized queue status {queuedContent.contentStatus}</Typography>
+        <Typography>ERROR: Unrecognized queue status {queuedContent.queuedContentStatus}</Typography>
       )}
     </Box>
   );
@@ -59,7 +59,7 @@ const QueuedContentDetailPendingRetry = ({ queuedContent }: QueuedContentCompone
 };
 
 const QueuedContentDetailDownloading = ({ queuedContent }: QueuedContentComponentProps) => {
-  const progress = queuedContent.currentProgress;
+  const progress = QueuedContentUtils.getCurrentStats(queuedContent);
   return (
     <Box>
       <DfDownloadProgressBar queuedContent={queuedContent} />
@@ -94,12 +94,12 @@ const QueuedContentDetailPostProcessing = ({ queuedContent }: QueuedContentCompo
 export const QueuedContentSummary = ({ queuedContent }: QueuedContentComponentProps) => {
   return (
     <Box>
-      {queuedContent.contentStatus === QueuedContentStatus.DOWNLOADING ? (
+      {queuedContent.queuedContentStatus === QueuedContentStatus.DOWNLOADING ? (
         <DfDownloadProgressBar queuedContent={queuedContent} />
-      ) : queuedContent.contentStatus === QueuedContentStatus.POST_PROCESSING ? (
+      ) : queuedContent.queuedContentStatus === QueuedContentStatus.POST_PROCESSING ? (
         <Typography>Post Processing: {queuedContent.statusInfo}</Typography>
       ) : (
-        <Typography>{queuedContent.contentStatus}</Typography>
+        <Typography>{queuedContent.queuedContentStatus}</Typography>
       )}
     </Box>
   );

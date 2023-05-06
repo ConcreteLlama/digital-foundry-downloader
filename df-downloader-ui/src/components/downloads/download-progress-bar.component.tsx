@@ -1,4 +1,4 @@
-import { QueuedContent } from "df-downloader-common";
+import { QueuedContent, QueuedContentUtils } from "df-downloader-common";
 import { LinearProgressWithLabel } from "../general/linear-progress-with-label.component";
 
 export type DfDownloadProgressBarProps = {
@@ -9,7 +9,7 @@ export const DfDownloadProgressBar = ({ queuedContent }: DfDownloadProgressBarPr
   return (
     <LinearProgressWithLabel
       variant="determinate"
-      value={(queuedContent.currentProgress?.percentComplete || 0) * 100}
+      value={(QueuedContentUtils.getCurrentStats(queuedContent)?.percentComplete || 0) * 100}
     />
   );
 };

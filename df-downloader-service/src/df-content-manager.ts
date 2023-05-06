@@ -61,7 +61,7 @@ export class DigitalFoundryContentManager {
         const contentManagementConfig = config.contentManagement;
         const metaConfig = config.metadata;
         const pendingInfo = this.queuedContent.get(dfContentInfo.name)!;
-        pendingInfo.contentStatus = QueuedContentStatus.DOWNLOADING;
+        pendingInfo.queuedContentStatus = QueuedContentStatus.DOWNLOADING;
         let err: any;
         try {
           logger.log(LogLevel.DEBUG, `Fetching ${JSON.stringify(dfContentInfo)}`);
@@ -77,10 +77,11 @@ export class DigitalFoundryContentManager {
               mediaInfo,
               (progressUpdate: DownloadProgressInfo) => {
                 progressUpdate && (currentProgress = progressUpdate);
-                pendingInfo!.currentProgress = currentProgress;
+                pendingInfo.currentProgress = currentProgress;
                 this.progressUpdate(dfContentInfo, mediaInfo, progressUpdate);
               }
             );
+            pendingInfo.currentProgress = undefined;
             if (!downloadResult) {
               err = `Unable to download ${dfContentInfo.name}`;
               return;
@@ -93,7 +94,7 @@ export class DigitalFoundryContentManager {
               err = downloadResult.error;
               return;
             }
-            pendingInfo.contentStatus = QueuedContentStatus.POST_PROCESSING;
+            pendingInfo.queuedContentStatus = QueuedContentStatus.POST_PROCESSING;
             const downloadLocation = downloadResult.destination;
             if (metaConfig.injectMetadata) {
               pendingInfo.statusInfo = "Injecting metadata";
@@ -128,7 +129,7 @@ export class DigitalFoundryContentManager {
                 LogLevel.DEBUG,
                 `Destination dir and download dir are not the same, moving ${downloadLocation} to ${destination}`
               );
-              pendingInfo!.contentStatus = QueuedContentStatus.POST_PROCESSING;
+              pendingInfo!.queuedContentStatus = QueuedContentStatus.POST_PROCESSING;
               pendingInfo.statusInfo = "Moving file";
 
               await moveFile(downloadLocation, destination, {
@@ -144,11 +145,11 @@ export class DigitalFoundryContentManager {
               mediaInfo.size,
               new Date()
             );
-            pendingInfo!.contentStatus = QueuedContentStatus.DONE;
+            pendingInfo!.queuedContentStatus = QueuedContentStatus.DONE;
             this.queuedContent.delete(dfContentInfo.name);
 
             serviceLocator.notificationConsumers.forEach((consumer) =>
-              consumer.downloadComplete(dfContentInfo, mediaInfo, destination, currentProgress)
+              consumer.downloadComplete(dfContentInfo, mediaInfo, destination, downloadResult.stats)
             );
           } catch (e) {
             err = e;
@@ -157,7 +158,7 @@ export class DigitalFoundryContentManager {
           err = e;
         } finally {
           if (err) {
-            pendingInfo!.contentStatus = QueuedContentStatus.PENDING_RETRY;
+            pendingInfo!.queuedContentStatus = QueuedContentStatus.PENDING_RETRY;
             logger.log(LogLevel.WARN, `Unable to fetch ${dfContentInfo.name}`);
             logger.log(LogLevel.WARN, err);
             serviceLocator.notificationConsumers.forEach((consumer) => consumer.downloadFailed(dfContentInfo, err));

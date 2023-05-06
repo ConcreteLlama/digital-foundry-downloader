@@ -16,7 +16,7 @@ export const QueuedContent = z.object({
   originalDetectionTime: z.coerce.date(),
   currentAttempt: z.number(),
   readyForRetry: z.boolean().optional(),
-  contentStatus: z.nativeEnum(QueuedContentStatus),
+  queuedContentStatus: z.nativeEnum(QueuedContentStatus),
   statusInfo: z.string().optional(),
   currentProgress: DownloadProgressInfo.optional(),
   dfContent: DfContentInfo,
@@ -37,7 +37,7 @@ export const QueuedContentUtils = {
     originalDetectionTime,
     currentAttempt: 0,
     readyForRetry: false,
-    contentStatus: QueuedContentStatus.QUEUED,
+    queuedContentStatus: QueuedContentStatus.QUEUED,
     statusInfo: undefined,
     currentProgress: undefined,
     dfContent,
@@ -48,6 +48,34 @@ export const QueuedContentUtils = {
     queuedContent.readyForRetry = false;
     queuedContent.currentAttempt++;
     queuedContent.currentRetryInterval *= 2;
+  },
+
+  getCurrentStats: (queuedContent: QueuedContent): DownloadProgressInfo | undefined => {
+    if (queuedContent.queuedContentStatus !== QueuedContentStatus.DOWNLOADING) {
+      return undefined;
+    }
+    console.log("returning stats");
+    return queuedContent.currentProgress;
+  },
+
+  getCumulativeStats: (queuedContent: QueuedContent[]) => {
+    return queuedContent.reduce(
+      (acc, queueItem) => {
+        const currentProgress = QueuedContentUtils.getCurrentStats(queueItem);
+        if (currentProgress) {
+          const { bytesPerSecond, totalBytes, totalBytesDownloaded } = currentProgress;
+          acc.bytesPerSecond += bytesPerSecond;
+          acc.totalBytes += totalBytes;
+          acc.totalBytesDownloaded += totalBytesDownloaded;
+        }
+        return acc;
+      },
+      {
+        bytesPerSecond: 0,
+        totalBytes: 0,
+        totalBytesDownloaded: 0,
+      }
+    );
   },
 };
 
