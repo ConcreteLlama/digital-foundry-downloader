@@ -8,8 +8,14 @@ import { SettingsPage } from "./routes/settings/settings.component";
 import { theme } from "./themes/theme";
 import { Box, Toolbar } from "@mui/material";
 import { SettingsRouteElement, isSettingsRoute, settingsRoutes } from "./routes/settings/settings.routes";
+import { useEffect } from "react";
+import { store } from "./store/store";
+import { queryServiceInfo } from "./store/service-info/service-info.actions";
 
 function App() {
+  useEffect(() => {
+    store.dispatch(queryServiceInfo.start());
+  }, []);
   return (
     <ThemeProvider theme={theme}>
       <Box sx={{ display: "flex" }}>

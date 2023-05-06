@@ -1,6 +1,6 @@
 import express, { Request, Response } from "express";
-import { DigitalFoundryContentManager } from "../df-content-manager.js";
-import { sendResponse } from "./utils.js";
+import { DigitalFoundryContentManager } from "../../df-content-manager.js";
+import { sendResponse } from "../utils.js";
 
 export const makeUserRouter = (contentManager: DigitalFoundryContentManager) => {
   const router = express.Router();

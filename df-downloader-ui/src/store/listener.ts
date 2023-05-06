@@ -5,12 +5,15 @@ import { startListeningDownloadQueue } from "./download-queue/download-queue.lis
 import { RootState, AppDispatch } from "./store";
 import { startListeningUserInfo } from "./user/user.listener";
 import { startListeneingConfig } from "./config/config.listener";
+import { startListeningServiceInfo } from "./service-info/service-info.listener";
 
 export const listenerMiddleware = createListenerMiddleware();
 export type AppStartListening = TypedStartListening<RootState, AppDispatch>;
 
 export const startAppListening = listenerMiddleware.startListening as AppStartListening;
 
+startListeningServiceInfo(startAppListening);
+startListeningUserInfo(startAppListening);
 startListeningDfContentInfo(startAppListening);
 startListeningDfTags(startAppListening);
 startListeningDownloadQueue(startAppListening);

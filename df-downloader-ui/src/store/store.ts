@@ -5,6 +5,7 @@ import { dfTagsReducer } from "./df-tags/df-tags.reducer";
 import { downloadQueueReducer } from "./download-queue/download-queue.reducer";
 import { userReducer } from "./user/user.reducer";
 import { configReducer } from "./config/config.reducer";
+import { serviceInfoReducer } from "./service-info/service-info.reducer";
 
 //TODO: Create a service status store to make it clear when it's updating etc.
 export const store = configureStore({
@@ -14,6 +15,7 @@ export const store = configureStore({
     downloadQueue: downloadQueueReducer,
     userInfo: userReducer,
     config: configReducer,
+    serviceInfo: serviceInfoReducer,
   },
   middleware: (getDefaultMiddleware) => getDefaultMiddleware().prepend(listenerMiddleware.middleware),
 });

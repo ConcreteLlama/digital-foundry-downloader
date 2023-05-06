@@ -10,6 +10,7 @@ export type ZodStringFieldProps = {
   zodString: ZodString | ZodOptional<ZodString>;
   isPassword?: boolean;
   onChange?: ChangeEventHandler<HTMLInputElement | HTMLTextAreaElement>;
+  disabled?: boolean;
   sx?: SxProps;
 };
 
@@ -20,6 +21,7 @@ export const ZodTextField = ({
   helperText,
   isPassword,
   onChange,
+  disabled,
   sx = {},
 }: ZodStringFieldProps) => {
   const isOptional = zodString.isOptional();
@@ -37,6 +39,7 @@ export const ZodTextField = ({
     required: !isOptional,
     value: zodStringActual.default,
     sx: sx,
+    disabled,
   };
   return isPassword ? <PasswordElement {...props} /> : <TextFieldElement {...props} />;
 };

@@ -1,7 +1,7 @@
+import { QueueDownloadRequest } from "df-downloader-common";
 import express, { Request, Response } from "express";
-import { DigitalFoundryContentManager } from "../df-content-manager.js";
-import { QueueDownloadRequest, zodParse } from "df-downloader-common";
-import { sendError, sendErrorAsResponse, sendResponse, zodParseHttp } from "./utils.js";
+import { DigitalFoundryContentManager } from "../../df-content-manager.js";
+import { sendErrorAsResponse, sendResponse, zodParseHttp } from "../utils.js";
 
 export const makeDownloadsApiRouter = (contentManager: DigitalFoundryContentManager) => {
   const router = express.Router();

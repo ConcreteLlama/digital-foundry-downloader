@@ -1,12 +1,12 @@
 import { fromZodError } from "zod-validation-error";
 import express from "express";
-import { configService } from "../config/config.js";
+import { configService } from "../../config/config.js";
 import {
   DfDownloaderConfig,
   DfDownloaderConfigKey,
   DfDownloaderConfigKeys,
 } from "df-downloader-common/config/df-downloader-config.js";
-import { sendError, sendResponse } from "./utils.js";
+import { sendError, sendResponse } from "../utils.js";
 
 export const makeConfigRouter = () => {
   const router = express.Router();

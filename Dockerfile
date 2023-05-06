@@ -7,6 +7,7 @@ WORKDIR /usr/src/app
 
 ENV CONFIG_DIR=/config
 ENV DB_DIR=/db
+ENV CONTAINER_ENV=docker
 
 RUN npm i yalc@1.0.0-pre.53 -g
 

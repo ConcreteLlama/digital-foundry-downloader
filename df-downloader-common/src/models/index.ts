@@ -11,3 +11,4 @@ export * from "./rest-response.js";
 export * from "./filter.js";
 export * from "./df-content-search.js";
 export * from "./notification.js";
+export * from "./service-info.js";

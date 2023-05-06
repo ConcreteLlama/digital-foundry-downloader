@@ -9,8 +9,7 @@ import path from "path";
 import { DfDbFileSchema, DfDbRuntimeSchema } from "./df-db-model.js";
 import { existsSync } from "fs";
 import { copyFile } from "fs/promises";
-
-const CURRENT_VERSION = "2.0.0";
+import { CURRENT_VERSION } from "../version.js";
 
 export class DfLowDb extends DfDownloaderOperationalDb {
   private data!: DfDbRuntimeSchema;
