@@ -4,6 +4,8 @@ import { AppStartListening } from "./listener";
 import { z } from "zod";
 import { fetchJson } from "../utils/fetch";
 import { parseResponseBody } from "df-downloader-common";
+import { isEqual } from "lodash";
+import { createSelectorCreator, defaultMemoize } from "reselect";
 
 export const createQueryActions = <START_PAYLOAD, SUCCESS_PAYLOAD, ERROR_PAYLOAD = DfUiError>(
   queryNamespace: string,
@@ -115,3 +117,6 @@ export const addQueryCases = <STATE extends QueryableState, START_PAYLOAD, SUCCE
     return success ? success(newState, action.payload) : newState;
   });
 };
+
+export const createDeepEqualSelector = createSelectorCreator(defaultMemoize, isEqual);
+export const createShallowEqualSelector = createSelectorCreator(defaultMemoize, (a, b) => a === b);

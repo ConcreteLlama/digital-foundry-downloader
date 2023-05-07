@@ -1,5 +1,5 @@
 import { AppBar, Box, Button, List, ListItem, Stack, Typography } from "@mui/material";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useSelector } from "react-redux";
 import {
   resetState,
@@ -8,7 +8,7 @@ import {
   updateDfContentInfoQuery,
 } from "../../store/df-content/df-content.action";
 import {
-  selectDfContentInfoKeys,
+  selectDfContentEntryKeys,
   selectPageInfo,
   selectQueryTags,
   selectSearchOpenState,
@@ -23,23 +23,11 @@ import { DfTagBox } from "./df-tag-box.component";
 import { MiddleModal } from "../general/middle-modal.component";
 import { PageSelector } from "../general/page-selector.component";
 
-//TODO:
-// Create a content detail item; when content item clicked, this pops up in front of everything showing all details
-
 export const DfContentInfoDirectory = () => {
-  const contentKeys = useSelector(selectDfContentInfoKeys, (a, b) => {
-    if (a.length !== b.length) {
-      return false;
-    }
-    for (let i = 0; i < a.length; i++) {
-      if (a[i] !== b[i]) {
-        return false;
-      }
-    }
-    return true;
-  });
+  const contentKeys = useSelector(selectDfContentEntryKeys);
   const totalItems = useSelector(selectTotalContentItems);
   const { currentPage, numPages, limit } = useSelector(selectPageInfo);
+  const [prevPage, setPrevPage] = useState(currentPage);
   const selectedItem = useSelector(selectSelectedContentItem);
   const searchOpen = useSelector(selectSearchOpenState);
   useEffect(() => {
@@ -47,6 +35,10 @@ export const DfContentInfoDirectory = () => {
       store.dispatch(resetState);
     };
   }, []);
+  if (prevPage !== currentPage) {
+    setPrevPage(currentPage);
+    window.scrollTo(0, 0);
+  }
   return (
     <Stack sx={{ justifyItems: "center", marginTop: 1 }}>
       <Box sx={{ display: "flex", justifyContent: "space-between", paddingX: 4 }}>

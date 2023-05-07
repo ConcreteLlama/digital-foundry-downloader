@@ -32,6 +32,7 @@
     "react-scripts": "5.0.1",
     "redux": "^4.2.1",
     "redux-saga": "^1.2.2",
+    "reselect": "^4.1.8",
     "web-vitals": "^2.1.4",
     "zod": "^3.21.4"
   },
