@@ -1,10 +1,10 @@
-import { Paper, Typography, Box, Divider, Stack } from "@mui/material";
+import { Paper, Typography, Divider, Stack, Box } from "@mui/material";
 import { useEffect } from "react";
 import { queryDfTags } from "../../store/df-tags/df-tags.action";
 import { store } from "../../store/store";
 import { DfTagDropdown } from "./df-tag-dropdown.component";
 import { DfTagModeSelect } from "./df-tag-mode-select.component";
-import { updateDfContentInfoQuery } from "../../store/df-content/df-content.action";
+import { updateDfContentQuery } from "../../store/df-content/df-content.action";
 
 export const DfTagBox = () => {
   useEffect(() => {
@@ -16,15 +16,15 @@ export const DfTagBox = () => {
         padding: 1,
       }}
     >
-      <Stack sx={{ gap: 1 }}>
+      <Stack sx={{ gap: 2, padding: 2 }}>
         <Typography variant="h6">Tags</Typography>
-        <Typography variant="h6">TODO: Should this be an advanced search form rather than just for tags?</Typography>
-        <Divider />
-        <Box sx={{ display: "flex", gap: 1 }}>
+        <Divider sx={{ marginBottom: 2 }} />
+        <Box sx={{ display: "flex", width: "100%", gap: 2 }}>
           <DfTagDropdown
+            sx={{ width: "100%" }}
             onChange={(tags) => {
               store.dispatch(
-                updateDfContentInfoQuery({
+                updateDfContentQuery({
                   tags: tags.length ? tags : undefined,
                 })
               );

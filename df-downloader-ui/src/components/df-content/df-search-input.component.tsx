@@ -1,5 +1,5 @@
 import { Input } from "@mui/material";
-import { updateDfContentInfoQuery } from "../../store/df-content/df-content.action";
+import { updateDfContentQuery } from "../../store/df-content/df-content.action";
 import { store } from "../../store/store";
 
 let searchInputTimer: ReturnType<typeof setTimeout>;
@@ -7,7 +7,7 @@ let searchInputTimer: ReturnType<typeof setTimeout>;
 const tempSearchRemoveThis = (searchString: string) => {
   clearTimeout(searchInputTimer);
   searchInputTimer = setTimeout(() => {
-    store.dispatch(updateDfContentInfoQuery({ search: searchString }));
+    store.dispatch(updateDfContentQuery({ search: searchString }));
   }, 500);
 };
 

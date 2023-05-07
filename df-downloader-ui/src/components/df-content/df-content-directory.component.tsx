@@ -5,7 +5,7 @@ import {
   resetState,
   setSearchOpen,
   setSelectedItem,
-  updateDfContentInfoQuery,
+  updateDfContentQuery,
 } from "../../store/df-content/df-content.action";
 import {
   selectDfContentEntryKeys,
@@ -41,7 +41,7 @@ export const DfContentInfoDirectory = () => {
   }
   return (
     <Stack sx={{ justifyItems: "center", marginTop: 1 }}>
-      <Box sx={{ display: "flex", justifyContent: "space-between", paddingX: 4 }}>
+      <Box sx={{ display: "flex", justifyContent: "space-between", paddingX: 4, gap: 2 }}>
         <DfSearch />
         <TagButton />
       </Box>
@@ -73,7 +73,7 @@ export const DfContentInfoDirectory = () => {
         <PageSelector
           currentPage={currentPage}
           numPages={numPages}
-          onUpdatePage={(page) => store.dispatch(updateDfContentInfoQuery({ page }))}
+          onUpdatePage={(page) => store.dispatch(updateDfContentQuery({ page }))}
           buttonProps={{
             variant: "contained",
           }}

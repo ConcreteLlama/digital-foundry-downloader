@@ -2,7 +2,7 @@ import { Typography } from "@mui/material";
 import { DfContentEntry, DfContentStatus } from "df-downloader-common";
 import { useState } from "react";
 import { useSelector } from "react-redux";
-import { fetchSingleDfContentInfo } from "../../store/df-content/df-content.action";
+import { fetchSingleDfContentEntry } from "../../store/df-content/df-content.action";
 import { selectDownloadItem } from "../../store/download-queue/download-queue.selector";
 import { store } from "../../store/store";
 import { isDownloadedContentStatus, isPaywalledContentStatus } from "../../utils/types";
@@ -22,7 +22,7 @@ export const DfContentStatusSummary = ({ content }: DfContentStatusSummaryProps)
     //TODO: It may be better to create a fn that lists items added to or removed from the download queue
     //then use that to trigger a refetch of the content infos. We can then apply that higher up the tree
     setPrevDownloadExists(downloadExists);
-    store.dispatch(fetchSingleDfContentInfo.start(content.name));
+    store.dispatch(fetchSingleDfContentEntry.start(content.name));
   }
   if (downloadStatus) {
     return <QueuedContentSummary queuedContent={downloadStatus} />;

@@ -1,14 +1,14 @@
 import { createReducer } from "@reduxjs/toolkit";
 import { addQueryCases } from "../utils";
 import {
-  fetchSingleDfContentInfo,
-  queryDfContentInfo,
-  resetDfContentInfoQuery,
+  fetchSingleDfContentEntry,
+  queryDfContent,
+  resetDfContentQuery,
   resetState,
-  setDfContentInfoQuery,
+  setDfContentQuery,
   setSearchOpen,
   setSelectedItem,
-  updateDfContentInfoQuery,
+  updateDfContentQuery,
 } from "./df-content.action";
 import { DefaultContentQuery, DfContentInfoState } from "./df-content.types";
 
@@ -22,7 +22,7 @@ const INITIAL_STATE: DfContentInfoState = {
   error: null,
 };
 export const dfContentReducer = createReducer(INITIAL_STATE, (builder) => {
-  addQueryCases(builder, queryDfContentInfo, {
+  addQueryCases(builder, queryDfContent, {
     success: (state, payload) => {
       return {
         ...state,
@@ -31,7 +31,7 @@ export const dfContentReducer = createReducer(INITIAL_STATE, (builder) => {
       };
     },
   });
-  addQueryCases(builder, fetchSingleDfContentInfo, {
+  addQueryCases(builder, fetchSingleDfContentEntry, {
     success: (state, payload) => {
       const content = state.content.map((c) => (c.name === payload.name ? payload : c));
       return {
@@ -40,7 +40,7 @@ export const dfContentReducer = createReducer(INITIAL_STATE, (builder) => {
       };
     },
   });
-  builder.addCase(updateDfContentInfoQuery, (state, action) => {
+  builder.addCase(updateDfContentQuery, (state, action) => {
     return {
       ...state,
       currentQuery: {
@@ -50,13 +50,13 @@ export const dfContentReducer = createReducer(INITIAL_STATE, (builder) => {
       },
     };
   });
-  builder.addCase(setDfContentInfoQuery, (state, action) => {
+  builder.addCase(setDfContentQuery, (state, action) => {
     return {
       ...state,
       currentQuery: action.payload,
     };
   });
-  builder.addCase(resetDfContentInfoQuery, (state, action) => {
+  builder.addCase(resetDfContentQuery, (state, action) => {
     return {
       ...state,
       currentQuery: DefaultContentQuery,

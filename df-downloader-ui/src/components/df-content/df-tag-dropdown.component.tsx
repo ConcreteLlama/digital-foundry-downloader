@@ -9,9 +9,7 @@ export type DfTagDropdownProps = {
 
 export const DfTagDropdown = ({ onChange, sx }: DfTagDropdownProps) => {
   const tags = useSelector(selectDfTags);
-  console.log("tag dropdown! all tags is", tags);
   const selectedTags = useSelector(selectSelectedTags);
-  console.log("tag dropdown! selected tags is", selectedTags);
   return (
     <Autocomplete
       multiple
