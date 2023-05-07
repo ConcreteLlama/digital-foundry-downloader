@@ -17,19 +17,19 @@ export const ContentManagementSettingsForm = () => {
       />
       <ZodTextField
         name="destinationDir"
-        label={`Destination Directory${
-          isContainer ? " (disabled if running in container; map the /destination_dir container path)" : ""
+        label="Destination Directory"
+        helperText={`The directory where downloaded content will be saved${
+          isContainer ? " (disabled when running in container; map the /destination_dir container path)" : ""
         }`}
-        helperText="The directory where downloaded content will be saved"
         disabled={isContainer}
         zodString={ContentManagementConfig.shape.destinationDir._def.innerType}
       />
       <ZodTextField
         name="workDir"
-        label={`Work Directory${
-          isContainer ? " (disabled if running in container; map the /destination_dir container path)" : ""
+        label="Work Directory"
+        helperText={`The directory where content is processed e.g. downloaded, injected with metadata, etc.${
+          isContainer ? " (disabled when running in container; map the /work_dir container path)" : ""
         }`}
-        helperText="The directory where content is processed (e.g. downloaded, injected with metadata, etc.)"
         disabled={isContainer}
         zodString={ContentManagementConfig.shape.workDir._def.innerType}
       />
