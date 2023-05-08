@@ -1,4 +1,4 @@
-import { Box, Paper, Typography } from "@mui/material";
+import { Box, Paper, Typography, useMediaQuery } from "@mui/material";
 import { DfContentInfoUtils, secondsToHHMMSS } from "df-downloader-common";
 import { Image } from "mui-image";
 import { useSelector } from "react-redux";
@@ -10,12 +10,14 @@ import { DfTagList } from "./df-tag-list.component";
 import { DownloadedContentDetail } from "./downloaded-content-info.component";
 import { MediaInfoList } from "./media-info/media-info-list.component";
 import { QueuedContentDetail } from "./queued-content-info.component";
+import { theme } from "../../themes/theme";
 
 export type DfContentInfoItemDetailProps = {
   dfContentName: string;
 };
 
 export const DfContentInfoItemDetail = ({ dfContentName }: DfContentInfoItemDetailProps) => {
+  const belowMd = useMediaQuery(theme.breakpoints.down("md"));
   const dfContentEntry = useSelector(selectDfContentInfoItem(dfContentName));
   const downloadStatus = useSelector(selectDownloadItem(dfContentName));
   if (!dfContentEntry) {
@@ -38,7 +40,7 @@ export const DfContentInfoItemDetail = ({ dfContentName }: DfContentInfoItemDeta
         {contentInfo.title}
       </Typography>
       <Box sx={{ display: "flex", justifyContent: "center" }}>
-        <Image src={DfContentInfoUtils.getThumbnailUrl(contentInfo, 1200, 600)} width="50%"></Image>
+        <Image src={DfContentInfoUtils.getThumbnailUrl(contentInfo, 1200, 600)} width={belowMd ? "90%" : "70%"}></Image>
       </Box>
       <DfTagList tags={contentInfo.tags || []} sx={{ alignSelf: "center" }} />
       <Typography variant="caption">Published on {formatDate(contentInfo.publishedDate)}</Typography>
