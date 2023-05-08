@@ -7,7 +7,6 @@ const selectSelf = (state: RootState) => state.dfContent;
 const selectContent = (state: RootState) => state.dfContent.content;
 const selectQuery = (state: RootState) => state.dfContent.currentQuery;
 const selectTotalItems = (state: RootState) => state.dfContent.totalItems;
-const selectSearchOpen = (state: RootState) => state.dfContent.searchOpen;
 
 export const selectDfContentEntryList = createDeepEqualSelector(selectContent, (content) => content);
 export const selectDfContentEntryMap = createSelector(selectDfContentEntryList, (content) => {
@@ -34,7 +33,3 @@ export const selectPageInfo = createSelector(selectQuery, selectTotalItems, (que
 
 export const selectQueryTags = createSelector(selectQuery, (queryParams) => queryParams.tags || []);
 export const selectTagQueryMode = createSelector(selectQuery, (queryParams) => queryParams.tagMode);
-
-export const selectSelectedContentItem = createSelector(selectSelf, (state) => state.selectedItem);
-
-export const selectSearchOpenState = createSelector(selectSearchOpen, (searchOpen) => searchOpen);

@@ -15,8 +15,4 @@ export const fetchSingleDfContentEntry = createQueryActions<string, DfContentEnt
   "dfContent/FETCH_SINGLE_DF_CONTENT_ENTRY"
 );
 
-export const setSelectedItem = createAction<string | null>("dfContent/SELECT_ITEM");
-
-export const setSearchOpen = createAction<boolean>("dfContent/SET_SEARCH_OPEN");
-
 export const resetState = createAction("dfContent/RESET_STATE");

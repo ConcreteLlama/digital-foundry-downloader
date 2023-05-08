@@ -1,17 +1,15 @@
-import { useSelector } from "react-redux";
-import { Box, Divider, Typography, Stack, CardActionArea, CardActions, useMediaQuery, SxProps } from "@mui/material";
+import { Box, CardActionArea, CardActions, Divider, Stack, SxProps, Typography, useMediaQuery } from "@mui/material";
+import { DfContentInfoUtils, secondsToHHMMSS } from "df-downloader-common";
 import { Image } from "mui-image";
-import { HoverOverCard } from "../general/hover-card.component";
-import { store } from "../../store/store";
-import { setSelectedItem } from "../../store/df-content/df-content.action";
-import { DfContentInfoUtils } from "df-downloader-common";
-import { secondsToHHMMSS } from "df-downloader-common";
+import { useSelector } from "react-redux";
 import { selectDfContentInfoItem } from "../../store/df-content/df-content.selector";
-import { DfContentStatusSummary } from "./df-content-status-summary.component";
 import { theme } from "../../themes/theme";
+import { HoverOverCard } from "../general/hover-card.component";
+import { DfContentStatusSummary } from "./df-content-status-summary.component";
 
 export type DfContentInfoItemCardProps = {
   dfContentName: string;
+  onClick: () => void;
 };
 
 const thumbWidth = 450;
@@ -26,7 +24,7 @@ const mobileLayout: SxProps = {
   flexDirection: "column",
 };
 
-export const DfContentInfoItemCard = ({ dfContentName }: DfContentInfoItemCardProps) => {
+export const DfContentInfoItemCard = ({ dfContentName, onClick }: DfContentInfoItemCardProps) => {
   const useMobileLayout = useMediaQuery(theme.breakpoints.down("md"));
 
   const dfContentEntry = useSelector(selectDfContentInfoItem(dfContentName));
@@ -48,7 +46,7 @@ export const DfContentInfoItemCard = ({ dfContentName }: DfContentInfoItemCardPr
         justifyContent: "space-around",
       }}
     >
-      <CardActionArea onClick={() => store.dispatch(setSelectedItem(dfContentName))} sx={{ marginBottom: 0 }}>
+      <CardActionArea onClick={onClick} sx={{ marginBottom: 0 }}>
         <Box sx={useMobileLayout ? mobileLayout : desktopLayout}>
           <Box
             sx={{

@@ -6,8 +6,6 @@ import {
   resetDfContentQuery,
   resetState,
   setDfContentQuery,
-  setSearchOpen,
-  setSelectedItem,
   updateDfContentQuery,
 } from "./df-content.action";
 import { DefaultContentQuery, DfContentInfoState } from "./df-content.types";
@@ -17,8 +15,6 @@ const INITIAL_STATE: DfContentInfoState = {
   content: [],
   totalItems: 0,
   currentQuery: DefaultContentQuery,
-  searchOpen: false,
-  selectedItem: null,
   error: null,
 };
 export const dfContentReducer = createReducer(INITIAL_STATE, (builder) => {
@@ -60,20 +56,6 @@ export const dfContentReducer = createReducer(INITIAL_STATE, (builder) => {
     return {
       ...state,
       currentQuery: DefaultContentQuery,
-    };
-  });
-  builder.addCase(setSelectedItem, (state, action) => {
-    return {
-      ...state,
-      selectedItem: action.payload,
-      searchOpen: false,
-    };
-  });
-  builder.addCase(setSearchOpen, (state, action) => {
-    return {
-      ...state,
-      searchOpen: action.payload,
-      selectedItem: null,
     };
   });
   builder.addCase(resetState, (state) => {

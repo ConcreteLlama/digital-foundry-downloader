@@ -16,7 +16,5 @@ export interface DfContentInfoState extends QueryableState {
   // These get turned into concrete classes in the selectors (classes are non-serializable)
   content: DfContentEntry[];
   currentQuery: DfContentInfoQueryParams;
-  selectedItem: string | null;
-  searchOpen: boolean;
   error: DfUiError | null;
 }
