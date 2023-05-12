@@ -60,7 +60,7 @@ export const makeContentApiRouter = (contentManager: DigitalFoundryContentManage
     sendResponse(res, response);
   });
 
-  router.get("/search", async (req: Request, res: Response) => {
+  router.post("/search", async (req: Request, res: Response) => {
     await zodParseHttp(DfContentEntrySearchBody, req, res, async (searchProps) => {
       const allContentEntries = await contentManager.db.getAllContentEntries();
       return sendResponse(res, DfContentEntrySearchUtils.search(searchProps, allContentEntries));

@@ -24,7 +24,7 @@ export const ZodTextField = ({
   disabled,
   sx = {},
 }: ZodStringFieldProps) => {
-  const isOptional = zodString.isOptional();
+  const isOptional = zodString instanceof ZodOptional;
   const zodStringActual = zodString instanceof ZodOptional ? zodString._def.innerType : zodString;
   const props: TextFieldElementProps = {
     name,
@@ -33,7 +33,7 @@ export const ZodTextField = ({
     onChange,
     type: "text",
     inputProps: {
-      min: zodStringActual.minLength,
+      min: isOptional ? 0 : zodStringActual.minLength,
       max: zodStringActual.maxLength,
     },
     required: !isOptional,

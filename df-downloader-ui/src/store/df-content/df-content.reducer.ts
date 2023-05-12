@@ -22,6 +22,7 @@ export const dfContentReducer = createReducer(INITIAL_STATE, (builder) => {
     success: (state, payload) => {
       return {
         ...state,
+        currentQuery: payload.params,
         totalItems: payload.totalResults,
         content: payload.content,
       };
@@ -63,7 +64,6 @@ export const dfContentReducer = createReducer(INITIAL_STATE, (builder) => {
       ...state,
       currentQuery: DefaultContentQuery,
       selectedItem: null,
-      searchOpen: false,
     };
   });
 });

@@ -45,7 +45,6 @@ export const DfSettingsSectionForm = (props: DfSettingsFormProps) => {
             resolver={zodResolver(zodSchema)}
             defaultValues={currentSettings as any}
             onSuccess={(data) => {
-              console.log("dispatching", data);
               store.dispatch(updateConfigSection.start({ section: sectionName, value: data }));
             }}
             onError={(error) => {

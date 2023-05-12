@@ -1,4 +1,3 @@
-import { Box } from "@mui/material";
 import { useEffect } from "react";
 import { DfContentInfoDirectory } from "../../components/df-content/df-content-directory.component";
 import { queryDfContent } from "../../store/df-content/df-content.action";
@@ -19,9 +18,5 @@ export const HomePage = () => {
       clearInterval(contentInterval);
     };
   }, []);
-  return (
-    <Box>
-      <DfContentInfoDirectory />
-    </Box>
-  );
+  return <DfContentInfoDirectory />;
 };

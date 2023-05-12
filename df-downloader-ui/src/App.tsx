@@ -1,16 +1,15 @@
-import { ThemeProvider } from "@mui/material";
-import { Routes, Route } from "react-router-dom";
+import { Box, Stack, ThemeProvider, Toolbar } from "@mui/material";
+import { useEffect } from "react";
+import { Route, Routes } from "react-router-dom";
 import "./App.css";
 import { DownloadsPage } from "./routes/downloads/downloads.component";
 import { HomePage } from "./routes/home/home.component";
 import { Nav } from "./routes/nav/nav.components";
 import { SettingsPage } from "./routes/settings/settings.component";
-import { theme } from "./themes/theme";
-import { Box, Toolbar } from "@mui/material";
 import { SettingsRouteElement, isSettingsRoute, settingsRoutes } from "./routes/settings/settings.routes";
-import { useEffect } from "react";
-import { store } from "./store/store";
 import { queryServiceInfo } from "./store/service-info/service-info.actions";
+import { store } from "./store/store";
+import { theme } from "./themes/theme";
 
 function App() {
   useEffect(() => {
@@ -20,14 +19,14 @@ function App() {
     <ThemeProvider theme={theme}>
       <Box sx={{ display: "flex" }}>
         <Nav />
-        <Box>
+        <Stack sx={{ flexGrow: 1, height: "100vh" }}>
           <Toolbar />
           <Routes>
             <Route index element={<HomePage />} />
             <Route path="downloads" element={<DownloadsPage />} />
             <Route element={<SettingsPage />}>{makeRoutes(settingsRoutes.routes)}</Route>
           </Routes>
-        </Box>
+        </Stack>
       </Box>
     </ThemeProvider>
   );

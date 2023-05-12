@@ -66,7 +66,7 @@ export function addFetchListener<
           const successPayload = opts.generateSuccessPayload(result.data);
           listenerApi.dispatch(queryActions.success(successPayload));
         } else {
-          console.error(result.error);
+          console.error(`Error fetching ${url} - ${result.error}`);
           listenerApi.dispatch(queryActions.failed(ensureDfUiError(result.error)));
         }
       } catch (e) {

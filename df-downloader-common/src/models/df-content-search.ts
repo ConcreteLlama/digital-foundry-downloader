@@ -8,10 +8,14 @@ const ContentSort = z.object({
   sortBy: z.enum(["date", "name"]),
   sortDirection: z.enum(["asc", "desc"]),
 });
+const ContentEntryFilterArray = z
+  .union([ContentEntryFilter, ContentEntryFilter.array()])
+  .transform((value) => (Array.isArray(value) ? value : [value]));
 const ContentFilter = z.object({
-  include: z.array(ContentEntryFilter).optional(),
-  exclude: z.array(ContentEntryFilter).optional(),
+  include: ContentEntryFilterArray.optional(),
+  exclude: ContentEntryFilterArray.optional(),
 });
+type ContentFilter = z.infer<typeof ContentFilter>;
 
 export const DfContentEntrySearchBody = z.object({
   page: z.number().default(1),
@@ -23,6 +27,7 @@ export const DfContentEntrySearchBody = z.object({
   filter: ContentFilter.optional(),
 });
 export type DfContentEntrySearchBody = z.infer<typeof DfContentEntrySearchBody>;
+export type DfContentEntrySearchBodyInput = z.input<typeof DfContentEntrySearchBody>;
 export const DfContentEntrySearchUtils = {
   search: (
     searchParams: DfContentEntrySearchBody,

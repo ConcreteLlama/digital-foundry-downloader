@@ -1,13 +1,14 @@
-import { DfContentEntry, DfContentInfoQueryParams } from "df-downloader-common";
+import { DfContentEntry, DfContentEntrySearchBodyInput } from "df-downloader-common";
 import { QueryableState } from "../utils";
 import { DfUiError } from "../../utils/error";
 
-export const DefaultContentQuery: DfContentInfoQueryParams = {
+export const DefaultContentQuery: DfContentEntrySearchBodyInput = {
   page: 1,
   limit: 100,
-  tagMode: "or",
-  sortBy: "date",
-  sortDirection: "desc",
+  sort: {
+    sortBy: "date",
+    sortDirection: "desc",
+  },
 };
 
 export interface DfContentInfoState extends QueryableState {
@@ -15,6 +16,6 @@ export interface DfContentInfoState extends QueryableState {
   totalItems: number;
   // These get turned into concrete classes in the selectors (classes are non-serializable)
   content: DfContentEntry[];
-  currentQuery: DfContentInfoQueryParams;
+  currentQuery: DfContentEntrySearchBodyInput;
   error: DfUiError | null;
 }

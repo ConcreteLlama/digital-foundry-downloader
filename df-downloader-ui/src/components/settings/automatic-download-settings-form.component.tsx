@@ -34,7 +34,7 @@ const AutoConfigSettings = () => {
             zodNumber={AutomaticDownloadsConfig.shape.downloadDelay._def.innerType}
           />
           <OrderableListFormField name="mediaTypes" label="Media Type Priorities" extendable={false} />
-          <FilterList type="exclude" />
+          <FilterList filterName="Exclusion" fieldArrayName="exclusionFilters" />
         </Fragment>
       )}
     </Fragment>

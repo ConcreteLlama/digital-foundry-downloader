@@ -22,14 +22,9 @@ export const selectDfContentInfoItem = (key: string) =>
 
 export const selectTotalContentItems = createSelector(selectSelf, (state) => state.totalItems);
 export const selectCurrentQuery = createSelector(selectSelf, (state) => state.currentQuery);
-export const tagIsSelected = (tag: string) => (state: RootState) =>
-  Boolean(state.dfContent.currentQuery.tags?.includes(tag));
 
 export const selectPageInfo = createSelector(selectQuery, selectTotalItems, (query, totalItems) => ({
-  currentPage: query.page,
-  limit: query.limit,
-  numPages: Math.ceil(totalItems / query.limit),
+  currentPage: query.page!,
+  limit: query.limit!,
+  numPages: Math.ceil(totalItems / query.limit!),
 }));
-
-export const selectQueryTags = createSelector(selectQuery, (queryParams) => queryParams.tags || []);
-export const selectTagQueryMode = createSelector(selectQuery, (queryParams) => queryParams.tagMode);

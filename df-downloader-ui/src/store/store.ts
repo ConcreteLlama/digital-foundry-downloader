@@ -17,7 +17,10 @@ export const store = configureStore({
     config: configReducer,
     serviceInfo: serviceInfoReducer,
   },
-  middleware: (getDefaultMiddleware) => getDefaultMiddleware().prepend(listenerMiddleware.middleware),
+  middleware: (getDefaultMiddleware) =>
+    getDefaultMiddleware({
+      serializableCheck: true,
+    }).prepend(listenerMiddleware.middleware),
 });
 
 export type RootState = ReturnType<typeof store.getState>;

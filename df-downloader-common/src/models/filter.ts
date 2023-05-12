@@ -4,11 +4,30 @@ import { DfContentInfo } from "./df-content-info.js";
 import { DfContentEntry } from "./df-content-entry.js";
 
 export const TagFilter = z.object({
-  tags: z.array(z.string()),
-  mode: z.enum(["or", "and"]),
+  tags: z.array(z.string()).optional().default([]),
+  mode: z.enum(["or", "and"]).optional().default("or"),
   caseSensitive: z.boolean().optional().default(false),
 });
 export type TagFilter = z.infer<typeof TagFilter>;
+export const TagFilterTransformer = z.union([TagFilter, z.string().array()]).transform((value) => {
+  if (!value) {
+    return undefined;
+  }
+  if (Array.isArray(value)) {
+    if (!value.length) {
+      return undefined;
+    }
+    return {
+      tags: value,
+      mode: "or" as "or" | "and",
+      caseSensitive: false,
+    };
+  }
+  if (!value.tags?.length) {
+    return undefined;
+  }
+  return value;
+});
 export const TagFilterUtils = {
   matches: (tagFilter: TagFilter, tags: string[]): boolean => {
     let filterTags = tagFilter.tags;
@@ -28,14 +47,21 @@ export const TagFilterUtils = {
 };
 
 export const StringFilter = z.object({
-  value: z.string().min(1),
+  value: z.string().optional().default(""),
   mode: z.enum(["contains", "startsWith"]).default("contains"),
   caseSensitive: z.boolean().optional().default(false),
 });
 export type StringFilter = z.infer<typeof StringFilter>;
 
 export const StringFilterTransformer = z.union([StringFilter, z.string()]).transform((value) => {
+  if (!value) {
+    return undefined;
+  }
   if (typeof value === "string") {
+    value = value.trim();
+    if (value.length === 0) {
+      return undefined;
+    }
     return StringFilter.parse({ value });
   }
   return value;
@@ -57,7 +83,7 @@ export const StringFilterUtils = {
 };
 
 export const ContentInfoFilter = z.object({
-  tags: TagFilter.optional(),
+  tags: TagFilterTransformer.optional(),
   title: StringFilterTransformer.optional(),
   description: StringFilterTransformer.optional(),
 });
@@ -65,7 +91,7 @@ export type ContentInfoFilter = z.infer<typeof ContentInfoFilter>;
 
 export const ContentInfoFilterUtils = {
   matches: (contentSearchFilter: ContentInfoFilter, contentInfo: DfContentInfo): boolean => {
-    if (contentSearchFilter.tags) {
+    if (contentSearchFilter.tags?.tags?.length) {
       if (!TagFilterUtils.matches(contentSearchFilter.tags, contentInfo.tags || [])) {
         return false;
       }
@@ -83,15 +109,18 @@ export const ContentInfoFilterUtils = {
     return true;
   },
 };
+const ContentStatusArrayEnum = z
+  .union([z.nativeEnum(DfContentStatus), z.nativeEnum(DfContentStatus).array()])
+  .refine((value) => (Array.isArray(value) ? value : [value]));
 
 export const ContentEntryFilter = ContentInfoFilter.extend({
-  status: z.nativeEnum(DfContentStatus).optional(),
+  status: ContentStatusArrayEnum.optional(),
 });
 export type ContentEntryFilter = z.infer<typeof ContentEntryFilter>;
 
 export const ContentEntryFilterUtils = {
   matches: (contentEntryFilter: ContentEntryFilter, contentEntry: DfContentEntry): boolean => {
-    if (contentEntryFilter.status && contentEntryFilter.status !== contentEntry.statusInfo.status) {
+    if (contentEntryFilter.status && !contentEntryFilter.status.includes(contentEntry.statusInfo.status)) {
       return false;
     }
     return ContentInfoFilterUtils.matches(contentEntryFilter, contentEntry.contentInfo);

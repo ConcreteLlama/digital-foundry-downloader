@@ -1,15 +1,15 @@
-import { DfContentEntry, DfContentQueryResponse } from "df-downloader-common";
+import { DfContentEntry, DfContentEntrySearchResponse } from "df-downloader-common";
+import { API_URL } from "../../config";
 import { AppStartListening } from "../listener";
 import { store } from "../store";
+import { addFetchListener } from "../utils";
 import {
   fetchSingleDfContentEntry,
   queryDfContent,
+  resetDfContentQuery,
   setDfContentQuery,
   updateDfContentQuery,
 } from "./df-content.action";
-import { objToUrlParams } from "./df-content.utils";
-import { addFetchListener } from "../utils";
-import { API_URL } from "../../config";
 
 export const startListeningDfContentInfo = (startListening: AppStartListening) => {
   startListening({
@@ -24,14 +24,26 @@ export const startListeningDfContentInfo = (startListening: AppStartListening) =
       store.dispatch(queryDfContent.start());
     },
   });
-  addFetchListener(startListening, queryDfContent, DfContentQueryResponse, () => {
-    const params = objToUrlParams(store.getState().dfContent.currentQuery);
-    let url = `${API_URL}/content/query`;
-    const urlQuery = params.toString();
-    if (urlQuery.length) {
-      url = `${url}?${params.toString()}`;
-    }
-    return [url];
+  startListening({
+    actionCreator: resetDfContentQuery,
+    effect: (action, listenerApi) => {
+      console.log("reset");
+      store.dispatch(queryDfContent.start());
+    },
+  });
+  addFetchListener(startListening, queryDfContent, DfContentEntrySearchResponse, () => {
+    const body = store.getState().dfContent.currentQuery;
+    let url = `${API_URL}/content/search`;
+    return [
+      url,
+      {
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(body),
+        method: "POST",
+      },
+    ];
   });
   addFetchListener(startListening, fetchSingleDfContentEntry, DfContentEntry, (contentName) => {
     return [`${API_URL}/content/entry/${contentName}`];
