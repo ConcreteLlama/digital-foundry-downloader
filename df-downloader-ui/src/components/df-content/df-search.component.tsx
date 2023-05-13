@@ -9,6 +9,7 @@ import {
   IconButton,
   Stack,
   Typography,
+  useMediaQuery,
 } from "@mui/material";
 import { DfContentEntrySearchBody } from "df-downloader-common";
 import { Fragment, useState } from "react";
@@ -19,6 +20,7 @@ import { resetDfContentQuery, updateDfContentQuery } from "../../store/df-conten
 import { useSelector } from "react-redux";
 import { selectCurrentQuery } from "../../store/df-content/df-content.selector";
 import CloseIcon from "@mui/icons-material/Close";
+import { theme } from "../../themes/theme";
 
 export type DfAdvancedSearchProps = {
   open: boolean;
@@ -28,6 +30,7 @@ export type DfAdvancedSearchProps = {
 export const DfAdvancedSearch = ({ open, onClose }: DfAdvancedSearchProps) => {
   const currentSearchValues = useSelector(selectCurrentQuery);
   const currentInclude = currentSearchValues?.filter?.include;
+  const fullScreen = useMediaQuery(theme.breakpoints.down("md"));
   const defaultFilter =
     !currentInclude || (Array.isArray(currentInclude) && currentInclude.length === 0)
       ? {
@@ -36,7 +39,7 @@ export const DfAdvancedSearch = ({ open, onClose }: DfAdvancedSearchProps) => {
         }
       : currentSearchValues.filter;
   return (
-    <Dialog open={open} onClose={onClose} fullWidth maxWidth={"lg"}>
+    <Dialog open={open} onClose={onClose} fullWidth maxWidth={"lg"} fullScreen={fullScreen}>
       <DialogTitle>
         <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
           <Typography variant="h6">Advanced Search</Typography>
@@ -45,7 +48,7 @@ export const DfAdvancedSearch = ({ open, onClose }: DfAdvancedSearchProps) => {
           </IconButton>
         </Box>
       </DialogTitle>
-      <DialogContent>
+      <DialogContent sx={{ padding: 2 }}>
         <FormContainer
           resolver={zodResolver(DfContentEntrySearchBody)}
           onSuccess={(data) => {

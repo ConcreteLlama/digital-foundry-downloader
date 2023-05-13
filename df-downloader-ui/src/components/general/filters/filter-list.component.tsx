@@ -12,7 +12,6 @@ import {
 import { Fragment, useState } from "react";
 import { FilterItemField } from "./filter-item-field.component";
 import { useFieldArray, useFormContext } from "react-hook-form";
-import { formFieldBorder } from "../../../utils/props";
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 import DeleteIcon from "@mui/icons-material/Delete";
 
@@ -92,7 +91,7 @@ const FilterAccordian = ({
           </Box>
         </AccordionSummary>
         <AccordionDetails>
-          <Stack sx={{ ...formFieldBorder, gap: 1 }} key={fieldId}>
+          <Stack key={fieldId} sx={{ gap: 1 }}>
             <FilterItemField
               parentFieldName={`${fieldArrayName}.${index}`}
               remove={remove && (() => remove(index))}
