@@ -1,5 +1,5 @@
 import { AppBar, Box, List, ListItem, Stack, Typography, useMediaQuery } from "@mui/material";
-import { Fragment, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { useSelector } from "react-redux";
 import { resetState, updateDfContentQuery } from "../../store/df-content/df-content.action";
 import {
@@ -8,18 +8,18 @@ import {
   selectTotalContentItems,
 } from "../../store/df-content/df-content.selector";
 import { store } from "../../store/store";
+import { theme } from "../../themes/theme";
 import { MiddleModal } from "../general/middle-modal.component";
 import { PageSelector } from "../general/page-selector.component";
 import { DfContentInfoItemCard } from "./df-content-item-card.component";
 import { DfContentInfoItemDetail } from "./df-content-item-detail.component";
 import { DfQuickSearch } from "./df-search-input.component";
 import { ClearDfSearchButton, DfAdvancedSearchButton } from "./df-search.component";
-import { theme } from "../../themes/theme";
 
 export const DfContentInfoDirectory = () => {
   const contentKeys = useSelector(selectDfContentEntryKeys);
   const totalItems = useSelector(selectTotalContentItems);
-  const stickyTopBar = useMediaQuery(theme.breakpoints.up("md"));
+  const resultsInTop = useMediaQuery(theme.breakpoints.up("md"));
   const { currentPage, numPages, limit } = useSelector(selectPageInfo);
   const [prevPage, setPrevPage] = useState(currentPage);
   const [selectedItem, setSelectedItem] = useState<string | null>(null);
@@ -34,11 +34,12 @@ export const DfContentInfoDirectory = () => {
   }
   return (
     <Box sx={{ display: "flex", flexDirection: "column", height: "100%", overflow: "clip" }}>
-      {stickyTopBar && (
-        <Box sx={{ position: "sticky", top: 0, zIndex: 1, backgroundColor: "background.default" }}>
-          <TopBar totalItems={totalItems} currentPage={currentPage} limit={limit} />
-        </Box>
-      )}
+      <Stack
+        sx={{ position: "sticky", top: 0, zIndex: 1, backgroundColor: "background.default", gap: 1, paddingBottom: 1 }}
+      >
+        <TopBar />
+        {resultsInTop && <SearchResultCounts totalItems={totalItems} currentPage={currentPage} limit={limit} />}
+      </Stack>
       <Box
         sx={{
           flexGrow: 1,
@@ -48,8 +49,8 @@ export const DfContentInfoDirectory = () => {
           },
         }}
       >
-        {!stickyTopBar && <TopBar totalItems={totalItems} currentPage={currentPage} limit={limit} />}
         <Stack sx={{ justifyItems: "center" }}>
+          {!resultsInTop && <SearchResultCounts totalItems={totalItems} currentPage={currentPage} limit={limit} />}
           {contentKeys.length === 0 ? (
             <Typography
               sx={{
@@ -92,29 +93,28 @@ export const DfContentInfoDirectory = () => {
   );
 };
 
-type TopBarProps = {
+const TopBar = () => {
+  const [quickSearchClear, setQuickSearchClear] = useState(false);
+  return (
+    <Box sx={{ display: "flex", justifyContent: "space-between", paddingX: 4, gap: 2 }}>
+      <DfQuickSearch clear={quickSearchClear} setClear={setQuickSearchClear} />
+      <DfAdvancedSearchButton onClick={() => setQuickSearchClear(true)} />
+      <ClearDfSearchButton onClick={() => setQuickSearchClear(true)} />
+    </Box>
+  );
+};
+
+type SearchResultCountsProps = {
   totalItems: number;
   currentPage: number;
   limit: number;
 };
-const TopBar = ({ totalItems, currentPage, limit }: TopBarProps) => {
-  const [quickSearchClear, setQuickSearchClear] = useState(false);
-  return (
-    <Fragment>
-      <Box sx={{ display: "flex", justifyContent: "space-between", paddingX: 4, gap: 2 }}>
-        <DfQuickSearch clear={quickSearchClear} setClear={setQuickSearchClear} />
-        <DfAdvancedSearchButton onClick={() => setQuickSearchClear(true)} />
-        <ClearDfSearchButton onClick={() => setQuickSearchClear(true)} />
-      </Box>
-      <Box>
-        <Typography
-          sx={{
-            textAlign: "center",
-          }}
-        >
-          Showing {limit * (currentPage - 1) + 1} to {Math.min(limit * currentPage, totalItems)} of {totalItems}
-        </Typography>
-      </Box>
-    </Fragment>
-  );
-};
+const SearchResultCounts = ({ totalItems, currentPage, limit }: SearchResultCountsProps) => (
+  <Typography
+    sx={{
+      textAlign: "center",
+    }}
+  >
+    Showing {limit * (currentPage - 1) + 1} to {Math.min(limit * currentPage, totalItems)} of {totalItems}
+  </Typography>
+);
