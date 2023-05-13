@@ -7,11 +7,12 @@ export type NavItemProps = {
   icon?: React.FC<SvgIconProps>;
   children?: React.ReactNode;
   sx?: SxProps;
+  onItemSelected?: () => void;
 };
 
-export const NavItem = ({ to, text, icon: IconComponent, children, sx = {} }: NavItemProps) => {
+export const NavItem = ({ to, text, icon: IconComponent, children, sx = {}, onItemSelected }: NavItemProps) => {
   return (
-    <ListItemButton component={Link} to={to} sx={sx}>
+    <ListItemButton component={Link} to={to} sx={sx} onClick={onItemSelected}>
       {IconComponent && (
         <ListItemIcon>
           <IconComponent color="primary" />

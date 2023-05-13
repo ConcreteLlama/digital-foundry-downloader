@@ -23,6 +23,9 @@ export const Nav = () => {
   const useMobileLayout = useMediaQuery(theme.breakpoints.down("md"));
   const useSmallLayout = useMediaQuery(theme.breakpoints.down("sm"));
   const [drawerOpen, setDrawerOpenState] = useState(false);
+  const onItemSelected = () => {
+    setDrawerOpenState(false);
+  };
   return (
     <Box>
       <CssBaseline />
@@ -59,9 +62,9 @@ export const Nav = () => {
         <Toolbar />
         <Box sx={{ overflow: "auto" }}>
           <List>
-            <NavItem to="/" text="Home" icon={HomeIcon} />
-            <NavItem to="/downloads" text="Downloads" icon={DownloadIcon} />
-            <SettingsNav />
+            <NavItem to="/" text="Home" icon={HomeIcon} onItemSelected={onItemSelected} />
+            <NavItem to="/downloads" text="Downloads" icon={DownloadIcon} onItemSelected={onItemSelected} />
+            <SettingsNav onItemSelected={onItemSelected} />
             {/* {makeNavItem("/", "Home", <HomeIcon />)}
             {makeNavItem("/downloads", "Downloads", <DownloadIcon />)}
             {makeNavItem("/settings", "Settings", <SettingsIcon />)} */}
