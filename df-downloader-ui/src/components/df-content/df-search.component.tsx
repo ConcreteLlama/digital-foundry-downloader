@@ -1,5 +1,15 @@
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Button, Dialog, DialogActions, DialogContent, DialogTitle, Stack } from "@mui/material";
+import {
+  Box,
+  Button,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogTitle,
+  IconButton,
+  Stack,
+  Typography,
+} from "@mui/material";
 import { DfContentEntrySearchBody } from "df-downloader-common";
 import { Fragment, useState } from "react";
 import { FormContainer } from "react-hook-form-mui";
@@ -8,6 +18,7 @@ import { store } from "../../store/store";
 import { resetDfContentQuery, updateDfContentQuery } from "../../store/df-content/df-content.action";
 import { useSelector } from "react-redux";
 import { selectCurrentQuery } from "../../store/df-content/df-content.selector";
+import CloseIcon from "@mui/icons-material/Close";
 
 export type DfAdvancedSearchProps = {
   open: boolean;
@@ -26,22 +37,29 @@ export const DfAdvancedSearch = ({ open, onClose }: DfAdvancedSearchProps) => {
       : currentSearchValues.filter;
   return (
     <Dialog open={open} onClose={onClose} fullWidth maxWidth={"lg"}>
-      <FormContainer
-        resolver={zodResolver(DfContentEntrySearchBody)}
-        onSuccess={(data) => {
-          console.log("success", data);
-          store.dispatch(updateDfContentQuery(data));
-          onClose();
-        }}
-        onError={(error) => {
-          console.log("error!", error);
-        }}
-        defaultValues={{
-          filter: defaultFilter,
-        }}
-      >
-        <DialogTitle>Advanced Search</DialogTitle>
-        <DialogContent>
+      <DialogTitle>
+        <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          <Typography variant="h6">Advanced Search</Typography>
+          <IconButton onClick={onClose}>
+            <CloseIcon fontSize="small" />
+          </IconButton>
+        </Box>
+      </DialogTitle>
+      <DialogContent>
+        <FormContainer
+          resolver={zodResolver(DfContentEntrySearchBody)}
+          onSuccess={(data) => {
+            console.log("success", data);
+            store.dispatch(updateDfContentQuery(data));
+            onClose();
+          }}
+          onError={(error) => {
+            console.log("error!", error);
+          }}
+          defaultValues={{
+            filter: defaultFilter,
+          }}
+        >
           <Stack>
             <FilterList
               filterName="Inclusion"
@@ -56,26 +74,47 @@ export const DfAdvancedSearch = ({ open, onClose }: DfAdvancedSearchProps) => {
               defaultExpandedState={true}
               mode="contentEntry"
             />
+            <Box
+              component={Button}
+              type="submit"
+              id="submit-search"
+              hidden={true}
+              onClick={() => {
+                store.dispatch(resetDfContentQuery());
+                onClose();
+              }}
+            />
           </Stack>
-        </DialogContent>
-        <DialogActions>
-          <Button variant="outlined" onClick={onClose}>
-            Cancel
-          </Button>
-          <Button
-            variant="outlined"
-            onClick={() => {
-              store.dispatch(resetDfContentQuery());
-              onClose();
-            }}
-          >
-            Clear
-          </Button>
-          <Button variant="contained" type="submit">
-            Search
-          </Button>
-        </DialogActions>
-      </FormContainer>
+        </FormContainer>
+      </DialogContent>
+      <DialogActions>
+        <Button variant="outlined" onClick={onClose}>
+          Cancel
+        </Button>
+        <Button
+          variant="outlined"
+          onClick={() => {
+            store.dispatch(resetDfContentQuery());
+            onClose();
+          }}
+        >
+          Clear
+        </Button>
+        <Button
+          variant="contained"
+          type="submit"
+          onClick={() => {
+            // If this seems weird it's because it is. Really the whole thing should be wrapped in FormContainer,
+            // but if the whole Dialog is wrapped in it, submit doesn't work, and if everything within the Dialog
+            // is wrapped in it, the DialogActions don't stick to the bottom of the dialog
+            // So we have a hidden button in the form itself and click it with this button. Sneaky beaky.
+            const submitButton = document.querySelector("#submit-search") as HTMLButtonElement;
+            submitButton.click();
+          }}
+        >
+          Search
+        </Button>
+      </DialogActions>
     </Dialog>
   );
 };
