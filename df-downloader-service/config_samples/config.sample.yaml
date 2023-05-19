@@ -32,4 +32,4 @@ restApi:
   http:
     port: 44556
 logging:
-  logLevel: "INFO"
+  logLevel: "info"

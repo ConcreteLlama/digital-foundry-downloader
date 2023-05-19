@@ -54,24 +54,32 @@ export abstract class DfNotificationConsumer {
     }
   }
 
+  passwordReset(token: string, resetUrl: string, expiryTime: Date): void {
+    if (this.subscribedNotifications.has(DfNotificationType.PASSWORD_RESET_REQUESTED)) {
+      this.notifyPasswordReset(token, resetUrl, expiryTime);
+    }
+  }
+
   abstract downloadProgressUpdate(
     dfContent: DfContentInfo,
     mediaInfo: MediaInfo,
     progressUpdate: DownloadProgressInfo
   ): void;
-  abstract notifyDownloadComplete(
+
+  protected abstract notifyDownloadComplete(
     dfContent: DfContentInfo,
     mediaInfo: MediaInfo,
     fileLocation: string,
     currentProgress: DownloadProgressInfo | undefined
   ): void;
-  abstract notifyDownloadFailed(dfContent: DfContentInfo, err: any): void;
-  abstract notifyDownloadStarting(dfContent: DfContentInfo, mediaInfo: MediaInfo): void;
-  abstract notifyNewContentDetected(contentName: string): void;
-  abstract notifyDownloadQueued(dfContent: DfContentInfo): void;
-  abstract downloadEnded(dfContentName: string): void;
-  abstract notifyUserNotSignedIn(): void;
-  abstract notifyUserSignedIn(username: string, tier: string): void;
+  protected abstract notifyDownloadFailed(dfContent: DfContentInfo, err: any): void;
+  protected abstract notifyDownloadStarting(dfContent: DfContentInfo, mediaInfo: MediaInfo): void;
+  protected abstract notifyNewContentDetected(contentName: string): void;
+  protected abstract notifyDownloadQueued(dfContent: DfContentInfo): void;
+  protected abstract downloadEnded(dfContentName: string): void;
+  protected abstract notifyUserNotSignedIn(): void;
+  protected abstract notifyUserSignedIn(username: string, tier: string): void;
+  protected abstract notifyPasswordReset(token: string, resetUrl: string, expiryTime: Date): void;
 
   toSummary(dfContent: DfContentInfo, mediaInfo: MediaInfo, finalProgressReport?: DownloadProgressInfo) {
     let toReturn = `Title:          ${dfContent.title}

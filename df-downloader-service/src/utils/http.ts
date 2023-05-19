@@ -3,7 +3,7 @@ import http from "http";
 import https from "https";
 import fs from "fs";
 import { RestApiConfig } from "df-downloader-common/config/rest-config.js";
-import { LogLevel, logger } from "./logger.js";
+import { logger } from "df-downloader-common";
 
 export const createExpressServer = (config: RestApiConfig) => {
   const app = express();
@@ -12,7 +12,7 @@ export const createExpressServer = (config: RestApiConfig) => {
     // Create an HTTP server
     const httpServer = http.createServer(app);
     httpServer.listen(config.http.port, () => {
-      logger.log(LogLevel.INFO, `Server listening on port ${config.http!.port}`);
+      logger.log("info", `Server listening on port ${config.http!.port}`);
     });
   }
 
@@ -27,7 +27,7 @@ export const createExpressServer = (config: RestApiConfig) => {
     };
     const httpsServer = https.createServer(httpsServerOptions, app);
     httpsServer.listen(config.https.port, () => {
-      logger.log(LogLevel.INFO, `Server listening on port ${config.https!.port}`);
+      logger.log("info", `Server listening on port ${config.https!.port}`);
     });
   }
 

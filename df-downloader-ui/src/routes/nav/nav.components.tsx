@@ -1,23 +1,24 @@
+import DownloadIcon from "@mui/icons-material/Download";
+import MenuIcon from "@mui/icons-material/Menu";
+import VideoCameraIcon from "@mui/icons-material/VideoCameraBack";
 import {
   AppBar,
-  Typography,
-  Toolbar,
   Box,
-  List,
   CssBaseline,
-  useMediaQuery,
   IconButton,
+  List,
   SwipeableDrawer,
+  Toolbar,
+  Typography,
+  useMediaQuery,
 } from "@mui/material";
-import { UserInfo } from "../../components/user-info/user-info.component";
-import HomeIcon from "@mui/icons-material/Home";
-import DownloadIcon from "@mui/icons-material/Download";
-import { NavItem } from "./nav-item.component";
-import { SettingsNav } from "../settings/settings-nav.component";
+import { SyntheticEvent, useState } from "react";
+import { AuthUserInfo } from "../../components/auth/auth-user-info.component";
+import { DfUserInfo } from "../../components/df-user-info/df-user-info.component";
 import { CumulativeDownloadInfo } from "../../components/downloads/cumulative-download-info.component";
 import { theme } from "../../themes/theme";
-import { SyntheticEvent, useState } from "react";
-import MenuIcon from "@mui/icons-material/Menu";
+import { SettingsNav } from "../settings/settings-nav.component";
+import { NavItem } from "./nav-item.component";
 
 export const Nav = () => {
   const useMobileLayout = useMediaQuery(theme.breakpoints.down("md"));
@@ -41,7 +42,8 @@ export const Nav = () => {
             </Typography>
           )}
           <CumulativeDownloadInfo />
-          <UserInfo mode={useSmallLayout ? "minimal" : "full"} />
+          <DfUserInfo mode={useSmallLayout ? "minimal" : "full"} />
+          <AuthUserInfo mode={useSmallLayout ? "minimal" : "full"} />
         </Toolbar>
       </AppBar>
       <SwipeableDrawer
@@ -62,12 +64,9 @@ export const Nav = () => {
         <Toolbar />
         <Box sx={{ overflow: "auto" }}>
           <List>
-            <NavItem to="/" text="Home" icon={HomeIcon} onItemSelected={onItemSelected} />
+            <NavItem to="/content" text="Content" icon={VideoCameraIcon} onItemSelected={onItemSelected} />
             <NavItem to="/downloads" text="Downloads" icon={DownloadIcon} onItemSelected={onItemSelected} />
             <SettingsNav onItemSelected={onItemSelected} />
-            {/* {makeNavItem("/", "Home", <HomeIcon />)}
-            {makeNavItem("/downloads", "Downloads", <DownloadIcon />)}
-            {makeNavItem("/settings", "Settings", <SettingsIcon />)} */}
           </List>
         </Box>
       </SwipeableDrawer>

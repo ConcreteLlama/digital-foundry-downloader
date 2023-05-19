@@ -1,5 +1,5 @@
 import { ZodObject, ZodRawShape, ZodType, z } from "zod";
-import { fromZodError } from "zod-validation-error";
+import { fromZodError, isValidationError, isValidationErrorLike } from "zod-validation-error";
 
 export const zodParse = <T extends ZodObject<any>>(schema: T, data: unknown): z.infer<T> => {
   const result = schema.safeParse(data);

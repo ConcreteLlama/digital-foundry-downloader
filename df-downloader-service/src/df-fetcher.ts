@@ -2,9 +2,9 @@ import * as CSSSelect from "css-select";
 import { Document, Element } from "domhandler";
 import got, { HTTPError } from "got";
 import htmlparser2 from "htmlparser2";
-import { DfContentInfo, DfContentInfoUtils, MediaInfo, UserInfo } from "df-downloader-common";
+import { DfContentInfo, DfContentInfoUtils, MediaInfo, DfUserInfo } from "df-downloader-common";
 import { download, ProgressListener } from "./utils/downloader.js";
-import { LogLevel, logger } from "./utils/logger.js";
+import { logger } from "df-downloader-common";
 import { sanitizeContentName } from "./utils/df-utils.js";
 import { getBody } from "./utils/dom-utils.js";
 import { extractFilenameFromUrl, fileSizeStringToBytes } from "./utils/file-utils.js";
@@ -51,7 +51,7 @@ function extractMeta(elements: Element[]): PageMeta {
   return toReturn;
 }
 
-function extractUserInfo(dom: Document): UserInfo | undefined {
+function extractDfUserInfo(dom: Document): DfUserInfo | undefined {
   const userProfile = CSSSelect.selectOne(".user_profile ", dom) as Element;
   if (!userProfile) {
     return undefined;
@@ -76,8 +76,8 @@ function extractUserInfo(dom: Document): UserInfo | undefined {
     : undefined;
 }
 
-function makeAuthHeaders() {
-  const dfSessionId = configService.config.digitalFoundry.sessionId;
+function makeAuthHeaders(sessionIdOverride?: string) {
+  const dfSessionId = sessionIdOverride || configService.config.digitalFoundry.sessionId;
   return dfSessionId
     ? {
         cookie: `sessionid=${dfSessionId};`,
@@ -94,9 +94,9 @@ export async function downloadMedia(
   mediaInfo: MediaInfo,
   progressListener?: ProgressListener
 ) {
-  logger.log(LogLevel.DEBUG, `Downloading video ${dfContent.name} at URL ${mediaInfo.url}`);
+  logger.log("debug", `Downloading video ${dfContent.name} at URL ${mediaInfo.url}`);
   if (!mediaInfo.url) {
-    logger.log(LogLevel.DEBUG, `Media info for ${dfContent.name} has no URL, returning`);
+    logger.log("debug", `Media info for ${dfContent.name} has no URL, returning`);
     return;
   }
   const filename = DfContentInfoUtils.makeFileName(dfContent, mediaInfo);
@@ -166,7 +166,7 @@ export async function forEachArchivePage<T>(
       }
       page++;
     } catch (e) {
-      logger.log(LogLevel.ERROR, `Unexpected HTTP error when fetching archive page content list page ${page}`, e);
+      logger.log("error", `Unexpected HTTP error when fetching archive page content list page ${page}`, e);
       return;
     }
   }
@@ -174,7 +174,7 @@ export async function forEachArchivePage<T>(
 
 export async function fetchArchivePageContentList(page: number = 1) {
   const archivePageUrl = `${dfBaseUrl}/archive?page=${page}`;
-  logger.log(LogLevel.VERBOSE, `Fetching list archive page ${page}: ${archivePageUrl}`);
+  logger.log("verbose", `Fetching list archive page ${page}: ${archivePageUrl}`);
 
   let response;
   try {
@@ -186,13 +186,13 @@ export async function fetchArchivePageContentList(page: number = 1) {
   } catch (e) {
     if (e instanceof HTTPError) {
       if (e.response.statusCode === 404) {
-        logger.log(LogLevel.INFO, `No archive content on page ${page} - must have reached end of content list`);
+        logger.log("info", `No archive content on page ${page} - must have reached end of content list`);
       } else {
-        logger.log(LogLevel.ERROR, "Unexpected HTTP error when fetching archive page content list", e);
+        logger.log("error", "Unexpected HTTP error when fetching archive page content list", e);
       }
       return [];
     }
-    logger.log(LogLevel.ERROR, "Unexpected error when fetching archive page content list", e);
+    logger.log("error", "Unexpected error when fetching archive page content list", e);
     return [];
   }
   const dom = htmlparser2.parseDocument(response.body);
@@ -219,7 +219,7 @@ export async function fetchArchivePageContentList(page: number = 1) {
 }
 
 export async function getMediaInfo(name: string): Promise<DfContentInfo> {
-  logger.log(LogLevel.DEBUG, "Getting info for media", name);
+  logger.log("debug", "Getting info for media", name);
   const dfUrl = makeDfVideoUrl(name);
   const response = await got.get(dfUrl, {
     headers: {
@@ -278,13 +278,13 @@ export async function getMediaInfo(name: string): Promise<DfContentInfo> {
   );
 }
 
-export async function getUserInfo() {
+export async function getDfUserInfo(sessionIdOverride?: string) {
   const response = await got.get(dfBaseUrl, {
     headers: {
-      ...makeAuthHeaders(),
+      ...makeAuthHeaders(sessionIdOverride),
     },
   });
   const dom = htmlparser2.parseDocument(response.body);
-  const userInfo = extractUserInfo(dom);
+  const userInfo = extractDfUserInfo(dom);
   return userInfo;
 }

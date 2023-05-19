@@ -2,7 +2,7 @@ import { queryConfigSection, updateConfigSection } from "./config.action";
 import { AppStartListening } from "../listener";
 import { fetchJson } from "../../utils/fetch";
 import { ensureDfUiError } from "../../utils/error";
-import { parseResponseBody } from "df-downloader-common";
+import { logger, parseResponseBody } from "df-downloader-common";
 import { DfDownloaderConfig } from "df-downloader-common/config/df-downloader-config";
 import { API_URL } from "../../config";
 
@@ -12,12 +12,11 @@ export const startListeneingConfig = (listener: AppStartListening) => {
     effect: async (action, listenerApi) => {
       const section = action.payload;
       try {
-        console.log("querying config section", section);
         let url = `${API_URL}/config/${section}`;
         const data = await fetchJson(url);
-        console.log("raw data is", data);
+        logger.log("verbose", "raw data is", data);
         const result = parseResponseBody(data, DfDownloaderConfig.shape[section]);
-        console.log("got data", data);
+        logger.log("verbose", "got data", data);
         if (result.data) {
           listenerApi.dispatch(
             queryConfigSection.success({
@@ -39,7 +38,7 @@ export const startListeneingConfig = (listener: AppStartListening) => {
       try {
         const section = action.payload.section;
         const url = `${API_URL}/config/${section}`;
-        console.log("sending", action.payload, "to", url);
+        logger.log("verbose", "sending", action.payload, "to", url);
         const data = await fetchJson(url, {
           method: "PUT",
           headers: {
@@ -48,7 +47,7 @@ export const startListeneingConfig = (listener: AppStartListening) => {
           body: JSON.stringify(action.payload.value),
         });
         const result = parseResponseBody(data, DfDownloaderConfig.shape[section]);
-        console.log("Got data after PUT", data);
+        logger.log("verbose", "Got data after PUT", data);
         if (result.data) {
           listenerApi.dispatch(
             updateConfigSection.success({
@@ -60,7 +59,7 @@ export const startListeneingConfig = (listener: AppStartListening) => {
           listenerApi.dispatch(queryConfigSection.failed(ensureDfUiError(result.error)));
         }
       } catch (e) {
-        console.log("error!", e);
+        logger.log("verbose", "error!", e);
         listenerApi.dispatch(updateConfigSection.failed(ensureDfUiError(e)));
       }
     },

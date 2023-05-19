@@ -5,7 +5,7 @@ import { queryDownloadQueue } from "../../store/download-queue/download-queue.ac
 import { store } from "../../store/store";
 import { setIntervalImmediate } from "../../utils/timer";
 
-export const HomePage = () => {
+export const DfContentPage = () => {
   useEffect(() => {
     const downloadQueueInterval = setIntervalImmediate(() => {
       store.dispatch(queryDownloadQueue.start());

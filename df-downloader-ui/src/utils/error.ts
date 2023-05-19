@@ -5,17 +5,17 @@ export enum DfUiErrorCode {
 }
 
 // Custom error interface
-export interface DfUiError {
+export interface DfUiError<T = any> {
   message: string;
   code: string;
-  details?: any;
+  details: T;
 }
 
 export const isDfUiError = (error: any): error is DfUiError => {
   return error && error.message && error.code;
 };
 
-export const ensureDfUiError = (error: any): DfUiError => {
+export const ensureDfUiError = <T = any>(error: any): DfUiError<T> => {
   if (isDfUiError(error)) {
     return error;
   }
@@ -27,6 +27,7 @@ export const createDfUiError = (error: any, defaultErrorCode?: DfUiErrorCode): D
   return {
     message: error.message || "An unknown error occurred.",
     code: error.code || defaultErrorCode || DfUiErrorCode.UNKNOWN_ERROR,
+    details: error.details,
   };
 };
 

@@ -3,7 +3,7 @@ const Deepgram = deepgram.Deepgram;
 import { parseArgsStringToArgv } from "string-argv";
 import ffmpegPath from "ffmpeg-static";
 import { spawn } from "child_process";
-import { LogLevel, logger } from "../../utils/logger.js";
+import { logger } from "df-downloader-common";
 import { Utterance } from "@deepgram/sdk/dist/types/utterance.js";
 import { PrerecordedTranscriptionResponse } from "@deepgram/sdk/dist/types/prerecordedTranscriptionResponse.js";
 import { SubtitleGenerator, SubtitleInfo } from "./subtitles.js";
@@ -57,7 +57,7 @@ export class DeepgramSubtitleGenerator implements SubtitleGenerator {
     this.deepgram = new Deepgram(deepgramApiKey);
   }
   async getSubs(filename: string, language: string): Promise<SubtitleInfo> {
-    logger.log(LogLevel.INFO, `Generating ${language} subs for ${filename}`);
+    logger.log("info", `Generating ${language} subs for ${filename}`);
     const ffmpegArgs = parseArgsStringToArgv(`-i "${filename}" -q:a 0 -map a -f wav -`);
     const process = spawn(ffmpegPath, ffmpegArgs);
     const procPromise = new Promise<void>((res, rej) => {

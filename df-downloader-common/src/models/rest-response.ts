@@ -1,4 +1,5 @@
 import { z, ZodTypeAny } from "zod";
+import { fromZodError } from "zod-validation-error";
 //TODO: This seems messier than it should be
 export const ErrorResponseError = z.object({
   message: z.string(),
@@ -7,17 +8,20 @@ export const ErrorResponseError = z.object({
 });
 export type ErrorResponseError = z.infer<typeof ErrorResponseError>;
 
-export const errorSchema = z.object({
+export const ErrorResponse = z.object({
   success: z.literal(false),
   error: ErrorResponseError,
 });
-export type ErrorResponse = z.infer<typeof errorSchema>;
+export type ErrorResponse = z.infer<typeof ErrorResponse>;
 
 export const successSchema = z.object({
   success: z.literal(true),
   data: z.any(),
 });
 export type SuccessResponse = z.infer<typeof successSchema>;
+
+export const EmptyResponseData = z.object({});
+export type EmptyResponseData = z.infer<typeof EmptyResponseData>;
 
 export const parseResponseBody = <T extends ZodTypeAny>(
   responseBody: any,
@@ -26,7 +30,7 @@ export const parseResponseBody = <T extends ZodTypeAny>(
   error?: ErrorResponseError;
   data?: z.infer<T>;
 } => {
-  const errorResult = errorSchema.safeParse(responseBody);
+  const errorResult = ErrorResponse.safeParse(responseBody);
   if (errorResult.success) {
     return {
       error: errorResult.data.error,
@@ -44,7 +48,7 @@ export const parseResponseBody = <T extends ZodTypeAny>(
     };
   }
 
-  throw new Error("Invalid response format");
+  throw successResult.error;
 };
 
 export const makeSuccessResponse = <T extends ZodTypeAny>(data: z.infer<T>): SuccessResponse => {

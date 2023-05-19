@@ -4,7 +4,7 @@ import { exec, spawn } from "child_process";
 import ffmpegPath from "ffmpeg-static";
 import { utimes } from "utimes";
 import { moveFile } from "./utils/file-utils.js";
-import { LogLevel, logger } from "./utils/logger.js";
+import { logger } from "df-downloader-common";
 import { SubtitleInfo } from "./media-utils/subtitles/subtitles.js";
 import { parseArgsStringToArgv } from "string-argv";
 import { serviceLocator } from "./services/service-locator.js";
@@ -17,7 +17,7 @@ export class DfMetaInjector {
 
   setMeta(mpegFilePath: string, contentInfo: DfContentInfo, subtitles?: SubtitleInfo[]) {
     const config = configService.config;
-    logger.log(LogLevel.INFO, `Setting metadata for ${mpegFilePath}`);
+    logger.log("info", `Setting metadata for ${mpegFilePath}`);
     const workingFilename = `${config.contentManagement.workDir}/ffmpeg_${filenameIter++}.mp4`;
     let ffmpegCommand = `${ffmpegPath} -i "${mpegFilePath}" -codec copy`;
     if (subtitles && subtitles.length > 0) {
@@ -36,13 +36,13 @@ export class DfMetaInjector {
       ffmpegCommand += ` -metadata genre="${tagListStr}"`;
     }
     ffmpegCommand = `${ffmpegCommand} "${workingFilename}"`;
-    logger.log(LogLevel.DEBUG, `Metadata command for ${mpegFilePath}: ${ffmpegCommand}`);
+    logger.log("debug", `Metadata command for ${mpegFilePath}: ${ffmpegCommand}`);
 
     let err: any;
     return new Promise((resolve, reject) => {
       exec(ffmpegCommand, async (error, stdout, stderr) => {
         try {
-          logger.log(LogLevel.DEBUG, `Metadata set complete`);
+          logger.log("debug", `Metadata set complete`);
           if (error) {
             err = error;
             return;
@@ -50,9 +50,9 @@ export class DfMetaInjector {
           await moveFile(workingFilename, mpegFilePath, {
             clobber: true,
           });
-          logger.log(LogLevel.DEBUG, `Moved ${workingFilename} back to ${mpegFilePath}`);
+          logger.log("debug", `Moved ${workingFilename} back to ${mpegFilePath}`);
         } catch (e) {
-          logger.log(LogLevel.ERROR, e);
+          logger.log("error", e);
           err = e;
         } finally {
           if (err) {
@@ -67,7 +67,7 @@ export class DfMetaInjector {
 
   async injectSubs(mpegFilePath: string, subtitleInfo: SubtitleInfo) {
     const config = configService.config;
-    logger.log(LogLevel.INFO, `Injecting ${subtitleInfo.language} subs for ${mpegFilePath}`);
+    logger.log("info", `Injecting ${subtitleInfo.language} subs for ${mpegFilePath}`);
     const workingFilename = `${config.contentManagement.workDir}/ffmpeg_${filenameIter++}.mp4`;
     const ffmpegArgs = parseArgsStringToArgv(
       `-i ${mpegFilePath} -i pipe: -c copy -c:s mov_text -metadata:s:s:0 language=${subtitleInfo.language} ${workingFilename}`
@@ -102,7 +102,7 @@ export class DfMetaInjector {
         atime: timestamp,
       });
     } catch (e) {
-      logger.log(LogLevel.ERROR, e);
+      logger.log("error", e);
     }
   }
 

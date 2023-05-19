@@ -1,6 +1,6 @@
 import { JSONFile, Low } from "lowdb";
-import { DfContentEntry, UserInfo, zodParse } from "df-downloader-common";
-import { LogLevel, logger } from "../utils/logger.js";
+import { DfContentEntry, DfUserInfo, zodParse } from "df-downloader-common";
+import { logger } from "df-downloader-common";
 import { WorkerQueue } from "../utils/queue-utils.js";
 import { DbInitInfo, DfDownloaderOperationalDb } from "./df-operational-db.js";
 import { ensureEnvString } from "../utils/env-utils.js";
@@ -34,12 +34,12 @@ export class DfLowDb extends DfDownloaderOperationalDb {
     this.db.data = zodParse(DfDbFileSchema, this.data);
     await this.writeQueue
       .addWork(async () => {
-        logger.log(LogLevel.INFO, "Writing to DB");
+        logger.log("info", "Writing to DB");
         await this.db.write();
-        logger.log(LogLevel.INFO, "Wrote to DB");
+        logger.log("info", "Wrote to DB");
       })
       .catch((error) => {
-        logger.log(LogLevel.ERROR, error);
+        logger.log("error", error);
       });
   }
   async init(): Promise<DbInitInfo> {
@@ -78,14 +78,14 @@ export class DfLowDb extends DfDownloaderOperationalDb {
     const data = this.db.data!;
     const version = data.version;
     if (version === CURRENT_VERSION) {
-      logger.log(LogLevel.INFO, `DB already at version ${CURRENT_VERSION} - no patches to apply`);
+      logger.log("info", `DB already at version ${CURRENT_VERSION} - no patches to apply`);
       this.data = zodParse(DfDbRuntimeSchema, data);
       return false;
     }
-    logger.log(LogLevel.INFO, `DB version is ${version}, backing up before patching`);
+    logger.log("info", `DB version is ${version}, backing up before patching`);
     await this.backup();
     if (!version) {
-      logger.log(LogLevel.INFO, `Patching DB version to 1.0.0`);
+      logger.log("info", `Patching DB version to 1.0.0`);
       data.version = "1.0.0";
       data.firstRunComplete = true;
       data.lastUpdated = new Date();
@@ -104,7 +104,7 @@ export class DfLowDb extends DfDownloaderOperationalDb {
     }
     while (data.version !== CURRENT_VERSION) {
       if (data.version === "1.0.0") {
-        logger.log(LogLevel.INFO, `Patching DB version to 2.0.0`);
+        logger.log("info", `Patching DB version to 2.0.0`);
         //this is pre-transform so don't need to worry about map
         data.contentInfo = Object.entries(data.contentInfo).map(([key, value]: [string, any]) => {
           const contentInfo = value.meta;
@@ -162,11 +162,11 @@ export class DfLowDb extends DfDownloaderOperationalDb {
     }
     await this.updateDb();
   }
-  async setUserInfo(user: UserInfo): Promise<void> {
+  async setDfUserInfo(user: DfUserInfo): Promise<void> {
     this.data.user = user;
     await this.updateDb();
   }
-  async getUserInfo(): Promise<UserInfo | undefined> {
+  async getDfUserInfo(): Promise<DfUserInfo | undefined> {
     return this.data.user;
   }
   async setFirstRunComplete(): Promise<void> {

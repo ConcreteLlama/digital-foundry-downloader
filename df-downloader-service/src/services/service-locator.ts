@@ -1,6 +1,6 @@
 import { SubtitleGenerator } from "../media-utils/subtitles/subtitles.js";
 import { DfNotificationConsumer } from "../notifiers/notification-consumer.js";
-import { LogLevel, logger } from "../utils/logger.js";
+import { logger } from "df-downloader-common";
 
 class ServiceLocator {
   public static instance = new ServiceLocator();
@@ -17,10 +17,7 @@ class ServiceLocator {
 
   set notificationConsumers(notificationConsumers: DfNotificationConsumer[]) {
     this._notificationConsumers = notificationConsumers;
-    logger.log(
-      LogLevel.INFO,
-      `Updated notification consumers to ${notificationConsumers.map((c) => c.name).join(", ")}`
-    );
+    logger.log("info", `Updated notification consumers to ${notificationConsumers.map((c) => c.name).join(", ")}`);
   }
 
   get notificationConsumers() {

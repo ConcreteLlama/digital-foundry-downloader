@@ -1,6 +1,6 @@
 import { DfContentInfo, DfNotificationType, DownloadProgressInfo, MediaInfo } from "df-downloader-common";
 import { DfNotificationConsumer } from "./notification-consumer.js";
-import { LogLevel, logger } from "../utils/logger.js";
+import { LogLevel, logger } from "df-downloader-common";
 import { downloadProgressToString } from "../utils/downloader.js";
 
 export class LoggerDfNotifier extends DfNotificationConsumer {
@@ -44,5 +44,8 @@ export class LoggerDfNotifier extends DfNotificationConsumer {
   }
   notifyUserSignedIn(username: string, tier: string): void {
     logger.log(this.logLevel, `DF Downloader user signed in. Username: ${username} Tier: ${tier}`);
+  }
+  notifyPasswordReset(token: string, resetUrl: string, expiryTime: Date): void {
+    logger.log(this.logLevel, `Password reset requested. Token: ${token} Reset URL: ${resetUrl} Expiry: ${expiryTime}`);
   }
 }

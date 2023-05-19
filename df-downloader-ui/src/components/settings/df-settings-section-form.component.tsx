@@ -1,5 +1,5 @@
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Box, Button, CircularProgress, Divider, Typography, styled, useMediaQuery } from "@mui/material";
+import { Box, Button, CircularProgress, Divider, Typography, styled } from "@mui/material";
 import { DfDownloaderConfig } from "df-downloader-common/config/df-downloader-config";
 import { FormContainer, useFormState } from "react-hook-form-mui";
 import { useSelector } from "react-redux";
@@ -7,7 +7,7 @@ import { selectConfigError, selectConfigLoading, selectConfigSection } from "../
 import { store } from "../../store/store";
 import { queryConfigSection, updateConfigSection } from "../../store/config/config.action";
 import { createContext, useEffect } from "react";
-import { theme } from "../../themes/theme";
+import { logger } from "df-downloader-common";
 
 export const CurrentSettingsContext = createContext<Partial<DfDownloaderConfig>>({});
 
@@ -15,11 +15,10 @@ export type DfSettingsFormProps = {
   sectionName: keyof DfDownloaderConfig;
   title: string;
   children: React.ReactNode;
+  onSubmit?: () => void;
 };
 
-export const DfSettingsSectionForm = (props: DfSettingsFormProps) => {
-  const useMobileLayout = useMediaQuery(theme.breakpoints.down("md"));
-  const { sectionName, title, children } = props;
+export const DfSettingsSectionForm = ({ sectionName, title, children, onSubmit }: DfSettingsFormProps) => {
   useEffect(() => {
     store.dispatch(queryConfigSection.start(sectionName));
   }, [sectionName]);
@@ -38,7 +37,7 @@ export const DfSettingsSectionForm = (props: DfSettingsFormProps) => {
           [sectionName]: currentSettings,
         }}
       >
-        <Box sx={{ width: useMobileLayout ? "80vw" : "50vw", height: "100%" }}>
+        <Box sx={{ height: "100%", width: "100%" }}>
           <Typography variant="h5">{title}</Typography>
           <Divider sx={{ marginTop: 2, marginBottom: 4 }} />
           <FormContainer
@@ -46,9 +45,10 @@ export const DfSettingsSectionForm = (props: DfSettingsFormProps) => {
             defaultValues={currentSettings as any}
             onSuccess={(data) => {
               store.dispatch(updateConfigSection.start({ section: sectionName, value: data }));
+              onSubmit?.();
             }}
             onError={(error) => {
-              console.log("error", error);
+              logger.log("error", error);
             }}
           >
             <SettingsStack>

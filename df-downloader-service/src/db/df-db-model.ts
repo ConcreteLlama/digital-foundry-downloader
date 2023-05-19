@@ -1,4 +1,4 @@
-import { DfContentEntry, UserInfo } from "df-downloader-common";
+import { DfContentEntry, DfUserInfo } from "df-downloader-common";
 import { z } from "zod";
 
 const DfDbBaseSchema = z.object({
@@ -6,7 +6,7 @@ const DfDbBaseSchema = z.object({
   lastUpdated: z.coerce.date(),
   firstRunComplete: z.boolean(),
   refetchRequired: z.boolean().optional(),
-  user: UserInfo.optional(),
+  user: DfUserInfo.optional(),
 });
 
 export const DfDbRuntimeSchema = DfDbBaseSchema.extend({

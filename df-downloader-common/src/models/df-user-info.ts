@@ -1,8 +1,8 @@
 import { z } from "zod";
 
-export const UserInfo = z.object({
+export const DfUserInfo = z.object({
   username: z.string(),
   tier: z.string(),
   avatarUrl: z.string().optional(),
 });
-export type UserInfo = z.infer<typeof UserInfo>;
+export type DfUserInfo = z.infer<typeof DfUserInfo>;

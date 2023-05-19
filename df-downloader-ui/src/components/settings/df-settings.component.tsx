@@ -1,18 +1,27 @@
 import { DfSettingsSectionForm } from "./df-settings-section-form.component";
 import { ZodTextField } from "../zod-fields/zod-text-field.component";
 import { DfConfig } from "df-downloader-common/config/df-config";
-import { Link, List, ListItem, ListItemText, ListSubheader } from "@mui/material";
+import { Box, Button, Link, List, ListItem, ListItemText, ListSubheader } from "@mui/material";
+import { fetchJson } from "../../utils/fetch";
+import { API_URL } from "../../config";
+import { store } from "../../store/store";
+import { queryDfUserInfo } from "../../store/df-user/df-user.actions";
+import { useState } from "react";
+import { useWatch } from "react-hook-form";
+import { DfUserInfo, TestSessionIdRequest, parseResponseBody } from "df-downloader-common";
 
 export const DfSettingsForm = () => {
   return (
-    <DfSettingsSectionForm sectionName="digitalFoundry" title="Digital Foundry">
-      <ZodTextField
-        name="sessionId"
-        label="Session ID"
-        isPassword={true}
-        zodString={DfConfig.shape.sessionId._def.innerType}
-        helperText="To acquire your DF Session ID, you'll need to extract the sessionid cookie from your browser (NOT the session_id cookie)"
-      />
+    <DfSettingsSectionForm
+      sectionName="digitalFoundry"
+      title="Digital Foundry"
+      onSubmit={() => {
+        fetchJson(`${API_URL}/df-user/await-login`, { method: "GET" }).then(() => {
+          store.dispatch(queryDfUserInfo.start());
+        });
+      }}
+    >
+      <DfSessionIdField />
       <List>
         <ListSubheader>Acquiring your sessionid cookie</ListSubheader>
         <ListItem>
@@ -38,4 +47,51 @@ export const DfSettingsForm = () => {
       </List>
     </DfSettingsSectionForm>
   );
+};
+
+const DfSessionIdField = () => {
+  const [testResult, setTestResult] = useState<string | false | null>(null);
+  const sessionIdValue = useWatch({
+    name: `sessionId`,
+  });
+  return (
+    <Box sx={{ display: "flex", justifyContent: "space-between", gap: 2 }}>
+      <ZodTextField
+        name="sessionId"
+        label="Session ID"
+        isPassword={true}
+        zodString={DfConfig.shape.sessionId._def.innerType}
+        helperText="To acquire your DF Session ID, you'll need to extract the sessionid cookie from your browser (NOT the session_id cookie)"
+        onChange={() => setTestResult(null)}
+      />
+      <Button
+        sx={{ bgcolor: testResult === false ? "error.main" : "default", width: 200 }}
+        disabled={!sessionIdValue || Boolean(testResult)}
+        variant="contained"
+        onClick={() => testSessionId(sessionIdValue, setTestResult)}
+      >
+        {testResult === null ? "Test Session ID" : testResult ? `${testResult}` : "Test Session ID Failed"}
+      </Button>
+    </Box>
+  );
+};
+
+const testSessionId = async (sessionId: string, setResult: (result: string | null | false) => void) => {
+  setResult(null);
+  const requestBody: TestSessionIdRequest = {
+    sessionId,
+  };
+  const data = await fetchJson(`${API_URL}/df-user/test-session-id`, {
+    method: "POST",
+    body: JSON.stringify(requestBody),
+    headers: {
+      "Content-Type": "application/json",
+    },
+  });
+  const result = parseResponseBody(data, DfUserInfo);
+  if (result.data) {
+    setResult(result.data.username);
+  } else {
+    setResult(false);
+  }
 };

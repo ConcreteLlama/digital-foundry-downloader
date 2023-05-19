@@ -1,12 +1,12 @@
 import _ from "lodash";
 import { DfDownloaderOperationalDb } from "./db/df-operational-db.js";
-import { getUserInfo } from "./df-fetcher.js";
-import { UserInfo } from "df-downloader-common";
+import { getDfUserInfo } from "./df-fetcher.js";
+import { DfUserInfo } from "df-downloader-common";
 
 export type UserTierChangeListener = (newTier?: string) => void | Promise<void>;
 
 export class DfUserManager {
-  currentUserInfo?: UserInfo;
+  currentDfUserInfo?: DfUserInfo;
   userTierChangeListeners: UserTierChangeListener[] = [];
   constructor(readonly db: DfDownloaderOperationalDb) {}
 
@@ -14,23 +14,23 @@ export class DfUserManager {
     this.userTierChangeListeners.push(userTierChangeListener);
   }
 
-  async checkUserInfo() {
-    const userInfo = await getUserInfo();
-    if (!_.isEqual(this.currentUserInfo, userInfo)) {
-      this.currentUserInfo = userInfo;
+  async checkDfUserInfo() {
+    const userInfo = await getDfUserInfo();
+    if (!_.isEqual(this.currentDfUserInfo, userInfo)) {
+      this.currentDfUserInfo = userInfo;
       this.userTierChangeListeners.forEach((listener) => listener(userInfo?.tier));
-      this.db.setUserInfo(userInfo);
+      this.db.setDfUserInfo(userInfo);
     }
     return userInfo;
   }
   async start() {
-    this.currentUserInfo = await this.db.getUserInfo();
-    await this.checkUserInfo();
-    setInterval(() => this.checkUserInfo(), 10000);
+    this.currentDfUserInfo = await this.db.getDfUserInfo();
+    await this.checkDfUserInfo();
+    setInterval(() => this.checkDfUserInfo(), 10000);
   }
 
   getCurrentTier() {
-    return this.currentUserInfo?.tier;
+    return this.currentDfUserInfo?.tier;
   }
   isUserSignedIn() {
     return Boolean(this.getCurrentTier());

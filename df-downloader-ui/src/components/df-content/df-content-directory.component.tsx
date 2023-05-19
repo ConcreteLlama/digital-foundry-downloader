@@ -15,6 +15,7 @@ import { DfContentInfoItemCard } from "./df-content-item-card.component";
 import { DfContentInfoItemDetail } from "./df-content-item-detail.component";
 import { DfQuickSearch } from "./df-search-input.component";
 import { ClearDfSearchButton, DfAdvancedSearchButton } from "./df-search.component";
+import { DfSessionCheckDialog } from "../settings/df-session-check-dialog.component";
 
 export const DfContentInfoDirectory = () => {
   const contentKeys = useSelector(selectDfContentEntryKeys);
@@ -33,7 +34,18 @@ export const DfContentInfoDirectory = () => {
     window.scrollTo(0, 0);
   }
   return (
-    <Box sx={{ display: "flex", flexDirection: "column", height: "100%", overflow: "clip" }}>
+    <Box
+      sx={{
+        display: "flex",
+        flexDirection: "column",
+        height: "100%",
+        overflow: "auto",
+        "::-webkit-scrollbar": {
+          display: "none",
+        },
+      }}
+    >
+      <DfSessionCheckDialog />
       <Stack
         sx={{ position: "sticky", top: 0, zIndex: 1, backgroundColor: "background.default", gap: 1, paddingBottom: 1 }}
       >
@@ -43,10 +55,6 @@ export const DfContentInfoDirectory = () => {
       <Box
         sx={{
           flexGrow: 1,
-          overflow: "auto",
-          "::-webkit-scrollbar": {
-            display: "none",
-          },
         }}
       >
         <Stack sx={{ justifyItems: "center" }}>
@@ -96,7 +104,17 @@ export const DfContentInfoDirectory = () => {
 const TopBar = () => {
   const [quickSearchClear, setQuickSearchClear] = useState(false);
   return (
-    <Box sx={{ display: "flex", justifyContent: "space-between", paddingX: 4, gap: 2 }}>
+    <Box
+      sx={{
+        display: "flex",
+        justifyContent: "space-between",
+        paddingX: {
+          xs: 1,
+          md: 4,
+        },
+        gap: 2,
+      }}
+    >
       <DfQuickSearch clear={quickSearchClear} setClear={setQuickSearchClear} />
       <DfAdvancedSearchButton onClick={() => setQuickSearchClear(true)} />
       <ClearDfSearchButton onClick={() => setQuickSearchClear(true)} />

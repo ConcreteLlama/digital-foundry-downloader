@@ -54,7 +54,6 @@ export const QueuedContentUtils = {
     if (queuedContent.queuedContentStatus !== QueuedContentStatus.DOWNLOADING) {
       return undefined;
     }
-    console.log("returning stats");
     return queuedContent.currentProgress;
   },
 

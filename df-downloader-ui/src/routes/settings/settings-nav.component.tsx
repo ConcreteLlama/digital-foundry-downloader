@@ -53,7 +53,12 @@ const SettingsSubRouteNavItem = ({ subRoute, level, onItemSelected }: SettingsSu
         <List component="div" disablePadding>
           {subRoute.routes.map((route) =>
             isSettingsRoute(route) ? (
-              <SettingsRouteNavItem route={route} level={level} onItemSelected={onItemSelected} />
+              <SettingsRouteNavItem
+                route={route}
+                level={level}
+                onItemSelected={onItemSelected}
+                key={`settings-route:${route}:${level}`}
+              />
             ) : (
               <SettingsSubRouteNavItem subRoute={route} level={level + 1} />
             )

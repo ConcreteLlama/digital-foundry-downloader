@@ -97,7 +97,7 @@ const PushbulletApiKeyField = () => {
     name: `${PUSHBULLET_KEY}.apiKey`,
   });
   return (
-    <Box sx={{ display: "flex", justifyContent: "space-between" }}>
+    <Box sx={{ display: "flex", justifyContent: "space-between", gap: 2 }}>
       <ZodTextField
         sx={{ width: 400 }}
         name={`${PUSHBULLET_KEY}.apiKey`}

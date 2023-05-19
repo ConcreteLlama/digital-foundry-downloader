@@ -13,6 +13,9 @@ export const PushbulletNotificationsConfig = NotificationsServiceConfig.extend({
 export type PushbulletNotificationsConfig = z.infer<typeof PushbulletNotificationsConfig>;
 export const PushbulletServiceKey = "pushbullet";
 
+export const NotificationServiceTypes = [PushbulletServiceKey] as const;
+export type NotificationServiceType = (typeof NotificationServiceTypes)[number];
+
 export const NotificationsConfig = z.object({
   services: z
     .object({

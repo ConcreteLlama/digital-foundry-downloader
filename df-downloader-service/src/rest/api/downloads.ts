@@ -1,7 +1,7 @@
 import { QueueDownloadRequest } from "df-downloader-common";
 import express, { Request, Response } from "express";
 import { DigitalFoundryContentManager } from "../../df-content-manager.js";
-import { sendErrorAsResponse, sendResponse, zodParseHttp } from "../utils.js";
+import { sendErrorAsResponse, sendResponse, zodParseHttp } from "../utils/utils.js";
 
 export const makeDownloadsApiRouter = (contentManager: DigitalFoundryContentManager) => {
   const router = express.Router();
@@ -19,7 +19,9 @@ export const makeDownloadsApiRouter = (contentManager: DigitalFoundryContentMana
         });
         sendResponse(res, queuedContentInfo);
       } catch (e) {
-        sendErrorAsResponse(res, e, 500);
+        sendErrorAsResponse(res, e, {
+          code: 500,
+        });
       }
     });
   });
@@ -32,7 +34,7 @@ export const makeDownloadsApiRouter = (contentManager: DigitalFoundryContentMana
   //     });
   //   }
   //   contentName = sanitizeContentName(contentName);
-  //   logger.log(LogLevel.INFO, `downloadContent ${req.body.contentName} - ${contentName}`);
+  //   logger.log("info", `downloadContent ${req.body.contentName} - ${contentName}`);
   //   try {
   //     const contentInfo = await contentManager.getContent(contentName);
   //     return res.send(contentInfo);

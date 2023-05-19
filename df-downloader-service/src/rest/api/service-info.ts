@@ -1,6 +1,6 @@
 import express from "express";
 import { CURRENT_VERSION } from "../../version.js";
-import { sendResponse } from "../utils.js";
+import { sendResponse } from "../utils/utils.js";
 import { ServiceInfo } from "df-downloader-common";
 
 const isContainer = (process.env.CONTAINER_ENV?.length || 0) > 0;

@@ -26,13 +26,21 @@ export const HttpsConfig = z
   });
 export type HttpsConfig = z.infer<typeof HttpsConfig>;
 
+export const REFLECT_REQUEST = "REFLECT_REQUEST";
 export const RestApiConfig = z
   .object({
     http: HttpConfig.optional(),
     https: HttpsConfig.optional(),
     publicAddress: z.string().optional(),
+    allowOrigin: z.union([z.literal(REFLECT_REQUEST), z.string(), z.array(z.string())]).optional(),
   })
   .refine((data) => xor(data.http, data.https), "Must supply only one of HTTP or HTTPS");
 export type RestApiConfig = z.infer<typeof RestApiConfig>;
 
 export const RestApiConfigKey = "restApi";
+
+export const DefaultRestApiConfig: RestApiConfig = {
+  http: {
+    port: 44556,
+  },
+};

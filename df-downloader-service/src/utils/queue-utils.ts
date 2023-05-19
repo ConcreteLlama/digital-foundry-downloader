@@ -1,5 +1,5 @@
 import Queue, { QueueOptions } from "better-queue";
-import { LogLevel, logger } from "../utils/logger.js";
+import { logger } from "df-downloader-common";
 
 export class WorkerQueue {
   readonly queue: Queue;
@@ -10,9 +10,9 @@ export class WorkerQueue {
       try {
         await fn();
       } catch (e) {
-        logger.log(LogLevel.ERROR, e);
+        logger.log("error", e);
         if (this.isRetry) {
-          logger.log(LogLevel.ERROR, "is retry");
+          logger.log("error", "is retry");
           throw e;
         }
       }

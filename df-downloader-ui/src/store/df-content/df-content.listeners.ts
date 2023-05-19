@@ -27,7 +27,6 @@ export const startListeningDfContentInfo = (startListening: AppStartListening) =
   startListening({
     actionCreator: resetDfContentQuery,
     effect: (action, listenerApi) => {
-      console.log("reset");
       store.dispatch(queryDfContent.start());
     },
   });

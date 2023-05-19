@@ -4,7 +4,7 @@ import fsPromises from "node:fs/promises";
 import stream from "node:stream";
 import { promisify } from "node:util";
 import prettyBytes from "pretty-bytes";
-import { LogLevel, logger } from "./logger.js";
+import { logger } from "df-downloader-common";
 import { DownloadProgressInfo } from "df-downloader-common";
 
 const pipeline = promisify(stream.pipeline);
@@ -177,7 +177,7 @@ export class DownloadInstance {
       const file = await fsPromises.open(this.destination, "w");
       await file.close();
     }
-    logger.log(LogLevel.INFO, `Starting download for ${this.opts.label}`);
+    logger.log("info", `Starting download for ${this.opts.label}`);
     return await this.downloadInternal();
   }
 
@@ -204,7 +204,7 @@ export class DownloadInstance {
     // } else if (this.state !== DownloadState.DOWNLOADING) {
     //   throw new Error(`Cannot pause download as it is in ${this.state} state`);
     // }
-    // logger.log(LogLevel.INFO, `Pausing download for ${this.downloadOptions.label}`);
+    // logger.log("info", `Pausing download for ${this.downloadOptions.label}`);
     // this.state = DownloadState.PAUSED;
     // this.currentStream.pause();
     // this.currentProgress.paused();
@@ -254,7 +254,7 @@ export class DownloadInstance {
         });
       const stream = this.currentStream;
       stream.on("response", (res: Response) => {
-        logger.log(LogLevel.DEBUG, `Got response ${res.statusCode} ${JSON.stringify(res.headers)}`);
+        logger.log("debug", `Got response ${res.statusCode} ${JSON.stringify(res.headers)}`);
       });
       let lastProgressTime = 0;
       stream.on("downloadProgress", (progress: Progress) => {
@@ -267,7 +267,7 @@ export class DownloadInstance {
           }
           lastProgressTime = now.getTime();
           // logger.log(
-          //   LogLevel.DEBUG,
+          //   "debug",
           //   `Download progress for ${this.url}: ${downloadProgressToString(progressReport)}`
           // );
         }
@@ -276,14 +276,14 @@ export class DownloadInstance {
         "retry",
         (retryCount: number, error: any, createRetryStream: (updatedOptions?: OptionsInit) => Request) => {
           if (this.state === DownloadState.STOPPED) {
-            logger.log(LogLevel.INFO, `Download ${this.opts.label} is STOPPED, not retrying`);
+            logger.log("info", `Download ${this.opts.label} is STOPPED, not retrying`);
             return resolve({
               status: DownloadState.STOPPED,
             });
           }
           this.currentProgress.retryAttempt();
           logger.log(
-            LogLevel.INFO,
+            "info",
             `Download retry for ${this.opts.label}. ${downloadProgressToString(
               this.currentProgress.generateProgressReport()
             )}`
@@ -317,7 +317,7 @@ export class DownloadInstance {
             error: e,
           });
         }
-        logger.log(LogLevel.ERROR, `Download of ${this.opts.label} to ${this.destination} failed:`, e);
+        logger.log("error", `Download of ${this.opts.label} to ${this.destination} failed:`, e);
       });
       stream.on("end", (e: any) => {
         this.state = DownloadState.DOWNLOADED;
@@ -333,7 +333,7 @@ export class DownloadInstance {
           destination: this.destination,
           stats: finalProgress,
         });
-        logger.log(LogLevel.INFO, `Download of ${this.opts.label} to ${this.destination} succeeded`);
+        logger.log("info", `Download of ${this.opts.label} to ${this.destination} succeeded`);
       });
       stream.on("close", () => {
         //TODO: Handle more cases?
@@ -415,11 +415,11 @@ export class MultiConnectionDownloadInstance {
     const progressListener = this.opts.progressListener;
     let err: any;
     this.state = DownloadState.DOWNLOADING;
-    logger.log(LogLevel.INFO, `Starting download for ${this.url} with ${this.maxConnections} connections`);
+    logger.log("info", `Starting download for ${this.url} with ${this.maxConnections} connections`);
     const options = await got.head(this.url);
     if (!options.headers["accept-ranges"]?.includes("bytes")) {
       logger.log(
-        LogLevel.WARN,
+        "warn",
         `Unable to use multiple connections for ${this.url} as Accept-Ranges not set or is not "bytes" - using single connection`
       );
       const downloadInstance = new DownloadInstance(this.url, this.destination, this.opts);

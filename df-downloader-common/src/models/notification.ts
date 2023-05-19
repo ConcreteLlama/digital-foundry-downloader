@@ -6,6 +6,7 @@ export enum DfNotificationType {
   DOWNLOAD_QUEUED = "DOWNLOAD_QUEUED",
   USER_NOT_SIGNED_IN = "USER_NOT_SIGNED_IN",
   USER_SIGNED_IN = "USER_SIGNED_IN",
+  PASSWORD_RESET_REQUESTED = "PASSWORD_RESET_REQUESTED",
 }
 
 export const AllNotifications: DfNotificationType[] = [
@@ -16,4 +17,5 @@ export const AllNotifications: DfNotificationType[] = [
   DfNotificationType.DOWNLOAD_QUEUED,
   DfNotificationType.USER_NOT_SIGNED_IN,
   DfNotificationType.USER_SIGNED_IN,
+  DfNotificationType.PASSWORD_RESET_REQUESTED,
 ];

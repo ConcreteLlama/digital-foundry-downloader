@@ -51,8 +51,11 @@ export const DfContentInfoUtils = {
     return `${dfContentInfo.name}.${extension}`;
   },
   getThumbnailUrl(dfContentInfo: DfContentInfo, width: number, height?: number) {
+    return this.thumbnailUrlToSize(dfContentInfo.thumbnailUrl || "", width, height);
+  },
+  thumbnailUrlToSize(thumbnailUrl: string, width: number, height?: number) {
     height = height ? height : Math.floor((width * 9) / 16);
-    return (dfContentInfo.thumbnailUrl || "").replace(/\/thumbnail\/.*\//, `/thumbnail/${width}x${height}/`);
+    return (thumbnailUrl || "").replace(/\/thumbnail\/.*\//, `/thumbnail/${width}x${height}/`);
   },
   getDurationSeconds(dfContentInfo: DfContentInfo) {
     return MediaInfoUtils.getDurationSeconds(dfContentInfo.mediaInfo);

@@ -21,7 +21,7 @@ import {
 } from "df-downloader-common";
 import { DfUserManager } from "./df-user-manager.js";
 import { DownloadState } from "./utils/downloader.js";
-import { LogLevel, logger } from "./utils/logger.js";
+import { logger } from "df-downloader-common";
 import { DeepgramSubtitleGenerator } from "./media-utils/subtitles/deepgram.js";
 import { sanitizeContentName } from "./utils/df-utils.js";
 import { ensureDirectory, extractFilenameFromUrl, fileSizeStringToBytes, moveFile } from "./utils/file-utils.js";
@@ -64,9 +64,9 @@ export class DigitalFoundryContentManager {
         pendingInfo.queuedContentStatus = QueuedContentStatus.DOWNLOADING;
         let err: any;
         try {
-          logger.log(LogLevel.DEBUG, `Fetching ${JSON.stringify(dfContentInfo)}`);
-          logger.log(LogLevel.DEBUG, "Fetching", mediaInfo, "from list", dfContentInfo.mediaInfo);
-          logger.log(LogLevel.INFO, `Fetching ${dfContentInfo.name} with media type ${mediaInfo.mediaType}`);
+          logger.log("debug", `Fetching ${JSON.stringify(dfContentInfo)}`);
+          logger.log("debug", "Fetching", mediaInfo, "from list", dfContentInfo.mediaInfo);
+          logger.log("info", `Fetching ${dfContentInfo.name} with media type ${mediaInfo.mediaType}`);
           let currentProgress: DownloadProgressInfo;
           try {
             serviceLocator.notificationConsumers.forEach((consumer) =>
@@ -87,7 +87,7 @@ export class DigitalFoundryContentManager {
               return;
             }
             if (downloadResult.status === DownloadState.STOPPED) {
-              logger.log(LogLevel.INFO, `Download for ${dfContentInfo.name} was manually stopped`);
+              logger.log("info", `Download for ${dfContentInfo.name} was manually stopped`);
               return;
             }
             if (downloadResult.status === DownloadState.FAILED) {
@@ -100,13 +100,9 @@ export class DigitalFoundryContentManager {
               pendingInfo.statusInfo = "Injecting metadata";
               try {
                 await this.dfMetaInjector.setMeta(downloadLocation, dfContentInfo);
-                logger.log(LogLevel.DEBUG, `Set meta for ${dfContentInfo.name}`);
+                logger.log("debug", `Set meta for ${dfContentInfo.name}`);
               } catch (e) {
-                logger.log(
-                  LogLevel.ERROR,
-                  `Unable to inject metadata for ${dfContentInfo.name} - continuing anyway`,
-                  e
-                );
+                logger.log("error", `Unable to inject metadata for ${dfContentInfo.name} - continuing anyway`, e);
               }
             }
             const subtitleGenerator = serviceLocator.subtitleGenerator;
@@ -117,7 +113,7 @@ export class DigitalFoundryContentManager {
                 pendingInfo.statusInfo = "Injecting subtitles";
                 await this.dfMetaInjector.injectSubs(downloadLocation, subInfo);
               } catch (e) {
-                logger.log(LogLevel.ERROR, `Unable to get subs for ${dfContentInfo.name} - continuing anyway`, e);
+                logger.log("error", `Unable to get subs for ${dfContentInfo.name} - continuing anyway`, e);
               }
             }
 
@@ -126,7 +122,7 @@ export class DigitalFoundryContentManager {
 
             if (downloadLocation !== destination) {
               logger.log(
-                LogLevel.DEBUG,
+                "debug",
                 `Destination dir and download dir are not the same, moving ${downloadLocation} to ${destination}`
               );
               pendingInfo!.queuedContentStatus = QueuedContentStatus.POST_PROCESSING;
@@ -134,8 +130,8 @@ export class DigitalFoundryContentManager {
 
               await moveFile(downloadLocation, destination, {
                 clobber: true,
-              }).catch((e) => logger.log(LogLevel.DEBUG, e));
-              logger.log(LogLevel.DEBUG, `File moved from ${downloadLocation} to ${destination}`);
+              }).catch((e) => logger.log("debug", e));
+              logger.log("debug", `File moved from ${downloadLocation} to ${destination}`);
             }
             await this.dfMetaInjector.setDate(destination, dfContentInfo.publishedDate);
             await this.db.contentDownloaded(
@@ -159,8 +155,8 @@ export class DigitalFoundryContentManager {
         } finally {
           if (err) {
             pendingInfo!.queuedContentStatus = QueuedContentStatus.PENDING_RETRY;
-            logger.log(LogLevel.WARN, `Unable to fetch ${dfContentInfo.name}`);
-            logger.log(LogLevel.WARN, err);
+            logger.log("warn", `Unable to fetch ${dfContentInfo.name}`);
+            logger.log("warn", err);
             serviceLocator.notificationConsumers.forEach((consumer) => consumer.downloadFailed(dfContentInfo, err));
             this.setupRetry(dfContentInfo.name);
           }
@@ -176,7 +172,7 @@ export class DigitalFoundryContentManager {
     );
     configService.on("configUpdated:downloads", ({ newValue }) => {
       logger.log(
-        LogLevel.INFO,
+        "info",
         `TODO: Write logic to max simultaneous downloads to ${newValue.maxSimultaneousDownloads} on the fly`
       );
     });
@@ -208,20 +204,19 @@ export class DigitalFoundryContentManager {
       await this.scanForExistingFiles();
     }
     logger.log(
-      LogLevel.INFO,
+      "info",
       `Starting DF content monitor. Checking for new content every ${contentDetectionConfig.contentCheckInterval}ms`
     );
     configService.on("configUpdated:digitalFoundry", ({ oldValue, newValue }) => {
       const oldSessionId = oldValue.sessionId;
       const newSessionId = newValue.sessionId;
       if (newSessionId !== oldSessionId) {
-        console.log("checking user info");
-        this.dfUserManager.checkUserInfo();
+        this.dfUserManager.checkDfUserInfo();
       }
     });
 
     const checkForNewContent = async () => {
-      await this.dfUserManager.checkUserInfo();
+      await this.dfUserManager.checkDfUserInfo();
       await this.checkForNewContents();
     };
     checkForNewContent();
@@ -230,7 +225,7 @@ export class DigitalFoundryContentManager {
 
   async scanWholeArchive(...ignoreList: string[]) {
     const contentDetectionConfig = configService.config.contentDetection;
-    logger.log(LogLevel.INFO, `Scanning whole archive`);
+    logger.log("info", `Scanning whole archive`);
     await forEachArchivePage(
       async (contentList) => {
         //We may not have finished completing our first run last time so we should filter the content list
@@ -245,10 +240,7 @@ export class DigitalFoundryContentManager {
         const contentMetas = await Promise.all(
           contentList.map((contentRef) =>
             dfFetchWorkerQueue.addWork(() => {
-              logger.log(
-                LogLevel.INFO,
-                `Fetching meta for ${JSON.stringify(contentRef.title)} then adding to ignore list`
-              );
+              logger.log("info", `Fetching meta for ${JSON.stringify(contentRef.title)} then adding to ignore list`);
               return getMediaInfo(sanitizeContentName(contentRef.link));
             })
           )
@@ -276,7 +268,7 @@ export class DigitalFoundryContentManager {
           fileSizeStringToBytes(mediaInfo.size || "None");
         } catch (e) {
           logger.log(
-            LogLevel.INFO,
+            "info",
             `Media info for https://www.digitalfoundry.net/${contentEntry.name} contains invalid entry with unparseable size field, setting to 0`
           );
           mediaInfo.size = "0";
@@ -285,7 +277,7 @@ export class DigitalFoundryContentManager {
         const urlFilename = extractFilenameFromUrl(mediaInfo.url);
         if (!urlFilename || urlFilename.trim().length === 0) {
           logger.log(
-            LogLevel.INFO,
+            "info",
             `Media info for https://www.digitalfoundry.net/${contentEntry.name} contains invalid entry with URL that doesn't contain a file path, removing`
           );
           updatesMade = true;
@@ -306,7 +298,7 @@ export class DigitalFoundryContentManager {
       const contentInfoResults = await Promise.allSettled(
         entryBatch.map((contentInfo) =>
           dfFetchWorkerQueue.addWork(() => {
-            logger.log(LogLevel.INFO, `${contentInfo.name} has out of date meta; fetching info and patching`);
+            logger.log("info", `${contentInfo.name} has out of date meta; fetching info and patching`);
             return getMediaInfo(contentInfo.name);
           })
         )
@@ -314,9 +306,9 @@ export class DigitalFoundryContentManager {
       const toUpdate: DfContentEntry[] = [];
       contentInfoResults.forEach((result, idx) => {
         if (result.status === "rejected") {
-          logger.log(LogLevel.ERROR, `Failed to fetch meta for ${entryBatch[idx].name} ${result.reason}`);
+          logger.log("error", `Failed to fetch meta for ${entryBatch[idx].name} ${result.reason}`);
         } else {
-          logger.log(LogLevel.INFO, `Successfully fetched meta for ${result.value.name}`);
+          logger.log("info", `Successfully fetched meta for ${result.value.name}`);
           const contentEntry = entryBatch[idx];
           contentEntry.contentInfo = result.value;
           contentEntry.dataVersion = "2.0.0";
@@ -332,7 +324,7 @@ export class DigitalFoundryContentManager {
     const contentEntries = await this.db.getAllContentEntries();
 
     const notDownloaded = contentEntries.filter((contentEntry) => contentEntry.statusInfo.status !== "DOWNLOADED");
-    logger.log(LogLevel.INFO, "Scanning for existing files");
+    logger.log("info", "Scanning for existing files");
     while (notDownloaded.length > 0) {
       const toCheck = notDownloaded.splice(0, 50);
       let toUpdate: DfContentEntry[] = [];
@@ -372,7 +364,7 @@ export class DigitalFoundryContentManager {
                 const sizeDifference = Math.abs(fileSizeStringToBytes(mediaInfo.size || "0") - matchingFileStats!.size);
                 matchingMediaInfos.push([mediaInfo, sizeDifference]);
               } catch (e: any) {
-                logger.log(LogLevel.WARN, `Error with content ${contentEntry.name}`, e.message ? e.message : e);
+                logger.log("warn", `Error with content ${contentEntry.name}`, e.message ? e.message : e);
               }
             }
           }
@@ -380,7 +372,7 @@ export class DigitalFoundryContentManager {
             return;
           }
           const bestMatch = matchingMediaInfos.sort(([, a], [, b]) => a - b)[0][0];
-          logger.log(LogLevel.INFO, `Found existing file ${matchingFileName} for ${contentEntry.name}`);
+          logger.log("info", `Found existing file ${matchingFileName} for ${contentEntry.name}`);
           toUpdate.push(
             makeDownloadedContentInfo(
               contentEntry.contentInfo,
@@ -395,7 +387,7 @@ export class DigitalFoundryContentManager {
       await this.db.addContentInfos(...toUpdate);
     }
 
-    logger.log(LogLevel.INFO, "Finished scanning for existing files");
+    logger.log("info", "Finished scanning for existing files");
   }
 
   async getNewContentList() {
@@ -436,7 +428,7 @@ export class DigitalFoundryContentManager {
         : { include: newContentInfos, exclude: [] };
       exclude.length &&
         logger.log(
-          LogLevel.INFO,
+          "info",
           `Ignoring ${exclude.map((contentInfo) => contentInfo.name).join(", ")} due to exclusion filters`
         );
       await this.db.addAvailableContent(exclude);
@@ -503,13 +495,13 @@ export class DigitalFoundryContentManager {
       this.queuedContent.set(contentName, queuedContentInfo);
     }
     if (dfContentInfo.dataPaywalled) {
-      logger.log(LogLevel.INFO, `Not downloading ${dfContentInfo.name} as data is paywalled; adding to ignore list`);
+      logger.log("info", `Not downloading ${dfContentInfo.name} as data is paywalled; adding to ignore list`);
       this.db.addPaywalledContent(this.dfUserManager.getCurrentTier() || "NONE", dfContentInfo);
       return;
     }
     if (delay) {
       logger.log(
-        LogLevel.INFO,
+        "info",
         `Queueing download for ${contentName} ${
           autoDownloadConfig.downloadDelay && autoDownloadConfig.downloadDelay >= 0
             ? `in ${autoDownloadConfig.downloadDelay}ms`
@@ -533,22 +525,22 @@ export class DigitalFoundryContentManager {
     const downloadConfig = configService.config.downloads;
     const pendingInfo = this.queuedContent.get(contentName);
     if (!pendingInfo) {
-      logger.log(LogLevel.ERROR, `Failed to get pending info for ${contentName}, unable to retry`);
+      logger.log("error", `Failed to get pending info for ${contentName}, unable to retry`);
       return;
     }
     if (pendingInfo.currentAttempt >= downloadConfig.maxRetries) {
-      logger.log(LogLevel.WARN, `${contentName} has exceeded max retry attempts of ${downloadConfig.maxRetries}`);
+      logger.log("warn", `${contentName} has exceeded max retry attempts of ${downloadConfig.maxRetries}`);
       return;
     }
     const nextAttempt = new Date();
     nextAttempt.setTime(nextAttempt.getTime() + pendingInfo.currentRetryInterval);
     logger.log(
-      LogLevel.INFO,
+      "info",
       `Failed download for ${contentName} will be removed from pending list to be attempted again in ${pendingInfo.currentRetryInterval}ms ` +
         `(${nextAttempt}). Retry attempt: ${pendingInfo.currentAttempt + 1})`
     );
     setTimeout(() => {
-      logger.log(LogLevel.INFO, `Failed download ${contentName} marked ready for retry`);
+      logger.log("info", `Failed download ${contentName} marked ready for retry`);
       pendingInfo.readyForRetry = true;
       this.getContent(pendingInfo.name);
     }, pendingInfo.currentRetryInterval);
@@ -561,7 +553,7 @@ export class DigitalFoundryContentManager {
   }
 
   async userTierChanged(newTier?: string) {
-    const userInfo = this.dfUserManager.currentUserInfo;
+    const userInfo = this.dfUserManager.currentDfUserInfo;
     if (this.dfUserManager.isUserSignedIn() && userInfo) {
       serviceLocator.notificationConsumers.forEach((consumer) =>
         consumer.userSignedIn(userInfo.username, userInfo.tier)
@@ -577,7 +569,7 @@ export class DigitalFoundryContentManager {
       ignoredPaywalledContent.forEach((contentInfo) => {
         contentInfo.statusInfo.status = DfContentStatus.AVAILABLE;
       });
-      logger.log(LogLevel.INFO, `Setting all paywalled content to "Available" (may not be accurate)"`);
+      logger.log("info", `Setting all paywalled content to "Available" (may not be accurate)"`);
       await this.db.addContentInfos(...ignoredPaywalledContent);
     } else {
       serviceLocator.notificationConsumers.forEach((consumer) => consumer.userNotSignedIn());
@@ -590,7 +582,7 @@ export class DigitalFoundryContentManager {
         contentInfo.statusInfo.status = DfContentStatus.CONTENT_PAYWALLED;
         (contentInfo.statusInfo as DfContentStatusInfoPaywalled).userTierWhenUnavailable = "NONE";
       });
-      logger.log(LogLevel.INFO, `Setting all available content to "Paywalled" (may not be accurate)"`);
+      logger.log("info", `Setting all available content to "Paywalled" (may not be accurate)"`);
       await this.db.addContentInfos(...availableContentEntries);
     }
   }

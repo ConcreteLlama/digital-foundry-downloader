@@ -6,7 +6,7 @@ import {
   DfDownloaderConfigKey,
   DfDownloaderConfigKeys,
 } from "df-downloader-common/config/df-downloader-config.js";
-import { sendError, sendResponse } from "../utils.js";
+import { sendError, sendResponse } from "../utils/utils.js";
 
 export const makeConfigRouter = () => {
   const router = express.Router();

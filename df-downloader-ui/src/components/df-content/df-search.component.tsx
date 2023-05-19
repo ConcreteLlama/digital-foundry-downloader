@@ -11,7 +11,7 @@ import {
   Typography,
   useMediaQuery,
 } from "@mui/material";
-import { DfContentEntrySearchBody } from "df-downloader-common";
+import { DfContentEntrySearchBody, logger } from "df-downloader-common";
 import { Fragment, useState } from "react";
 import { FormContainer } from "react-hook-form-mui";
 import { FilterList } from "../general/filters/filter-list.component";
@@ -52,12 +52,11 @@ export const DfAdvancedSearch = ({ open, onClose }: DfAdvancedSearchProps) => {
         <FormContainer
           resolver={zodResolver(DfContentEntrySearchBody)}
           onSuccess={(data) => {
-            console.log("success", data);
             store.dispatch(updateDfContentQuery(data));
             onClose();
           }}
           onError={(error) => {
-            console.log("error!", error);
+            logger.log("error", "error in search form", error);
           }}
           defaultValues={{
             filter: defaultFilter,

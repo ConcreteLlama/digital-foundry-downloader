@@ -2,7 +2,7 @@ import {
   DfContentInfo,
   DfContentInfoQueryParams,
   DfTagInfo,
-  UserInfo,
+  DfUserInfo,
   DfContentEntry,
   DfContentEntryUtils,
   DfContentStatusInfoUtils,
@@ -166,7 +166,7 @@ export abstract class DfDownloaderOperationalDb {
     };
   }
   abstract removeContentInfos(contentNames: string[]): Promise<void>;
-  abstract setUserInfo(user?: UserInfo): Promise<void>;
-  abstract getUserInfo(): Promise<UserInfo | undefined>;
+  abstract setDfUserInfo(user?: DfUserInfo): Promise<void>;
+  abstract getDfUserInfo(): Promise<DfUserInfo | undefined>;
   abstract setFirstRunComplete(): Promise<void>;
 }

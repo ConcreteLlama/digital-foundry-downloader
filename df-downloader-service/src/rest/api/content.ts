@@ -11,7 +11,7 @@ import express, { Request, Response } from "express";
 import { DigitalFoundryContentManager } from "../../df-content-manager.js";
 import { sanitizeContentName } from "../../utils/df-utils.js";
 import { queryParamToInteger, queryParamToString, queryParamToStringArray } from "../../utils/query-utils.js";
-import { sendResponse, zodParseHttp } from "../utils.js";
+import { sendResponse, zodParseHttp } from "../utils/utils.js";
 
 export const makeContentApiRouter = (contentManager: DigitalFoundryContentManager) => {
   const router = express.Router();

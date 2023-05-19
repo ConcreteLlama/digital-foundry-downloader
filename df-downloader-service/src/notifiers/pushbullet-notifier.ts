@@ -1,6 +1,6 @@
 import { got } from "got";
 import { DfNotificationConsumer } from "./notification-consumer.js";
-import { DfContentInfo, DownloadProgressInfo, MediaInfo, DfNotificationType } from "df-downloader-common";
+import { DfContentInfo, DownloadProgressInfo, MediaInfo, DfNotificationType, logger } from "df-downloader-common";
 import { PushbulletNotificationsConfig } from "df-downloader-common/config/notifications-config";
 
 export class PushBulletNotifier extends DfNotificationConsumer {
@@ -26,7 +26,7 @@ export class PushBulletNotifier extends DfNotificationConsumer {
         }),
       })
       .catch((e) => {
-        console.log(e);
+        logger.log("error", `Error sending pushbullet notification: ${e}`);
       });
   }
 
@@ -83,6 +83,14 @@ export class PushBulletNotifier extends DfNotificationConsumer {
       "",
       `DF Downloader User signed in`,
       `DF Downloader user signed in. Username: ${username} Tier: ${tier}`,
+      false
+    );
+  }
+  notifyPasswordReset(token: string, resetUrl: string, expiryTime: Date): void {
+    this.sendPush(
+      "",
+      `DF Downloader Password Reset`,
+      `To reset your password go here: ${resetUrl}\nIf that doesn't work you can enter the following token on the password reset page: ${token}\nExpires on ${expiryTime.toISOString()}`,
       false
     );
   }
