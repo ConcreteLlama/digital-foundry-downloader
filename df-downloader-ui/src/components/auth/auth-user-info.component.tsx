@@ -12,7 +12,7 @@ export type AuthUserInfoProps = {
   mode: "full" | "minimal";
 };
 export const AuthUserInfo = ({ mode }: AuthUserInfoProps) => {
-  const [anchorEl, setAnchorEl] = React.useState<null | HTMLElement>(null);
+  const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
   const open = Boolean(anchorEl);
   const handleClick = (event: React.MouseEvent<HTMLElement>) => {
     setAnchorEl(event.currentTarget);
