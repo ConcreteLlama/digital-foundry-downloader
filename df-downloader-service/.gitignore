@@ -1,5 +1,4 @@
 db*.json
 .db.json.tmp
-config.yaml
-users.yaml
 public
+config/*

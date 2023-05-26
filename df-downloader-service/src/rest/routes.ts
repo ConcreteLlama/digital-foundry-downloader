@@ -10,10 +10,10 @@ import cookieParser from "cookie-parser";
 import { getAllowOrigin, getPublicAddress } from "./utils/utils.js";
 import { logger } from "df-downloader-common";
 
-export function makeRoutes(contentManager: DigitalFoundryContentManager, jwtManager: JwtManager) {
+export const makeRoutes = async (contentManager: DigitalFoundryContentManager, jwtManager: JwtManager) => {
   const restConfig = configService.config.restApi;
   const publicAddress = getPublicAddress();
-  const app = createExpressServer(restConfig);
+  const app = await createExpressServer(restConfig, publicAddress);
   const allowedOrigins = getAllowOrigin(publicAddress);
   logger.log("info", `Allowing origins: ${allowedOrigins === true ? "Reflected" : allowedOrigins}`);
   app.use(
@@ -26,4 +26,4 @@ export function makeRoutes(contentManager: DigitalFoundryContentManager, jwtMana
   app.use("/api", makeApiRouter(contentManager, jwtManager));
   const webRouter = makeWebRouter(publicAddress);
   webRouter && app.use(webRouter);
-}
+};

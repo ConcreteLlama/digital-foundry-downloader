@@ -1,11 +1,14 @@
+import { logger } from "df-downloader-common";
+import { RestApiConfig } from "df-downloader-common/config/rest-config.js";
 import express from "express";
+import fs from "fs";
 import http from "http";
 import https from "https";
-import fs from "fs";
-import { RestApiConfig } from "df-downloader-common/config/rest-config.js";
-import { logger } from "df-downloader-common";
+import path from "path";
+import { configDir } from "../config/config.js";
+import { generateSelfSignedCert, setupCert } from "./cert.js";
 
-export const createExpressServer = (config: RestApiConfig) => {
+export const createExpressServer = async (config: RestApiConfig, publicAddress: string) => {
   const app = express();
 
   if (config.http) {
@@ -18,10 +21,25 @@ export const createExpressServer = (config: RestApiConfig) => {
 
   if (config.https) {
     // Create an HTTPS server
+    let cert: string;
+    let key: string;
+    let ca: string | undefined;
+    if (config.https.keyPath && config.https.certPath) {
+      cert = fs.readFileSync(config.https.certPath).toString();
+      key = fs.readFileSync(config.https.keyPath).toString();
+      if (config.https.caPath) {
+        ca = fs.readFileSync(config.https.caPath).toString();
+      }
+    } else {
+      logger.log("warn", "HTTPS key and cert paths not provided, generating self-signed certificate");
+      const certData = await setupCert(path.join(configDir, "security"), publicAddress);
+      cert = certData.cert;
+      key = certData.key;
+    }
     const httpsServerOptions: https.ServerOptions = {
-      key: fs.readFileSync(config.https.keyPath!),
-      cert: fs.readFileSync(config.https.certPath!),
-      ca: fs.readFileSync(config.https.caPath!),
+      key,
+      cert,
+      ca,
       requestCert: config.https.requestCert,
       rejectUnauthorized: config.https.rejectUnauthorized,
     };
