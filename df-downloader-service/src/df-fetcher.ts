@@ -197,7 +197,6 @@ export async function fetchArchivePageContentList(page: number = 1) {
   }
   const dom = htmlparser2.parseDocument(response.body);
   const contentList = CSSSelect.selectAll(".archive_list > .summary_list li", dom);
-  console.log('content list len is', contentList.length);
   return contentList.reduce((toReturn, current) => {
     const summaryElement = CSSSelect.selectOne(".summary a", current);
     if (!(summaryElement instanceof Element)) {
