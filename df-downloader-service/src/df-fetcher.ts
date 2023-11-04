@@ -6,7 +6,7 @@ import { DfContentInfo, DfContentInfoUtils, MediaInfo, DfUserInfo } from "df-dow
 import { download, ProgressListener } from "./utils/downloader.js";
 import { logger } from "df-downloader-common";
 import { sanitizeContentName } from "./utils/df-utils.js";
-import { getBody } from "./utils/dom-utils.js";
+import { getBody, getBodyOfChild } from "./utils/dom-utils.js";
 import { extractFilenameFromUrl, fileSizeStringToBytes } from "./utils/file-utils.js";
 import { serviceLocator } from "./services/service-locator.js";
 import { configService } from "./config/config.js";
@@ -197,15 +197,19 @@ export async function fetchArchivePageContentList(page: number = 1) {
   }
   const dom = htmlparser2.parseDocument(response.body);
   const contentList = CSSSelect.selectAll(".archive_list > .summary_list li", dom);
+  console.log('content list len is', contentList.length);
   return contentList.reduce((toReturn, current) => {
-    const summaryElement = CSSSelect.selectOne(".summary > a", current);
+    const summaryElement = CSSSelect.selectOne(".summary a", current);
     if (!(summaryElement instanceof Element)) {
+      logger.log('verbose', `No summary link element, skipping`);
       return toReturn;
     }
     const thumbElement = CSSSelect.selectOne(".thumbnail > img", current);
     const thumbnail = thumbElement instanceof Element ? thumbElement.attribs.src : "";
-    const { href, title } = summaryElement.attribs;
+    const title = getBodyOfChild(summaryElement);
+    const { href } = summaryElement.attribs;
     if (!href || !title) {
+      logger.log('verbose', `Skipping - href is ${href} and title is ${title}`);
       return toReturn;
     }
     toReturn.push({
@@ -214,6 +218,7 @@ export async function fetchArchivePageContentList(page: number = 1) {
       name: sanitizeContentName(href),
       thumbnail,
     });
+    logger.log('silly', `Found content: ${JSON.stringify(toReturn, null, 2)}`)
     return toReturn;
   }, [] as DfContentInfoReference[]);
 }

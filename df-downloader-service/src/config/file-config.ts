@@ -1,4 +1,4 @@
-import fs from "fs";
+import fs, { mkdirSync } from "fs";
 import path from "path";
 import YAML from "yaml";
 import { DfDownloaderConfig } from "df-downloader-common/config/df-downloader-config.js";
@@ -18,6 +18,9 @@ export class FileConfig extends ConfigService {
       configStr = fs.readFileSync(configFilePath, "utf-8");
     } catch (e) {}
     if (!configStr) {
+      mkdirSync(dir, {
+        recursive: true
+      })
       const sampleFilePath = path.join(code_dir, "config_samples", "config.sample.yaml");
       fs.copyFileSync(sampleFilePath, configFilePath);
       configStr = fs.readFileSync(configFilePath, "utf-8");
