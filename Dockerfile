@@ -1,6 +1,4 @@
-# TODO: Rewrite this Dockerfile to reflect the new project structure
-
-from node:18
+FROM --platform=linux/amd64 node:18
 
 # Create app directory
 WORKDIR /usr/src/app

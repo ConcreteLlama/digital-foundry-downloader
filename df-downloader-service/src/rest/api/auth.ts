@@ -69,8 +69,8 @@ export const makeAuthRouter = (jwtManager: JwtManager) => {
           value: token,
           options: {
             httpOnly: true,
-            sameSite: "none",
-            secure: true,
+            sameSite: "strict",
+            secure: isRestSecure(),
           },
         },
       ],

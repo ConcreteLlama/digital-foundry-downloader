@@ -94,7 +94,7 @@ In the root directory of this project, run:
 
 `npm run start`
 
-The service will start. You can access the web UI at `http://localhost:44556` (unless you've changed the config, in which case... go to the address that's appropriate to your config).
+The service will start. You can access the web UI at `http://127.0.0.1:44556` (unless you've changed the config, in which case... go to the address that's appropriate to your config).
 
 ## Docker instructions
 
@@ -111,7 +111,7 @@ docker build . -t  concretellama/df-downloader-node
 You can build this into a docker container and deploy it somewhere. Ensure you have volumes mapped for /db /config, /working_dir and /destination_dir and all environment variables setup.
 
 If you have docker ready to go then you can easily run this by checking out the docker_run.sample.sh
- 
+
 ```
 docker run -d \
   --env WORK_DIR="//working_dir" \
