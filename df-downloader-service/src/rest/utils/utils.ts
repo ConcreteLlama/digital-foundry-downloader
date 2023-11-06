@@ -72,25 +72,26 @@ export const isRestSecure = () => {
   return Boolean(configService.config.restApi.https);
 };
 
-export const getPublicAddress = () => {
+export const getPublicAddresses = () => {
   const restConfig = configService.config.restApi;
 
-  let publicAddress = process.env.PUBLIC_ADDRESS;
-  if (publicAddress) {
-    logger.log("info", `Using public address ${publicAddress} from env`);
+  const envAddress = process.env.PUBLIC_ADDRESS;
+  if (envAddress) {
+    logger.log("info", `Using public address ${envAddress} from env`);
+    return [envAddress]
   } else if (restConfig.publicAddress) {
-    publicAddress = restConfig.publicAddress;
-    logger.log("info", `Using public address ${publicAddress} from config`);
+    logger.log("info", `Using public address ${restConfig.publicAddress} from config`);
+    return [restConfig.publicAddress];
   } else {
     const protcol = restConfig.https ? "https" : "http";
     const port = restConfig.http ? restConfig.http.port : restConfig.https!.port;
-    publicAddress = `${protcol}://127.0.0.1:${port}`;
-    logger.log("info", `Using auto generated public address ${publicAddress}`);
+    const publicAddresses = [`${protcol}://127.0.0.1:${port}`, `${protcol}://localhost:${port}`];
+    logger.log("info", `Using auto generated public address ${publicAddresses}`);
+    return publicAddresses;
   }
-  return publicAddress;
 };
 
-export const getAllowOrigin = (defaultVal: string = "") => {
+export const getAllowOrigin = (defaultVal: string | string[] = "") => {
   const restConfig = configService.config.restApi;
 
   const envAllowOrigin = process.env.ALLOW_ORIGIN;
