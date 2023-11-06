@@ -1,6 +1,7 @@
 # DF Downloader
 
-DF Downloader is an application designed to download the latest Digital Foundry videos when they are available. This will only work in any useful manner if you are a Patreon subscriber.
+DF Downloader is an application designed to download the latest Digital Foundry videos when they are available. This will only work in any useful manner if you are a Patreon subscriber. If you are not a subscriber,
+this tool will still be able to get info about available content but it will not be able to download anything.
 
 _NOTE - This is a personal project that I developed for my own use and has been consistently working for me for some time. I thought I'd put it out there as I found it so useful. I don't get much time to actually work on it but try to keep it updated if it breaks or doesn't work quite as expected._
 
@@ -13,7 +14,7 @@ _NOTE - This is a personal project that I developed for my own use and has been 
 - Can send pushbullet notifications when various events occur
 - Stores download history in a very simple "DB" using lowdb (so basically it just writes to a JSON file) so it doesn't keep redownloading the same content on restart.
 - Ability to automatically generate subtitles for videos using Deepgram (experimental).
-- Has a web UI (WIP) to see available content, monitor downloads and configure
+- Has a web UI to see available content, monitor downloads and configure
 
 # DF Session ID
 
@@ -32,31 +33,62 @@ it'll log you back in.
 - WebUI is incomplete
 - Can't currently control active downloads in download queue
 
-# Next steps
-
-- Reintroduce notifications config for pushbullet
-- Use the filter schema to add include and exclude config + forms to the automatic download config section
-- Make UI work from paths that aren't / (try refreshing on, say, /downloads)
-- CORS
-- Lock some config fields if running in a container
-
 # Notes on behaviour
 
 On first run, this will scan the entire DF archive and build up a DB of all available content. On future runs, it will check every archive page at the beginning to see if it's missing anything. The first run can take quite a while - it does fetch multiple pages simultaenously but the last thing I want is for this tool to hammer the DF site unnecessarily. Maybe I've been a little over-cautious in this regard.
 
 Either way, currently the size of the DB after first run is upward of 3.5MB.
 
-If you want to limit the impact of this, set MAX_ARCHIVE_DEPTH
+If you want to limit the impact of this, set the max archive depth
 
 It will also scan your destination dir for existing downloaded content. This behaviour can be disabled with SCAN_EXISTING_FILES=false
 
-## Installation
+## Structure
 
-### Local
+This is split into 3 packages:
 
-All steps are in the Dockerfile (TODO: Update this with actual help)
+### df-downloader-common
 
-### In a Docker container
+Includes all models shared between the UI and the backend service
+
+### df-downloader-ui
+
+A react web UI to interface with df-downloader-service to view available content, monitor downloads and configure the service.
+
+### df-downloader-service
+
+The backend service that does most of the actual work - scanning the DF site for new content, managing content, and downloading it.
+The service is also able to host the web UI.
+
+## Standalone (no Docker) instructions
+
+### Prerequisites
+
+- node18
+
+### Setup
+
+In the root directory of this project run:
+
+`npm run build`
+
+It'll do everything for you
+
+### Configuration
+
+See the config.sample.yaml file for all config options, but generally you can configure most options in the Web UI.
+
+### Running
+
+In the root directory of this project, run:
+
+`npm run start`
+
+The service will start. You can access the web UI at `http://localhost:44556` (unless you've changed the config, in which case... go to the address that's appropriate to your config)
+
+## Docker instructions
+
+### Setup
 
 If you have docker installed, you can run
 
@@ -64,18 +96,12 @@ If you have docker installed, you can run
 docker build . -t  concretellama/df-downloader-node
 ```
 
-## Usage
-
-### Running locally
-
-TODO: Update this with actual help
-
-### Running in docker
+### Confiuguration
 
 You can build this into a docker container and deploy it somewhere. Ensure you have volumes mapped for /db /config, /working_dir and /destination_dir and all environment variables setup.
 
 If you have docker ready to go then you can easily run this by checking out the docker_run.sample.sh
-
+ 
 ```
 docker run -d \
   --env WORK_DIR="//working_dir" \
@@ -123,12 +149,8 @@ The rest is configured in CONFIG_DIR/config.yaml (see config.yaml.sample). You c
 
 ### CONFIG_DIR
 
-**REQUIRED**
-
-Location of the config.yaml
+Location of the config.yaml. Defaults to config/config.yaml
 
 ### DB_DIR
 
-**REQUIRED**
-
-Location of the db.json
+Location of the db.json. Defaults to db/db.json.

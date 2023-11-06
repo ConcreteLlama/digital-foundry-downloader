@@ -11,10 +11,16 @@
     "test": "echo \"Error: no test specified\" && exit 1",
     "watch": "tsc --watch",
     "build": "tsc",
-    "dev": "env-cmd -f dev.env nodemon --watch dist dist/index.js",
+    "dev": "env-cmd -f dev.env --silent nodemon --watch dist dist/index.js",
+    "start": "node dist/index.js",
     "get-ui": "rimraf public && cp -r ../df-downloader-ui/build public",
     "build-get-ui": "cd ../df-downloader-ui && npm run build && cd ../df-downloader-service && npm run get-ui",
-    "add-common": "yalc add df-downloader-common"
+    "add-common": "yalc add df-downloader-common",
+    "full-build": "npm i && npm run add-common && npm run build",
+    "remove:config": "rimraf config/users.yaml && rimraf config/config.yaml",
+    "remove:data": "rimraf db/db.json",
+    "remove": "rimraf .yalc && rimraf yalc.lock && rimraf dist && rimraf public; rimraf node_modules",
+    "remove:all": "npm run remove:config && npm run remove:data && npm run remove"
   },
   "author": "",
   "license": "ISC",

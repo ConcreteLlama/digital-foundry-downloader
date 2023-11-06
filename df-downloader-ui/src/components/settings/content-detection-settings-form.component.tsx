@@ -15,7 +15,7 @@ export const ContentDetectionSettingsForm = () => {
         name="maxArchivePage"
         label="Max Archive Page"
         helperText="Maximum number of pages to scan on the DF site. Infinite if unset"
-        zodNumber={ContentDetectionConfig.shape.maxArchivePage.sourceType()._def.innerType}
+        zodNumber={ContentDetectionConfig.shape.maxArchivePage._def.innerType}
       />
     </DfSettingsSectionForm>
   );

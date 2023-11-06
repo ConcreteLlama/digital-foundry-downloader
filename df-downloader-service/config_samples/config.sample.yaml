@@ -1,35 +1,149 @@
-digitalFoundry:
-  sessionId: ""
-contentDetection:
-  contentCheckInterval: 59998
-  maxArchivePage: 1000
-automaticDownloads:
-  enabled: true
-  mediaTypes:
-    - h.264 (4K)
-    - HEVC
-    - h.264
-    - h.264 (1080p)
-    - MP3
-  downloadDelay: 20000
-contentManagement:
-  scanForExistingFiles: true
-  destinationDir: df_downloads
-  workDir: work_dir
-downloads:
-  maxSimultaneousDownloads: 2
-  maxConnectionsPerDownload: 5
-  failureRetryIntervalBase: 60000
-  maxRetries: 10
-postProcessing:
-  metadata:
-    injectMetadata: true
-  # subtitles:
-  #   subtitlesService: "deepgram"
-  #   deepgram:
-  #     apiKey: 'xxxxxxxx'
-restApi:
-  http:
-    port: 44556
-logging:
-  logLevel: "info"
+# digitalFoundry:
+#   # Digital Foundry sessionid cookie
+#   sessionId: ""
+
+# contentDetection:
+#   # How often to check for new content in milliseconds
+#   # Default: 60000
+#   contentCheckInterval: 60000
+
+#   # The maximum number of pages to check for new content
+#   # Default: 1000000
+#   maxArchivePage: 1000
+
+# automaticDownloads:
+#   # Whether automatic downloads are enabled
+#   # Default: false
+#   enabled: true
+
+#   # The media types that are accetable for automatic downloads in order of preference
+#   mediaTypes:
+#     - h.264 (4K)
+#     - HEVC
+#     - h.264
+#     - h.264 (1080p)
+#     - MP3
+#   # The maximum number of concurrent downloads
+#   # Default: 2
+#   downloadDelay: 20000
+
+# # Exclusion filters for automatic downloads - if a content entry matches any of these filters, it will not be downloaded
+#   exclusionFilters:
+# # Example filter (tags, description and title are all optional)
+#   exclusionFilters:
+#   - tags:
+#        tags:
+#          - Multiplayer Competitive
+#        mode: or
+#        caseSensitive: false
+#      description:
+#        value: fortnite
+#        mode: contains
+#        caseSensitive: false
+#    - title:
+#        value: Bonus
+#        mode: startsWith
+#        caseSensitive: false
+
+# contentManagement:
+#   # If set, the service will scan the destination directory for existing files and add them to the database as downloaded
+#   # Default: true
+#   scanForExistingFiles: true
+
+#   # The directory where downloaded files are stored
+#   # Default: df_downloads
+#   destinationDir: df_downloads
+
+#   # The directory where temporary working files are stored (partial downloads etc)
+#   # Default: work_dir
+#   workDir: work_dir
+
+# downloads:
+#   # The maximum number of simultaneous downloads
+#   maxSimultaneousDownloads: 2
+  
+#   # The maximum number of retries for failed downloads
+#   maxRetries: 10
+  
+#   # The maximum number of concurrent downloads
+#   maxConnectionsPerDownload: 5
+  
+#   # How long to wait before retrying a failed download in milliseconds
+#   failureRetryIntervalBase: 60000
+
+# authentication:
+#   # Configuration for password reset
+#   passwordReset:
+
+#   # The validity period of a password reset token in milliseconds
+#   # Default: 600000 (10 minutes)
+#   resetTokenValidity: number
+
+# Rest API config. The default config is for a local HTTP server on port 44556
+# restApi:
+#  # The public address of the server
+#  # Optional
+#  # Defaults to the address the server is listening on
+#  publicAddress: string
+
+#  # The allowed origins for CORS requests
+#  # Optional
+#  # Defaults to the address the server is listening on
+#  allowOrigin: string | string[]
+
+#   # The HTTP configuration (insecure) (use this OR https)
+#   http:
+#     # The port to listen on
+#     # Default: 44556
+#     port: 44556
+
+#   # The HTTPS configuration (secure) (use this OR http)
+#   https:
+#     # The port to listen on
+#     # Default: 44556
+#     port: number
+
+#     # The path to the key file
+#     keyPath: string
+
+#     # The path to the certificate file
+#     certPath: string
+
+#     # The path to the CA bundle file
+#     caPath: string
+
+#     # Whether to request a certificate from the client
+#     requestCert: boolean
+
+#     # Whether to reject unauthorized certificates
+#      rejectUnauthorized: boolean
+
+
+# metadata:
+# # Whether to inject metadata into the downloaded files
+# # Default: true
+#  injectMetadata: boolean
+
+# subtitles:
+#  # The subtitles service to use
+#  subtitlesService: deepgram
+
+# # Deepgram configuration
+# deepgram:
+#    # Deepgram API key
+#    apiKey: string
+
+# notifications:
+#  # The notification services to use
+#  services:
+#    # Pushbullet configuration
+#    pushbullet:
+#      # Whether to enable notifications for this service
+#      # enabled: boolean
+#      # The Pushbullet API key
+#      apiKey: string
+
+# logging:
+#    # The minimum log level to log
+#    # Default: info
+#    logLevel: "info"

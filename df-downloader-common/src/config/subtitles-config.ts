@@ -1,6 +1,7 @@
 import { z } from "zod";
 
 export const DeepgramConfig = z.object({
+  /** Deepgram API key */
   apiKey: z.string().min(30),
 });
 export type DeepgramConfig = z.infer<typeof DeepgramConfig>;
@@ -10,7 +11,9 @@ export type SubtitlesService = z.infer<typeof SubtitlesService>;
 
 export const SubtitlesConfig = z
   .object({
+    /** The subtitles service to use */
     subtitlesService: SubtitlesService.nullable().optional(),
+    /** Deepgram configuration */
     deepgram: DeepgramConfig.optional(),
   })
   .refine(

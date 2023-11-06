@@ -5,6 +5,7 @@ import { DfDownloaderConfig } from "df-downloader-common/config/df-downloader-co
 import { ConfigService } from "./config-service.js";
 import { fromZodError } from "zod-validation-error";
 import { code_dir } from "../utils/file-utils.js";
+import { logger } from "df-downloader-common";
 
 export class FileConfig extends ConfigService {
   constructor(private cachedConfig: DfDownloaderConfig, private configFilePath: fs.PathLike) {
@@ -26,13 +27,14 @@ export class FileConfig extends ConfigService {
       configStr = fs.readFileSync(configFilePath, "utf-8");
     }
 
-    const configPlain = YAML.parse(configStr);
+    const configPlain = YAML.parse(configStr) || {};
     const result = DfDownloaderConfig.safeParse(configPlain);
     if (!result.success) {
       throw new Error(fromZodError(result.error).toString());
     }
     const config = result.data;
 
+    logger.log('silly', `Full config:\n\n${JSON.stringify(config, null, 2)}`);
     return new FileConfig(config, configFilePath);
   }
   get config() {

@@ -4,8 +4,11 @@ import { DfContentInfo } from "./df-content-info.js";
 import { DfContentEntry } from "./df-content-entry.js";
 
 export const TagFilter = z.object({
+  /** The tags to filter by */
   tags: z.array(z.string()).optional().default([]),
+  /** Whether to match all tags (and) or any tag (or) */
   mode: z.enum(["or", "and"]).optional().default("or"),
+  /** Whether to match tags case sensitively */
   caseSensitive: z.boolean().optional().default(false),
 });
 export type TagFilter = z.infer<typeof TagFilter>;
@@ -47,8 +50,11 @@ export const TagFilterUtils = {
 };
 
 export const StringFilter = z.object({
+  /** The string to filter by */
   value: z.string().optional().default(""),
+  /** The mode to use for filtering - contains or startsWith */
   mode: z.enum(["contains", "startsWith"]).default("contains"),
+  /** Whether to match case sensitively */
   caseSensitive: z.boolean().optional().default(false),
 });
 export type StringFilter = z.infer<typeof StringFilter>;
@@ -83,8 +89,11 @@ export const StringFilterUtils = {
 };
 
 export const ContentInfoFilter = z.object({
+  /** Filter by tags */
   tags: TagFilterTransformer.optional(),
+  /** Filter by title */
   title: StringFilterTransformer.optional(),
+  /** Filter by description */
   description: StringFilterTransformer.optional(),
 });
 export type ContentInfoFilter = z.infer<typeof ContentInfoFilter>;

@@ -9,8 +9,10 @@
   "scripts": {
     "watch": "tsc-watch --onSuccess \"npm run build\"",
     "preyalcpublish": "tsc",
+    "yalc": "yalc",
     "build": "mkdirp dist && cp package.json dist && cd dist && yalc publish --private --push",
-    "start": "node dist/test.js"
+    "start": "node dist/test.js",
+    "remove": "yalc remove df-downloader-common; rimraf dist && rimraf node_modules"
   },
   "author": "",
   "license": "ISC",
@@ -21,6 +23,7 @@
   "devDependencies": {
     "env-cmd": "10.1.0",
     "mkdirp": "^2.1.6",
+    "rimraf": "^5.0.5",
     "tsc-watch": "^6.0.0",
     "typescript": "^4.9.5",
     "yalc": "^1.0.0-pre.53"
