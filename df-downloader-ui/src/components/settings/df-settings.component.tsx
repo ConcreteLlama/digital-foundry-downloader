@@ -9,6 +9,7 @@ import { queryDfUserInfo } from "../../store/df-user/df-user.actions";
 import { useState } from "react";
 import { useWatch } from "react-hook-form";
 import { DfUserInfo, TestSessionIdRequest, parseResponseBody } from "df-downloader-common";
+import { queryDfContent } from "../../store/df-content/df-content.action";
 
 export const DfSettingsForm = () => {
   return (
@@ -16,8 +17,10 @@ export const DfSettingsForm = () => {
       sectionName="digitalFoundry"
       title="Digital Foundry"
       onSubmit={() => {
+
         fetchJson(`${API_URL}/df-user/await-login`, { method: "GET" }).then(() => {
           store.dispatch(queryDfUserInfo.start());
+          store.dispatch(queryDfContent.start());
         });
       }}
     >

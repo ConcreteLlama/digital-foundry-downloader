@@ -22,7 +22,7 @@ export const MediaInfoTable = ({ contentInfo, currentDownloadingType, mediaInfo 
             <TableCell>{mediaInfo.videoEncoding}</TableCell>
             <TableCell>{mediaInfo.audioEncoding}</TableCell>
             <TableCell>
-              <StartDownloadingButton contentInfo={contentInfo} mediaType={mediaInfo.mediaType} />
+              <StartDownloadingButton contentInfo={contentInfo} mediaType={mediaInfo.mediaType} disabled={!Boolean(mediaInfo.url)} />
             </TableCell>
           </TableRow>
         ))}

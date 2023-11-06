@@ -21,5 +21,6 @@ export const DfContentQueryResponse = z.object({
   totalResults: z.number(),
   totalDuration: z.string(),
   content: z.array(DfContentEntry),
+  scanInProgress: z.boolean().optional(),
 });
 export type DfContentQueryResponse = z.infer<typeof DfContentQueryResponse>;

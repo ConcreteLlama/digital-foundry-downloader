@@ -5,7 +5,7 @@ import { Accordion, AccordionDetails, AccordionSummary, Box, Stack, Typography }
 import { MediaInfoListProps } from "./media-info-list.component";
 import { StartDownloadingButton } from "../start-download-dialog.component";
 
-export const MediaInfoAccordion = ({ contentInfo, currentDownloadingType, mediaInfo }: MediaInfoListProps) => {
+export const MediaInfoAccordion = ({ contentInfo, mediaInfo }: MediaInfoListProps) => {
   return (
     <Stack sx={{ gap: 1 }}>
       {mediaInfo.map((mediaInfo) => {
@@ -16,7 +16,7 @@ export const MediaInfoAccordion = ({ contentInfo, currentDownloadingType, mediaI
                 <Typography>
                   {mediaInfo.mediaType} ({mediaInfo.size})
                 </Typography>
-                <StartDownloadingButton contentInfo={contentInfo} mediaType={mediaInfo.mediaType} />
+                <StartDownloadingButton contentInfo={contentInfo} mediaType={mediaInfo.mediaType} disabled={!Boolean(mediaInfo.url)} />
               </Box>
             </AccordionSummary>
             <AccordionDetails>

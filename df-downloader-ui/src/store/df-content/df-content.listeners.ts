@@ -30,6 +30,18 @@ export const startListeningDfContentInfo = (startListening: AppStartListening) =
       store.dispatch(queryDfContent.start());
     },
   });
+  // Need to intercept the query df content success state
+  startListening({
+    actionCreator: queryDfContent.success,
+    effect: (action, listenerApi) => {
+      if (action.payload.scanInProgress) {
+        setTimeout(() => {
+          console.log('Scan in progress; re-querying...')
+          store.dispatch(queryDfContent.start());
+        }, 5000);
+      }
+    },
+  });
   addFetchListener(startListening, queryDfContent, DfContentEntrySearchResponse, () => {
     const body = store.getState().dfContent.currentQuery;
     let url = `${API_URL}/content/search`;

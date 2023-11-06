@@ -22,7 +22,6 @@ import {
 import { DfUserManager } from "./df-user-manager.js";
 import { DownloadState } from "./utils/downloader.js";
 import { logger } from "df-downloader-common";
-import { DeepgramSubtitleGenerator } from "./media-utils/subtitles/deepgram.js";
 import { sanitizeContentName } from "./utils/df-utils.js";
 import { ensureDirectory, extractFilenameFromUrl, fileSizeStringToBytes, moveFile } from "./utils/file-utils.js";
 import { dfFetchWorkerQueue, fileScannerQueue } from "./utils/queue-utils.js";
@@ -46,6 +45,7 @@ export class DigitalFoundryContentManager {
   private dfMetaInjector: DfMetaInjector;
   private dfUserManager: DfUserManager;
   queuedContent: Map<string, QueuedContent> = new Map<string, QueuedContent>();
+  metaFetchesInProgress: number = 0;
 
   workQueue: Queue<DownloadQueueItem, any>;
 
@@ -224,98 +224,126 @@ export class DigitalFoundryContentManager {
   }
 
   async scanWholeArchive(...ignoreList: string[]) {
-    const contentDetectionConfig = configService.config.contentDetection;
-    logger.log("info", `Scanning whole archive`);
-    await forEachArchivePage(
-      async (contentList) => {
-        //We may not have finished completing our first run last time so we should filter the content list
-        ignoreList && (contentList = contentList.filter((contentRef) => !ignoreList.includes(contentRef.name)));
-        const existingContentInfos = await this.db.getContentInfoMap(
-          contentList.map((contentInfo) => contentInfo.name)
-        );
-        contentList = contentList.filter((content) => {
-          const existing = existingContentInfos.get(content.name);
-          return !(existing && existing.contentInfo);
-        });
-        const contentMetas = await Promise.all(
-          contentList.map((contentRef) =>
-            dfFetchWorkerQueue.addWork(() => {
-              logger.log("info", `Fetching meta for ${JSON.stringify(contentRef.title)} then adding to ignore list`);
-              return getMediaInfo(sanitizeContentName(contentRef.link));
-            })
-          )
-        );
-        if (contentMetas.length > 0) {
-          await this.db.addContents(this.dfUserManager.getCurrentTier() || "NONE", contentMetas);
-        }
-        return true;
-      },
-      1,
-      contentDetectionConfig.maxArchivePage
-    );
-    await this.db.setFirstRunComplete();
+    try {
+      this.metaFetchesInProgress++;
+      const contentDetectionConfig = configService.config.contentDetection;
+      logger.log("info", `Scanning whole archive`);
+      await forEachArchivePage(
+        async (contentList) => {
+          //We may not have finished completing our first run last time so we should filter the content list
+          ignoreList && (contentList = contentList.filter((contentRef) => !ignoreList.includes(contentRef.name)));
+          const existingContentInfos = await this.db.getContentInfoMap(
+            contentList.map((contentInfo) => contentInfo.name)
+          );
+          contentList = contentList.filter((content) => {
+            const existing = existingContentInfos.get(content.name);
+            return !(existing && existing.contentInfo);
+          });
+          const contentMetas = await Promise.all(
+            contentList.map((contentRef) =>
+              dfFetchWorkerQueue.addWork(() => {
+                logger.log("info", `Fetching meta for ${JSON.stringify(contentRef.title)} then adding to ignore list`);
+                return getMediaInfo(sanitizeContentName(contentRef.link));
+              })
+            )
+          );
+          if (contentMetas.length > 0) {
+            await this.db.addContents(this.dfUserManager.getCurrentTier() || "NONE", contentMetas);
+          }
+          return true;
+        },
+        1,
+        contentDetectionConfig.maxArchivePage
+      );
+      await this.db.setFirstRunComplete();
+    } finally {
+      this.metaFetchesInProgress--;
+    }
   }
 
   async patchMetas() {
     const contentEntries = await this.db.getAllContentEntries();
+    const requiringMetaRefresh = new Set<string>();
     for (const contentEntry of contentEntries) {
       if (!contentEntry.contentInfo) {
+        logger.log("debug", `Content entry ${contentEntry.name} has no meta, skipping`);
         continue;
       }
       let updatesMade = false;
-      contentEntry.contentInfo.mediaInfo = contentEntry.contentInfo.mediaInfo.filter((mediaInfo) => {
-        try {
-          fileSizeStringToBytes(mediaInfo.size || "None");
-        } catch (e) {
-          logger.log(
-            "info",
-            `Media info for https://www.digitalfoundry.net/${contentEntry.name} contains invalid entry with unparseable size field, setting to 0`
-          );
-          mediaInfo.size = "0";
-          updatesMade = true;
-        }
-        const urlFilename = extractFilenameFromUrl(mediaInfo.url);
-        if (!urlFilename || urlFilename.trim().length === 0) {
-          logger.log(
-            "info",
-            `Media info for https://www.digitalfoundry.net/${contentEntry.name} contains invalid entry with URL that doesn't contain a file path, removing`
-          );
-          updatesMade = true;
-          return false;
-        }
-        return true;
-      });
+      if (!contentEntry.contentInfo.mediaInfo?.length && this.dfUserManager.getCurrentTier()) {
+        logger.log(
+          "info",
+          `Media info for https://www.digitalfoundry.net/${contentEntry.name} contains no entries but we have a user tier, adding to update list`
+        );
+        requiringMetaRefresh.add(contentEntry.name);
+        continue;
+      } else {
+        contentEntry.contentInfo.mediaInfo = contentEntry.contentInfo.mediaInfo.filter((mediaInfo) => {
+          try {
+            fileSizeStringToBytes(mediaInfo.size || "None");
+          } catch (e) {
+            logger.log(
+              "info",
+              `Media info for https://www.digitalfoundry.net/${contentEntry.name} contains invalid entry with unparseable size field, setting to 0`
+            );
+            mediaInfo.size = "0";
+            updatesMade = true;
+          }
+          if (mediaInfo.url) {
+            const urlFilename = mediaInfo.url ? extractFilenameFromUrl(mediaInfo.url) : null;
+            if (!Boolean(urlFilename?.trim()?.length)) {
+              logger.log(
+                "info",
+                `Media info for https://www.digitalfoundry.net/${contentEntry.name} contains invalid entry with URL that doesn't contain a file path, removing`
+              );
+              updatesMade = true;
+              return false;
+            }
+          } else if (this.dfUserManager.getCurrentTier()) {
+            requiringMetaRefresh.add(contentEntry.name);
+          }
+          return true;
+        });
+      }
       if (updatesMade) {
         await this.db.addContentInfos(contentEntry);
       }
     }
     const requiringUpdate = contentEntries.filter(
-      (contentEntry) => !contentEntry.contentInfo || contentEntry.dataVersion !== "2.0.0"
-    );
-    //TODO: Reverse so we update the most recent first
-    while (requiringUpdate.length > 0) {
-      const entryBatch = requiringUpdate.splice(0, 10);
-      const contentInfoResults = await Promise.allSettled(
-        entryBatch.map((contentInfo) =>
-          dfFetchWorkerQueue.addWork(() => {
-            logger.log("info", `${contentInfo.name} has out of date meta; fetching info and patching`);
-            return getMediaInfo(contentInfo.name);
-          })
-        )
-      );
-      const toUpdate: DfContentEntry[] = [];
-      contentInfoResults.forEach((result, idx) => {
-        if (result.status === "rejected") {
-          logger.log("error", `Failed to fetch meta for ${entryBatch[idx].name} ${result.reason}`);
-        } else {
-          logger.log("info", `Successfully fetched meta for ${result.value.name}`);
-          const contentEntry = entryBatch[idx];
-          contentEntry.contentInfo = result.value;
-          contentEntry.dataVersion = "2.0.0";
-          toUpdate.push(contentEntry);
-        }
-      });
-      await this.db.addContentInfos(...toUpdate);
+      (contentEntry) => !contentEntry.contentInfo || contentEntry.dataVersion !== "2.0.0" || requiringMetaRefresh.has(contentEntry.name)
+    ).sort((a, b) => a.contentInfo?.publishedDate.getTime() - b.contentInfo?.publishedDate.getTime());
+    if (requiringUpdate.length === 0) {
+      logger.log("info", "No content entries require meta patching");
+      return;
+    }
+    try {
+      this.metaFetchesInProgress++;
+      while (requiringUpdate.length > 0) {
+        const entryBatch = requiringUpdate.splice(0, 10);
+        const contentInfoResults = await Promise.allSettled(
+          entryBatch.map((contentInfo) =>
+            dfFetchWorkerQueue.addWork(() => {
+              logger.log("info", `${contentInfo.name} has out of date meta; fetching info and patching`);
+              return getMediaInfo(contentInfo.name);
+            })
+          )
+        );
+        const toUpdate: DfContentEntry[] = [];
+        contentInfoResults.forEach((result, idx) => {
+          if (result.status === "rejected") {
+            logger.log("error", `Failed to fetch meta for ${entryBatch[idx].name} ${result.reason}`);
+          } else {
+            logger.log("info", `Successfully fetched meta for ${result.value.name}`);
+            const contentEntry = entryBatch[idx];
+            contentEntry.contentInfo = result.value;
+            contentEntry.dataVersion = "2.0.0";
+            toUpdate.push(contentEntry);
+          }
+        });
+        await this.db.addContentInfos(...toUpdate);
+      }
+    } finally {
+      this.metaFetchesInProgress--;
     }
   }
 
@@ -336,11 +364,10 @@ export class DigitalFoundryContentManager {
           const { contentInfo } = contentEntry;
           for (const mediaInfo of contentInfo.mediaInfo) {
             const dfDownloaderFilename = DfContentInfoUtils.makeFileName(contentInfo, mediaInfo);
-            const urlFileName = extractFilenameFromUrl(mediaInfo.url);
             const filenames = [
               `${contentManagementConfig.destinationDir}/${dfDownloaderFilename}`,
-              `${contentManagementConfig.destinationDir}/${urlFileName}`,
             ];
+            mediaInfo.url && filenames.push(extractFilenameFromUrl(mediaInfo.url));
             let matchFound = false;
             for (const filename of filenames) {
               if (filename !== matchingFileName) {
@@ -502,10 +529,9 @@ export class DigitalFoundryContentManager {
     if (delay) {
       logger.log(
         "info",
-        `Queueing download for ${contentName} ${
-          autoDownloadConfig.downloadDelay && autoDownloadConfig.downloadDelay >= 0
-            ? `in ${autoDownloadConfig.downloadDelay}ms`
-            : "immediately"
+        `Queueing download for ${contentName} ${autoDownloadConfig.downloadDelay && autoDownloadConfig.downloadDelay >= 0
+          ? `in ${autoDownloadConfig.downloadDelay}ms`
+          : "immediately"
         }`
       );
     }
@@ -537,7 +563,7 @@ export class DigitalFoundryContentManager {
     logger.log(
       "info",
       `Failed download for ${contentName} will be removed from pending list to be attempted again in ${pendingInfo.currentRetryInterval}ms ` +
-        `(${nextAttempt}). Retry attempt: ${pendingInfo.currentAttempt + 1})`
+      `(${nextAttempt}). Retry attempt: ${pendingInfo.currentAttempt + 1})`
     );
     setTimeout(() => {
       logger.log("info", `Failed download ${contentName} marked ready for retry`);
@@ -571,6 +597,7 @@ export class DigitalFoundryContentManager {
       });
       logger.log("info", `Setting all paywalled content to "Available" (may not be accurate)"`);
       await this.db.addContentInfos(...ignoredPaywalledContent);
+      await this.patchMetas();
     } else {
       serviceLocator.notificationConsumers.forEach((consumer) => consumer.userNotSignedIn());
       //TODO: Either find a way to find *which* tier content belongs to or rescan all content to see whether it's still paywalled
@@ -585,5 +612,13 @@ export class DigitalFoundryContentManager {
       logger.log("info", `Setting all available content to "Paywalled" (may not be accurate)"`);
       await this.db.addContentInfos(...availableContentEntries);
     }
+  }
+
+  get currentFetchQueueSize() {
+    return dfFetchWorkerQueue.getQueueSize();
+  }
+
+  get scanInProgress() {
+    return this.metaFetchesInProgress > 0 || this.currentFetchQueueSize > 0;
   }
 }

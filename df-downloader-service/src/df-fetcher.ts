@@ -258,9 +258,6 @@ export async function getMediaInfo(name: string): Promise<DfContentInfo> {
         if (href) url = href;
       }
     }
-    if (!url || extractFilenameFromUrl(url).trim().length === 0) {
-      continue;
-    }
     mediaInfos.push({
       duration,
       size,

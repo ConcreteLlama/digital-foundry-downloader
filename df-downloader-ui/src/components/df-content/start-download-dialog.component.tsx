@@ -55,9 +55,10 @@ export type StartDownloadButtonProps = {
   contentInfo: DfContentInfo;
   mediaType?: string;
   label?: string;
+  disabled?: boolean;
 };
 
-export const StartDownloadingButton = ({ contentInfo, mediaType, label }: StartDownloadButtonProps) => {
+export const StartDownloadingButton = ({ contentInfo, mediaType, label, disabled }: StartDownloadButtonProps) => {
   const [dialogOpen, setDialogOpen] = useState(false);
   return (
     <Fragment>
@@ -76,7 +77,7 @@ export const StartDownloadingButton = ({ contentInfo, mediaType, label }: StartD
           <DownloadIcon fontSize="small" />
         </Box>
       ) : (
-        <IconButton onClick={() => setDialogOpen(true)}>
+        <IconButton onClick={() => setDialogOpen(true)} disabled={disabled}>
           <DownloadIcon fontSize="small" />
         </IconButton>
       )}

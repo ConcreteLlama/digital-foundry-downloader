@@ -56,6 +56,7 @@ export const makeContentApiRouter = (contentManager: DigitalFoundryContentManage
       totalResults: result.totalResults,
       totalDuration: secondsToHHMMSS(result.totalDurationSeconds),
       content: result.queryResult,
+      scanInProgress: contentManager.scanInProgress,
     };
     sendResponse(res, response);
   });
@@ -63,7 +64,9 @@ export const makeContentApiRouter = (contentManager: DigitalFoundryContentManage
   router.post("/search", async (req: Request, res: Response) => {
     await zodParseHttp(DfContentEntrySearchBody, req, res, async (searchProps) => {
       const allContentEntries = await contentManager.db.getAllContentEntries();
-      return sendResponse(res, DfContentEntrySearchUtils.search(searchProps, allContentEntries));
+      const result = DfContentEntrySearchUtils.search(searchProps, allContentEntries);
+      result.scanInProgress = contentManager.scanInProgress;
+      return sendResponse(res, result);
     });
   });
 

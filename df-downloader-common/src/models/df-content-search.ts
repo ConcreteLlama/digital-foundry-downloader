@@ -70,5 +70,6 @@ export const DfContentEntrySearchResponse = z.object({
   totalResults: z.number(),
   totalDuration: z.string(),
   content: z.array(DfContentEntry),
+  scanInProgress: z.boolean().optional(),
 });
 export type DfContentEntrySearchResponse = z.infer<typeof DfContentEntrySearchResponse>;

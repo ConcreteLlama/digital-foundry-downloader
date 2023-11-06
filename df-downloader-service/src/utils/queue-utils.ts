@@ -32,6 +32,10 @@ export class WorkerQueue {
       });
     });
   }
+
+  getQueueSize() {
+    return (this.queue as any).length;
+  }
 }
 
 export const dfFetchWorkerQueue = new WorkerQueue({
