@@ -1,9 +1,11 @@
 # DF Downloader
 
-DF Downloader is an application designed to download the latest Digital Foundry videos when they are available. This will only work in any useful manner if you are a Patreon subscriber. If you are not a subscriber,
+DF Downloader is a nodejs/react application designed to download the latest Digital Foundry videos when they are available. This will only work in any useful manner if you are a Patreon subscriber. If you are not a subscriber,
 this tool will still be able to get info about available content but it will not be able to download anything.
 
 _NOTE - This is a personal project that I developed for my own use and has been consistently working for me for some time. I thought I'd put it out there as I found it so useful. I don't get much time to actually work on it but try to keep it updated if it breaks or doesn't work quite as expected._
+
+If you just want to get up and running, check out the [Standalone (no docker)](#standalone-no-docker-instructions) instructions.
 
 # Features
 
@@ -66,6 +68,8 @@ The service is also able to host the web UI.
 
 - node18
 
+You'll need nodejs. I've been running this with node18. If you don't have nodejs, I recommend using [nvm](https://github.com/nvm-sh/nvm) to install nodejs but you can just go to the [nodejs website](https://nodejs.org/en/) and download the latest version.
+
 ### Setup
 
 In the root directory of this project run:
@@ -76,7 +80,13 @@ It'll do everything for you
 
 ### Configuration
 
-See the config.sample.yaml file for all config options, but generally you can configure most options in the Web UI.
+TL;DR - If you're using the web UI, you don't need to do anything and you can skip this.
+
+See the config.sample.yaml file for all config options, but generally you can configure most options in the Web UI. Manually editing the config file is mostly useful for configuring the REST API and logging.
+
+You can find a sample config in df-downloader-service/config_samples/config.sample.yaml. This will automatically be copied to df-downloader-service/config/config.yaml on first run. You'll notice it's all commented out - there is no mandatory config.
+
+Note that when you update config with the web ui, any comments will be lost.
 
 ### Running
 
@@ -84,7 +94,7 @@ In the root directory of this project, run:
 
 `npm run start`
 
-The service will start. You can access the web UI at `http://localhost:44556` (unless you've changed the config, in which case... go to the address that's appropriate to your config)
+The service will start. You can access the web UI at `http://localhost:44556` (unless you've changed the config, in which case... go to the address that's appropriate to your config).
 
 ## Docker instructions
 
@@ -136,14 +146,6 @@ If like me you run this in a container on a server and you're using an insecure 
 ```
 
 In the case of Unraid, that file will not persist on restart.
-
-## Configuration
-
-This is partly configured with env vars:
-
-See dev.env.sample for a list of configurable options
-
-The rest is configured in CONFIG_DIR/config.yaml (see config.yaml.sample). You can also configure with the Web UI.
 
 ## Environment variables
 
