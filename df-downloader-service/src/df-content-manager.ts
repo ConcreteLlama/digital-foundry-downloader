@@ -18,6 +18,8 @@ import {
   QueuedContentUtils,
   DfContentStatus,
   filterContentInfos,
+  asyncSome,
+  transformFirst,
 } from "df-downloader-common";
 import { DfUserManager } from "./df-user-manager.js";
 import { DownloadState } from "./utils/downloader.js";
@@ -176,6 +178,15 @@ export class DigitalFoundryContentManager {
         `TODO: Write logic to max simultaneous downloads to ${newValue.maxSimultaneousDownloads} on the fly`
       );
     });
+    configService.on("configUpdated:contentManagement", ({ newValue, oldValue }) => {
+      if (newValue.destinationDir !== oldValue.destinationDir) {
+        ensureDirectory(newValue.destinationDir);
+        this.scanForExistingFiles();
+      }
+      if (newValue.workDir !== oldValue.workDir) {
+        ensureDirectory(newValue.workDir);
+      }
+    });
     //TODO: Do this on both update and load (maybe make a new event for configLoadOrUpdate)
     configService.on("configUpdated:contentManagement", ({ newValue, oldValue }) => {
       if (newValue.destinationDir !== oldValue.destinationDir) {
@@ -188,6 +199,8 @@ export class DigitalFoundryContentManager {
   }
 
   async start(dbInitInfo: DbInitInfo) {
+    ensureDirectory(configService.config.contentManagement.destinationDir);
+    ensureDirectory(configService.config.contentManagement.workDir);
     const contentManagementConfig = configService.config.contentManagement;
     const contentDetectionConfig = configService.config.contentDetection;
     //TODO: Queue all downloads in "ATTEMPTING_DOWNLOAD" state
@@ -259,6 +272,7 @@ export class DigitalFoundryContentManager {
     } finally {
       this.metaFetchesInProgress--;
     }
+    logger.log("info", `Finished scanning whole archive`);
   }
 
   async patchMetas() {
@@ -311,7 +325,7 @@ export class DigitalFoundryContentManager {
     }
     const requiringUpdate = contentEntries.filter(
       (contentEntry) => !contentEntry.contentInfo || contentEntry.dataVersion !== "2.0.0" || requiringMetaRefresh.has(contentEntry.name)
-    ).sort((a, b) => a.contentInfo?.publishedDate.getTime() - b.contentInfo?.publishedDate.getTime());
+    ).sort((a, b) => b.contentInfo?.publishedDate.getTime() - a.contentInfo?.publishedDate.getTime());
     if (requiringUpdate.length === 0) {
       logger.log("info", "No content entries require meta patching");
       return;
@@ -358,57 +372,54 @@ export class DigitalFoundryContentManager {
       let toUpdate: DfContentEntry[] = [];
       await Promise.all(
         toCheck.map(async (contentEntry) => {
-          let matchingFileStats: Stats | undefined = undefined;
-          let matchingFileName: string | undefined = undefined;
-          const matchingMediaInfos: [MediaInfo, number][] = [];
           const { contentInfo } = contentEntry;
-          for (const mediaInfo of contentInfo.mediaInfo) {
+          const fileMatch = await transformFirst(contentInfo.mediaInfo, async (mediaInfo) => {
             const dfDownloaderFilename = DfContentInfoUtils.makeFileName(contentInfo, mediaInfo);
             const filenames = [
               `${contentManagementConfig.destinationDir}/${dfDownloaderFilename}`,
             ];
             mediaInfo.url && filenames.push(extractFilenameFromUrl(mediaInfo.url));
-            let matchFound = false;
-            for (const filename of filenames) {
-              if (filename !== matchingFileName) {
-                try {
-                  await fileScannerQueue.addWork(() => fs.access(filename));
-                  const fileInfo = await fileScannerQueue.addWork(() => fs.stat(filename));
-                  if (!fileInfo) {
-                    continue;
-                  }
-                  matchingFileName = filename;
-                  matchingFileStats = fileInfo;
-                  matchFound = true;
-                  break;
-                } catch (e) {
-                  // File not found, continue loop
-                }
-              }
-            }
-            if (matchFound) {
+            for (const contentFilename of filenames) {
               try {
-                const sizeDifference = Math.abs(fileSizeStringToBytes(mediaInfo.size || "0") - matchingFileStats!.size);
-                matchingMediaInfos.push([mediaInfo, sizeDifference]);
-              } catch (e: any) {
-                logger.log("warn", `Error with content ${contentEntry.name}`, e.message ? e.message : e);
+                await fileScannerQueue.addWork(() => fs.access(contentFilename));
+                const fileInfo = await fileScannerQueue.addWork(() => fs.stat(contentFilename));
+                if (!fileInfo) {
+                  continue;
+                }
+                return {
+                  matchingFileName: contentFilename,
+                  matchingFileStats: fileInfo,
+                };
+              } catch (e) {
+                // File not found, continue loop
               }
             }
+            return false;
+          });
+          if (fileMatch) {
+            const { matchingFileName, matchingFileStats } = fileMatch;
+            const matchingMediaInfos: [
+              MediaInfo,
+              number
+            ][] = contentInfo.mediaInfo.map((mediaInfo) => {
+                try {
+                  const sizeDifference = Math.abs(fileSizeStringToBytes(mediaInfo.size || "0") - matchingFileStats.size);
+                  return [mediaInfo, sizeDifference];
+                } catch (e: any) {
+                  return [mediaInfo, -1];
+                }
+              });
+            const bestMatch = matchingMediaInfos.sort(([, a], [, b]) => a - b)[0][0];
+            toUpdate.push(
+              makeDownloadedContentInfo(
+                contentEntry.contentInfo,
+                bestMatch.mediaType,
+                matchingFileName,
+                prettyBytes(matchingFileStats.size),
+                matchingFileStats.birthtime
+              )
+            );
           }
-          if (matchingMediaInfos.length === 0 || !matchingFileName || !matchingFileStats) {
-            return;
-          }
-          const bestMatch = matchingMediaInfos.sort(([, a], [, b]) => a - b)[0][0];
-          logger.log("info", `Found existing file ${matchingFileName} for ${contentEntry.name}`);
-          toUpdate.push(
-            makeDownloadedContentInfo(
-              contentEntry.contentInfo,
-              bestMatch.mediaType,
-              matchingFileName,
-              prettyBytes(matchingFileStats.size),
-              matchingFileStats.birthtime
-            )
-          );
         })
       );
       await this.db.addContentInfos(...toUpdate);

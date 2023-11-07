@@ -2,3 +2,5 @@ db*.json
 .db.json.tmp
 public
 config/*
+work_dir
+df_downloads
