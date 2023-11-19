@@ -2,6 +2,8 @@ import {
   DfContentEntrySearchBody,
   DfContentEntrySearchUtils,
   DfContentEntryUtils,
+  DfContentInfoRefreshMetaRequest,
+  DfContentInfoRefreshMetaResponse,
   DfContentQueryResponse,
   DfContentStatus,
   DfTagsResponse,
@@ -29,6 +31,17 @@ export const makeContentApiRouter = (contentManager: DigitalFoundryContentManage
       return res.status(404).send();
     }
     return sendResponse(res, contentInfo);
+  });
+
+  router.post("/entry/refresh-metadata", async (req: Request, res: Response) => {
+    await zodParseHttp(DfContentInfoRefreshMetaRequest, req, res, async (body) => {
+      const contentNames = body.contentName.map((name) => sanitizeContentName(name));
+      const result = await contentManager.refreshMeta(...contentNames);
+      const response: DfContentInfoRefreshMetaResponse = {
+        contentEntries: result,
+      };
+      return sendResponse(res, response);
+    });
   });
 
   router.get("/query", async (req: Request, res: Response) => {

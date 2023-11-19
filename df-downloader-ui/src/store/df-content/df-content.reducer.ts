@@ -3,6 +3,7 @@ import { addQueryCases } from "../utils";
 import {
   fetchSingleDfContentEntry,
   queryDfContent,
+  refreshDfContentMeta,
   resetDfContentQuery,
   resetState,
   setDfContentQuery,
@@ -31,6 +32,18 @@ export const dfContentReducer = createReducer(INITIAL_STATE, (builder) => {
   addQueryCases(builder, fetchSingleDfContentEntry, {
     success: (state, payload) => {
       const content = state.content.map((c) => (c.name === payload.name ? payload : c));
+      return {
+        ...state,
+        content,
+      };
+    },
+  });
+  addQueryCases(builder, refreshDfContentMeta, {
+    success(state, actionPayload) {
+      const content = state.content.map((existingContentEntry) => {
+        const updatedContent = actionPayload.contentEntries.find((updatedContent) => updatedContent.name === existingContentEntry.name);
+        return updatedContent ? updatedContent : existingContentEntry;
+      });
       return {
         ...state,
         content,

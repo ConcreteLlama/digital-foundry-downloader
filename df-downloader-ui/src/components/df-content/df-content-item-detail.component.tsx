@@ -1,4 +1,4 @@
-import { Box, Paper, Typography, useMediaQuery } from "@mui/material";
+import { Box, IconButton, Paper, Typography, useMediaQuery } from "@mui/material";
 import { DfContentInfoUtils, secondsToHHMMSS } from "df-downloader-common";
 import { Image } from "mui-image";
 import { useSelector } from "react-redux";
@@ -11,6 +11,9 @@ import { DownloadedContentDetail } from "./downloaded-content-info.component";
 import { MediaInfoList } from "./media-info/media-info-list.component";
 import { QueuedContentDetail } from "./queued-content-info.component";
 import { theme } from "../../themes/theme";
+import { refreshDfContentMeta } from "../../store/df-content/df-content.action";
+import { store } from "../../store/store";
+import Refresh from "@mui/icons-material/Refresh";
 
 export type DfContentInfoItemDetailProps = {
   dfContentName: string;
@@ -64,6 +67,20 @@ export const DfContentInfoItemDetail = ({ dfContentName }: DfContentInfoItemDeta
           contentInfo={contentInfo}
           mediaInfo={contentInfo.mediaInfo}
         />
+      </Box>
+      <Box sx={{
+        display: 'flex',
+        justifyContent: 'right',
+        alignItems: 'center'
+      }}
+      > 
+        <Typography variant="caption">Refresh content metadata</Typography> 
+        <IconButton size="small" aria-label="Refresh content metadata" onClick={() => {
+          console.log('clicked refresh');
+          store.dispatch(refreshDfContentMeta.start(dfContentName))
+        }}>
+          <Refresh />
+        </IconButton>
       </Box>
     </Paper>
   ) : (

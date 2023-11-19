@@ -8,20 +8,20 @@ import {
   DfContentStatusInfoUtils,
 } from "df-downloader-common";
 
-export const makePaywalledContentInfo = (userTierWhenUnavailable: string, dfContent: DfContentInfo) => {
+export const makePaywalledContentEntry = (userTierWhenUnavailable: string, dfContent: DfContentInfo) => {
   return DfContentEntryUtils.create(
     dfContent.name,
     dfContent,
     DfContentStatusInfoUtils.createPaywalled(userTierWhenUnavailable)
   );
 };
-export const makeAvailableContentInfo = (dfContent: DfContentInfo) => {
+export const makeAvailableContentEntry = (dfContent: DfContentInfo) => {
   return DfContentEntryUtils.create(dfContent.name, dfContent, DfContentStatusInfoUtils.createAvailable());
 };
-export const makeDownloadingContentInfo = (dfContent: DfContentInfo) => {
+export const makeDownloadingContentEntry = (dfContent: DfContentInfo) => {
   return DfContentEntryUtils.create(dfContent.name, dfContent, DfContentStatusInfoUtils.createAttemptingDownload());
 };
-export const makeDownloadedContentInfo = (
+export const makeDownloadedContentEntry = (
   dfContent: DfContentInfo,
   format: string,
   downloadLocation: string,
@@ -56,26 +56,26 @@ export abstract class DfDownloaderOperationalDb {
     size: string | undefined,
     downloadDate: Date
   ) {
-    return this.addContentInfos(makeDownloadedContentInfo(dfContent, format, downloadLocation, size, downloadDate));
+    return this.addContentInfos(makeDownloadedContentEntry(dfContent, format, downloadLocation, size, downloadDate));
   }
   addContents(userTier: string, dfContents: DfContentInfo[]) {
     return this.addContentInfos(
       ...dfContents.map((dfContent) =>
-        dfContent.dataPaywalled ? makePaywalledContentInfo(userTier, dfContent) : makeAvailableContentInfo(dfContent)
+        dfContent.dataPaywalled ? makePaywalledContentEntry(userTier, dfContent) : makeAvailableContentEntry(dfContent)
       )
     );
   }
 
   addPaywalledContent(userTierWhenUnavailable: string, ...dfContents: DfContentInfo[]) {
     return this.addContentInfos(
-      ...dfContents.map((dfContent) => makePaywalledContentInfo(userTierWhenUnavailable, dfContent))
+      ...dfContents.map((dfContent) => makePaywalledContentEntry(userTierWhenUnavailable, dfContent))
     );
   }
   addAvailableContent(dfContents: DfContentInfo[]) {
-    return this.addContentInfos(...dfContents.map((dfContent) => makeAvailableContentInfo(dfContent)));
+    return this.addContentInfos(...dfContents.map((dfContent) => makeAvailableContentEntry(dfContent)));
   }
   addDownloadingContents(dfContents: DfContentInfo[]) {
-    return this.addContentInfos(...dfContents.map((dfContent) => makeDownloadingContentInfo(dfContent)));
+    return this.addContentInfos(...dfContents.map((dfContent) => makeDownloadingContentEntry(dfContent)));
   }
   public abstract addContentInfos(...contentInfos: DfContentEntry[]): Promise<void>;
   abstract getContentEntryList(contentNames: string[]): Promise<(DfContentEntry | undefined)[]>;

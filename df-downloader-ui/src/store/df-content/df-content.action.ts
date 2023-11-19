@@ -1,5 +1,5 @@
 import { createAction } from "@reduxjs/toolkit";
-import { DfContentEntry, DfContentEntrySearchBodyInput, DfContentEntrySearchResponse } from "df-downloader-common";
+import { DfContentEntry, DfContentEntrySearchBodyInput, DfContentEntrySearchResponse, DfContentInfoRefreshMetaResponse } from "df-downloader-common";
 import { createQueryActions } from "../utils";
 
 //TODO: Create a separate query store
@@ -9,6 +9,7 @@ export const queryDfContent = createQueryActions<void, DfContentEntrySearchRespo
 export const updateDfContentQuery = createAction<DfContentEntrySearchBodyInput>("dfContent/UPDATE_QUERY");
 export const setDfContentQuery = createAction<DfContentEntrySearchBodyInput>("dfContent/SET_QUERY");
 export const resetDfContentQuery = createAction("dfContent/RESET_QUERY");
+export const refreshDfContentMeta = createQueryActions<string | string[], DfContentInfoRefreshMetaResponse>("dfContent", "dfContent/REFRESH_DF_CONTENT_META");
 
 export const fetchSingleDfContentEntry = createQueryActions<string, DfContentEntry>(
   "dfContent",

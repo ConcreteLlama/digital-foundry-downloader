@@ -79,7 +79,7 @@
 #   # Default: 600000 (10 minutes)
 #   resetTokenValidity: number
 
-# Rest API config. The default config is for a local HTTP server on port 44556
+# # Rest API config. The default config is for a local HTTP server on port 44556
 # restApi:
 #  # The public address of the server
 #  # Optional

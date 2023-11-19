@@ -1,4 +1,4 @@
-import { DfContentEntry, DfContentEntrySearchResponse } from "df-downloader-common";
+import { DfContentEntry, DfContentEntrySearchResponse, DfContentInfoRefreshMetaResponse } from "df-downloader-common";
 import { API_URL } from "../../config";
 import { AppStartListening } from "../listener";
 import { store } from "../store";
@@ -6,6 +6,7 @@ import { addFetchListener } from "../utils";
 import {
   fetchSingleDfContentEntry,
   queryDfContent,
+  refreshDfContentMeta,
   resetDfContentQuery,
   setDfContentQuery,
   updateDfContentQuery,
@@ -58,5 +59,14 @@ export const startListeningDfContentInfo = (startListening: AppStartListening) =
   });
   addFetchListener(startListening, fetchSingleDfContentEntry, DfContentEntry, (contentName) => {
     return [`${API_URL}/content/entry/${contentName}`];
+  });
+  addFetchListener(startListening, refreshDfContentMeta, DfContentInfoRefreshMetaResponse, (contentNames) => {
+    return [`${API_URL}/content/entry/refresh-metadata`, {
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ contentName: contentNames }),
+      method: "POST",
+    }];
   });
 };

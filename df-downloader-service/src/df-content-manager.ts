@@ -2,7 +2,7 @@ import Queue from "better-queue";
 import { Stats } from "fs";
 import fs from "fs/promises";
 import prettyBytes from "pretty-bytes";
-import { DbInitInfo, DfDownloaderOperationalDb, makeDownloadedContentInfo } from "./db/df-operational-db.js";
+import { DbInitInfo, DfDownloaderOperationalDb, makeAvailableContentEntry, makeDownloadedContentEntry, makePaywalledContentEntry } from "./db/df-operational-db.js";
 import { DfContentInfoReference, downloadMedia, forEachArchivePage, getMediaInfo } from "./df-fetcher.js";
 import { DfMetaInjector } from "./df-mpeg-meta.js";
 import { DfNotificationConsumer } from "./notifiers/notification-consumer.js";
@@ -30,6 +30,7 @@ import { dfFetchWorkerQueue, fileScannerQueue } from "./utils/queue-utils.js";
 import { serviceLocator } from "./services/service-locator.js";
 import { getMostImportantItem } from "./utils/importance-list.js";
 import { configService } from "./config/config.js";
+import { userInfo } from "os";
 
 type DownloadQueueItem = {
   dfContentInfo: DfContentInfo;
@@ -330,35 +331,50 @@ export class DigitalFoundryContentManager {
       logger.log("info", "No content entries require meta patching");
       return;
     }
+    await this.refreshMeta(...requiringUpdate.map((contentEntry) => contentEntry.name));
+  }
+
+  async refreshMeta(...contentNames: string[]) {
+    const updatedMetas: DfContentEntry[] = [];
     try {
       this.metaFetchesInProgress++;
-      while (requiringUpdate.length > 0) {
-        const entryBatch = requiringUpdate.splice(0, 10);
+      while (contentNames.length > 0) {
+        const entryBatch = contentNames.splice(0, 10);
         const contentInfoResults = await Promise.allSettled(
-          entryBatch.map((contentInfo) =>
+          entryBatch.map((contentName) =>
             dfFetchWorkerQueue.addWork(() => {
-              logger.log("info", `${contentInfo.name} has out of date meta; fetching info and patching`);
-              return getMediaInfo(contentInfo.name);
+              logger.log("info", `${contentName} has out of date meta; fetching info and patching`);
+              return getMediaInfo(contentName);
             })
           )
         );
+        const existingEntries = await this.db.getContentInfoMap(entryBatch);
         const toUpdate: DfContentEntry[] = [];
         contentInfoResults.forEach((result, idx) => {
           if (result.status === "rejected") {
-            logger.log("error", `Failed to fetch meta for ${entryBatch[idx].name} ${result.reason}`);
+            logger.log("error", `Failed to fetch meta for ${entryBatch[idx]} ${result.reason}`);
           } else {
             logger.log("info", `Successfully fetched meta for ${result.value.name}`);
-            const contentEntry = entryBatch[idx];
-            contentEntry.contentInfo = result.value;
-            contentEntry.dataVersion = "2.0.0";
-            toUpdate.push(contentEntry);
+            const contentName = entryBatch[idx];
+            const contentInfo = result.value;
+            const existingContentEntry = existingEntries.get(contentName);
+            if (existingContentEntry) {
+              existingContentEntry.contentInfo = contentInfo;
+              existingContentEntry.dataVersion = "2.0.0";
+              toUpdate.push(existingContentEntry);
+            } else {
+              toUpdate.push(contentInfo.dataPaywalled ? makePaywalledContentEntry(this.dfUserManager.getCurrentTier() || "NONE", contentInfo) 
+                : makeAvailableContentEntry(contentInfo));
+            }
           }
         });
         await this.db.addContentInfos(...toUpdate);
+        updatedMetas.push(...toUpdate);
       }
     } finally {
       this.metaFetchesInProgress--;
     }
+    return updatedMetas;
   }
 
   async scanForExistingFiles() {
@@ -411,7 +427,7 @@ export class DigitalFoundryContentManager {
               });
             const bestMatch = matchingMediaInfos.sort(([, a], [, b]) => a - b)[0][0];
             toUpdate.push(
-              makeDownloadedContentInfo(
+              makeDownloadedContentEntry(
                 contentEntry.contentInfo,
                 bestMatch.mediaType,
                 matchingFileName,

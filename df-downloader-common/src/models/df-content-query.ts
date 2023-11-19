@@ -24,3 +24,15 @@ export const DfContentQueryResponse = z.object({
   scanInProgress: z.boolean().optional(),
 });
 export type DfContentQueryResponse = z.infer<typeof DfContentQueryResponse>;
+
+export const DfContentInfoRefreshMetaRequest = z.object({
+  contentName: z.union([z.string(), z.array(z.string())]).transform((value) => {
+    return Array.isArray(value) ? value : [value];
+  }),
+});
+export type DfContentInfoRefreshMetaRequest = z.infer<typeof DfContentInfoRefreshMetaRequest>;
+
+export const DfContentInfoRefreshMetaResponse = z.object({
+  contentEntries: z.array(DfContentEntry),
+});
+export type DfContentInfoRefreshMetaResponse = z.infer<typeof DfContentInfoRefreshMetaResponse>;
