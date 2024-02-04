@@ -25,6 +25,7 @@ const AutoConfigSettings = () => {
         label="Enable Automatic Downloads"
         helperText="Whether automatic downloads are enabled"
       />
+      <OrderableListFormField name="mediaTypes" label="Media Type Priorities" extendable={false} />
       {enabled && (
         <Fragment>
           <ZodNumberField
@@ -33,7 +34,6 @@ const AutoConfigSettings = () => {
             helperText="Delay after detecting new content before starting the download (in milliseconds)"
             zodNumber={AutomaticDownloadsConfig.shape.downloadDelay._def.innerType}
           />
-          <OrderableListFormField name="mediaTypes" label="Media Type Priorities" extendable={false} />
           <FilterList filterName="Exclusion" fieldArrayName="exclusionFilters" />
         </Fragment>
       )}
