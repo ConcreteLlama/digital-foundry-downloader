@@ -2,7 +2,13 @@ import Queue from "better-queue";
 import { Stats } from "fs";
 import fs from "fs/promises";
 import prettyBytes from "pretty-bytes";
-import { DbInitInfo, DfDownloaderOperationalDb, makeAvailableContentEntry, makeDownloadedContentEntry, makePaywalledContentEntry } from "./db/df-operational-db.js";
+import {
+  DbInitInfo,
+  DfDownloaderOperationalDb,
+  makeAvailableContentEntry,
+  makeDownloadedContentEntry,
+  makePaywalledContentEntry,
+} from "./db/df-operational-db.js";
 import { DfContentInfoReference, downloadMedia, forEachArchivePage, getMediaInfo } from "./df-fetcher.js";
 import { DfMetaInjector } from "./df-mpeg-meta.js";
 import { DfNotificationConsumer } from "./notifiers/notification-consumer.js";
@@ -31,6 +37,7 @@ import { serviceLocator } from "./services/service-locator.js";
 import { getMostImportantItem } from "./utils/importance-list.js";
 import { configService } from "./config/config.js";
 import { userInfo } from "os";
+import { getMediaTypeIndex } from "./utils/media-type.js";
 
 type DownloadQueueItem = {
   dfContentInfo: DfContentInfo;
@@ -324,9 +331,14 @@ export class DigitalFoundryContentManager {
         await this.db.addContentInfos(contentEntry);
       }
     }
-    const requiringUpdate = contentEntries.filter(
-      (contentEntry) => !contentEntry.contentInfo || contentEntry.dataVersion !== "2.0.0" || requiringMetaRefresh.has(contentEntry.name)
-    ).sort((a, b) => b.contentInfo?.publishedDate.getTime() - a.contentInfo?.publishedDate.getTime());
+    const requiringUpdate = contentEntries
+      .filter(
+        (contentEntry) =>
+          !contentEntry.contentInfo ||
+          contentEntry.dataVersion !== "2.0.0" ||
+          requiringMetaRefresh.has(contentEntry.name)
+      )
+      .sort((a, b) => b.contentInfo?.publishedDate.getTime() - a.contentInfo?.publishedDate.getTime());
     if (requiringUpdate.length === 0) {
       logger.log("info", "No content entries require meta patching");
       return;
@@ -363,8 +375,11 @@ export class DigitalFoundryContentManager {
               existingContentEntry.dataVersion = "2.0.0";
               toUpdate.push(existingContentEntry);
             } else {
-              toUpdate.push(contentInfo.dataPaywalled ? makePaywalledContentEntry(this.dfUserManager.getCurrentTier() || "NONE", contentInfo) 
-                : makeAvailableContentEntry(contentInfo));
+              toUpdate.push(
+                contentInfo.dataPaywalled
+                  ? makePaywalledContentEntry(this.dfUserManager.getCurrentTier() || "NONE", contentInfo)
+                  : makeAvailableContentEntry(contentInfo)
+              );
             }
           }
         });
@@ -391,9 +406,7 @@ export class DigitalFoundryContentManager {
           const { contentInfo } = contentEntry;
           const fileMatch = await transformFirst(contentInfo.mediaInfo, async (mediaInfo) => {
             const dfDownloaderFilename = DfContentInfoUtils.makeFileName(contentInfo, mediaInfo);
-            const filenames = [
-              `${contentManagementConfig.destinationDir}/${dfDownloaderFilename}`,
-            ];
+            const filenames = [`${contentManagementConfig.destinationDir}/${dfDownloaderFilename}`];
             mediaInfo.url && filenames.push(extractFilenameFromUrl(mediaInfo.url));
             for (const contentFilename of filenames) {
               try {
@@ -414,17 +427,14 @@ export class DigitalFoundryContentManager {
           });
           if (fileMatch) {
             const { matchingFileName, matchingFileStats } = fileMatch;
-            const matchingMediaInfos: [
-              MediaInfo,
-              number
-            ][] = contentInfo.mediaInfo.map((mediaInfo) => {
-                try {
-                  const sizeDifference = Math.abs(fileSizeStringToBytes(mediaInfo.size || "0") - matchingFileStats.size);
-                  return [mediaInfo, sizeDifference];
-                } catch (e: any) {
-                  return [mediaInfo, -1];
-                }
-              });
+            const matchingMediaInfos: [MediaInfo, number][] = contentInfo.mediaInfo.map((mediaInfo) => {
+              try {
+                const sizeDifference = Math.abs(fileSizeStringToBytes(mediaInfo.size || "0") - matchingFileStats.size);
+                return [mediaInfo, sizeDifference];
+              } catch (e: any) {
+                return [mediaInfo, -1];
+              }
+            });
             const bestMatch = matchingMediaInfos.sort(([, a], [, b]) => a - b)[0][0];
             toUpdate.push(
               makeDownloadedContentEntry(
@@ -529,7 +539,9 @@ export class DigitalFoundryContentManager {
     const mediaInfo =
       queuedContentInfo?.selectedMediaInfo ||
       (mediaType ? dfContentInfo.mediaInfo.find((mediaInfo) => mediaInfo.mediaType === mediaType) : undefined) ||
-      getMostImportantItem(autoDownloadConfig.mediaTypes, dfContentInfo.mediaInfo, (mediaInfo) => mediaInfo.mediaType);
+      getMostImportantItem(autoDownloadConfig.mediaTypes, dfContentInfo.mediaInfo, (mediaTypeList, mediaInfo) =>
+        getMediaTypeIndex(mediaTypeList, mediaInfo.mediaType)
+      );
     if (!mediaInfo) {
       throw new Error(`Could not get valid media info for ${dfContentInfo.name}`);
     }
@@ -556,9 +568,10 @@ export class DigitalFoundryContentManager {
     if (delay) {
       logger.log(
         "info",
-        `Queueing download for ${contentName} ${autoDownloadConfig.downloadDelay && autoDownloadConfig.downloadDelay >= 0
-          ? `in ${autoDownloadConfig.downloadDelay}ms`
-          : "immediately"
+        `Queueing download for ${contentName} ${
+          autoDownloadConfig.downloadDelay && autoDownloadConfig.downloadDelay >= 0
+            ? `in ${autoDownloadConfig.downloadDelay}ms`
+            : "immediately"
         }`
       );
     }
@@ -590,7 +603,7 @@ export class DigitalFoundryContentManager {
     logger.log(
       "info",
       `Failed download for ${contentName} will be removed from pending list to be attempted again in ${pendingInfo.currentRetryInterval}ms ` +
-      `(${nextAttempt}). Retry attempt: ${pendingInfo.currentAttempt + 1})`
+        `(${nextAttempt}). Retry attempt: ${pendingInfo.currentAttempt + 1})`
     );
     setTimeout(() => {
       logger.log("info", `Failed download ${contentName} marked ready for retry`);
