@@ -7,6 +7,7 @@ import { MediaInfoTable } from "./media-info-table.component";
 export type MediaInfoListProps = {
   contentInfo: DfContentInfo;
   currentDownloadingType?: string;
+  downloadedContentType?: string;
   mediaInfo: MediaInfo[];
 };
 

@@ -64,21 +64,26 @@ export const DfContentInfoItemDetail = ({ dfContentName }: DfContentInfoItemDeta
         </Typography>
         <MediaInfoList
           currentDownloadingType={downloadStatus?.selectedMediaInfo?.mediaType}
+          downloadedContentType={isDownloadedContentStatus(statusInfo) ? statusInfo.format : undefined}
           contentInfo={contentInfo}
           mediaInfo={contentInfo.mediaInfo}
         />
       </Box>
-      <Box sx={{
-        display: 'flex',
-        justifyContent: 'right',
-        alignItems: 'center'
-      }}
-      > 
-        <Typography variant="caption">Refresh content metadata</Typography> 
-        <IconButton size="small" aria-label="Refresh content metadata" onClick={() => {
-          console.log('clicked refresh');
-          store.dispatch(refreshDfContentMeta.start(dfContentName))
-        }}>
+      <Box
+        sx={{
+          display: "flex",
+          justifyContent: "right",
+          alignItems: "center",
+        }}
+      >
+        <Typography variant="caption">Refresh content metadata</Typography>
+        <IconButton
+          size="small"
+          aria-label="Refresh content metadata"
+          onClick={() => {
+            store.dispatch(refreshDfContentMeta.start(dfContentName));
+          }}
+        >
           <Refresh />
         </IconButton>
       </Box>

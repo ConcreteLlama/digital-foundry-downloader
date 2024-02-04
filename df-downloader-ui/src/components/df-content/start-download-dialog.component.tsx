@@ -13,6 +13,8 @@ import { store } from "../../store/store";
 import { startDownload } from "../../store/download-queue/download-queue.action";
 import { Fragment, useState } from "react";
 import DownloadIcon from "@mui/icons-material/Download";
+import DownloadingIcon from "@mui/icons-material/Downloading";
+import DownloadedIcon from "@mui/icons-material/DownloadDone";
 import { DfContentInfo } from "df-downloader-common";
 
 export type StartDownloadDialogProps = {
@@ -56,10 +58,43 @@ export type StartDownloadButtonProps = {
   mediaType?: string;
   label?: string;
   disabled?: boolean;
+  variant?: "downloading" | "downloaded" | "available";
 };
 
-export const StartDownloadingButton = ({ contentInfo, mediaType, label, disabled }: StartDownloadButtonProps) => {
+export const getDownloadVariant = (
+  mediaType: string,
+  currentDownloadingType?: string,
+  downloadedContentType?: string
+) => {
+  if (mediaType === currentDownloadingType) {
+    return "downloading";
+  } else if (mediaType === downloadedContentType) {
+    return "downloaded";
+  } else {
+    return "available";
+  }
+};
+
+const selectDownloadIcon = (variant: "downloading" | "downloaded" | "available") => {
+  switch (variant) {
+    case "downloading":
+      return DownloadingIcon;
+    case "downloaded":
+      return DownloadedIcon;
+    case "available":
+      return DownloadIcon;
+  }
+};
+
+export const StartDownloadingButton = ({
+  contentInfo,
+  mediaType,
+  label,
+  disabled,
+  variant = "available",
+}: StartDownloadButtonProps) => {
   const [dialogOpen, setDialogOpen] = useState(false);
+  const VariantIcon = selectDownloadIcon(variant);
   return (
     <Fragment>
       <StartDownloadDialog
@@ -74,11 +109,11 @@ export const StartDownloadingButton = ({ contentInfo, mediaType, label, disabled
           onClick={() => setDialogOpen(true)}
         >
           <Typography>Available</Typography>
-          <DownloadIcon fontSize="small" />
+          <VariantIcon fontSize="small" />
         </Box>
       ) : (
         <IconButton onClick={() => setDialogOpen(true)} disabled={disabled}>
-          <DownloadIcon fontSize="small" />
+          <VariantIcon fontSize="small" />
         </IconButton>
       )}
     </Fragment>
