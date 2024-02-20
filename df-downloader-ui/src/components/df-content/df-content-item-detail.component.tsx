@@ -1,11 +1,10 @@
 import { Box, IconButton, Paper, Typography, useMediaQuery } from "@mui/material";
-import { DfContentInfoUtils, secondsToHHMMSS } from "df-downloader-common";
+import { DfContentInfoUtils, isDownloadedContentStatus, secondsToHHMMSS } from "df-downloader-common";
 import { Image } from "mui-image";
 import { useSelector } from "react-redux";
 import { selectDfContentInfoItem } from "../../store/df-content/df-content.selector";
 import { selectDownloadItem } from "../../store/download-queue/download-queue.selector";
 import { formatDate } from "../../utils/date";
-import { isDownloadedContentStatus } from "../../utils/types";
 import { DfTagList } from "./df-tag-list.component";
 import { DownloadedContentDetail } from "./downloaded-content-info.component";
 import { MediaInfoList } from "./media-info/media-info-list.component";

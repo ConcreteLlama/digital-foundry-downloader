@@ -8,6 +8,15 @@ export const mediaTypeToRegexMap: Record<MediaType, RegExp> = {
   MP3: /mp3/i,
 };
 
+export const getMediaType = (mediaTypeString: string) => {
+  for (const [mediaType, mediaTypeRegex] of Object.entries(mediaTypeToRegexMap) as [MediaType, RegExp][]) {
+    if (mediaTypeRegex.test(mediaTypeString)) {
+      return mediaType;
+    }
+  }
+  return null;
+};
+
 export const getMatchingMediaType = (
   mediaTypePriorityList: MediaType[],
   mediaTypeString: string,

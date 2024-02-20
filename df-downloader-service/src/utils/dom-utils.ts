@@ -16,3 +16,8 @@ export function getBody(selector: string, parent?: Document | null) {
   const element = CSSSelect.selectOne(selector, parent);
   return getBodyOfChild(element);
 }
+
+export const getHref = (selector: string, parent?: Document | null) => {
+  const element = CSSSelect.selectOne(selector, parent) as Element;
+  return element?.attribs["href"];
+};

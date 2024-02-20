@@ -1,11 +1,15 @@
 import { Typography } from "@mui/material";
-import { DfContentEntry, DfContentStatus } from "df-downloader-common";
+import {
+  DfContentEntry,
+  DfContentStatus,
+  isDownloadedContentStatus,
+  isPaywalledContentStatus,
+} from "df-downloader-common";
 import { useState } from "react";
 import { useSelector } from "react-redux";
 import { fetchSingleDfContentEntry } from "../../store/df-content/df-content.action";
 import { selectDownloadItem } from "../../store/download-queue/download-queue.selector";
 import { store } from "../../store/store";
-import { isDownloadedContentStatus, isPaywalledContentStatus } from "../../utils/types";
 import { DownloadedContentSummary } from "./downloaded-content-info.component";
 import { QueuedContentSummary } from "./queued-content-info.component";
 import { StartDownloadingButton } from "./start-download-dialog.component";

@@ -1,12 +1,20 @@
 import deepgram from "@deepgram/sdk";
 const Deepgram = deepgram.Deepgram;
-import { parseArgsStringToArgv } from "string-argv";
-import ffmpegPath from "ffmpeg-static";
-import { spawn } from "child_process";
-import { logger } from "df-downloader-common";
+import { DfContentInfo, logger, LanguageCode } from "df-downloader-common";
 import { Utterance } from "@deepgram/sdk/dist/types/utterance.js";
 import { PrerecordedTranscriptionResponse } from "@deepgram/sdk/dist/types/prerecordedTranscriptionResponse.js";
 import { SubtitleGenerator, SubtitleInfo } from "./subtitles.js";
+import { SubtitlesService } from "df-downloader-common/config/subtitles-config.js";
+import { fileToAudioStream } from "../audio.js";
+
+const languageCodeToDeepgramCode = (language: LanguageCode) => {
+  switch (language) {
+    case "en":
+      return "eng";
+    default:
+      return "eng";
+  }
+};
 
 type Utt = {
   transcript: string;
@@ -52,31 +60,19 @@ const generateSrt = (transcript: PrerecordedTranscriptionResponse, maxWordsPerUt
 };
 
 export class DeepgramSubtitleGenerator implements SubtitleGenerator {
+  readonly serviceType: SubtitlesService = "deepgram";
   private readonly deepgram;
   constructor(deepgramApiKey: string) {
     this.deepgram = new Deepgram(deepgramApiKey);
   }
-  async getSubs(filename: string, language: string): Promise<SubtitleInfo> {
-    logger.log("info", `Generating ${language} subs for ${filename}`);
-    const ffmpegArgs = parseArgsStringToArgv(`-i "${filename}" -q:a 0 -map a -f wav -`);
-    const process = spawn(ffmpegPath, ffmpegArgs);
-    const procPromise = new Promise<void>((res, rej) => {
-      let lastErr: any;
-      process.on("error", (err) => {
-        rej(err);
-      });
-      process.on("close", (rc) => {
-        if (rc !== 0) {
-          rej(lastErr.toString());
-        }
-        res();
-      });
-      process.stderr.on("data", (chunk) => (lastErr = chunk));
-    });
+  async getSubs(_dfContentInfo: DfContentInfo, filename: string, languageCode: LanguageCode): Promise<SubtitleInfo> {
+    const language = languageCodeToDeepgramCode(languageCode);
+    logger.log("info", `Generating ${language} subs using deepgram for ${filename}`);
+    const wavAudioStream = fileToAudioStream(filename);
     try {
       const transcript = await this.deepgram.transcription.preRecorded(
         {
-          stream: process.stdout,
+          stream: wavAudioStream.stdout,
           mimetype: "audio/x-wav",
         },
         {
@@ -93,11 +89,7 @@ export class DeepgramSubtitleGenerator implements SubtitleGenerator {
         language,
       };
     } catch (e) {
-      const timeout = setTimeout(() => {
-        process.kill();
-      }, 1000);
-      await procPromise;
-      clearTimeout(timeout);
+      await wavAudioStream.awaitStop(1000);
       throw e;
     }
   }

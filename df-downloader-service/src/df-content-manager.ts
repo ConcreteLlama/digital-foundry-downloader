@@ -24,8 +24,9 @@ import {
   QueuedContentUtils,
   DfContentStatus,
   filterContentInfos,
+  transformFirstMatchAsync,
+  CURRENT_DATA_VERSION,
   asyncSome,
-  transformFirst,
 } from "df-downloader-common";
 import { DfUserManager } from "./df-user-manager.js";
 import { DownloadState } from "./utils/downloader.js";
@@ -36,20 +37,21 @@ import { dfFetchWorkerQueue, fileScannerQueue } from "./utils/queue-utils.js";
 import { serviceLocator } from "./services/service-locator.js";
 import { getMostImportantItem } from "./utils/importance-list.js";
 import { configService } from "./config/config.js";
-import { userInfo } from "os";
 import { getMediaTypeIndex } from "./utils/media-type.js";
+import test from "node:test";
 
 type DownloadQueueItem = {
   dfContentInfo: DfContentInfo;
   mediaInfo: MediaInfo;
 };
 
-// TODO: Refactor this so that we have a separate class for the queue and the content manager
-// The queue takes the content manager in the constructor
-// Should have multiple queues - either:
-// - One for downloads and one for post processing or
-// - One for downloads and one for each post processing step (preferred)
-// Need something above the queues that manages the state of the queued items - when one step is done, it can move the item to the next queue
+/**
+ * TODO: Make queues for unrelated work items; download queue, subtitles queue, metadata queue, mover queue etc.
+ * These can all be in separate files
+ *
+ * The second generic of Queue is the return type when a task is finished (on('task_finish'))
+ * and that is how we can move items from one queue to the next
+ */
 
 export class DigitalFoundryContentManager {
   private dfMetaInjector: DfMetaInjector;
@@ -64,6 +66,7 @@ export class DigitalFoundryContentManager {
     this.dfUserManager = new DfUserManager(db);
     this.dfUserManager.addUserTierChangeListener((tier) => this.userTierChanged(tier));
     const downloadsConfig = configService.config.downloads;
+
     this.workQueue = new Queue<DownloadQueueItem, any>(
       async (queueItem: DownloadQueueItem, cb) => {
         const { dfContentInfo, mediaInfo } = queueItem;
@@ -115,15 +118,34 @@ export class DigitalFoundryContentManager {
                 logger.log("error", `Unable to inject metadata for ${dfContentInfo.name} - continuing anyway`, e);
               }
             }
-            const subtitleGenerator = serviceLocator.subtitleGenerator;
-            if (subtitleGenerator) {
-              try {
-                pendingInfo.statusInfo = "Fetching subtitles";
-                const subInfo = await subtitleGenerator.getSubs(downloadLocation, "eng");
-                pendingInfo.statusInfo = "Injecting subtitles";
-                await this.dfMetaInjector.injectSubs(downloadLocation, subInfo);
-              } catch (e) {
-                logger.log("error", `Unable to get subs for ${dfContentInfo.name} - continuing anyway`, e);
+            if (config.subtitles?.autoGenerateSubs && config.subtitles?.servicePriorities?.length) {
+              const result = await asyncSome(config.subtitles.servicePriorities, async (subtitleService) => {
+                const subtitleGenerator = serviceLocator.getSubtitleGenerator(subtitleService);
+                if (subtitleGenerator) {
+                  try {
+                    pendingInfo.statusInfo = `Getting subs using ${subtitleService}`;
+                    const subInfo = await subtitleGenerator.getSubs(pendingInfo.dfContent, downloadLocation, "en");
+                    if (!subInfo) {
+                      return false;
+                    }
+                    pendingInfo.statusInfo = `Injecting subs from ${subtitleService}`;
+                    await this.dfMetaInjector.injectSubs(downloadLocation, subInfo);
+                    return true;
+                  } catch (e) {
+                    logger.log(
+                      "error",
+                      `Unable to get subs for ${dfContentInfo.name} with service ${subtitleService} - continuing anyway`,
+                      e
+                    );
+                  }
+                }
+                return false;
+              });
+              if (!result) {
+                logger.log(
+                  "warn",
+                  `Unable to get subs for ${dfContentInfo.name} using configured services: ${config.subtitles?.servicePriorities}`
+                );
               }
             }
 
@@ -335,7 +357,7 @@ export class DigitalFoundryContentManager {
       .filter(
         (contentEntry) =>
           !contentEntry.contentInfo ||
-          contentEntry.dataVersion !== "2.0.0" ||
+          contentEntry.dataVersion !== CURRENT_DATA_VERSION ||
           requiringMetaRefresh.has(contentEntry.name)
       )
       .sort((a, b) => b.contentInfo?.publishedDate.getTime() - a.contentInfo?.publishedDate.getTime());
@@ -372,7 +394,7 @@ export class DigitalFoundryContentManager {
             const existingContentEntry = existingEntries.get(contentName);
             if (existingContentEntry) {
               existingContentEntry.contentInfo = contentInfo;
-              existingContentEntry.dataVersion = "2.0.0";
+              existingContentEntry.dataVersion = CURRENT_DATA_VERSION;
               toUpdate.push(existingContentEntry);
             } else {
               toUpdate.push(
@@ -404,7 +426,7 @@ export class DigitalFoundryContentManager {
       await Promise.all(
         toCheck.map(async (contentEntry) => {
           const { contentInfo } = contentEntry;
-          const fileMatch = await transformFirst(contentInfo.mediaInfo, async (mediaInfo) => {
+          const fileMatch = await transformFirstMatchAsync(contentInfo.mediaInfo, async (mediaInfo) => {
             const dfDownloaderFilename = DfContentInfoUtils.makeFileName(contentInfo, mediaInfo);
             const filenames = [`${contentManagementConfig.destinationDir}/${dfDownloaderFilename}`];
             mediaInfo.url && filenames.push(extractFilenameFromUrl(mediaInfo.url));

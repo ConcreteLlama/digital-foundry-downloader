@@ -37,7 +37,7 @@ export const startListeningDfContentInfo = (startListening: AppStartListening) =
     effect: (action, listenerApi) => {
       if (action.payload.scanInProgress) {
         setTimeout(() => {
-          console.log('Scan in progress; re-querying...')
+          console.log("Scan in progress; re-querying...");
           store.dispatch(queryDfContent.start());
         }, 5000);
       }
@@ -61,12 +61,15 @@ export const startListeningDfContentInfo = (startListening: AppStartListening) =
     return [`${API_URL}/content/entry/${contentName}`];
   });
   addFetchListener(startListening, refreshDfContentMeta, DfContentInfoRefreshMetaResponse, (contentNames) => {
-    return [`${API_URL}/content/entry/refresh-metadata`, {
-      headers: {
-        "Content-Type": "application/json",
+    return [
+      `${API_URL}/content/entry/refresh-metadata`,
+      {
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ contentName: contentNames }),
+        method: "POST",
       },
-      body: JSON.stringify({ contentName: contentNames }),
-      method: "POST",
-    }];
+    ];
   });
 };

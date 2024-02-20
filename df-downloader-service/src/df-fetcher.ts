@@ -1,15 +1,14 @@
 import * as CSSSelect from "css-select";
+import { DfContentInfo, DfContentInfoUtils, DfUserInfo, MediaInfo, logger } from "df-downloader-common";
 import { Document, Element } from "domhandler";
 import got, { HTTPError } from "got";
 import htmlparser2 from "htmlparser2";
-import { DfContentInfo, DfContentInfoUtils, MediaInfo, DfUserInfo } from "df-downloader-common";
-import { download, ProgressListener } from "./utils/downloader.js";
-import { logger } from "df-downloader-common";
+import { configService } from "./config/config.js";
 import { sanitizeContentName } from "./utils/df-utils.js";
 import { getBody, getBodyOfChild } from "./utils/dom-utils.js";
-import { extractFilenameFromUrl, fileSizeStringToBytes } from "./utils/file-utils.js";
-import { serviceLocator } from "./services/service-locator.js";
-import { configService } from "./config/config.js";
+import { ProgressListener, download } from "./utils/downloader.js";
+import { fileSizeStringToBytes } from "./utils/file-utils.js";
+import { extractYoutubeVideoId } from "./utils/youtube.js";
 
 type PageMeta = {
   publishedDate: Date;
@@ -200,7 +199,7 @@ export async function fetchArchivePageContentList(page: number = 1) {
   return contentList.reduce((toReturn, current) => {
     const summaryElement = CSSSelect.selectOne(".summary a", current);
     if (!(summaryElement instanceof Element)) {
-      logger.log('verbose', `No summary link element, skipping`);
+      logger.log("verbose", `No summary link element, skipping`);
       return toReturn;
     }
     const thumbElement = CSSSelect.selectOne(".thumbnail > img", current);
@@ -208,7 +207,7 @@ export async function fetchArchivePageContentList(page: number = 1) {
     const title = getBodyOfChild(summaryElement);
     const { href } = summaryElement.attribs;
     if (!href || !title) {
-      logger.log('verbose', `Skipping - href is ${href} and title is ${title}`);
+      logger.log("verbose", `Skipping - href is ${href} and title is ${title}`);
       return toReturn;
     }
     toReturn.push({
@@ -217,7 +216,7 @@ export async function fetchArchivePageContentList(page: number = 1) {
       name: sanitizeContentName(href),
       thumbnail,
     });
-    logger.log('silly', `Found content: ${JSON.stringify(toReturn, null, 2)}`)
+    logger.log("silly", `Found content: ${JSON.stringify(toReturn, null, 2)}`);
     return toReturn;
   }, [] as DfContentInfoReference[]);
 }
@@ -235,6 +234,8 @@ export async function getMediaInfo(name: string): Promise<DfContentInfo> {
   const meta = extractMeta(metaElements.filter((element) => element instanceof Element) as Element[]);
   const description =
     getBody("p", CSSSelect.selectOne("#content_above .article .article_body .article_body_content", dom)) || "";
+  const youtubeIframeUrl = (CSSSelect.selectOne(".video_wrapper iframe", dom) as Element)?.attribs?.src;
+  const youtubeVideoId = youtubeIframeUrl ? extractYoutubeVideoId(youtubeIframeUrl) : undefined;
   const article = CSSSelect.selectOne("#content_above .article", dom);
   const dataPaywalled = (article as Element).attribs["data-paywalled"] === "false" ? false : true;
   const videoInfoElements = CSSSelect.selectAll(".article_body .video_data_file", article);
@@ -273,6 +274,7 @@ export async function getMediaInfo(name: string): Promise<DfContentInfo> {
     description,
     mediaInfos,
     meta.thumbnail,
+    youtubeVideoId,
     dataPaywalled,
     meta.publishedDate,
     meta.tags

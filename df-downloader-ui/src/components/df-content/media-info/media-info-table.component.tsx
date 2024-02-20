@@ -1,7 +1,6 @@
 import { Table, TableBody, TableCell, TableHead, TableRow } from "@mui/material";
 import { StartDownloadingButton, getDownloadVariant } from "../start-download-dialog.component";
 import { MediaInfoListProps } from "./media-info-list.component";
-import { get } from "lodash";
 
 export const MediaInfoTable = ({
   contentInfo,

@@ -8,6 +8,7 @@ export const DfContentInfo = z
     title: z.string(),
     description: z.string().optional(),
     thumbnailUrl: z.string().optional(),
+    youtubeVideoId: z.string().optional(),
     mediaInfo: z.array(MediaInfo),
     dataPaywalled: z.boolean(),
     tags: z.array(z.string()).optional(),
@@ -23,6 +24,7 @@ export const DfContentInfoUtils = {
     description: string | undefined,
     mediaInfo: MediaInfo[],
     thumbnailUrl: string,
+    youtubeVideoId: string | undefined,
     dataPaywalled: boolean,
     publishedDate?: Date,
     tags?: string[]
@@ -32,6 +34,7 @@ export const DfContentInfoUtils = {
     description,
     mediaInfo,
     thumbnailUrl,
+    youtubeVideoId,
     dataPaywalled,
     tags: tags || [],
     publishedDate: publishedDate || DfContentInfoUtils.extractDateFromName(name) || new Date(),

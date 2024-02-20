@@ -6,6 +6,7 @@ import { ConfigService } from "./config-service.js";
 import { fromZodError } from "zod-validation-error";
 import { code_dir } from "../utils/file-utils.js";
 import { logger } from "df-downloader-common";
+import { raw } from "express";
 
 export class FileConfig extends ConfigService {
   constructor(private cachedConfig: DfDownloaderConfig, private configFilePath: fs.PathLike) {
@@ -20,21 +21,24 @@ export class FileConfig extends ConfigService {
     } catch (e) {}
     if (!configStr) {
       mkdirSync(dir, {
-        recursive: true
-      })
+        recursive: true,
+      });
       const sampleFilePath = path.join(code_dir, "config_samples", "config.sample.yaml");
       fs.copyFileSync(sampleFilePath, configFilePath);
       configStr = fs.readFileSync(configFilePath, "utf-8");
     }
 
     const configPlain = YAML.parse(configStr) || {};
+    const patched = this.patchConfig(configPlain);
     const result = DfDownloaderConfig.safeParse(configPlain);
     if (!result.success) {
       throw new Error(fromZodError(result.error).toString());
     }
+    if (patched) {
+      fs.writeFileSync(configFilePath, YAML.stringify(result.data));
+    }
     const config = result.data;
-
-    logger.log('silly', `Full config:\n\n${JSON.stringify(config, null, 2)}`);
+    logger.log("silly", `Full config:\n\n${JSON.stringify(config, null, 2)}`);
     return new FileConfig(config, configFilePath);
   }
   get config() {
@@ -43,5 +47,24 @@ export class FileConfig extends ConfigService {
   async writeConfig(config: DfDownloaderConfig) {
     this.cachedConfig = config;
     await fs.promises.writeFile(this.configFilePath, YAML.stringify(this.cachedConfig));
+  }
+  static patchConfig(rawConfig: any) {
+    let patched: boolean = false;
+    if (rawConfig.subtitles) {
+      if (rawConfig.subtitles.subtitlesService) {
+        patched = true;
+        rawConfig.subtitles.autoGenerateSubs = true;
+        rawConfig.subtitles.servicePriorities = [rawConfig.subtitles.subtitlesService];
+        delete rawConfig.subtitles.subtitlesService;
+      }
+      if (rawConfig.subtitles.deepgram) {
+        rawConfig.subtitles.services = {
+          deepgram: rawConfig.subtitles.deepgram,
+        };
+        delete rawConfig.subtitles.deepgram;
+      }
+    }
+    patched && logger.log("info", `Config pathed to latest schema`);
+    return patched;
   }
 }

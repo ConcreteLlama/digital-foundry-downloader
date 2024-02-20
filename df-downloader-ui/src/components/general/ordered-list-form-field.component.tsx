@@ -1,8 +1,7 @@
 import { DndContext, DragEndEvent, useDraggable, useDroppable } from "@dnd-kit/core";
 import { arrayMove } from "@dnd-kit/sortable";
-import { Box, Button, Card, FormControl, IconButton, List, Stack, TextField, Typography } from "@mui/material";
-import { useState } from "react";
 import DragIndicatorIcon from "@mui/icons-material/DragIndicator";
+import { Box, Card, IconButton, List, Stack, Typography } from "@mui/material";
 import { Controller, useFormContext } from "react-hook-form";
 import { FormLabelInline } from "./form-label-inline";
 
@@ -14,11 +13,10 @@ interface OrdereableListFormFieldProps {
 interface OrderableListProps {
   onChange: (value: string[]) => void;
   possibleValues: Array<string>;
-  extendable?: boolean;
   name: string;
 }
 
-export const OrderableListFormField = ({ extendable = false, name, label }: OrdereableListFormFieldProps) => {
+export const OrderableListFormField = ({ name, label }: OrdereableListFormFieldProps) => {
   const { control } = useFormContext();
   return (
     <Controller
@@ -35,7 +33,7 @@ export const OrderableListFormField = ({ extendable = false, name, label }: Orde
             }}
           >
             <FormLabelInline>{label}</FormLabelInline>
-            <OrderableList name={name} possibleValues={value} extendable={extendable} onChange={onChange} />
+            <OrderableList name={name} possibleValues={value} onChange={onChange} />
           </Box>
         );
       }}
@@ -47,19 +45,16 @@ interface ListItem {
   id: string;
   label: string;
 }
-export const OrderableList = ({ name, possibleValues, onChange, extendable = false }: OrderableListProps) => {
-  const [items, setItems] = useState<ListItem[]>(
-    possibleValues.map((value) => ({
-      id: `${name}-${value}`,
-      label: value,
-    }))
-  );
+export const OrderableList = ({ name, possibleValues, onChange }: OrderableListProps) => {
+  const items: ListItem[] = possibleValues.map((value) => ({
+    id: `${name}-${value}`,
+    label: value,
+  }));
   const handleDragEnd = ({ active, over }: DragEndEvent) => {
     if (active.id !== over?.id) {
       const oldIndex = items.findIndex((item) => item.id === active.id);
       const newIndex = items.findIndex((item) => item.id === over?.id);
       const newOrder = arrayMove(items, oldIndex, newIndex);
-      setItems(newOrder);
       onChange(newOrder.map((item) => item.label));
     }
   };
@@ -72,27 +67,28 @@ export const OrderableList = ({ name, possibleValues, onChange, extendable = fal
           ))}
         </List>
       </DndContext>
-      {extendable && <AddItemForm fieldName={name} currentItems={items} setItems={setItems} />}
     </Stack>
   );
 };
-type AddItemFormProps = {
-  fieldName: string;
-  currentItems: ListItem[];
-  setItems: (items: ListItem[]) => void;
-};
 
-const AddItemForm = ({ currentItems, setItems, fieldName }: AddItemFormProps) => {
-  const [value, setValue] = useState<string>("");
-  return (
-    <FormControl>
-      <Box>
-        <TextField onChange={(event) => setValue(event.target.value)} size="small" placeholder="Add Custom Value" />
-        <Button onClick={() => setItems([...currentItems, { id: `${fieldName}-${value}`, label: value }])}>Add</Button>
-      </Box>
-    </FormControl>
-  );
-};
+// Removed this functionality as unused; if I want to have extendable lists in the future I can create a wrapper that takes addItem and
+// removeItem handlers as props and manages the state of the list.
+// type AddItemFormProps = {
+//   fieldName: string;
+//   currentItems: ListItem[];
+//   setItems: (items: ListItem[]) => void;
+// };
+// const AddItemForm = ({ currentItems, setItems, fieldName }: AddItemFormProps) => {
+//   const [value, setValue] = useState<string>("");
+//   return (
+//     <FormControl>
+//       <Box>
+//         <TextField onChange={(event) => setValue(event.target.value)} size="small" placeholder="Add Custom Value" />
+//         <Button onClick={() => setItems([...currentItems, { id: `${fieldName}-${value}`, label: value }])}>Add</Button>
+//       </Box>
+//     </FormControl>
+//   );
+// };
 
 interface OrderedListItemProps {
   id: string;

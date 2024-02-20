@@ -6,6 +6,8 @@ import {
   DfContentStatusInfoPaywalled,
 } from "./df-content-status.js";
 
+export const CURRENT_DATA_VERSION = "2.0.1";
+
 export const DfContentEntry = z.object({
   name: z.string(),
   dataVersion: z.string(),
@@ -17,7 +19,7 @@ export type DfContentEntry = z.infer<typeof DfContentEntry>;
 export const DfContentEntryUtils = {
   create: (name: string, contentInfo: DfContentInfo, statusInfo: DfContentStatusInfo): DfContentEntry => ({
     name,
-    dataVersion: "2.0.0",
+    dataVersion: CURRENT_DATA_VERSION,
     contentInfo,
     statusInfo,
   }),

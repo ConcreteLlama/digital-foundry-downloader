@@ -53,21 +53,18 @@ export const DfContentStatusInfoUtils = {
   }),
 };
 
-// There are really placeholders for if I ever add more detail into these basic status
-// Note: These don't seem to be exported properly on .d.ts, so I can't use them in the code - leaving here in case I can figure out why
-// otherwise code needing type guards needs to be in the relevant package
-// export const isAvailableContentStatus = (status: DfContentStatusInfo): status is DfContentStatusInfo => {
-//   return status.status === DfContentStatus.AVAILABLE;
-// };
+export const isAvailableContentStatus = (status: DfContentStatusInfo): status is DfContentStatusInfo => {
+  return status.status === DfContentStatus.AVAILABLE;
+};
 
-// export const isAttemptingDownloadContentStatus = (status: DfContentStatusInfo): status is DfContentStatusInfo => {
-//   return status.status === DfContentStatus.ATTEMPTING_DOWNLOAD;
-// };
+export const isAttemptingDownloadContentStatus = (status: DfContentStatusInfo): status is DfContentStatusInfo => {
+  return status.status === DfContentStatus.ATTEMPTING_DOWNLOAD;
+};
 
-// export const isPaywalledContentStatus = (status: DfContentStatusInfo): status is DfContentStatusInfoPaywalled => {
-//   return status.status === DfContentStatus.CONTENT_PAYWALLED;
-// };
+export const isPaywalledContentStatus = (status: DfContentStatusInfo): status is DfContentStatusInfoPaywalled => {
+  return status.status === DfContentStatus.CONTENT_PAYWALLED;
+};
 
-// export const isDownloadedContentStatus = (status: DfContentStatusInfo): status is DfContentStatusInfoDownloaded => {
-//   return status.status === DfContentStatus.DOWNLOADED;
-// };
+export const isDownloadedContentStatus = (status: DfContentStatusInfo): status is DfContentStatusInfoDownloaded => {
+  return status.status === DfContentStatus.DOWNLOADED;
+};

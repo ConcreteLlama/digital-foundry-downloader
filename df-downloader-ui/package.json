@@ -43,7 +43,8 @@
     "eject": "react-scripts eject",
     "add-common": "yalc add df-downloader-common",
     "full-build": "npm i && npm run add-common && npm run build",
-    "remove": "rimraf .yalc && rimraf yalc.lock && rimraf .yalc && rimraf build && rimraf node_modules"
+    "remove": "rimraf .yalc && rimraf yalc.lock && rimraf .yalc && rimraf build && rimraf node_modules",
+    "reinstall-deps": "npm run remove && npm i && npm run add-common && npm i"
   },
   "eslintConfig": {
     "extends": [
