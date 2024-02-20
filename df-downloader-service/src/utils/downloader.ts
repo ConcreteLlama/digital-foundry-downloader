@@ -536,7 +536,7 @@ export async function download(url: string, destination: string, downloadOptions
   if (!maxConnections || maxConnections === 1) {
     downloadInstance = new DownloadInstance(url, destination, downloadOptions);
   } else {
-    downloadInstance = new MultiConnectionDownloadInstance(url, destination, 5, downloadOptions);
+    downloadInstance = new MultiConnectionDownloadInstance(url, destination, maxConnections, downloadOptions);
   }
   return await downloadInstance.download();
 }
