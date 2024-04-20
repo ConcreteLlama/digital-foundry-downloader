@@ -1,5 +1,5 @@
-import { Box, IconButton, Modal, ModalProps, Stack } from "@mui/material";
 import CloseIcon from "@mui/icons-material/Close";
+import { Box, IconButton, Modal, ModalProps, Stack } from "@mui/material";
 import { ResponsiveModalContainer } from "./middle-modal.styles.ts";
 
 export const MiddleModal = (props: ModalProps) => {
@@ -22,6 +22,7 @@ export const MiddleModal = (props: ModalProps) => {
             sx={{
               overflow: "auto",
               maxHeight: "94vh",
+              maxWidth: "99vw",
               "::-webkit-scrollbar": {
                 display: "none",
               },

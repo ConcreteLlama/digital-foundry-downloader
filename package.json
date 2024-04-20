@@ -1,6 +1,6 @@
 {
   "name": "digital-foundry-downloader",
-  "version": "1.0.0",
+  "version": "2.2.1",
   "description": "DF Downloader is an application designed to download the latest Digital Foundry videos when they are available",
   "main": "index.js",
   "scripts": {
