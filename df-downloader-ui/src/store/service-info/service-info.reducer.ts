@@ -11,10 +11,7 @@ const INITIAL_STATE: ServiceInfoState = {
 export const serviceInfoReducer = createReducer(INITIAL_STATE, (builder) => {
   return addQueryCases(builder, queryServiceInfo, {
     success: (state, payload) => {
-      return {
-        ...state,
-        serviceInfo: payload,
-      };
+      state.serviceInfo = payload;
     },
   });
 });

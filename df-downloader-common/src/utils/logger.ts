@@ -32,3 +32,5 @@ export class Logger {
 }
 
 export const logger = new Logger("info");
+
+export const loggerFn = (level: LogLevel, ...toLog: any[]) => logger.log(level, ...toLog);

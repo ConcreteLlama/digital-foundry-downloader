@@ -1,14 +1,20 @@
 import * as CSSSelect from "css-select";
-import { DfContentInfo, DfContentInfoUtils, DfUserInfo, MediaInfo, logger } from "df-downloader-common";
+import {
+  DfContentInfo,
+  DfContentInfoUtils,
+  DfUserInfo,
+  MediaInfo,
+  fileSizeStringToBytes,
+  logger,
+} from "df-downloader-common";
 import { Document, Element } from "domhandler";
 import got, { HTTPError } from "got";
 import htmlparser2 from "htmlparser2";
 import { configService } from "./config/config.js";
 import { sanitizeContentName } from "./utils/df-utils.js";
 import { getBody, getBodyOfChild } from "./utils/dom-utils.js";
-import { ProgressListener, download } from "./utils/downloader.js";
-import { fileSizeStringToBytes } from "./utils/file-utils.js";
 import { extractYoutubeVideoId } from "./utils/youtube.js";
+import { extractFilenameFromUrl } from "./utils/file-utils.js";
 
 type PageMeta = {
   publishedDate: Date;
@@ -25,6 +31,8 @@ export type DfContentInfoReference = {
 };
 
 const dfBaseUrl = "https://www.digitalfoundry.net";
+
+export const makeDfContentUrl = (name: string) => `${dfBaseUrl}/${name}`;
 
 function extractMeta(elements: Element[]): PageMeta {
   const toReturn: PageMeta = {
@@ -75,7 +83,7 @@ function extractDfUserInfo(dom: Document): DfUserInfo | undefined {
     : undefined;
 }
 
-function makeAuthHeaders(sessionIdOverride?: string) {
+function makeAuthHeaders(sessionIdOverride?: string): Record<string, string> {
   const dfSessionId = sessionIdOverride || configService.config.digitalFoundry.sessionId;
   return dfSessionId
     ? {
@@ -88,28 +96,19 @@ function makeDfVideoUrl(videoName: string) {
   return `${dfBaseUrl}/${videoName}`;
 }
 
-export async function downloadMedia(
-  dfContent: DfContentInfo,
-  mediaInfo: MediaInfo,
-  progressListener?: ProgressListener
-) {
-  logger.log("debug", `Downloading video ${dfContent.name} at URL ${mediaInfo.url}`);
-  if (!mediaInfo.url) {
-    logger.log("debug", `Media info for ${dfContent.name} has no URL, returning`);
-    return;
-  }
+export const makeDfDownloadParams = (dfContent: DfContentInfo, mediaInfo: MediaInfo) => {
   const filename = DfContentInfoUtils.makeFileName(dfContent, mediaInfo);
   const downloadDestination = `${configService.config.contentManagement.workDir}/${filename}`;
-  const baseHeaders = {
+  const headers = {
     ...makeAuthHeaders(),
     "User-Agent": "DigitalFounload",
   };
-  return await download(mediaInfo.url, downloadDestination, {
-    headers: baseHeaders,
-    progressListener,
-    maxResumeAttempts: 20,
-  });
-}
+  return {
+    url: async () => getMediaUrl(dfContent.name, mediaInfo.mediaType),
+    destination: downloadDestination,
+    headers,
+  };
+};
 
 export async function fetchFeedContentList() {
   const response = await got.get(`${dfBaseUrl}/feed`, {
@@ -259,13 +258,14 @@ export async function getMediaInfo(name: string): Promise<DfContentInfo> {
         if (href) url = href;
       }
     }
+    const mediaFilename = url ? extractFilenameFromUrl(url) : undefined;
     mediaInfos.push({
       duration,
       size,
       mediaType,
       videoEncoding,
       audioEncoding,
-      url,
+      mediaFilename,
     });
   }
   return DfContentInfoUtils.create(
@@ -280,6 +280,34 @@ export async function getMediaInfo(name: string): Promise<DfContentInfo> {
     meta.tags
   );
 }
+
+export const getMediaUrl = async (name: string, desiredMediaType: string) => {
+  const downloadUrlOverride = configService.getDevConfigField("downloadUrlOverride");
+  if (downloadUrlOverride) {
+    return `${downloadUrlOverride}/${name}.mp4`;
+  }
+  const dfUrl = makeDfVideoUrl(name);
+  const response = await got.get(dfUrl, {
+    headers: {
+      ...makeAuthHeaders(),
+    },
+  });
+  const dom = htmlparser2.parseDocument(response.body);
+  const videoInfoElements = CSSSelect.selectAll(".article_body .video_data_file", dom);
+  for (const videoInfoElement of videoInfoElements) {
+    const videoType = getBody(".name", videoInfoElement);
+    if (!videoType) continue;
+    if (videoType === desiredMediaType) {
+      const aElements = CSSSelect.selectAll("a", videoInfoElement);
+      for (const aElement of aElements) {
+        if (aElement instanceof Element) {
+          const href = aElement.attribs["href"];
+          if (href) return href;
+        }
+      }
+    }
+  }
+};
 
 export async function getDfUserInfo(sessionIdOverride?: string) {
   const response = await got.get(dfBaseUrl, {

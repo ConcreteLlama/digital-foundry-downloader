@@ -1,3 +1,6 @@
+import DownloadIcon from "@mui/icons-material/Download";
+import DownloadedIcon from "@mui/icons-material/DownloadDone";
+import DownloadingIcon from "@mui/icons-material/Downloading";
 import {
   Box,
   Button,
@@ -7,15 +10,15 @@ import {
   DialogContentText,
   DialogTitle,
   IconButton,
+  Tooltip,
   Typography,
 } from "@mui/material";
-import { store } from "../../store/store";
-import { startDownload } from "../../store/download-queue/download-queue.action";
+import { DfContentEntry, DfContentEntryUtils, DfContentInfo } from "df-downloader-common";
 import { Fragment, useState } from "react";
-import DownloadIcon from "@mui/icons-material/Download";
-import DownloadingIcon from "@mui/icons-material/Downloading";
-import DownloadedIcon from "@mui/icons-material/DownloadDone";
-import { DfContentInfo } from "df-downloader-common";
+import { useSelector } from "react-redux";
+import { startDownload } from "../../store/df-tasks/tasks.action";
+import { selectActivePipelineIdsForMediaType } from "../../store/df-tasks/tasks.selector.ts";
+import { store } from "../../store/store";
 
 export type StartDownloadDialogProps = {
   contentInfo: DfContentInfo;
@@ -54,68 +57,59 @@ export const StartDownloadDialog = ({ contentInfo, mediaType, open, onClose }: S
 };
 
 export type StartDownloadButtonProps = {
-  contentInfo: DfContentInfo;
+  contentEntry: DfContentEntry;
   mediaType?: string;
   label?: string;
   disabled?: boolean;
-  variant?: "downloading" | "downloaded" | "available";
 };
 
-export const getDownloadVariant = (
-  mediaType: string,
-  currentDownloadingType?: string,
-  downloadedContentType?: string
-) => {
-  if (mediaType === currentDownloadingType) {
-    return "downloading";
-  } else if (mediaType === downloadedContentType) {
-    return "downloaded";
-  } else {
-    return "available";
-  }
-};
-
-const selectDownloadIcon = (variant: "downloading" | "downloaded" | "available") => {
-  switch (variant) {
-    case "downloading":
-      return DownloadingIcon;
-    case "downloaded":
-      return DownloadedIcon;
-    case "available":
-      return DownloadIcon;
-  }
-};
-
-export const StartDownloadingButton = ({
-  contentInfo,
-  mediaType,
-  label,
-  disabled,
-  variant = "available",
-}: StartDownloadButtonProps) => {
+export const StartDownloadingButton = ({ contentEntry, mediaType, label, disabled }: StartDownloadButtonProps) => {
   const [dialogOpen, setDialogOpen] = useState(false);
-  const VariantIcon = selectDownloadIcon(variant);
+  const activePipeline = useSelector(selectActivePipelineIdsForMediaType(contentEntry.name, mediaType || ""));
+  const downloadContentInfo = DfContentEntryUtils.getDownloadForFormat(contentEntry, mediaType || "");
+  const contentPaywalled = contentEntry.contentInfo.dataPaywalled;
+
+  let VariantIcon = DownloadIcon;
+  let tooltip = "Start Download";
+  let buttonDisabled = disabled || false;
+  if (activePipeline.length > 0) {
+    VariantIcon = DownloadingIcon;
+    tooltip = "Tasks currently active, cannot download content.";
+    buttonDisabled = true;
+  } else if (contentPaywalled) {
+    VariantIcon = DownloadIcon;
+    tooltip = "Content is paywalled and cannot be downloaded.";
+    buttonDisabled = true;
+  } else if (downloadContentInfo) {
+    VariantIcon = DownloadedIcon;
+    tooltip = "Download again";
+    buttonDisabled = false;
+  }
   return (
     <Fragment>
       <StartDownloadDialog
-        contentInfo={contentInfo}
+        contentInfo={contentEntry.contentInfo}
         mediaType={mediaType}
         open={dialogOpen}
         onClose={() => setDialogOpen(false)}
       />
-      {label ? (
-        <Box
-          sx={{ display: "flex", alignItems: "center", cursor: "pointer", "&:hover": { color: "primary.main" } }}
-          onClick={() => setDialogOpen(true)}
-        >
-          <Typography>Available</Typography>
-          <VariantIcon fontSize="small" />
-        </Box>
-      ) : (
-        <IconButton onClick={() => setDialogOpen(true)} disabled={disabled}>
-          <VariantIcon fontSize="small" />
-        </IconButton>
-      )}
+      <Tooltip title={tooltip}>
+        {label ? (
+          <Box
+            sx={{ display: "flex", alignItems: "center", cursor: "pointer", "&:hover": { color: "primary.main" } }}
+            onClick={() => setDialogOpen(true)}
+          >
+            <Typography>Available</Typography>
+            <VariantIcon fontSize="small" />
+          </Box>
+        ) : (
+          <div>
+            <IconButton onClick={() => setDialogOpen(true)} disabled={buttonDisabled}>
+              <VariantIcon fontSize="small" />
+            </IconButton>
+          </div>
+        )}
+      </Tooltip>
     </Fragment>
   );
 };

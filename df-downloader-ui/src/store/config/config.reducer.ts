@@ -12,27 +12,17 @@ const INITIAL_STATE: ConfigState = {
 export const configReducer = createReducer(INITIAL_STATE, (builder) => {
   addQueryCases(builder, queryConfigSection, {
     success: (state, payload) => {
-      return {
-        ...state,
-        config: {
-          ...state.config,
-          [payload.section]: payload.value,
-        },
-      };
+      state.config = state.config || {};
+      (state.config[payload.section] as any) = payload.value;
     },
   });
   addQueryCases(builder, updateConfigSection, {
     success: (state, payload) => {
       if (!payload.value) {
-        return state;
+        return;
       }
-      return {
-        ...state,
-        config: {
-          ...(state.config || {}),
-          [payload.section]: payload.value,
-        },
-      };
+      state.config = state.config || {};
+      (state.config[payload.section] as any) = payload.value;
     },
   });
 });

@@ -1,11 +1,12 @@
-import { Box, Container, IconButton, Modal, ModalProps, Stack } from "@mui/material";
+import { Box, IconButton, Modal, ModalProps, Stack } from "@mui/material";
 import CloseIcon from "@mui/icons-material/Close";
+import { ResponsiveModalContainer } from "./middle-modal.styles.ts";
 
 export const MiddleModal = (props: ModalProps) => {
   const { children, ...other } = props;
   return (
     <Modal {...other}>
-      <Container sx={{ outline: "none" }}>
+      <ResponsiveModalContainer sx={{ outline: "none" }}>
         <Stack>
           <IconButton
             onClick={() => {
@@ -30,7 +31,7 @@ export const MiddleModal = (props: ModalProps) => {
             {children}
           </Box>
         </Stack>
-      </Container>
+      </ResponsiveModalContainer>
     </Modal>
   );
 };

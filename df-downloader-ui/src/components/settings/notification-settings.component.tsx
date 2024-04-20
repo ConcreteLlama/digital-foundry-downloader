@@ -81,6 +81,7 @@ const PushbulletSettings = ({ remove }: PushbulletSettingsProps) => {
       <CheckboxElement name={`${PUSHBULLET_KEY}.enabled`} label="Enabled" />
       <PushbulletApiKeyField />
       <MultiSelectElement
+        variant="outlined"
         name={`${PUSHBULLET_KEY}.subscribedNotifications`}
         label="Subscribed Notifications"
         options={Object.values(DfNotificationType)}

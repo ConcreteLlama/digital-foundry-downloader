@@ -15,36 +15,38 @@ import { queryServiceInfo } from "./store/service-info/service-info.actions";
 import { store } from "./store/store";
 import { theme } from "./themes/theme";
 import { queryDfUserInfo } from "./store/df-user/df-user.actions";
+import { selectIsLoading } from "./store/general.selector.ts";
+import { selectServiceError } from "./store/service-info/service-info.selector.ts";
+import { AppNotReadyPage } from "./AppNotReadyPage.tsx";
+import { queryConfigSection } from "./store/config/config.action.ts";
 
 function App() {
-  useEffect(() => {
-    store.dispatch(queryCurrentUser.start());
-    store.dispatch(queryServiceInfo.start());
-    store.dispatch(queryDfUserInfo.start());
-  }, []);
-  const authUser = useSelector(selectAuthUser);
   return (
     <ThemeProvider theme={theme}>
-      {authUser ? (
-        <Box sx={{ display: "flex" }}>
-          <Nav />
-          <Stack sx={{ flexGrow: 1, height: "100vh" }}>
-            <Toolbar />
-            <Routes>
-              <Route index element={<DfContentPage />} />
-              <Route path="content" element={<DfContentPage />} />
-              <Route path="downloads" element={<DownloadsPage />} />
-              <Route path="auth" element={<AuthPage />} />
-              <Route element={<SettingsPage />}>{makeRoutes(settingsRoutes.routes)}</Route>
-            </Routes>
-          </Stack>
-        </Box>
-      ) : (
-        <AuthPage />
-      )}
+      <MainContainer />
     </ThemeProvider>
   );
 }
+
+const MainContainer = () => {
+  useEffect(() => {
+    store.dispatch(queryServiceInfo.start());
+  }, []);
+  const loading = useSelector(selectIsLoading("serviceInfo"));
+  const serviceError = useSelector(selectServiceError);
+  useEffect(() => {
+    store.dispatch(queryCurrentUser.start());
+    store.dispatch(queryDfUserInfo.start());
+  }, [serviceError]);
+  const authUser = useSelector(selectAuthUser);
+  return loading || (serviceError && !serviceError.details) ? (
+    <AppNotReadyPage />
+  ) : authUser ? (
+    <MainApp />
+  ) : (
+    <AuthPage />
+  );
+};
 
 const makeRoutes = (routes: SettingsRouteElement[]) => {
   const toReturn: React.ReactElement[] = [];
@@ -54,6 +56,37 @@ const makeRoutes = (routes: SettingsRouteElement[]) => {
       : toReturn.push(...makeRoutes(route.routes))
   );
   return toReturn;
+};
+const routes = makeRoutes(settingsRoutes.routes);
+
+const MainApp = () => {
+  useEffect(() => {
+    store.dispatch(queryConfigSection.start("dev"));
+  }, []);
+  return (
+    <Box sx={{ display: "flex", width: "100vw" }}>
+      <Nav />
+      <Stack
+        sx={{
+          flex: "1 1 auto",
+          height: "100vh",
+          overflow: "auto",
+          "::-webkit-scrollbar": {
+            display: "none",
+          },
+        }}
+      >
+        <Toolbar />
+        <Routes>
+          <Route index element={<DfContentPage />} />
+          <Route path="content" element={<DfContentPage />} />
+          <Route path="downloads" element={<DownloadsPage />} />
+          <Route path="auth" element={<AuthPage />} />
+          <Route element={<SettingsPage />}>{routes}</Route>
+        </Routes>
+      </Stack>
+    </Box>
+  );
 };
 
 export default App;

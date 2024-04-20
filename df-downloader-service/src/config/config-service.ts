@@ -1,5 +1,6 @@
 import _ from "lodash";
 import { DfDownloaderConfig, DfDownloaderConfigInput } from "df-downloader-common/config/df-downloader-config";
+import { DevConfig } from "df-downloader-common/config/dev-config";
 import { TypedEventEmitter } from "../utils/event-emitter.js";
 
 export interface ConfigFieldUpdateEvent<T> {
@@ -46,6 +47,13 @@ export abstract class ConfigService extends TypedEventEmitter<ConfigUpdateEvents
         });
       }
     });
+  }
+  getDevConfigField<K extends keyof DevConfig>(field: K): DevConfig[K] {
+    const devConfig = this.config.dev;
+    if (!devConfig?.devModeEnabled) {
+      return undefined;
+    }
+    return devConfig[field];
   }
   abstract get config(): DfDownloaderConfig;
   abstract writeConfig(config: DfDownloaderConfig): void | Promise<void>;

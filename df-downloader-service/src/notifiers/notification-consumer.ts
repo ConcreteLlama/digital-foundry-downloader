@@ -1,5 +1,10 @@
-import prettyBytes from "pretty-bytes";
-import { DfContentInfo, MediaInfo, DownloadProgressInfo, DfNotificationType } from "df-downloader-common";
+import {
+  DfContentInfo,
+  MediaInfo,
+  DownloadProgressInfo,
+  DfNotificationType,
+  bytesToHumanReadable,
+} from "df-downloader-common";
 
 // TODO: Make a global typed event consumer/emitter rather than... whatever this is
 
@@ -89,7 +94,7 @@ Size:           ${mediaInfo.size}
 Description:    ${dfContent.description}`;
     if (finalProgressReport) {
       toReturn += `
-Average speed:  ${prettyBytes(finalProgressReport.averageBytesPerSecond)}/s`;
+Average speed:  ${bytesToHumanReadable(finalProgressReport.averageBytesPerSecond)}/s`;
     }
     return toReturn;
   }

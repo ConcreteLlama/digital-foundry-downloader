@@ -15,7 +15,7 @@ export class YoutubeSubtitleGenerator implements SubtitleGenerator {
     if (!subs) {
       throw new Error("Failed to fetch subs");
     }
-    return { srt: youtubeSubsToSrt(subs), language };
+    return { srt: youtubeSubsToSrt(subs), language, service: this.serviceType };
   }
   destroy(): void {
     // Nothing to do

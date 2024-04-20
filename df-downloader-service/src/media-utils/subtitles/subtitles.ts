@@ -10,6 +10,7 @@ import { GoogleSttSubtitlesGenerator } from "./google-stt.js";
 export type SubtitleInfo = {
   srt: string;
   language: string;
+  service: SubtitlesService;
 };
 
 export interface SubtitleGenerator {

@@ -15,17 +15,13 @@ const initialLoginState: AuthUserState = {
 
 export const authUserReducer = createReducer(initialLoginState, (builder) => {
   addQueryCases(builder, queryCurrentUser, {
-    success: (state, payload) => ({
-      ...state,
-      user: payload,
-    }),
+    success: (state, payload) => {
+      state.user = payload;
+    },
     failed: (state, payload: DfUiError<AuthErrorResponseData>) => {
-      return {
-        ...state,
-        error: payload,
-        canRegister: payload.details?.registrationAvailable || false,
-        user: null,
-      };
+      state.error = payload;
+      state.user = null;
+      state.canRegister = payload.details?.registrationAvailable || false;
     },
   });
   addQueryCases(builder, login, {
@@ -33,32 +29,20 @@ export const authUserReducer = createReducer(initialLoginState, (builder) => {
     failed: "loginError",
   });
   addQueryCases(builder, register, {
-    success: (state, payload) => {
-      return {
-        ...state,
-        user: null,
-        canRegister: false,
-      };
+    success: (state) => {
+      state.user = null;
+      state.canRegister = false;
     },
     failed: (state, payload) => {
-      return {
-        ...state,
-        error: payload,
-      };
+      state.error = payload;
     },
   });
   addQueryCases(builder, logout, {
-    success: (state, payload) => {
-      return {
-        ...state,
-        user: null,
-      };
+    success: (state) => {
+      state.user = null;
     },
     failed: (state, payload) => {
-      return {
-        ...state,
-        error: payload,
-      };
+      state.error = payload;
     },
   });
 });

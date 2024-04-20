@@ -87,9 +87,13 @@ export class DeepgramSubtitleGenerator implements SubtitleGenerator {
       return {
         srt: generateSrt(transcript, 20),
         language,
+        service: this.serviceType,
       };
     } catch (e) {
-      await wavAudioStream.awaitStop(1000);
+      logger.log("error", `Error generating subs using deepgram for ${filename}: ${e}`);
+      await wavAudioStream.awaitStop(1000).catch((e) => {
+        logger.log("error", `Error stopping audio stream for ${filename}: ${e}`);
+      });
       throw e;
     }
   }

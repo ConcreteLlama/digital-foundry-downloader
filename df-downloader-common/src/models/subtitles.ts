@@ -14,5 +14,6 @@ export const GenerateSubtitlesRequest = z.object({
   /** The language to generate subtitles for */
   language: LanguageCode.default("en"),
   /** The subtitles service to generate/fetch the subtitles with */
-  subtitlesService: SubtitlesService.default("youtube"),
+  subtitlesService: SubtitlesService.optional(),
 });
+export type GenerateSubtitlesRequest = z.infer<typeof GenerateSubtitlesRequest>;

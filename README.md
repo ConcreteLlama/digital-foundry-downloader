@@ -66,9 +66,9 @@ The service is also able to host the web UI.
 
 ### Prerequisites
 
-- node18
+- node20
 
-You'll need nodejs. I've been running this with node18. If you don't have nodejs, I recommend using [nvm](https://github.com/nvm-sh/nvm) to install nodejs but you can just go to the [nodejs website](https://nodejs.org/en/) and download the latest version.
+You'll need nodejs. I've been running this with node20. If you don't have nodejs, I recommend using [nvm](https://github.com/nvm-sh/nvm) to install nodejs but you can just go to the [nodejs website](https://nodejs.org/en/) and download the latest version.
 
 ### Setup
 

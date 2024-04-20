@@ -2,19 +2,15 @@ import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 import HeadphonesIcon from "@mui/icons-material/Headphones";
 import VideoCameraIcon from "@mui/icons-material/VideoCameraBack";
 import { Accordion, AccordionDetails, AccordionSummary, Box, Stack, Typography } from "@mui/material";
+import { StartDownloadingButton } from "../start-download-dialog.component";
 import { MediaInfoListProps } from "./media-info-list.component";
-import { StartDownloadingButton, getDownloadVariant } from "../start-download-dialog.component";
 
-export const MediaInfoAccordion = ({
-  contentInfo,
-  mediaInfo,
-  currentDownloadingType,
-  downloadedContentType,
-}: MediaInfoListProps) => {
+export const MediaInfoAccordion = ({ contentEntry }: MediaInfoListProps) => {
+  const { contentInfo } = contentEntry;
+  const { mediaInfo } = contentInfo;
   return (
     <Stack sx={{ gap: 1 }}>
       {mediaInfo.map((mediaInfo) => {
-        const downloadVariant = getDownloadVariant(mediaInfo.mediaType, currentDownloadingType, downloadedContentType);
         return (
           <Accordion variant="elevation">
             <AccordionSummary expandIcon={<ExpandMoreIcon />}>
@@ -22,12 +18,7 @@ export const MediaInfoAccordion = ({
                 <Typography>
                   {mediaInfo.mediaType} ({mediaInfo.size})
                 </Typography>
-                <StartDownloadingButton
-                  contentInfo={contentInfo}
-                  mediaType={mediaInfo.mediaType}
-                  disabled={!Boolean(mediaInfo.url) || downloadVariant === "downloading"}
-                  variant={downloadVariant}
-                />
+                <StartDownloadingButton contentEntry={contentEntry} mediaType={mediaInfo.mediaType} />
               </Box>
             </AccordionSummary>
             <AccordionDetails>

@@ -15,15 +15,16 @@ import { SubtitlesSettingsForm } from "../../components/settings/subtitles-setti
 import { ContentDetectionSettingsForm } from "../../components/settings/content-detection-settings-form.component";
 import { AutomaticDownloadsSettingsForm } from "../../components/settings/automatic-download-settings-form.component";
 import NotificationsIcon from "@mui/icons-material/Notifications";
+import CodeIcon from "@mui/icons-material/Code";
 import { NotificationSettingsForm } from "../../components/settings/notification-settings.component";
-
-//TODO: Get a digital foundry icon svg
+import { DevSettingsForm } from "../../components/settings/dev-settings-form.component.tsx";
 
 export type SettingsRoute = {
   path: string;
   element: JSX.Element;
   name: string;
   icon?: React.FC;
+  devOnly?: boolean;
 };
 export const isSettingsRoute = (route: SettingsRouteElement): route is SettingsRoute => {
   return (route as SettingsRoute).path !== undefined;
@@ -33,6 +34,7 @@ export type SettingsSubRoute = {
   name: string;
   icon?: React.FC;
   routes: SettingsRouteElement[];
+  devOnly?: boolean;
 };
 export const isSettingsSubRoute = (route: SettingsRouteElement): route is SettingsSubRoute => {
   return (route as SettingsSubRoute).routes !== undefined;
@@ -91,6 +93,13 @@ export const settingsRoutes: SettingsSubRoute = {
       element: <NotificationSettingsForm />,
       name: "Notifications",
       icon: NotificationsIcon,
+    },
+    {
+      path: "/settings/dev",
+      element: <DevSettingsForm />,
+      name: "Dev",
+      icon: CodeIcon,
+      devOnly: true,
     },
   ],
 };

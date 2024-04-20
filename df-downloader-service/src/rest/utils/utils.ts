@@ -78,7 +78,7 @@ export const getPublicAddresses = () => {
   const envAddress = process.env.PUBLIC_ADDRESS;
   if (envAddress) {
     logger.log("info", `Using public address ${envAddress} from env`);
-    return [envAddress]
+    return [envAddress];
   } else if (restConfig.publicAddress) {
     logger.log("info", `Using public address ${restConfig.publicAddress} from config`);
     return [restConfig.publicAddress];

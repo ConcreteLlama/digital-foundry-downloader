@@ -1,13 +1,14 @@
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Box, Button, CircularProgress, Divider, Typography, styled } from "@mui/material";
+import { Box, Button, Divider, Typography, styled } from "@mui/material";
+import { logger } from "df-downloader-common";
 import { DfDownloaderConfig } from "df-downloader-common/config/df-downloader-config";
+import { createContext, useEffect } from "react";
 import { FormContainer, useFormState } from "react-hook-form-mui";
 import { useSelector } from "react-redux";
+import { queryConfigSection, updateConfigSection } from "../../store/config/config.action";
 import { selectConfigError, selectConfigLoading, selectConfigSection } from "../../store/config/config.selector";
 import { store } from "../../store/store";
-import { queryConfigSection, updateConfigSection } from "../../store/config/config.action";
-import { createContext, useEffect } from "react";
-import { logger } from "df-downloader-common";
+import { Loading } from "../general/loading.component.tsx";
 
 export const CurrentSettingsContext = createContext<Partial<DfDownloaderConfig>>({});
 
@@ -29,7 +30,7 @@ export const DfSettingsSectionForm = ({ sectionName, title, children, onSubmit }
   if (configError) {
     return <Typography>{configError.message}</Typography>;
   } else if (configLoading || !currentSettings) {
-    return <CircularProgress />;
+    return <Loading />;
   } else {
     return (
       <CurrentSettingsContext.Provider

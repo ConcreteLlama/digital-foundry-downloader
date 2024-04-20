@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { MediaInfo, MediaInfoUtils } from "./media-info.js";
+import { sanitizeFileName } from "../utils/file-utils.js";
 
 export const DfContentInfo = z
   .object({
@@ -49,9 +50,10 @@ export const DfContentInfoUtils = {
       0
     );
   },
-  makeFileName(dfContentInfo: DfContentInfo, mediaInfo: MediaInfo) {
+  makeFileName(dfContentInfo: DfContentInfo, mediaInfo: MediaInfo, includeFormat: boolean = true) {
     const extension = mediaInfo.mediaType === "MP3" ? "mp3" : "mp4";
-    return `${dfContentInfo.name}.${extension}`;
+    const format = includeFormat ? `_${mediaInfo.mediaType}` : "";
+    return `${sanitizeFileName(`${dfContentInfo.name}${format}`)}.${extension}`;
   },
   getThumbnailUrl(dfContentInfo: DfContentInfo, width: number, height?: number) {
     return this.thumbnailUrlToSize(dfContentInfo.thumbnailUrl || "", width, height);
@@ -62,5 +64,8 @@ export const DfContentInfoUtils = {
   },
   getDurationSeconds(dfContentInfo: DfContentInfo) {
     return MediaInfoUtils.getDurationSeconds(dfContentInfo.mediaInfo);
+  },
+  getMediaInfo(dfContentInfo: DfContentInfo, mediaType: string) {
+    return dfContentInfo.mediaInfo.find((mediaInfo) => mediaInfo.mediaType === mediaType);
   },
 };

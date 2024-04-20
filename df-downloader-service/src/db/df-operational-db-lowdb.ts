@@ -125,6 +125,42 @@ export class DfLowDb extends DfDownloaderOperationalDb {
         });
         data.refetchRequired = true;
         data.version = "2.0.0";
+      } else if (data.version === "2.0.0") {
+        logger.log("info", `Patching DB version to 2.0.1`);
+        for (const contentInfo of Object.values(data.contentInfo) as any[]) {
+          for (const mediaInfo of contentInfo.contentInfo.mediaInfo || []) {
+            delete mediaInfo.url;
+          }
+        }
+        data.version = "2.0.1";
+      } else if (data.version === "2.0.1") {
+        logger.log("info", `Patching DB version to 2.2.0`);
+        for (const contentInfo of Object.values(data.contentInfo) as any[]) {
+          const statusInfo = contentInfo.statusInfo;
+          if (statusInfo.status === "ATTEMPTING_DOWNLOAD" || statusInfo.status === "DOWNLOADED") {
+            statusInfo.status = "AVAILABLE";
+          } else if (statusInfo.status === "CONTENT_PAYWALLED") {
+            statusInfo.status = "PAYWALLED";
+          }
+          const { format, downloadDate, downloadLocation, size } = statusInfo;
+          contentInfo.statusInfo = {
+            status: statusInfo.status,
+            userTierWhenUnavailable: statusInfo.userTierWhenUnavailable,
+          };
+          if (format && downloadDate && downloadLocation) {
+            contentInfo.downloads = [
+              {
+                format,
+                downloadDate,
+                downloadLocation,
+                size,
+              },
+            ];
+          } else {
+            contentInfo.downloads = [];
+          }
+        }
+        data.version = "2.2.0";
       } else {
         throw new Error(`Unrecognized DB version ${data.version}`);
       }
@@ -132,8 +168,7 @@ export class DfLowDb extends DfDownloaderOperationalDb {
     this.data = zodParse(DfDbRuntimeSchema, data);
     await this.updateDb();
   }
-
-  async addContentInfos(...contentEntries: DfContentEntry[]): Promise<void> {
+  protected async setContentEntries(contentEntries: DfContentEntry[]): Promise<void> {
     if (contentEntries.length === 0) {
       return;
     }

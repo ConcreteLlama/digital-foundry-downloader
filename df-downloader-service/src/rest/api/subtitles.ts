@@ -1,9 +1,9 @@
+import { DfContentEntryUtils, GenerateSubtitlesRequest, isVideoFormat } from "df-downloader-common";
 import express from "express";
-import { DigitalFoundryContentManager } from "../../df-content-manager";
-import { zodParseHttp } from "../utils/utils";
-import { DfContentStatus, GenerateSubtitlesRequest, isDownloadedContentStatus } from "df-downloader-common";
-import { sanitizeContentName } from "../../utils/df-utils";
-import { getMediaType, mediaTypeToRegexMap } from "../../utils/media-type";
+import { DigitalFoundryContentManager } from "../../df-content-manager.js";
+import { serviceLocator } from "../../services/service-locator.js";
+import { sanitizeContentName } from "../../utils/df-utils.js";
+import { zodParseHttp } from "../utils/utils.js";
 
 export const makeSubtitlesRouter = (contentManager: DigitalFoundryContentManager) => {
   const router = express.Router();
@@ -13,7 +13,7 @@ export const makeSubtitlesRouter = (contentManager: DigitalFoundryContentManager
       GenerateSubtitlesRequest,
       req,
       res,
-      async ({ dfContentName, subtitlesService, mediaFilePath }) => {
+      async ({ dfContentName, subtitlesService, mediaFilePath, language }) => {
         const contentName = sanitizeContentName(dfContentName);
         const content = await contentManager.db.getContentEntry(contentName);
         if (!content) {
@@ -22,29 +22,58 @@ export const makeSubtitlesRouter = (contentManager: DigitalFoundryContentManager
           });
         }
         const contentStatusInfo = content.statusInfo;
-        if (!isDownloadedContentStatus(contentStatusInfo)) {
+        if (!DfContentEntryUtils.hasDownload(content)) {
           return res.status(400).send({
             message: "Content not downloaded; cannot generate subtitles",
           });
         }
-        // TODO: In the future we may have multiple download infos, which is why the API
-        // request specifies it
-        // I should extend the contentStatusInfo for downloaded media to instead includ a downloadInfo array
-        // which also includes the relevant media info (video format/audio format) so we can just
-        // falsey check the the video format; if it's not there we can't inject subs
-        if (contentStatusInfo.downloadLocation !== mediaFilePath) {
-          return res.status(400).send({
-            message: "Content file path does not match",
+        const downloadInfo = DfContentEntryUtils.getDownload(content, mediaFilePath);
+        if (!downloadInfo) {
+          return res.status(404).send({
+            message: `Could not find download info for "${contentName}" in "${mediaFilePath}"`,
           });
         }
-        // For now let's just do a simple check for MP3 as that's currently the only
-        // non video format we support
-        if (getMediaType(contentStatusInfo.format) === "MP3") {
+        if (!isVideoFormat(downloadInfo.format)) {
           return res.status(400).send({
-            message: "Non-video files are not supporte",
+            message: `Requested content at file "${mediaFilePath}" is format "${downloadInfo.format}" which is not supported for subtitle generation`,
           });
         }
+        const mediaInfo = DfContentEntryUtils.getMediaInfo(content, downloadInfo.format);
+        if (!mediaInfo) {
+          return res.status(400).send({
+            message: `Could not find media info for "${contentName}" in "${downloadInfo.format}"`,
+          });
+        }
+        const subtitleGenerators = subtitlesService
+          ? serviceLocator.getSubtitleGenerator(subtitlesService)
+          : serviceLocator.getSubtitleGenerators();
+        if (!subtitleGenerators) {
+          return res.status(400).send({
+            message: `No subtitle generators available for service "${subtitlesService}"`,
+          });
+        }
+        const subsTask = contentManager.taskManager.generateSubs(
+          content.contentInfo,
+          mediaInfo!,
+          mediaFilePath,
+          language,
+          subtitleGenerators
+        );
+        subsTask.on("completed", (result) => {
+          if (result.status === "success") {
+            const { language, service } = result.pipelineResult;
+            contentManager.db.subsGenerated(contentName, mediaFilePath, {
+              language,
+              service,
+            });
+          }
+        });
+
+        res.status(200).send({
+          message: "Subtitles generation started",
+        });
       }
     );
   });
+  return router;
 };

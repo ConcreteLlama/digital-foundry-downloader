@@ -1,13 +1,10 @@
 import { Table, TableBody, TableCell, TableHead, TableRow } from "@mui/material";
-import { StartDownloadingButton, getDownloadVariant } from "../start-download-dialog.component";
+import { StartDownloadingButton } from "../start-download-dialog.component";
 import { MediaInfoListProps } from "./media-info-list.component";
 
-export const MediaInfoTable = ({
-  contentInfo,
-  currentDownloadingType,
-  downloadedContentType,
-  mediaInfo,
-}: MediaInfoListProps) => {
+export const MediaInfoTable = ({ contentEntry }: MediaInfoListProps) => {
+  const { contentInfo } = contentEntry;
+  const { mediaInfo } = contentInfo;
   return (
     <Table>
       <TableHead>
@@ -21,11 +18,6 @@ export const MediaInfoTable = ({
       </TableHead>
       <TableBody>
         {mediaInfo.map((mediaInfo) => {
-          const downloadVariant = getDownloadVariant(
-            mediaInfo.mediaType,
-            currentDownloadingType,
-            downloadedContentType
-          );
           return (
             <TableRow>
               <TableCell>{mediaInfo.mediaType}</TableCell>
@@ -33,12 +25,7 @@ export const MediaInfoTable = ({
               <TableCell>{mediaInfo.videoEncoding}</TableCell>
               <TableCell>{mediaInfo.audioEncoding}</TableCell>
               <TableCell>
-                <StartDownloadingButton
-                  contentInfo={contentInfo}
-                  mediaType={mediaInfo.mediaType}
-                  disabled={!Boolean(mediaInfo.url) || downloadVariant === "downloading"}
-                  variant={downloadVariant}
-                />
+                <StartDownloadingButton contentEntry={contentEntry} mediaType={mediaInfo.mediaType} />
               </TableCell>
             </TableRow>
           );

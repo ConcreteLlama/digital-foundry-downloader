@@ -1,5 +1,5 @@
 import { createQueryActions } from "../utils";
-import { DfDownloaderConfig, DfDownloaderConfigKey } from "df-downloader-common/config/df-downloader-config.js";
+import { DfDownloaderConfig, DfDownloaderConfigKey } from "df-downloader-common/config/df-downloader-config";
 
 // Action to get either the whole config or a specific field
 type QueryConfigSectionPayload = {

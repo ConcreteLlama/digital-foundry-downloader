@@ -10,6 +10,7 @@ import { SubtitlesConfig, SubtitlesConfigKey } from "./subtitles-config.js";
 import { ContentDetectionConfig, ContentDetectionConfigKey } from "./content-detection-config.js";
 import { AutomaticDownloadsConfig, AutomaticDownloadsConfigKey } from "./automatic-downloads-config.js";
 import { AuthenticationConfig, AuthenticationConfigKey, DefaultAuthenticationConfig } from "./auth-config.js";
+import { DevConfig, DevConfigKey } from "./dev-config.js";
 
 export const DfDownloaderConfig = z.object({
   [DfConfigKey]: DfConfig.default({}),
@@ -23,6 +24,7 @@ export const DfDownloaderConfig = z.object({
   [SubtitlesConfigKey]: SubtitlesConfig.optional(),
   [NotificationsConfigKey]: NotificationsConfig.optional(),
   [LoggingConfigKey]: LoggingConfig.default(DefaultLoggingConfig),
+  [DevConfigKey]: DevConfig.optional(),
 });
 export type DfDownloaderConfig = z.infer<typeof DfDownloaderConfig>;
 export type DfDownloaderConfigInput = z.input<typeof DfDownloaderConfig>;

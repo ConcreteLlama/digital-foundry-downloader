@@ -1,6 +1,5 @@
-import { FormContainer, PasswordElement, TextFieldElement, useForm } from "react-hook-form-mui";
-import { useEffect, useState } from "react";
-import { z } from "zod";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { Button, Typography } from "@mui/material";
 import {
   BasicUserIdRequest,
   ChangePasswordRequest,
@@ -9,10 +8,12 @@ import {
   ValidateResetTokenResponse,
   parseResponseBody,
 } from "df-downloader-common";
-import { zodResolver } from "@hookform/resolvers/zod";
+import { useEffect, useState } from "react";
+import { FormContainer, PasswordElement, TextFieldElement, useForm } from "react-hook-form-mui";
+import { z } from "zod";
 import { API_URL } from "../../config";
-import { Button, Stack, Typography } from "@mui/material";
 import { postJson } from "../../utils/fetch";
+import { AuthFormStack } from "./auth-form.styles.ts";
 
 export type ResetPasswordFormProps = {
   username?: string | null;
@@ -57,10 +58,10 @@ const InitiateResetForm = ({ setUsername, username }: InitiateResetFormProps) =>
       }}
       defaultValues={{ username: username || "" }}
     >
-      <Stack sx={{ gap: 2, paddingTop: 2 }}>
+      <AuthFormStack>
         <TextFieldElement label="Username" {...register("username")} />
         <Button type="submit">Reset Password</Button>
-      </Stack>
+      </AuthFormStack>
     </FormContainer>
   );
 };
@@ -127,20 +128,20 @@ export const PasswordResetForm = ({ username, resetToken, onClose }: PasswordRes
               setError("Reset token invalid or expired");
             }
           })
-          .catch((error) => {
+          .catch(() => {
             setError("Reset token invalid or expired");
           });
       }}
       resolver={zodResolver(resetPasswordSchema)}
       defaultValues={{ username: username || "", resetToken: resetToken || "", newPassword: "", newPasswordVerify: "" }}
     >
-      <Stack sx={{ gap: 2, paddingTop: 2 }}>
+      <AuthFormStack>
         <PasswordElement label="Password Reset Token" {...register("resetToken")} disabled={Boolean(resetToken)} />
         <PasswordElement label="New Password" {...register("newPassword")} />
         <PasswordElement label="Re-enter New Password" {...register("newPasswordVerify")} />
         {error && <Typography color="error">{error}</Typography>}
         <Button type="submit">Change Password</Button>
-      </Stack>
+      </AuthFormStack>
     </FormContainer>
   );
 };

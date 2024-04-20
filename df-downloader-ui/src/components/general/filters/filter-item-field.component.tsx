@@ -99,7 +99,13 @@ export const ContentStatusField = ({ fieldName }: ContentStatusFieldProps) => {
   return (
     <Stack sx={{ gap: 2 }}>
       <Typography>Status</Typography>
-      <MultiSelectElement name={fieldName} label="Status" options={Object.values(DfContentStatus)} showChips />
+      <MultiSelectElement
+        variant="outlined"
+        name={fieldName}
+        label="Status"
+        options={Object.values(DfContentStatus)}
+        showChips
+      />
     </Stack>
   );
 };

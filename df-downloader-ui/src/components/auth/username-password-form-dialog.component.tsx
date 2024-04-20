@@ -1,5 +1,4 @@
 import { Button, Dialog, DialogContent, DialogTitle, Stack, Typography } from "@mui/material";
-import { logger } from "df-downloader-common";
 import { useForm } from "react-hook-form";
 import { FormContainer, PasswordElement, TextFieldElement } from "react-hook-form-mui";
 

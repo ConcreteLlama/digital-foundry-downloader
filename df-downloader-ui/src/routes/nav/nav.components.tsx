@@ -12,17 +12,21 @@ import {
   Typography,
   useMediaQuery,
 } from "@mui/material";
-import { SyntheticEvent, useState } from "react";
+import { useState } from "react";
 import { AuthUserInfo } from "../../components/auth/auth-user-info.component";
 import { DfUserInfo } from "../../components/df-user-info/df-user-info.component";
-import { CumulativeDownloadInfo } from "../../components/downloads/cumulative-download-info.component";
+import { CumulativeDownloadInfo } from "../../components/tasks/cumulative-download-info.component";
 import { theme } from "../../themes/theme";
 import { SettingsNav } from "../settings/settings-nav.component";
 import { NavItem } from "./nav-item.component";
+import { selectConfigSectionField } from "../../store/config/config.selector.ts";
+import { useSelector } from "react-redux";
 
 export const Nav = () => {
   const useMobileLayout = useMediaQuery(theme.breakpoints.down("md"));
   const useSmallLayout = useMediaQuery(theme.breakpoints.down("sm"));
+  const devModeEnabled = useSelector(selectConfigSectionField("dev", "devModeEnabled"));
+  const title = `Digital Foundry Content Manager${devModeEnabled ? " (dev mode)" : ""}`;
   const [drawerOpen, setDrawerOpenState] = useState(false);
   const onItemSelected = () => {
     setDrawerOpenState(false);
@@ -38,7 +42,7 @@ export const Nav = () => {
             </IconButton>
           ) : (
             <Typography variant="h6" sx={{ textAlign: "center" }}>
-              Digital Foundry Content Manager
+              {title}
             </Typography>
           )}
           <CumulativeDownloadInfo />
@@ -54,10 +58,10 @@ export const Nav = () => {
           flexShrink: 0,
           [`& .MuiDrawer-paper`]: { width: 240, boxSizing: "border-box" },
         }}
-        onClose={function (event: SyntheticEvent<{}, Event>): void {
+        onClose={function (): void {
           setDrawerOpenState(false);
         }}
-        onOpen={function (event: SyntheticEvent<{}, Event>): void {
+        onOpen={function (): void {
           setDrawerOpenState(true);
         }}
       >

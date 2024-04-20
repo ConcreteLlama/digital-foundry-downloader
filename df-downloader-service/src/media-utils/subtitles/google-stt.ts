@@ -64,6 +64,7 @@ export class GoogleSttSubtitlesGenerator implements SubtitleGenerator {
         const toReturn = {
           srt: generateSrt(srtLines),
           language,
+          service: this.serviceType,
         };
         resolve(toReturn);
       });

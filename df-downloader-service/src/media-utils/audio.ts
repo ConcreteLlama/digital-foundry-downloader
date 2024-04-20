@@ -1,4 +1,3 @@
-import { parseArgsStringToArgv } from "string-argv";
 import ffmpegPath from "ffmpeg-static";
 import { spawn } from "child_process";
 
@@ -10,12 +9,19 @@ export type AudioStreamOpts = {
 };
 export const fileToAudioStream = (filename: string, opts?: AudioStreamOpts) => {
   const { aCodec, format = "wav", channels, sampleRate } = opts || {};
-  const acOpt = channels ? `-ac ${channels}` : "";
-  const arOpt = sampleRate ? `-ar ${sampleRate}` : "";
-  const codecOpt = aCodec ? `-acodec ${aCodec}` : "";
-  const ffmpegArgs = parseArgsStringToArgv(
-    `-i "${filename}" ${acOpt} ${arOpt} ${codecOpt} -q:a 0 -map a -f ${format} -`
-  );
+
+  const ffmpegArgs: string[] = ["-i", filename];
+  if (channels) {
+    ffmpegArgs.push("-ac", channels.toString());
+  }
+  if (sampleRate) {
+    ffmpegArgs.push("-ar", sampleRate.toString());
+  }
+  if (aCodec) {
+    ffmpegArgs.push("-acodec", aCodec);
+  }
+  ffmpegArgs.push("-q:a", "0", "-map", "a", "-f", format, "-");
+
   const process = spawn(ffmpegPath, ffmpegArgs);
   const procPromise = new Promise<void>((res, rej) => {
     let lastErr: any;

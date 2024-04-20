@@ -5,6 +5,7 @@ import {
   DfContentInfoRefreshMetaRequest,
   DfContentInfoRefreshMetaResponse,
   DfContentQueryResponse,
+  DeleteDownloadRequest,
   DfContentStatus,
   DfTagsResponse,
   secondsToHHMMSS,
@@ -88,6 +89,27 @@ export const makeContentApiRouter = (contentManager: DigitalFoundryContentManage
       tags: await contentManager.db.getAllTags(),
     };
     return sendResponse(res, responseData);
+  });
+
+  router.post("/delete-download", async (req: Request, res: Response) => {
+    await zodParseHttp(DeleteDownloadRequest, req, res, async (searchProps) => {
+      const contentEntry = await contentManager.db.getContentEntry(searchProps.contentName);
+      if (!contentEntry) {
+        return res.status(404).send({
+          message: "Content not found",
+        });
+      }
+      const downloadInfo = DfContentEntryUtils.getDownload(contentEntry, searchProps.downloadLocation);
+      if (!downloadInfo) {
+        return res.status(404).send({
+          message: `Download not found for content ${searchProps.contentName}`,
+        });
+      }
+      await contentManager.deleteDownload(contentEntry, downloadInfo.downloadLocation);
+      return sendResponse(res, {
+        message: `Download deleted for ${searchProps.contentName} at ${searchProps.downloadLocation}`,
+      });
+    });
   });
 
   return router;

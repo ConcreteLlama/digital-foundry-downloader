@@ -15,29 +15,28 @@ import {
 export const startListeningDfContentInfo = (startListening: AppStartListening) => {
   startListening({
     actionCreator: updateDfContentQuery,
-    effect: (action, listenerApi) => {
+    effect: () => {
       store.dispatch(queryDfContent.start());
     },
   });
   startListening({
     actionCreator: setDfContentQuery,
-    effect: (action, listenerApi) => {
+    effect: () => {
       store.dispatch(queryDfContent.start());
     },
   });
   startListening({
     actionCreator: resetDfContentQuery,
-    effect: (action, listenerApi) => {
+    effect: () => {
       store.dispatch(queryDfContent.start());
     },
   });
   // Need to intercept the query df content success state
   startListening({
     actionCreator: queryDfContent.success,
-    effect: (action, listenerApi) => {
+    effect: (action) => {
       if (action.payload.scanInProgress) {
         setTimeout(() => {
-          console.log("Scan in progress; re-querying...");
           store.dispatch(queryDfContent.start());
         }, 5000);
       }
@@ -45,7 +44,7 @@ export const startListeningDfContentInfo = (startListening: AppStartListening) =
   });
   addFetchListener(startListening, queryDfContent, DfContentEntrySearchResponse, () => {
     const body = store.getState().dfContent.currentQuery;
-    let url = `${API_URL}/content/search`;
+    const url = `${API_URL}/content/search`;
     return [
       url,
       {

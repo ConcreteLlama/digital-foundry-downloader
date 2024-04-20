@@ -109,9 +109,7 @@ export const makeAuthRouter = (jwtManager: JwtManager) => {
           );
         }
         const authUrl = `${req.headers.origin}/auth?resetToken=${resetToken}&username=${id}`;
-        serviceLocator.notificationConsumers.forEach((consumer) => {
-          consumer.passwordReset(resetToken, authUrl, new Date(expiryTime));
-        });
+        serviceLocator.notifier.passwordReset(resetToken, authUrl, new Date(expiryTime));
       }
       return res.status(200).send();
     });

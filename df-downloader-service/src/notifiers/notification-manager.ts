@@ -18,7 +18,7 @@ const makeNotificationConsumers = (notificationsConfig: NotificationsConfig | un
 
   const notificationServices = notificationsConfig?.services;
   if (notificationServices) {
-    if (notificationServices.pushbullet) {
+    if (notificationServices.pushbullet && notificationServices.pushbullet.enabled) {
       notificationConsumers.push(PushBulletNotifier.fromConfig(notificationServices.pushbullet));
     }
   }
@@ -27,9 +27,9 @@ const makeNotificationConsumers = (notificationsConfig: NotificationsConfig | un
 
 export const loadNotificationConsumers = () => {
   //TODO: This is a bit brute force-ey and should probably be changed to only update the consumers that have changed
-  serviceLocator.notificationConsumers = makeNotificationConsumers(configService.config.notifications);
+  serviceLocator.setNotificationConsumers(makeNotificationConsumers(configService.config.notifications));
   configService.on("configUpdated:notifications", (event) => {
     const config = event?.newValue;
-    serviceLocator.notificationConsumers = makeNotificationConsumers(config);
+    serviceLocator.setNotificationConsumers(makeNotificationConsumers(config));
   });
 };

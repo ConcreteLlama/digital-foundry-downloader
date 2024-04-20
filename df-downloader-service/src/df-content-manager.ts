@@ -1,213 +1,48 @@
-import Queue from "better-queue";
-import { Stats } from "fs";
-import fs from "fs/promises";
-import prettyBytes from "pretty-bytes";
 import {
-  DbInitInfo,
-  DfDownloaderOperationalDb,
-  makeAvailableContentEntry,
-  makeDownloadedContentEntry,
-  makePaywalledContentEntry,
-} from "./db/df-operational-db.js";
-import { DfContentInfoReference, downloadMedia, forEachArchivePage, getMediaInfo } from "./df-fetcher.js";
-import { DfMetaInjector } from "./df-mpeg-meta.js";
-import { DfNotificationConsumer } from "./notifiers/notification-consumer.js";
-import {
-  DfContentInfo,
-  MediaInfo,
-  QueuedContentStatus,
-  DownloadProgressInfo,
-  DfContentEntry,
-  DfContentStatusInfoPaywalled,
-  QueuedContent,
-  DfContentInfoUtils,
-  QueuedContentUtils,
-  DfContentStatus,
-  filterContentInfos,
-  transformFirstMatchAsync,
   CURRENT_DATA_VERSION,
-  asyncSome,
+  DfContentEntry,
+  DfContentEntryUpdate,
+  DfContentInfo,
+  DfContentInfoUtils,
+  DfContentStatus,
+  MediaInfo,
+  bytesToHumanReadable,
+  fileSizeStringToBytes,
+  filterAndMap,
+  filterContentInfos,
+  getMediaTypeIndex,
+  logger,
+  transformFirstMatchAsync,
 } from "df-downloader-common";
-import { DfUserManager } from "./df-user-manager.js";
-import { DownloadState } from "./utils/downloader.js";
-import { logger } from "df-downloader-common";
-import { sanitizeContentName } from "./utils/df-utils.js";
-import { ensureDirectory, extractFilenameFromUrl, fileSizeStringToBytes, moveFile } from "./utils/file-utils.js";
-import { dfFetchWorkerQueue, fileScannerQueue } from "./utils/queue-utils.js";
-import { serviceLocator } from "./services/service-locator.js";
-import { getMostImportantItem } from "./utils/importance-list.js";
+import fs from "fs/promises";
 import { configService } from "./config/config.js";
-import { getMediaTypeIndex } from "./utils/media-type.js";
-import test from "node:test";
-
-type DownloadQueueItem = {
-  dfContentInfo: DfContentInfo;
-  mediaInfo: MediaInfo;
-};
-
-/**
- * TODO: Make queues for unrelated work items; download queue, subtitles queue, metadata queue, mover queue etc.
- * These can all be in separate files
- *
- * The second generic of Queue is the return type when a task is finished (on('task_finish'))
- * and that is how we can move items from one queue to the next
- */
+import { DbInitInfo, DfDownloaderOperationalDb, DownloadInfoWithName } from "./db/df-operational-db.js";
+import { DfContentInfoReference, forEachArchivePage, getMediaInfo, makeDfContentUrl } from "./df-fetcher.js";
+import { DfTaskManager } from "./df-task-manager.js";
+import { DfUserManager } from "./df-user-manager.js";
+import { serviceLocator } from "./services/service-locator.js";
+import { sanitizeContentName } from "./utils/df-utils.js";
+import { deleteFile, ensureDirectory } from "./utils/file-utils.js";
+import { getMostImportantItem } from "./utils/importance-list.js";
+import { dfFetchWorkerQueue, fileScannerQueue } from "./utils/queue-utils.js";
+import path from "path";
 
 export class DigitalFoundryContentManager {
-  private dfMetaInjector: DfMetaInjector;
   private dfUserManager: DfUserManager;
-  queuedContent: Map<string, QueuedContent> = new Map<string, QueuedContent>();
+  readonly taskManager: DfTaskManager;
+  noMediaContentInfos: Map<
+    string,
+    {
+      attempts: number;
+      contentRef: DfContentInfoReference;
+    }
+  > = new Map();
   metaFetchesInProgress: number = 0;
 
-  workQueue: Queue<DownloadQueueItem, any>;
-
   constructor(readonly db: DfDownloaderOperationalDb) {
-    this.dfMetaInjector = new DfMetaInjector();
     this.dfUserManager = new DfUserManager(db);
     this.dfUserManager.addUserTierChangeListener((tier) => this.userTierChanged(tier));
-    const downloadsConfig = configService.config.downloads;
-
-    this.workQueue = new Queue<DownloadQueueItem, any>(
-      async (queueItem: DownloadQueueItem, cb) => {
-        const { dfContentInfo, mediaInfo } = queueItem;
-        const config = configService.config;
-        const contentManagementConfig = config.contentManagement;
-        const metaConfig = config.metadata;
-        const pendingInfo = this.queuedContent.get(dfContentInfo.name)!;
-        pendingInfo.queuedContentStatus = QueuedContentStatus.DOWNLOADING;
-        let err: any;
-        try {
-          logger.log("debug", `Fetching ${JSON.stringify(dfContentInfo)}`);
-          logger.log("debug", "Fetching", mediaInfo, "from list", dfContentInfo.mediaInfo);
-          logger.log("info", `Fetching ${dfContentInfo.name} with media type ${mediaInfo.mediaType}`);
-          let currentProgress: DownloadProgressInfo;
-          try {
-            serviceLocator.notificationConsumers.forEach((consumer) =>
-              consumer.downloadStarting(dfContentInfo, mediaInfo)
-            );
-            const downloadResult = await downloadMedia(
-              dfContentInfo,
-              mediaInfo,
-              (progressUpdate: DownloadProgressInfo) => {
-                progressUpdate && (currentProgress = progressUpdate);
-                pendingInfo.currentProgress = currentProgress;
-                this.progressUpdate(dfContentInfo, mediaInfo, progressUpdate);
-              }
-            );
-            pendingInfo.currentProgress = undefined;
-            if (!downloadResult) {
-              err = `Unable to download ${dfContentInfo.name}`;
-              return;
-            }
-            if (downloadResult.status === DownloadState.STOPPED) {
-              logger.log("info", `Download for ${dfContentInfo.name} was manually stopped`);
-              return;
-            }
-            if (downloadResult.status === DownloadState.FAILED) {
-              err = downloadResult.error;
-              return;
-            }
-            pendingInfo.queuedContentStatus = QueuedContentStatus.POST_PROCESSING;
-            const downloadLocation = downloadResult.destination;
-            if (metaConfig.injectMetadata) {
-              pendingInfo.statusInfo = "Injecting metadata";
-              try {
-                await this.dfMetaInjector.setMeta(downloadLocation, dfContentInfo);
-                logger.log("debug", `Set meta for ${dfContentInfo.name}`);
-              } catch (e) {
-                logger.log("error", `Unable to inject metadata for ${dfContentInfo.name} - continuing anyway`, e);
-              }
-            }
-            if (config.subtitles?.autoGenerateSubs && config.subtitles?.servicePriorities?.length) {
-              const result = await asyncSome(config.subtitles.servicePriorities, async (subtitleService) => {
-                const subtitleGenerator = serviceLocator.getSubtitleGenerator(subtitleService);
-                if (subtitleGenerator) {
-                  try {
-                    pendingInfo.statusInfo = `Getting subs using ${subtitleService}`;
-                    const subInfo = await subtitleGenerator.getSubs(pendingInfo.dfContent, downloadLocation, "en");
-                    if (!subInfo) {
-                      return false;
-                    }
-                    pendingInfo.statusInfo = `Injecting subs from ${subtitleService}`;
-                    await this.dfMetaInjector.injectSubs(downloadLocation, subInfo);
-                    return true;
-                  } catch (e) {
-                    logger.log(
-                      "error",
-                      `Unable to get subs for ${dfContentInfo.name} with service ${subtitleService} - continuing anyway`,
-                      e
-                    );
-                  }
-                }
-                return false;
-              });
-              if (!result) {
-                logger.log(
-                  "warn",
-                  `Unable to get subs for ${dfContentInfo.name} using configured services: ${config.subtitles?.servicePriorities}`
-                );
-              }
-            }
-
-            const filename = DfContentInfoUtils.makeFileName(dfContentInfo, mediaInfo);
-            const destination = `${contentManagementConfig.destinationDir}/${filename}`;
-
-            if (downloadLocation !== destination) {
-              logger.log(
-                "debug",
-                `Destination dir and download dir are not the same, moving ${downloadLocation} to ${destination}`
-              );
-              pendingInfo!.queuedContentStatus = QueuedContentStatus.POST_PROCESSING;
-              pendingInfo.statusInfo = "Moving file";
-
-              await moveFile(downloadLocation, destination, {
-                clobber: true,
-              }).catch((e) => logger.log("debug", e));
-              logger.log("debug", `File moved from ${downloadLocation} to ${destination}`);
-            }
-            await this.dfMetaInjector.setDate(destination, dfContentInfo.publishedDate);
-            await this.db.contentDownloaded(
-              dfContentInfo,
-              mediaInfo.mediaType,
-              destination,
-              mediaInfo.size,
-              new Date()
-            );
-            pendingInfo!.queuedContentStatus = QueuedContentStatus.DONE;
-            this.queuedContent.delete(dfContentInfo.name);
-
-            serviceLocator.notificationConsumers.forEach((consumer) =>
-              consumer.downloadComplete(dfContentInfo, mediaInfo, destination, downloadResult.stats)
-            );
-          } catch (e) {
-            err = e;
-          }
-        } catch (e) {
-          err = e;
-        } finally {
-          if (err) {
-            pendingInfo!.queuedContentStatus = QueuedContentStatus.PENDING_RETRY;
-            logger.log("warn", `Unable to fetch ${dfContentInfo.name}`);
-            logger.log("warn", err);
-            serviceLocator.notificationConsumers.forEach((consumer) => consumer.downloadFailed(dfContentInfo, err));
-            this.setupRetry(dfContentInfo.name);
-          }
-          cb();
-        }
-      },
-      {
-        concurrent: downloadsConfig.maxSimultaneousDownloads,
-        priority: ({ dfContentInfo }: DownloadQueueItem, cb) => {
-          return cb(null, dfContentInfo.publishedDate.getTime());
-        },
-      }
-    );
-    configService.on("configUpdated:downloads", ({ newValue }) => {
-      logger.log(
-        "info",
-        `TODO: Write logic to max simultaneous downloads to ${newValue.maxSimultaneousDownloads} on the fly`
-      );
-    });
+    this.taskManager = new DfTaskManager();
     configService.on("configUpdated:contentManagement", ({ newValue, oldValue }) => {
       if (newValue.destinationDir !== oldValue.destinationDir) {
         ensureDirectory(newValue.destinationDir);
@@ -314,12 +149,17 @@ export class DigitalFoundryContentManager {
         continue;
       }
       let updatesMade = false;
-      if (!contentEntry.contentInfo.mediaInfo?.length && this.dfUserManager.getCurrentTier()) {
-        logger.log(
-          "info",
-          `Media info for https://www.digitalfoundry.net/${contentEntry.name} contains no entries but we have a user tier, adding to update list`
-        );
-        requiringMetaRefresh.add(contentEntry.name);
+      if (contentEntry.contentInfo.mediaInfo?.length === 0 && this.dfUserManager.getCurrentTier()) {
+        logger.log("info", `Content entry ${contentEntry.name} has no media info, adding to no media list`);
+        this.noMediaContentInfos.set(contentEntry.name, {
+          attempts: 0,
+          contentRef: {
+            title: contentEntry.contentInfo.title,
+            name: contentEntry.name,
+            link: makeDfContentUrl(contentEntry.name),
+            thumbnail: contentEntry.contentInfo.thumbnailUrl || "",
+          },
+        });
         continue;
       } else {
         contentEntry.contentInfo.mediaInfo = contentEntry.contentInfo.mediaInfo.filter((mediaInfo) => {
@@ -333,8 +173,8 @@ export class DigitalFoundryContentManager {
             mediaInfo.size = "0";
             updatesMade = true;
           }
-          if (mediaInfo.url) {
-            const urlFilename = mediaInfo.url ? extractFilenameFromUrl(mediaInfo.url) : null;
+          if (mediaInfo.mediaFilename) {
+            const urlFilename = mediaInfo.mediaFilename;
             if (!Boolean(urlFilename?.trim()?.length)) {
               logger.log(
                 "info",
@@ -350,7 +190,7 @@ export class DigitalFoundryContentManager {
         });
       }
       if (updatesMade) {
-        await this.db.addContentInfos(contentEntry);
+        await this.db.addOrUpdateEntries(contentEntry);
       }
     }
     const requiringUpdate = contentEntries
@@ -383,7 +223,7 @@ export class DigitalFoundryContentManager {
           )
         );
         const existingEntries = await this.db.getContentInfoMap(entryBatch);
-        const toUpdate: DfContentEntry[] = [];
+        const toUpdate: DfContentEntryUpdate[] = [];
         contentInfoResults.forEach((result, idx) => {
           if (result.status === "rejected") {
             logger.log("error", `Failed to fetch meta for ${entryBatch[idx]} ${result.reason}`);
@@ -397,16 +237,18 @@ export class DigitalFoundryContentManager {
               existingContentEntry.dataVersion = CURRENT_DATA_VERSION;
               toUpdate.push(existingContentEntry);
             } else {
-              toUpdate.push(
-                contentInfo.dataPaywalled
-                  ? makePaywalledContentEntry(this.dfUserManager.getCurrentTier() || "NONE", contentInfo)
-                  : makeAvailableContentEntry(contentInfo)
-              );
+              toUpdate.push({
+                name: contentName,
+                contentInfo,
+                statusInfo: contentInfo.dataPaywalled
+                  ? { userTierWhenUnavailable: this.dfUserManager.getCurrentTier(), status: DfContentStatus.PAYWALLED }
+                  : { status: DfContentStatus.AVAILABLE },
+              });
             }
           }
         });
-        await this.db.addContentInfos(...toUpdate);
-        updatedMetas.push(...toUpdate);
+        const updated = await this.db.updateEntries(...toUpdate);
+        updatedMetas.push(...updated);
       }
     } finally {
       this.metaFetchesInProgress--;
@@ -418,28 +260,32 @@ export class DigitalFoundryContentManager {
     const contentManagementConfig = configService.config.contentManagement;
     const contentEntries = await this.db.getAllContentEntries();
 
-    const notDownloaded = contentEntries.filter((contentEntry) => contentEntry.statusInfo.status !== "DOWNLOADED");
+    const notDownloaded = contentEntries.filter((contentEntry) => contentEntry.downloads.length === 0);
     logger.log("info", "Scanning for existing files");
     while (notDownloaded.length > 0) {
       const toCheck = notDownloaded.splice(0, 50);
-      let toUpdate: DfContentEntry[] = [];
-      await Promise.all(
+      const toAddDownload: DownloadInfoWithName[] = [];
+      await Promise.allSettled(
         toCheck.map(async (contentEntry) => {
           const { contentInfo } = contentEntry;
           const fileMatch = await transformFirstMatchAsync(contentInfo.mediaInfo, async (mediaInfo) => {
-            const dfDownloaderFilename = DfContentInfoUtils.makeFileName(contentInfo, mediaInfo);
-            const filenames = [`${contentManagementConfig.destinationDir}/${dfDownloaderFilename}`];
-            mediaInfo.url && filenames.push(extractFilenameFromUrl(mediaInfo.url));
+            const fileNameWithMediaType = DfContentInfoUtils.makeFileName(contentInfo, mediaInfo, true);
+            const fileNameWithoutMediaType = DfContentInfoUtils.makeFileName(contentInfo, mediaInfo, false);
+            const filenames: string[] = [fileNameWithMediaType, fileNameWithoutMediaType];
+            mediaInfo.mediaFilename && filenames.push(mediaInfo.mediaFilename);
             for (const contentFilename of filenames) {
+              const fullFilename = path.join(contentManagementConfig.destinationDir, contentFilename);
               try {
-                await fileScannerQueue.addWork(() => fs.access(contentFilename));
-                const fileInfo = await fileScannerQueue.addWork(() => fs.stat(contentFilename));
+                await fileScannerQueue.addWork(() => fs.access(fullFilename));
+                const fileInfo = await fileScannerQueue.addWork(() => fs.stat(fullFilename));
                 if (!fileInfo) {
                   continue;
                 }
                 return {
-                  matchingFileName: contentFilename,
+                  matchingFileName: fullFilename,
                   matchingFileStats: fileInfo,
+                  exactMatch: contentFilename === fileNameWithMediaType,
+                  mediaInfo,
                 };
               } catch (e) {
                 // File not found, continue loop
@@ -448,29 +294,41 @@ export class DigitalFoundryContentManager {
             return false;
           });
           if (fileMatch) {
-            const { matchingFileName, matchingFileStats } = fileMatch;
-            const matchingMediaInfos: [MediaInfo, number][] = contentInfo.mediaInfo.map((mediaInfo) => {
-              try {
-                const sizeDifference = Math.abs(fileSizeStringToBytes(mediaInfo.size || "0") - matchingFileStats.size);
-                return [mediaInfo, sizeDifference];
-              } catch (e: any) {
-                return [mediaInfo, -1];
-              }
+            const { matchingFileName, matchingFileStats, exactMatch } = fileMatch;
+            let bestMatch: MediaInfo;
+            if (exactMatch) {
+              logger.log("info", `Found exact match for ${contentInfo.name} at ${matchingFileName}`);
+              bestMatch = fileMatch.mediaInfo;
+            } else {
+              logger.log(
+                "info",
+                `Found inexact match for ${contentInfo.name} at ${matchingFileName}, finding closest match`
+              );
+              const matchingMediaInfos: [MediaInfo, number][] = contentInfo.mediaInfo.map((mediaInfo) => {
+                try {
+                  const sizeDifference = Math.abs(
+                    fileSizeStringToBytes(mediaInfo.size || "0") - matchingFileStats.size
+                  );
+                  return [mediaInfo, sizeDifference];
+                } catch (e: any) {
+                  return [mediaInfo, -1];
+                }
+              });
+              bestMatch = matchingMediaInfos.sort(([, a], [, b]) => a - b)[0][0];
+            }
+            toAddDownload.push({
+              name: contentInfo.name,
+              downloadInfo: {
+                format: bestMatch.mediaType,
+                downloadLocation: matchingFileName,
+                size: bytesToHumanReadable(matchingFileStats.size),
+                downloadDate: matchingFileStats.birthtime,
+              },
             });
-            const bestMatch = matchingMediaInfos.sort(([, a], [, b]) => a - b)[0][0];
-            toUpdate.push(
-              makeDownloadedContentEntry(
-                contentEntry.contentInfo,
-                bestMatch.mediaType,
-                matchingFileName,
-                prettyBytes(matchingFileStats.size),
-                matchingFileStats.birthtime
-              )
-            );
           }
         })
       );
-      await this.db.addContentInfos(...toUpdate);
+      await this.db.addDownloads(toAddDownload);
     }
 
     logger.log("info", "Finished scanning for existing files");
@@ -481,9 +339,7 @@ export class DigitalFoundryContentManager {
     await forEachArchivePage(async (contentList) => {
       const existingMeta = await this.db.getContentEntryList(contentList.map((contentRef) => contentRef.name));
       const newContentInfos = contentList.filter(
-        (value, idx) =>
-          (!existingMeta[idx] || existingMeta[idx]?.statusInfo.status === "ATTEMPTING_DOWNLOAD") &&
-          !this.queuedContent.has(value.name)
+        (value, idx) => !existingMeta[idx] && !this.taskManager.hasPipelineForContent(value.name)
       );
       if (newContentInfos.length === 0) {
         return false;
@@ -505,9 +361,39 @@ export class DigitalFoundryContentManager {
   }
 
   async checkForNewContents() {
+    const noMediaInfoContents = [...this.noMediaContentInfos.values()];
+    logger.log(
+      "info",
+      `Checking for new content${
+        noMediaInfoContents.length
+          ? ` and media info for the following media with no media infos: ${noMediaInfoContents
+              .map((v) => v.contentRef.name)
+              .join(", ")}`
+          : ""
+      }`
+    );
     const autoDownloadConfig = configService.config.automaticDownloads;
-    const newContentRefs = await this.getNewContentList();
+    const newContentRefs = [...(await this.getNewContentList()), ...noMediaInfoContents.map((v) => v.contentRef)];
     const newContentInfos = await this.getContentInfos(newContentRefs);
+    const newNoMediaContentInfoMap = new Map<string, { attempts: number; contentRef: DfContentInfoReference }>();
+    newContentInfos.forEach((contentInfo, idx) => {
+      if (!contentInfo) {
+        return;
+      }
+      if (!contentInfo.mediaInfo.length && this.dfUserManager.getCurrentTier()) {
+        logger.log("info", `No media info found for ${contentInfo.name}, adding to no media list`);
+        const attempts = this.noMediaContentInfos.get(contentInfo.name)?.attempts || 0;
+        if (attempts >= 60 * 24) {
+          logger.log("info", `Removing ${contentInfo.name} from no media list as it has been there for over 24 hours`);
+          return;
+        }
+        newNoMediaContentInfoMap.set(contentInfo.name, {
+          attempts: (this.noMediaContentInfos.get(contentInfo.name)?.attempts || 0) + 1,
+          contentRef: newContentRefs[idx],
+        });
+      }
+    });
+    this.noMediaContentInfos = newNoMediaContentInfoMap;
     if (autoDownloadConfig.enabled) {
       const { include, exclude } = autoDownloadConfig.exclusionFilters?.length
         ? filterContentInfos(autoDownloadConfig.exclusionFilters, newContentInfos, true)
@@ -517,16 +403,15 @@ export class DigitalFoundryContentManager {
           "info",
           `Ignoring ${exclude.map((contentInfo) => contentInfo.name).join(", ")} due to exclusion filters`
         );
-      await this.db.addAvailableContent(exclude);
-      await this.db.addDownloadingContents(include);
+      await this.db.addContents(this.dfUserManager.getCurrentTier() || "NONE", newContentInfos);
       for (const content of include) {
-        serviceLocator.notificationConsumers.forEach((consumer) => consumer.newContentDetected(content.title));
+        serviceLocator.notifier.newContentDetected(content.title);
         this.getContent(content, {
           delay: autoDownloadConfig.downloadDelay,
         });
       }
     } else {
-      await this.db.addAvailableContent(newContentInfos);
+      await this.db.addContents(this.dfUserManager.getCurrentTier() || "NONE", newContentInfos);
     }
   }
 
@@ -553,13 +438,11 @@ export class DigitalFoundryContentManager {
       contentName = content.name;
       contentInfoArg = content;
     }
-    let queuedContentInfo = this.queuedContent.get(contentName);
-    const dfContentInfo = contentInfoArg || queuedContentInfo?.dfContent || (await this.getMediaInfo(contentName));
+    const dfContentInfo = contentInfoArg || (await this.getMediaInfo(contentName));
     if (!dfContentInfo) {
       throw new Error(`Unable to find content info for ${contentName}`);
     }
     const mediaInfo =
-      queuedContentInfo?.selectedMediaInfo ||
       (mediaType ? dfContentInfo.mediaInfo.find((mediaInfo) => mediaInfo.mediaType === mediaType) : undefined) ||
       getMostImportantItem(autoDownloadConfig.mediaTypes, dfContentInfo.mediaInfo, (mediaTypeList, mediaInfo) =>
         getMediaTypeIndex(mediaTypeList, mediaInfo.mediaType)
@@ -567,24 +450,9 @@ export class DigitalFoundryContentManager {
     if (!mediaInfo) {
       throw new Error(`Could not get valid media info for ${dfContentInfo.name}`);
     }
-    if (queuedContentInfo) {
-      if (!queuedContentInfo.readyForRetry) {
-        throw new Error(`Already downloading ${queuedContentInfo}`);
-      }
-      QueuedContentUtils.newAttempt(queuedContentInfo);
-    } else {
-      queuedContentInfo = QueuedContentUtils.create(
-        contentName,
-        downloadConfig.failureRetryIntervalBase,
-        new Date(),
-        dfContentInfo,
-        mediaInfo
-      );
-      this.queuedContent.set(contentName, queuedContentInfo);
-    }
     if (dfContentInfo.dataPaywalled) {
       logger.log("info", `Not downloading ${dfContentInfo.name} as data is paywalled; adding to ignore list`);
-      this.db.addPaywalledContent(this.dfUserManager.getCurrentTier() || "NONE", dfContentInfo);
+      this.db.addContents(this.dfUserManager.getCurrentTier() || "NONE", [dfContentInfo]);
       return;
     }
     if (delay) {
@@ -598,82 +466,71 @@ export class DigitalFoundryContentManager {
       );
     }
     setTimeout(() => {
-      queuedContentInfo!.dfContent = dfContentInfo;
-      this.workQueue.push({
-        dfContentInfo,
-        mediaInfo,
+      this.taskManager.downloadContent(dfContentInfo, mediaInfo).on("completed", (pipelineResult) => {
+        if (pipelineResult.status === "success") {
+          const finalPipelineResult = pipelineResult.pipelineResult;
+          const { size, downloadLocation, mediaInfo, subtitles } = finalPipelineResult;
+          this.db.contentDownloaded(dfContentInfo.name, {
+            format: mediaInfo.mediaType,
+            downloadDate: new Date(),
+            downloadLocation: downloadLocation,
+            size: size ? bytesToHumanReadable(size) : undefined,
+            subtitles: subtitles
+              ? [
+                  {
+                    service: subtitles.service,
+                    language: subtitles.language,
+                  },
+                ]
+              : undefined,
+          });
+        }
       });
-      serviceLocator.notificationConsumers.forEach((consumer) => consumer.downloadQueued(dfContentInfo!));
     }, delay || 0);
-
-    return queuedContentInfo;
-  }
-
-  setupRetry(contentName: string) {
-    const downloadConfig = configService.config.downloads;
-    const pendingInfo = this.queuedContent.get(contentName);
-    if (!pendingInfo) {
-      logger.log("error", `Failed to get pending info for ${contentName}, unable to retry`);
-      return;
-    }
-    if (pendingInfo.currentAttempt >= downloadConfig.maxRetries) {
-      logger.log("warn", `${contentName} has exceeded max retry attempts of ${downloadConfig.maxRetries}`);
-      return;
-    }
-    const nextAttempt = new Date();
-    nextAttempt.setTime(nextAttempt.getTime() + pendingInfo.currentRetryInterval);
-    logger.log(
-      "info",
-      `Failed download for ${contentName} will be removed from pending list to be attempted again in ${pendingInfo.currentRetryInterval}ms ` +
-        `(${nextAttempt}). Retry attempt: ${pendingInfo.currentAttempt + 1})`
-    );
-    setTimeout(() => {
-      logger.log("info", `Failed download ${contentName} marked ready for retry`);
-      pendingInfo.readyForRetry = true;
-      this.getContent(pendingInfo.name);
-    }, pendingInfo.currentRetryInterval);
-  }
-
-  progressUpdate(dfContent: DfContentInfo, mediaInfo: MediaInfo, progressUpdate: DownloadProgressInfo) {
-    serviceLocator.notificationConsumers.forEach((consumer) =>
-      consumer.downloadProgressUpdate(dfContent, mediaInfo, progressUpdate)
-    );
   }
 
   async userTierChanged(newTier?: string) {
     const userInfo = this.dfUserManager.currentDfUserInfo;
     if (this.dfUserManager.isUserSignedIn() && userInfo) {
-      serviceLocator.notificationConsumers.forEach((consumer) =>
-        consumer.userSignedIn(userInfo.username, userInfo.tier)
-      );
+      serviceLocator.notifier.userSignedIn(userInfo.username, userInfo.tier);
       const allContentEntries = await this.db.getAllContentEntries();
       const ignoredPaywalledContent = allContentEntries.filter((ignoredContent) => {
-        if (ignoredContent.statusInfo.status !== "CONTENT_PAYWALLED") {
+        if (ignoredContent.statusInfo.status !== "PAYWALLED") {
           return false;
         }
-        return (ignoredContent.statusInfo as DfContentStatusInfoPaywalled).userTierWhenUnavailable !== newTier;
+        return ignoredContent.statusInfo.userTierWhenUnavailable !== newTier;
       });
-      //TODO: Either find a way to find *which* tier content belongs to or rescan all content to see whether it's still paywalled
       ignoredPaywalledContent.forEach((contentInfo) => {
         contentInfo.statusInfo.status = DfContentStatus.AVAILABLE;
       });
       logger.log("info", `Setting all paywalled content to "Available" (may not be accurate)"`);
-      await this.db.addContentInfos(...ignoredPaywalledContent);
+      await this.db.addOrUpdateEntries(...ignoredPaywalledContent);
       await this.patchMetas();
     } else {
-      serviceLocator.notificationConsumers.forEach((consumer) => consumer.userNotSignedIn());
+      serviceLocator.notifier.userNotSignedIn();
       //TODO: Either find a way to find *which* tier content belongs to or rescan all content to see whether it's still paywalled
       const allContentEntries = await this.db.getAllContentEntries();
       const availableContentEntries = allContentEntries.filter(
         (contentInfo) => contentInfo.statusInfo.status === "AVAILABLE"
       );
       availableContentEntries.forEach((contentInfo) => {
-        contentInfo.statusInfo.status = DfContentStatus.CONTENT_PAYWALLED;
-        (contentInfo.statusInfo as DfContentStatusInfoPaywalled).userTierWhenUnavailable = "NONE";
+        contentInfo.statusInfo.status = DfContentStatus.PAYWALLED;
+        contentInfo.statusInfo.userTierWhenUnavailable = "NONE";
       });
       logger.log("info", `Setting all available content to "Paywalled" (may not be accurate)"`);
-      await this.db.addContentInfos(...availableContentEntries);
+      await this.db.addOrUpdateEntries(...availableContentEntries);
     }
+  }
+
+  async deleteDownload(contentEntry: DfContentEntry, downloadLocation: string) {
+    if (!contentEntry.downloads.find((d) => d.downloadLocation === downloadLocation)) {
+      throw new Error(`Download not found for content ${contentEntry.name}`);
+    }
+    const deleted = await deleteFile(downloadLocation);
+    if (!deleted) {
+      throw new Error(`Failed to delete file ${downloadLocation}`);
+    }
+    await this.db.removeDownload(contentEntry.name, downloadLocation);
   }
 
   get currentFetchQueueSize() {

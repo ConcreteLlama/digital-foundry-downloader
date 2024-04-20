@@ -11,10 +11,7 @@ const INITIAL_STATE: DfTagsState = {
 export const dfTagsReducer = createReducer(INITIAL_STATE, (builder) => {
   addQueryCases(builder, queryDfTags, {
     success: (state, payload) => {
-      return {
-        ...state,
-        tags: payload.tags,
-      };
+      state.tags = payload.tags;
     },
   });
 });

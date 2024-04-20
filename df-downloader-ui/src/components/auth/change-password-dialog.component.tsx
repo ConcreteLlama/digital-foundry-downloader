@@ -1,5 +1,5 @@
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Button, Dialog, DialogActions, DialogContent, DialogTitle, Stack, Typography } from "@mui/material";
+import { Button, Dialog, DialogActions, DialogContent, DialogTitle, Typography } from "@mui/material";
 import { ChangePasswordRequest, Password, logger } from "df-downloader-common";
 import { useState } from "react";
 import { useForm } from "react-hook-form";
@@ -8,6 +8,7 @@ import { z } from "zod";
 import { API_URL } from "../../config";
 import { queryCurrentUser } from "../../store/auth-user/auth-user.actions";
 import { store } from "../../store/store";
+import { AuthFormStack } from "./auth-form.styles.ts";
 
 const changePasswordSchema = z
   .object({
@@ -73,7 +74,7 @@ export const ChangePasswordFormDialog = ({ onClose, open }: ChangePasswordFormDi
                   setError("Change password failed");
                 }
               })
-              .catch((error) => {
+              .catch(() => {
                 setError("Change password failed");
               });
           }}
@@ -81,13 +82,13 @@ export const ChangePasswordFormDialog = ({ onClose, open }: ChangePasswordFormDi
             logger.log("error", "Error changing password", error);
           }}
         >
-          <Stack sx={{ gap: 2, paddingTop: 2 }}>
+          <AuthFormStack>
             <PasswordElement label="Old Password" {...register("oldPassword")} />
             <PasswordElement label="New Password" {...register("newPassword")} />
             <PasswordElement label="Re-enter New Password" {...register("newPasswordVerify")} />
             {error && <Typography color="error">{error}</Typography>}
             <Button type="submit">Change Password</Button>
-          </Stack>
+          </AuthFormStack>
         </FormContainer>
       </DialogContent>
       <DialogActions>

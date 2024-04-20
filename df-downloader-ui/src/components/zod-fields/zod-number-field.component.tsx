@@ -6,9 +6,10 @@ export type ZodNumberFieldProps = {
   label: string;
   helperText?: string;
   zodNumber: ZodNumber;
+  step?: number;
 };
 
-export const ZodNumberField = ({ name, label, zodNumber, helperText }: ZodNumberFieldProps) => {
+export const ZodNumberField = ({ name, label, zodNumber, helperText, step }: ZodNumberFieldProps) => {
   return (
     <TextFieldElement
       name={name}
@@ -18,6 +19,7 @@ export const ZodNumberField = ({ name, label, zodNumber, helperText }: ZodNumber
       inputProps={{
         min: zodNumber.minValue,
         max: zodNumber.maxValue,
+        step,
       }}
       value={zodNumber.default}
     />

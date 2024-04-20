@@ -13,7 +13,8 @@ import { DefaultContentQuery, DfContentInfoState } from "./df-content.types";
 
 const INITIAL_STATE: DfContentInfoState = {
   loading: false,
-  content: [],
+  selectedContent: [],
+  content: {},
   totalItems: 0,
   currentQuery: DefaultContentQuery,
   error: null,
@@ -21,33 +22,25 @@ const INITIAL_STATE: DfContentInfoState = {
 export const dfContentReducer = createReducer(INITIAL_STATE, (builder) => {
   addQueryCases(builder, queryDfContent, {
     success: (state, payload) => {
-      return {
-        ...state,
-        currentQuery: payload.params,
-        totalItems: payload.totalResults,
-        content: payload.content,
-      };
+      state.currentQuery = payload.params;
+      state.totalItems = payload.totalResults;
+      for (const content of payload.content) {
+        state.content[content.name] = content;
+      }
+      state.selectedContent = payload.content.map((c) => c.name);
     },
   });
   addQueryCases(builder, fetchSingleDfContentEntry, {
     success: (state, payload) => {
-      const content = state.content.map((c) => (c.name === payload.name ? payload : c));
-      return {
-        ...state,
-        content,
-      };
+      state.content[payload.name] = payload;
     },
   });
   addQueryCases(builder, refreshDfContentMeta, {
     success(state, actionPayload) {
-      const content = state.content.map((existingContentEntry) => {
-        const updatedContent = actionPayload.contentEntries.find((updatedContent) => updatedContent.name === existingContentEntry.name);
-        return updatedContent ? updatedContent : existingContentEntry;
-      });
-      return {
-        ...state,
-        content,
-      };
+      const { contentEntries } = actionPayload;
+      for (const contentEntry of contentEntries) {
+        state.content[contentEntry.name] = contentEntry;
+      }
     },
   });
   builder.addCase(updateDfContentQuery, (state, action) => {
@@ -66,7 +59,7 @@ export const dfContentReducer = createReducer(INITIAL_STATE, (builder) => {
       currentQuery: action.payload,
     };
   });
-  builder.addCase(resetDfContentQuery, (state, action) => {
+  builder.addCase(resetDfContentQuery, (state) => {
     return {
       ...state,
       currentQuery: DefaultContentQuery,

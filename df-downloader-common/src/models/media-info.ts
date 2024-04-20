@@ -8,7 +8,7 @@ export const MediaInfo = z.object({
   videoEncoding: z.string().optional(),
   audioEncoding: z.string().optional(),
   videoId: z.string().optional(),
-  url: z.string().optional(),
+  mediaFilename: z.string().optional(),
 });
 export type MediaInfo = z.infer<typeof MediaInfo>;
 

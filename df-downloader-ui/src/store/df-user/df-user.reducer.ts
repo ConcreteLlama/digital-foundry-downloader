@@ -11,10 +11,7 @@ const INITIAL_STATE: DfUserState = {
 export const dfUserReducer = createReducer(INITIAL_STATE, (builder) => {
   return addQueryCases(builder, queryDfUserInfo, {
     success: (state, payload) => {
-      return {
-        ...state,
-        userInfo: payload,
-      };
+      state.userInfo = payload;
     },
   });
 });

@@ -4,3 +4,5 @@ public
 config/*
 work_dir
 df_downloads
+test-new-stuff.ts
+downloader.log

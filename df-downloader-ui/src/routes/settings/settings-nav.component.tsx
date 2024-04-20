@@ -4,6 +4,8 @@ import SettingsIcon from "@mui/icons-material/Settings";
 import { ExpandLess, ExpandMore } from "@mui/icons-material";
 import { NavItem } from "../nav/nav-item.component";
 import { SettingsRoute, SettingsSubRoute, isSettingsRoute, settingsRoutes } from "./settings.routes";
+import { useSelector } from "react-redux";
+import { selectDevConfigEnabled } from "../../store/config/config.selector.ts";
 
 type SettingsNavProps = {
   onItemSelected?: () => void;
@@ -36,6 +38,7 @@ type SettingsSubRouteNavItemProps = {
   onItemSelected?: () => void;
 };
 const SettingsSubRouteNavItem = ({ subRoute, level, onItemSelected }: SettingsSubRouteNavItemProps) => {
+  const devModeEnabled = useSelector(selectDevConfigEnabled);
   const [open, setOpen] = React.useState(false);
   const handleClick = () => {
     setOpen(!open);
@@ -51,8 +54,9 @@ const SettingsSubRouteNavItem = ({ subRoute, level, onItemSelected }: SettingsSu
       </ListItemButton>
       <Collapse in={open} timeout="auto" unmountOnExit>
         <List component="div" disablePadding>
-          {subRoute.routes.map((route) =>
-            isSettingsRoute(route) ? (
+          {subRoute.routes.map((route) => {
+            if (route.devOnly && !devModeEnabled) return null;
+            return isSettingsRoute(route) ? (
               <SettingsRouteNavItem
                 route={route}
                 level={level}
@@ -61,8 +65,8 @@ const SettingsSubRouteNavItem = ({ subRoute, level, onItemSelected }: SettingsSu
               />
             ) : (
               <SettingsSubRouteNavItem subRoute={route} level={level + 1} />
-            )
-          )}
+            );
+          })}
         </List>
       </Collapse>
     </Box>

@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="3 2 32 32" width="24" height="24"
+  xmlns:v="https://vecta.io/nano">
+  <g filter="url(#A)">
+    <rect x="3" y="2" width="32" height="32" rx="8" />
+    <path
+      d="M18.105 26h-6.493c-.217 0-.326-.261-.173-.414l4.182-4.183c.046-.046.109-.072.173-.072h2.36c1.824 0 3.368-1.419 3.423-3.23.056-1.883-1.469-3.432-3.351-3.432h-2.529v3.097c0 .134-.11.243-.244.243h-4.209c-.134 0-.244-.109-.244-.243v-7.524c0-.133.11-.243.244-.243h6.983c4.48 0 8.118 3.656 8.05 8.124C26.209 22.514 22.523 26 18.105 26z"
+      fill="#ffffff" />
+  </g>
+  <defs>
+    <filter id="A" x="0" y="0" width="38" height="38" filterUnits="userSpaceOnUse"
+      color-interpolation-filters="sRGB">
+      <feFlood flood-opacity="0" result="A" />
+      <feColorMatrix in="SourceAlpha" values="0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 127 0" />
+      <feOffset dy="1" />
+      <feGaussianBlur stdDeviation="1" />
+      <feColorMatrix values="0 0 0 0 0.14902 0 0 0 0 0.172549 0 0 0 0 0.203922 0 0 0 0.06 0" />
+      <feBlend in2="A" result="C" />
+      <feColorMatrix in="SourceAlpha" values="0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 127 0" />
+      <feOffset dy="1" />
+      <feGaussianBlur stdDeviation="1.5" />
+      <feColorMatrix values="0 0 0 0 0.14902 0 0 0 0 0.172549 0 0 0 0 0.203922 0 0 0 0.1 0" />
+      <feBlend in2="C" />
+      <feBlend in="SourceGraphic" />
+    </filter>
+  </defs>
+</svg>

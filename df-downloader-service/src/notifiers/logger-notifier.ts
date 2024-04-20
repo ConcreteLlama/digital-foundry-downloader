@@ -1,7 +1,7 @@
 import { DfContentInfo, DfNotificationType, DownloadProgressInfo, MediaInfo } from "df-downloader-common";
 import { DfNotificationConsumer } from "./notification-consumer.js";
 import { LogLevel, logger } from "df-downloader-common";
-import { downloadProgressToString } from "../utils/downloader.js";
+import { downloadProgressToString } from "../tasks/download-task.js";
 
 export class LoggerDfNotifier extends DfNotificationConsumer {
   constructor(private logLevel: LogLevel, ...subscribedNotifications: DfNotificationType[]) {
