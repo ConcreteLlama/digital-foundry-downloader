@@ -5,18 +5,19 @@ this tool will still be able to get info about available content but it will not
 
 _NOTE - This is a personal project that I developed for my own use and has been consistently working for me for some time. I thought I'd put it out there as I found it so useful. I don't get much time to actually work on it but try to keep it updated if it breaks or doesn't work quite as expected._
 
-If you just want to get up and running, check out the [Standalone (no docker)](#standalone-no-docker-instructions) instructions.
+If you just want to get up and running, check out the [Standalone (no docker)](#standalone-no-docker-instructions) instructions or go to the [concretellama/digital-foundry-downloader dockerhub page](https://hub.docker.com/repository/docker/concretellama/digital-foundry-downloader) to run in a container.
 
 # Features
 
 - Downloads new Digital Foundry videos when available
 - Tags downloaded media with title, synopsis, date and tags (as genre tags)
 - Has a download queue to limit the number of simultaneous downloads
+- Can force start downloads outside of the limit, reorder downloads and pause/resume them
 - If a download fails, it will attempt to continue from the point it failed (e.g. if 50% through will continue from 50%)
 - Can send pushbullet notifications when various events occur
 - Stores download history in a very simple "DB" using lowdb (so basically it just writes to a JSON file) so it doesn't keep redownloading the same content on restart.
-- Ability to automatically generate subtitles for videos using Deepgram (experimental).
-- Has a web UI to see available content, monitor downloads and configure
+- Ability to automatically generate subtitles for videos - either extracted from YouTube or generated with Deepgram or Google STT (Google STT implementation is quite slow due to using streaming recognize).
+- Has a web UI to see available content, manage downloads, configure etc.
 
 # DF Session ID
 
@@ -98,7 +99,9 @@ The service will start. You can access the web UI at `http://127.0.0.1:44556` (u
 
 ## Docker instructions
 
-### Setup
+Note: If you're just planning on running this rather than developing it, please go to the [concretellama/digital-foundry-downloader dockerhub page](https://hub.docker.com/repository/docker/concretellama/digital-foundry-downloader)
+
+### Setup (Devs)
 
 If you have docker installed, you can run
 
@@ -114,17 +117,13 @@ If you have docker ready to go then you can easily run this by checking out the 
 
 ```
 docker run -d \
-  --env WORK_DIR="//working_dir" \
-  --env DESTINATION_DIR="//destination_dir" \
-  --env CONFIG_DIR="//config" \
-  --env DB_DIR="//db" \
-  --env PUBLIC_ADDRESS=http://127.0.0.1:44556 \
+  --env PUBLIC_ADDRESS=http://localhost:44556 \
   -v C:/Users/concretellama/Downloads:/working_dir \
   -v C:/Users/concretellama/Videos:/destination_dir \
   -v C:/Users/concretellama/df-downloader/config:/config \
   -v C:/Users/concretellama/df-downloader/db:/db \
   -p 44556:44556 \
-  docker.io/concretellama/df-downloader-node
+  concretellama/df-downloader-node:latest
 ```
 
 I've also supplied a bash script to build and deploy the container to a supplied registry. I have this setup to go to a private registry on my local network.
@@ -149,10 +148,6 @@ In the case of Unraid, that file will not persist on restart.
 
 ## Environment variables
 
-### CONFIG_DIR
+### PUBLIC_ADDRESS
 
-Location of the config.yaml. Defaults to config/config.yaml
-
-### DB_DIR
-
-Location of the db.json. Defaults to db/db.json.
+This tells the backend service what the public address is for CORS purposes - this should match the address you use to access the web UI in your browser.
