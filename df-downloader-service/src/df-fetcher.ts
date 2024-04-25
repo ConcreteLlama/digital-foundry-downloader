@@ -13,8 +13,8 @@ import htmlparser2 from "htmlparser2";
 import { configService } from "./config/config.js";
 import { sanitizeContentName } from "./utils/df-utils.js";
 import { getBody, getBodyOfChild } from "./utils/dom-utils.js";
-import { extractYoutubeVideoId } from "./utils/youtube.js";
 import { extractFilenameFromUrl } from "./utils/file-utils.js";
+import { extractYoutubeVideoId } from "./utils/youtube.js";
 
 type PageMeta = {
   publishedDate: Date;
@@ -194,17 +194,17 @@ export async function fetchArchivePageContentList(page: number = 1) {
     return [];
   }
   const dom = htmlparser2.parseDocument(response.body);
-  const contentList = CSSSelect.selectAll(".archive_list > .summary_list li", dom);
+  const contentList = CSSSelect.selectAll(".archive__items > .archive__item", dom);
   return contentList.reduce((toReturn, current) => {
-    const summaryElement = CSSSelect.selectOne(".summary a", current);
-    if (!(summaryElement instanceof Element)) {
-      logger.log("verbose", `No summary link element, skipping`);
+    const archiveTitleLink = CSSSelect.selectOne(".archive__title a", current);
+    if (!(archiveTitleLink instanceof Element)) {
+      logger.log("verbose", `No archive title link element, skipping`);
       return toReturn;
     }
-    const thumbElement = CSSSelect.selectOne(".thumbnail > img", current);
+    const thumbElement = CSSSelect.selectOne(".archive__thumbnail > .thumbnail > img", current);
     const thumbnail = thumbElement instanceof Element ? thumbElement.attribs.src : "";
-    const title = getBodyOfChild(summaryElement);
-    const { href } = summaryElement.attribs;
+    const title = getBodyOfChild(archiveTitleLink);
+    const { href } = archiveTitleLink.attribs;
     if (!href || !title) {
       logger.log("verbose", `Skipping - href is ${href} and title is ${title}`);
       return toReturn;
