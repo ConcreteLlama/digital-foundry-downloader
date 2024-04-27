@@ -1,7 +1,8 @@
 import { Grid, GridProps, useMediaQuery } from "@mui/material";
-import { bytesToHumanReadable, calculateTimeRemainingSeconds } from "df-downloader-common";
+import { bytesToHumanReadable, calculateTimeRemainingSeconds, capitalizeFirstLetter } from "df-downloader-common";
 import prettyMilliseconds from "pretty-ms";
 import { useSelector } from "react-redux";
+import { Fragment } from "react/jsx-runtime";
 import {
   selectDownoadingProgressField,
   selectTaskState,
@@ -10,7 +11,6 @@ import {
 import { theme } from "../../../themes/theme.ts";
 import { EllipsisTooltipText } from "../../general/ellipsis-tooltip-text.component.tsx";
 import { TaskControls } from "../task-controls.component.tsx";
-import { Fragment } from "react/jsx-runtime";
 
 const progressBarColours = {
   running: {
@@ -196,7 +196,9 @@ const DownloadStatusDescription = ({ pipelineId, stepId }: DownloadTaskInfoProps
   const pauseTrigger = useSelector(selectTaskStatusField(pipelineId, stepId, "pauseTrigger"));
 
   const attemptInfo = taskState === "awaiting_retry" ? ` (Attempt ${attempt})` : "";
-  const pauseInfo = taskState === "paused" && pauseTrigger ? ` (${pauseTrigger.toUpperCase()})` : "";
-  const value = `${taskState?.toUpperCase()}${attemptInfo}${pauseInfo}${message ? `: ${message}` : ""}`;
+  const pauseInfo = taskState === "paused" && pauseTrigger ? ` (${capitalizeFirstLetter(pauseTrigger)})` : "";
+  const value = `${capitalizeFirstLetter(taskState || "").replace("_", " ")}${attemptInfo}${pauseInfo}${
+    message ? `: ${message}` : ""
+  }`;
   return <EllipsisTooltipText text={value} />;
 };

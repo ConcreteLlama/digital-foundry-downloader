@@ -39,8 +39,12 @@ export class DownloadTask extends Task<SuccessDownloadResult, DownloadStatus, Do
     switch (state) {
       case "idle":
         return "idle";
+      case "pausing":
+        return "pausing";
       case "paused":
         return "paused";
+      case "cancelling":
+        return "cancelling";
       case "cancelled":
         return "cancelled";
       case "failed":

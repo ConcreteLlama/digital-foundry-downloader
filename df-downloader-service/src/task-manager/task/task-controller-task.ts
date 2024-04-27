@@ -279,6 +279,10 @@ export class TaskControllerTask<RESULT, CONTROLS_CONTEXT, STATUS_DETAIL = undefi
         return "success";
       case "awaiting_retry":
         return "awaiting_retry";
+      case "pausing":
+        return "pausing";
+      case "cancelling":
+        return "cancelling";
       default:
         return "running";
     }

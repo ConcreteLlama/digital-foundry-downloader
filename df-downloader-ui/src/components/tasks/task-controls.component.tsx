@@ -1,5 +1,4 @@
 import ClearIcon from "@mui/icons-material/Clear.js";
-import { ResumeIcon } from "../../icons/resume-icon.component.tsx";
 import PauseButtonIcon from "@mui/icons-material/Pause";
 import StartButtonIcon from "@mui/icons-material/PlayArrow";
 import StopButton from "@mui/icons-material/Stop";
@@ -8,6 +7,7 @@ import { ControlPipelineRequest, TaskPipelineAction } from "df-downloader-common
 import { Fragment, useState } from "react";
 import { useSelector } from "react-redux";
 import { API_URL } from "../../config";
+import { ResumeIcon } from "../../icons/resume-icon.component.tsx";
 import {
   selectBasicTaskField,
   selectCurrentStep,
@@ -35,15 +35,17 @@ export const TaskControls = ({ pipelineId }: TaskControlsProps) => {
   const capabilities = useSelector(selectBasicTaskField(pipelineId, currentStep || "", "capabilities"));
   const isComplete = useSelector(selectIsComplete(pipelineId));
   const pauseTrigger = useSelector(selectTaskStatusField(pipelineId, currentStep || "", "pauseTrigger"));
+  const isPausingOrCancelling = taskState === "pausing" || taskState === "cancelling";
+  const buttonsDisabled = isComplete || isPausingOrCancelling;
   const startButton =
     pauseTrigger === "auto" || taskState === "idle" ? (
-      <ForceStartButton pipelineId={pipelineId} disabled={isComplete} />
+      <ForceStartButton pipelineId={pipelineId} disabled={buttonsDisabled} />
     ) : taskState === "running" ? (
-      <PauseButton pipelineId={pipelineId} disabled={isComplete} />
+      <PauseButton pipelineId={pipelineId} disabled={buttonsDisabled} />
     ) : (
-      <ResumeButton pipelineId={pipelineId} disabled={isComplete} />
+      <ResumeButton pipelineId={pipelineId} disabled={buttonsDisabled} />
     );
-  const cancelEnabled = capabilities?.includes("cancel");
+  const cancelEnabled = capabilities?.includes("cancel") && taskState !== "cancelling";
   return (
     <ButtonGroup>
       {isComplete ? (

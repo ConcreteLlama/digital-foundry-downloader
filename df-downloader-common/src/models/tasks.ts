@@ -1,13 +1,23 @@
 import { z } from "zod";
-import { DownloadProgressInfo } from "./download-progress-info.js";
-import { DfContentInfo } from "./df-content-info.js";
 import { MediaType } from "../config/df-config.js";
 import { mapFilterEmpty } from "../utils/general.js";
+import { DfContentInfo } from "./df-content-info.js";
+import { DownloadProgressInfo } from "./download-progress-info.js";
 
 export const PipelineResultStatus = z.enum(["success", "failed", "cancelled"]);
 export type PipelineResultStatus = z.infer<typeof PipelineResultStatus>;
 
-export const TaskState = z.enum(["idle", "awaiting_retry", "running", "paused", "success", "failed", "cancelled"]);
+export const TaskState = z.enum([
+  "idle",
+  "awaiting_retry",
+  "running",
+  "pausing",
+  "paused",
+  "success",
+  "failed",
+  "cancelling",
+  "cancelled",
+]);
 export type TaskState = z.infer<typeof TaskState>;
 
 export const DfTaskType = z.enum(["download", "subtitles", "inject_metadata", "move_file"]);

@@ -40,7 +40,17 @@ export type InferTaskTaskResult<TASK> = TaskResult<TASK extends Task<infer RESUL
 export type InferTaskResult<TASK> = TASK extends Task<infer RESULT, any, any> ? RESULT : never;
 export type InferTaskStatusDetail<TASK> = TASK extends Task<any, infer STATUS_DETAIL, any> ? STATUS_DETAIL : never;
 
-export const taskStates = ["idle", "awaiting_retry", "running", "paused", "cancelled", "failed", "success"] as const;
+export const taskStates = [
+  "idle",
+  "awaiting_retry",
+  "running",
+  "pausing",
+  "paused",
+  "cancelling",
+  "cancelled",
+  "failed",
+  "success",
+] as const;
 export type TaskState = (typeof taskStates)[number];
 
 export type PauseTrigger = "manual" | "auto";
