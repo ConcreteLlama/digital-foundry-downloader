@@ -1,7 +1,6 @@
-import { got } from "got";
-import { DfNotificationConsumer } from "./notification-consumer.js";
-import { DfContentInfo, DownloadProgressInfo, MediaInfo, DfNotificationType, logger } from "df-downloader-common";
+import { DfContentInfo, DfNotificationType, DownloadProgressInfo, MediaInfo, logger } from "df-downloader-common";
 import { PushbulletNotificationsConfig } from "df-downloader-common/config/notifications-config";
+import { DfNotificationConsumer } from "./notification-consumer.js";
 
 export class PushBulletNotifier extends DfNotificationConsumer {
   static fromConfig(config: PushbulletNotificationsConfig) {
@@ -13,17 +12,22 @@ export class PushBulletNotifier extends DfNotificationConsumer {
   }
 
   sendPush(dfContentName: string, title: string, body: string, addToMap: boolean = true) {
-    got
-      .post("https://api.pushbullet.com/v2/pushes", {
-        headers: {
-          "Access-Token": this.apiKey,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          title,
-          body,
-          type: "note",
-        }),
+    fetch("https://api.pushbullet.com/v2/pushes", {
+      method: "POST",
+      headers: {
+        "Access-Token": this.apiKey,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        title,
+        body,
+        type: "note",
+      }),
+    })
+      .then((resonse) => {
+        if (!resonse.ok) {
+          logger.log("error", `Error sending pushbullet notification: ${resonse.statusText}`);
+        }
       })
       .catch((e) => {
         logger.log("error", `Error sending pushbullet notification: ${e}`);

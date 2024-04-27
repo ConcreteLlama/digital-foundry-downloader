@@ -8,7 +8,6 @@ import {
   logger,
 } from "df-downloader-common";
 import { Document, Element } from "domhandler";
-import got, { HTTPError } from "got";
 import htmlparser2 from "htmlparser2";
 import { configService } from "./config/config.js";
 import { sanitizeContentName } from "./utils/df-utils.js";
@@ -111,12 +110,15 @@ export const makeDfDownloadParams = (dfContent: DfContentInfo, mediaInfo: MediaI
 };
 
 export async function fetchFeedContentList() {
-  const response = await got.get(`${dfBaseUrl}/feed`, {
+  const response = await fetch(`${dfBaseUrl}/feed`, {
     headers: {
       ...makeAuthHeaders(),
     },
   });
-  const feed = htmlparser2.parseFeed(response.body);
+  if (!response.ok) {
+    throw new Error(`Failed to fetch feed: ${response.statusText}`);
+  }
+  const feed = htmlparser2.parseFeed(await response.text());
   if (!feed) {
     return [];
   }
@@ -176,24 +178,21 @@ export async function fetchArchivePageContentList(page: number = 1) {
 
   let response;
   try {
-    response = await got.get(archivePageUrl, {
+    response = await fetch(archivePageUrl, {
       headers: {
         ...makeAuthHeaders(),
       },
     });
   } catch (e) {
-    if (e instanceof HTTPError) {
-      if (e.response.statusCode === 404) {
-        logger.log("info", `No archive content on page ${page} - must have reached end of content list`);
-      } else {
-        logger.log("error", "Unexpected HTTP error when fetching archive page content list", e);
-      }
-      return [];
-    }
-    logger.log("error", "Unexpected error when fetching archive page content list", e);
+    logger.log("error", "Unexpected HTTP error when fetching archive page content list", e);
     return [];
   }
-  const dom = htmlparser2.parseDocument(response.body);
+  if (!response.ok) {
+    logger.log("error", `Failed to fetch archive page ${page}: ${response.statusText}`);
+    return [];
+  }
+  const responseText = await response.text();
+  const dom = htmlparser2.parseDocument(responseText);
   const contentList = CSSSelect.selectAll(".archive__items > .archive__item", dom);
   return contentList.reduce((toReturn, current) => {
     const archiveTitleLink = CSSSelect.selectOne(".archive__title a", current);
@@ -223,12 +222,15 @@ export async function fetchArchivePageContentList(page: number = 1) {
 export async function getMediaInfo(name: string): Promise<DfContentInfo> {
   logger.log("debug", "Getting info for media", name);
   const dfUrl = makeDfVideoUrl(name);
-  const response = await got.get(dfUrl, {
+  const response = await fetch(dfUrl, {
     headers: {
       ...makeAuthHeaders(),
     },
   });
-  const dom = htmlparser2.parseDocument(response.body);
+  if (!response.ok) {
+    throw new Error(`Failed to fetch media info: ${response.statusText}`);
+  }
+  const dom = htmlparser2.parseDocument(await response.text());
   const metaElements = CSSSelect.selectAll("meta", dom);
   const meta = extractMeta(metaElements.filter((element) => element instanceof Element) as Element[]);
   const description =
@@ -287,12 +289,15 @@ export const getMediaUrl = async (name: string, desiredMediaType: string) => {
     return `${downloadUrlOverride}/${name}.mp4`;
   }
   const dfUrl = makeDfVideoUrl(name);
-  const response = await got.get(dfUrl, {
+  const response = await fetch(dfUrl, {
     headers: {
       ...makeAuthHeaders(),
     },
   });
-  const dom = htmlparser2.parseDocument(response.body);
+  if (!response.ok) {
+    throw new Error(`Failed to fetch media info: ${response.statusText}`);
+  }
+  const dom = htmlparser2.parseDocument(await response.text());
   const videoInfoElements = CSSSelect.selectAll(".article_body .video_data_file", dom);
   for (const videoInfoElement of videoInfoElements) {
     const videoType = getBody(".name", videoInfoElement);
@@ -310,12 +315,15 @@ export const getMediaUrl = async (name: string, desiredMediaType: string) => {
 };
 
 export async function getDfUserInfo(sessionIdOverride?: string) {
-  const response = await got.get(dfBaseUrl, {
+  const response = await fetch(dfBaseUrl, {
     headers: {
       ...makeAuthHeaders(sessionIdOverride),
     },
   });
-  const dom = htmlparser2.parseDocument(response.body);
+  if (!response.ok) {
+    throw new Error(`Failed to fetch user info: ${response.statusText}`);
+  }
+  const dom = htmlparser2.parseDocument(await response.text());
   const userInfo = extractDfUserInfo(dom);
   return userInfo;
 }

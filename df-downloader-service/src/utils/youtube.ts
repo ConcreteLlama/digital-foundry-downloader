@@ -1,10 +1,9 @@
-import got from "got";
 import * as CSSSelect from "css-select";
-import * as htmlparser2 from "htmlparser2";
-import { Element } from "domhandler";
-import { getBodyOfChild } from "./dom-utils.js";
 import { transformFirstMatch } from "df-downloader-common";
+import { Element } from "domhandler";
+import * as htmlparser2 from "htmlparser2";
 import { generateSrt, secondsToSrtTimestamp } from "../media-utils/subtitles/srt-utils.js";
+import { getBodyOfChild } from "./dom-utils.js";
 
 export const extractYoutubeVideoId = (url: string) => {
   const match = url.match(
@@ -35,8 +34,12 @@ type CaptionTrack = {
 };
 
 export const fetchSubs = async (videoId: string, language: string) => {
-  const response = await got.get(`https://www.youtube.com/watch?v=${videoId}`);
-  const dom = htmlparser2.parseDocument(response.body);
+  const response = await fetch(`https://www.youtube.com/watch?v=${videoId}`);
+  if (!response.ok) {
+    throw new Error(`Failed to fetch video page: ${response.statusText}`);
+  }
+  const responseText = await response.text();
+  const dom = htmlparser2.parseDocument(responseText);
   const scriptTags = CSSSelect.selectAll("script", dom);
   const scriptJson = transformFirstMatch(scriptTags, (scriptTag) => {
     const scriptBody = getBodyOfChild(scriptTag);
@@ -62,8 +65,11 @@ export const fetchSubs = async (videoId: string, language: string) => {
     throw new Error(`No track found for language ${language}`);
   }
   // Now fetch the actual captions
-  const captionsResponse = await got.get(trackUrl);
-  return captionsResponse.body;
+  const captionsResponse = await fetch(trackUrl);
+  if (!captionsResponse.ok) {
+    throw new Error(`Failed to fetch captions: ${captionsResponse.statusText}`);
+  }
+  return await captionsResponse.text();
 };
 
 export type YoutubeSubtitleLine = {
