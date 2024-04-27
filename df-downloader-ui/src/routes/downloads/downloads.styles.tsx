@@ -1,6 +1,6 @@
-import styled from "@emotion/styled";
+import { styled } from "@mui/material";
 
-export const DownloadsPageContainer = styled.div`
+export const DownloadsPageContainer = styled("div")`
   display: flex;
   flex-direction: column;
   width: 100%;
