@@ -98,6 +98,9 @@ export class DownloadTask extends Task<SuccessDownloadResult, DownloadStatus, Do
       };
     }
   }
+  getStatusMessage(): string {
+    return this.download.getStatusMessage();
+  }
   async awaitResult(): Promise<TaskResult<SuccessDownloadResult>> {
     const result = await this.download.awaitResult();
     return this.makeResult(result);

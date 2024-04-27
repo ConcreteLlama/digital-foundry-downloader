@@ -74,8 +74,13 @@ export const createDownloadTaskPipeline = (opts: DownloadTaskPipelineOpts) => {
         const config = configService.config;
         const subtitlesConfig = config.subtitles;
         if (subtitlesConfig?.autoGenerateSubs) {
-          const subtitleGenerators = serviceLocator.getSubtitleGenerators(subtitlesConfig.servicePriorities);
-          const subtitleTask = SubtitlesTaskBuilder(subtitleGenerators, dfContentInfo, downloadLocation, "en");
+          const subtitleGenerator = serviceLocator.getSubtitleGenerators(subtitlesConfig.servicePriorities);
+          const subtitleTask = SubtitlesTaskBuilder({
+            subtitleGenerators: subtitleGenerator,
+            dfContentInfo: dfContentInfo,
+            filePath: downloadLocation,
+            language: "en",
+          });
           return subtitleTask;
         } else {
           return null;

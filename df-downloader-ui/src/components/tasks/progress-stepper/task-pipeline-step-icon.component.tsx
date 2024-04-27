@@ -3,8 +3,8 @@ import DownloadIcon from "@mui/icons-material/Download";
 import MoveIcon from "@mui/icons-material/DriveFileMove";
 import SubtitlesIcon from "@mui/icons-material/Subtitles";
 import { StepIconProps, Tooltip } from "@mui/material";
-import { TaskState } from "df-downloader-common";
 import { styled } from "@mui/system";
+import { TaskState } from "df-downloader-common";
 
 const scale = 1.25;
 
@@ -23,11 +23,6 @@ const ActiveIcon = styled("div")({
   },
 });
 
-export type TaskPipelineStepIconProps = {
-  stepName: string;
-  taskState?: TaskState;
-} & StepIconProps;
-
 const getIconComponent = (stepName: string) => {
   switch (stepName) {
     case "Download":
@@ -43,7 +38,13 @@ const getIconComponent = (stepName: string) => {
   }
 };
 
-export const TaskPipelineStepIcon = ({ stepName, active, taskState }: TaskPipelineStepIconProps) => {
+export type TaskPipelineStepIconProps = {
+  stepName: string;
+  stepStatusMessage?: string;
+  taskState?: TaskState;
+} & StepIconProps;
+
+export const TaskPipelineStepIcon = ({ stepName, stepStatusMessage, active, taskState }: TaskPipelineStepIconProps) => {
   const IconComponent = getIconComponent(stepName);
   const iconColor =
     taskState === "failed"
@@ -55,7 +56,7 @@ export const TaskPipelineStepIcon = ({ stepName, active, taskState }: TaskPipeli
       : active
       ? "primary"
       : "disabled";
-
-  const tooltipIcon = <Tooltip title={stepName}>{<IconComponent sx={{ color: iconColor }} />}</Tooltip>;
+  const tooltipTitle = `${stepName}${stepStatusMessage ? ` - ${stepStatusMessage}` : ""}`;
+  const tooltipIcon = <Tooltip title={tooltipTitle}>{<IconComponent sx={{ color: iconColor }} />}</Tooltip>;
   return active ? <ActiveIcon>{tooltipIcon}</ActiveIcon> : tooltipIcon;
 };

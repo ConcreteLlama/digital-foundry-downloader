@@ -26,8 +26,13 @@ export const createSubtitlesTaskPipeline = (opts: SubtitlesTaskPipelineCreatorOp
     .next({
       stepName: "Fetch Subtitles",
       taskCreator: ({ context }) => {
-        const { dfContentInfo, fileLocation, language, subtitleGenerators } = context;
-        return SubtitlesTaskBuilder(subtitleGenerators, dfContentInfo, fileLocation, language);
+        const { dfContentInfo: contentInfo, fileLocation, language, subtitleGenerators: subtitleGenerator } = context;
+        return SubtitlesTaskBuilder({
+          subtitleGenerators: subtitleGenerator,
+          dfContentInfo: contentInfo,
+          filePath: fileLocation,
+          language,
+        });
       },
       taskManager: subtitlesTaskManager,
     })

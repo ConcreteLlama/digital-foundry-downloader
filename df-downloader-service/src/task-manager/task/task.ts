@@ -144,10 +144,7 @@ export abstract class Task<
     return this.stateToTaskState(this.getInternalState());
   }
 
-  getStatusMessage() {
-    const status = this.getStatus() as any;
-    return status?.message;
-  }
+  abstract getStatusMessage(): string;
 
   abstract stateToTaskState(state: STATE_TYPE): TaskState;
 

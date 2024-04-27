@@ -1,10 +1,10 @@
 import { bytesToHumanReadable } from "df-downloader-common";
 import { CachedEventEmitter } from "../../utils/event-emitter.js";
+import { DownloadResult } from "./download-result.js";
 import { DownloadContext } from "./fsm/download-context.js";
-import { DownloadResult, isSuccessDownloadResult } from "./download-result.js";
-import { DownloadOptions, DownloadStatus } from "./types.js";
 import { DownloadFSM } from "./fsm/downloader-fsm.js";
 import { DownloadStates } from "./fsm/types.js";
+import { DownloadOptions, DownloadStatus } from "./types.js";
 
 type DownloadEventMap = {
   stateChanged: DownloadStates;
@@ -82,5 +82,9 @@ export class Download extends CachedEventEmitter<DownloadEventMap> {
       ...this.context.getStatus(),
       state: this.fsm.currentState,
     };
+  }
+  getStatusMessage(): string {
+    const contextStatus = this.context.getStatus();
+    return `State: ${this.getState()}, ${contextStatus.percentComplete.toFixed(2)}% complete`;
   }
 }

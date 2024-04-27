@@ -37,6 +37,7 @@ type TaskControlsNoPause<RESULT, CONTEXT, STATUS_DETAIL = undefined> = {
    * @returns A promise that resolves to the result of the task
    */
   start: (context: CONTEXT) => Promise<TaskResult<RESULT> | RESULT>;
+  getStatusMessage?: (currentState: { context: CONTEXT; state: TaskControllerTaskState }) => string;
   cancel?: (context: CONTEXT) => Promise<void>;
   cleanup?: (context: CONTEXT) => Promise<void>;
 } & (STATUS_DETAIL extends undefined
@@ -191,11 +192,15 @@ type TaskControllerFSM<RESULT, CONTROLS_CONTEXT, STATUS_DETAIL = undefined> = FS
 >;
 
 export const TaskControllerTaskBuilder = <RESULT, CONTROLS_CONTEXT, STATUS_DETAIL = undefined>(
-  controls: TaskControls<RESULT, CONTROLS_CONTEXT, STATUS_DETAIL>
+  controls: TaskControls<RESULT, CONTROLS_CONTEXT, STATUS_DETAIL>,
+  defaultOpts: Partial<TaskOpts> = {}
 ) => {
   const fsmBuilder = TaskControllerFSMBuilder(controls);
   return (controlsContext: CONTROLS_CONTEXT, opts: Partial<TaskOpts> = {}) => {
-    return new TaskControllerTask<RESULT, CONTROLS_CONTEXT, STATUS_DETAIL>(controls, controlsContext, fsmBuilder, opts);
+    return new TaskControllerTask<RESULT, CONTROLS_CONTEXT, STATUS_DETAIL>(controls, controlsContext, fsmBuilder, {
+      ...defaultOpts,
+      ...opts,
+    });
   };
 };
 
@@ -304,5 +309,14 @@ export class TaskControllerTask<RESULT, CONTROLS_CONTEXT, STATUS_DETAIL = undefi
 
   prepareForRetry() {
     return this.fsm.dispatch("prepare_for_retry");
+  }
+
+  getStatusMessage(): string {
+    return this.controls.getStatusMessage
+      ? this.controls.getStatusMessage({
+          context: this.controlsContext,
+          state: this.stateToTaskState(this.fsm.currentState),
+        })
+      : `In state: ${this.getTaskState()}`;
   }
 }
