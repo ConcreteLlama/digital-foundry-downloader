@@ -106,7 +106,7 @@ Note: If you're just planning on running this rather than developing it, please 
 If you have docker installed, you can run
 
 ```
-docker build . -t  concretellama/df-downloader-node
+docker build . -t  concretellama/digital-foundry-downloader
 ```
 
 ### Confiuguration
@@ -123,7 +123,7 @@ docker run -d \
   -v C:/Users/concretellama/df-downloader/config:/config \
   -v C:/Users/concretellama/df-downloader/db:/db \
   -p 44556:44556 \
-  concretellama/df-downloader-node:latest
+  concretellama/digital-foundry-downloader:latest
 ```
 
 I've also supplied a bash script to build and deploy the container to a supplied registry. I have this setup to go to a private registry on my local network.
@@ -131,7 +131,7 @@ I've also supplied a bash script to build and deploy the container to a supplied
 Usage:
 
 ```
-./update_container.sh "concretellama/df-downloader-node" "127.0.0.1:5000"
+./update_container.sh "concretellama/digital-foundry-downloader" "127.0.0.1:5000"
 ```
 
 If like me you run this in a container on a server and you're using an insecure local registry, don't forget to add your local registry to the list of insecure registries in your docker daemon config json (/etc/docker/daemon.json).

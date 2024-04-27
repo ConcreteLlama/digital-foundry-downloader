@@ -5,4 +5,4 @@ docker run -d \
   -v C:/Users/concretellama/df-downloader/config:/config \
   -v C:/Users/concretellama/df-downloader/db:/db \
   -p 44556:44556 \
-  concretellama/df-downloader-node:latest
+  concretellama/digital-foundry-downloader:latest
