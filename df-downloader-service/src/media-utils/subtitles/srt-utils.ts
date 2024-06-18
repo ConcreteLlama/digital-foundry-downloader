@@ -31,7 +31,7 @@ export const millisecondsToSrtTimestamp = (ms: number): SrtTimestamp => {
     hours,
     minutes,
     seconds,
-    milliseconds: ms,
+    milliseconds: Math.floor(ms),
   };
 };
 

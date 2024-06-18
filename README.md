@@ -3,7 +3,7 @@
 DF Downloader is a nodejs/react application designed to download the latest Digital Foundry videos when they are available. This will only work in any useful manner if you are a Patreon subscriber. If you are not a subscriber,
 this tool will still be able to get info about available content but it will not be able to download anything.
 
-_NOTE - This is a personal project that I developed for my own use and has been consistently working for me for some time. I thought I'd put it out there as I found it so useful. I don't get much time to actually work on it but try to keep it updated if it breaks or doesn't work quite as expected._
+_NOTE - This is a personal project that I developed for my own use and has been consistently working for me for some time. I thought I'd put it out there as I found it so useful. I don't get much time to actually work on it but try to keep it updated if it breaks or doesn't work quite as expected. Also if you look through the code you may spot some weird, convoluted looking stuff. I sometimes use this to experiment with new ideas (such as playing around with Typescript types)_
 
 If you just want to get up and running, check out the [Standalone (no docker)](#standalone-no-docker-instructions) instructions or go to the [concretellama/digital-foundry-downloader dockerhub page](https://hub.docker.com/repository/docker/concretellama/digital-foundry-downloader) to run in a container.
 
