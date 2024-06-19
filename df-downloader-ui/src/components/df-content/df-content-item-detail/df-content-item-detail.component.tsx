@@ -92,7 +92,10 @@ export const DfContentInfoItemDetail = ({ dfContentName }: DfContentInfoItemDeta
               </Button>
             </Box>
             {pipelineIds.map((pipelineId) => (
-              <PipelineInfoSummaryDetail pipelineId={pipelineId} />
+              <PipelineInfoSummaryDetail
+                key={`cid-pipeline-info-summary-detail${pipelineId}`}
+                pipelineId={pipelineId}
+              />
             ))}
           </Stack>
         )}

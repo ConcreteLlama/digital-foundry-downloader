@@ -19,7 +19,7 @@ export const MediaInfoTable = ({ contentEntry }: MediaInfoListProps) => {
       <TableBody>
         {mediaInfo.map((mediaInfo) => {
           return (
-            <TableRow>
+            <TableRow key={`media-info-table-${contentInfo.name}-${mediaInfo.mediaType}`}>
               <TableCell>{mediaInfo.mediaType}</TableCell>
               <TableCell>{mediaInfo.size}</TableCell>
               <TableCell>{mediaInfo.videoEncoding}</TableCell>

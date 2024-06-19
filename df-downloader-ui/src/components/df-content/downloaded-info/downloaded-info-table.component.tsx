@@ -1,9 +1,9 @@
 import { Table, TableBody, TableCell, TableHead, TableRow } from "@mui/material";
+import { DfContentEntry } from "df-downloader-common";
 import { DfContentDownloadInfo } from "df-downloader-common/models/df-content-download-info";
 import { DownloadedInfoListProps } from "./downloaded-info-list.component.tsx";
-import { SubtitlesInfo } from "./subtitles-info.component.tsx";
 import { DownloadedItemActions } from "./downloaded-item-actions.component.tsx";
-import { DfContentEntry } from "df-downloader-common";
+import { SubtitlesInfo } from "./subtitles-info.component.tsx";
 
 export const DownloadedInfoTable = ({ contentEntry }: DownloadedInfoListProps) => {
   const { downloads } = contentEntry;
@@ -20,7 +20,11 @@ export const DownloadedInfoTable = ({ contentEntry }: DownloadedInfoListProps) =
       </TableHead>
       <TableBody>
         {downloads.map((download) => (
-          <DownloadedInfoTableRow download={download} contentEntry={contentEntry} />
+          <DownloadedInfoTableRow
+            download={download}
+            contentEntry={contentEntry}
+            key={`dl-info-table-row-${contentEntry.name}-download-${download.downloadDate.toString()}`}
+          />
         ))}
       </TableBody>
     </Table>
