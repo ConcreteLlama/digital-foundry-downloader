@@ -8,13 +8,13 @@ import {
   MediaInfo,
   bytesToHumanReadable,
   fileSizeStringToBytes,
-  filterAndMap,
   filterContentInfos,
   getMediaTypeIndex,
   logger,
   transformFirstMatchAsync,
 } from "df-downloader-common";
 import fs from "fs/promises";
+import path from "path";
 import { configService } from "./config/config.js";
 import { DbInitInfo, DfDownloaderOperationalDb, DownloadInfoWithName } from "./db/df-operational-db.js";
 import { DfContentInfoReference, forEachArchivePage, getMediaInfo, makeDfContentUrl } from "./df-fetcher.js";
@@ -25,7 +25,6 @@ import { sanitizeContentName } from "./utils/df-utils.js";
 import { deleteFile, ensureDirectory } from "./utils/file-utils.js";
 import { getMostImportantItem } from "./utils/importance-list.js";
 import { dfFetchWorkerQueue, fileScannerQueue } from "./utils/queue-utils.js";
-import path from "path";
 
 export class DigitalFoundryContentManager {
   private dfUserManager: DfUserManager;
@@ -406,31 +405,50 @@ export class DigitalFoundryContentManager {
       await this.db.addContents(this.dfUserManager.getCurrentTier() || "NONE", newContentInfos);
       for (const content of include) {
         serviceLocator.notifier.newContentDetected(content.title);
-        this.getContent(content, {
-          delay: autoDownloadConfig.downloadDelay,
-        });
+        this.downloadContentIn(content, autoDownloadConfig.downloadDelay);
       }
     } else {
       await this.db.addContents(this.dfUserManager.getCurrentTier() || "NONE", newContentInfos);
     }
   }
 
-  async getMediaInfo(contentName: string) {
-    return await getMediaInfo(contentName);
+  async getUpdateMediaInfo(contentName: string) {
+    logger.log("info", `Getting updated media info for ${contentName}`);
+    const newContentInfo = await getMediaInfo(contentName);
+    if (!newContentInfo) {
+      throw new Error(`Failed to get media info for ${contentName}`);
+    }
+    const updated = await this.db.updateContentInfo(contentName, newContentInfo);
+    return updated;
   }
 
-  async getContent(
+  async downloadContentIn(content: string | DfContentInfo, delay: number): Promise<void> {
+    return new Promise<void>((resolve, reject) => {
+      if (delay) {
+        logger.log(
+          "info",
+          `Queueing download for ${typeof content === "string" ? content : content.name} ${
+            delay && delay >= 0 ? `in ${delay}ms` : "immediately"
+          }`
+        );
+      }
+      setTimeout(() => {
+        this.downloadContent(content)
+          .then(() => resolve())
+          .catch((err) => reject(err));
+      }, delay || 0);
+    });
+  }
+
+  async downloadContent(
     content: string | DfContentInfo,
     {
-      delay,
       mediaType,
     }: {
-      delay?: number;
       mediaType?: string;
     } = {}
   ) {
     const autoDownloadConfig = configService.config.automaticDownloads;
-    const downloadConfig = configService.config.downloads;
     let contentName: string, contentInfoArg: DfContentInfo | undefined;
     if (typeof content === "string") {
       contentName = sanitizeContentName(content);
@@ -438,7 +456,15 @@ export class DigitalFoundryContentManager {
       contentName = content.name;
       contentInfoArg = content;
     }
-    const dfContentInfo = contentInfoArg || (await this.getMediaInfo(contentName));
+    const updatedContentInfo = await this.getUpdateMediaInfo(contentName).catch((e) => {
+      logger.log(
+        "error",
+        `Failed to get updated media info for ${contentName}${
+          contentInfoArg ? " - using existing cached version" : ""
+        }: ${e}`
+      );
+    });
+    const dfContentInfo = updatedContentInfo?.contentInfo || contentInfoArg;
     if (!dfContentInfo) {
       throw new Error(`Unable to find content info for ${contentName}`);
     }
@@ -453,20 +479,12 @@ export class DigitalFoundryContentManager {
     if (dfContentInfo.dataPaywalled) {
       logger.log("info", `Not downloading ${dfContentInfo.name} as data is paywalled; adding to ignore list`);
       this.db.addContents(this.dfUserManager.getCurrentTier() || "NONE", [dfContentInfo]);
-      return;
+      throw new Error(`Content ${dfContentInfo.name} is paywalled`);
     }
-    if (delay) {
-      logger.log(
-        "info",
-        `Queueing download for ${contentName} ${
-          autoDownloadConfig.downloadDelay && autoDownloadConfig.downloadDelay >= 0
-            ? `in ${autoDownloadConfig.downloadDelay}ms`
-            : "immediately"
-        }`
-      );
-    }
-    setTimeout(() => {
-      this.taskManager.downloadContent(dfContentInfo, mediaInfo).on("completed", (pipelineResult) => {
+
+    const pipelineExec = this.taskManager
+      .downloadContent(dfContentInfo, mediaInfo)
+      .on("completed", (pipelineResult) => {
         if (pipelineResult.status === "success") {
           const finalPipelineResult = pipelineResult.pipelineResult;
           const { size, downloadLocation, mediaInfo, subtitles } = finalPipelineResult;
@@ -486,7 +504,11 @@ export class DigitalFoundryContentManager {
           });
         }
       });
-    }, delay || 0);
+    return {
+      contentName: dfContentInfo.name,
+      mediaInfo: mediaInfo,
+      pipelineExec,
+    };
   }
 
   async userTierChanged(newTier?: string) {

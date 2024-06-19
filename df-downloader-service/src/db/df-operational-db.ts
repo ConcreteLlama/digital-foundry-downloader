@@ -1,19 +1,16 @@
-import { log } from "console";
 import {
   DfContentEntry,
-  DfContentEntryUtils,
   DfContentEntryCreate,
   DfContentEntryUpdate,
-  logger,
-  mapFilterEmpty,
-} from "df-downloader-common";
-import {
+  DfContentEntryUtils,
   DfContentInfo,
   DfContentInfoQueryParams,
   DfContentStatus,
   DfContentStatusInfo,
   DfTagInfo,
   DfUserInfo,
+  logger,
+  mapFilterEmpty,
 } from "df-downloader-common";
 import { DfContentDownloadInfo, DfContentSubtitleInfo } from "df-downloader-common/models/df-content-download-info.js";
 
@@ -87,7 +84,18 @@ export abstract class DfDownloaderOperationalDb {
       throw new Error(`Content ${dfContentName} not found`);
     }
     const updated = DfContentEntryUtils.update(existingContent, updates);
-    return this.addOrUpdateEntries(updated);
+    return (await this.addOrUpdateEntries(updated))[0];
+  }
+  async updateContentInfo(dfContentName: string, updates: DfContentInfo) {
+    const existingContent = await this.getContentEntry(dfContentName);
+    if (!existingContent) {
+      throw new Error(`Content ${dfContentName} not found`);
+    }
+    const updated = DfContentEntryUtils.update(existingContent, {
+      name: dfContentName,
+      contentInfo: updates,
+    });
+    return (await this.addOrUpdateEntries(updated))[0];
   }
   addContents(userTier: string | undefined, dfContents: DfContentInfo[]) {
     return this.addOrUpdateEntries(
@@ -102,7 +110,7 @@ export abstract class DfDownloaderOperationalDb {
     );
   }
   protected abstract setContentEntries(contentEntries: DfContentEntry[]): Promise<void>;
-  public async addOrUpdateEntries(...contentInfos: DfContentEntryCreate[]): Promise<void> {
+  public async addOrUpdateEntries(...contentInfos: DfContentEntryCreate[]): Promise<DfContentEntry[]> {
     const existingEntries = await this.getContentEntryList(contentInfos.map((contentInfo) => contentInfo.name));
     const replacementEntries = existingEntries.map((existingEntry, idx) => {
       const contentInfo = contentInfos[idx];
@@ -112,6 +120,7 @@ export abstract class DfDownloaderOperationalDb {
       return DfContentEntryUtils.update(existingEntry, contentInfo);
     });
     await this.setContentEntries(replacementEntries);
+    return replacementEntries;
   }
   public async updateEntries(...contentEntries: DfContentEntryUpdate[]): Promise<DfContentEntry[]> {
     const existingEntries = await this.getContentEntryList(contentEntries.map((contentInfo) => contentInfo.name));

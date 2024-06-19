@@ -1,6 +1,7 @@
-import { AddTaskRequest, ControlPipelineRequest, TaskResponse } from "df-downloader-common";
+import { AddTaskRequest, ControlPipelineRequest, DownloadContentResponse, TaskResponse } from "df-downloader-common";
 import express, { Request, Response } from "express";
 import { DigitalFoundryContentManager } from "../../df-content-manager.js";
+import { makeTaskPipelineInfo } from "../../df-task-manager.js";
 import { sendErrorAsResponse, sendResponse, zodParseHttp } from "../utils/utils.js";
 
 export const makeDownloadsApiRouter = (contentManager: DigitalFoundryContentManager) => {
@@ -40,10 +41,15 @@ export const makeDownloadsApiRouter = (contentManager: DigitalFoundryContentMana
   router.post("/task", async (req: Request, res: Response) => {
     await zodParseHttp(AddTaskRequest, req, res, async (data) => {
       try {
-        const queuedContentInfo = await contentManager.getContent(data.name, {
+        const queuedContentInfo = await contentManager.downloadContent(data.name, {
           mediaType: data.mediaType,
         });
-        sendResponse(res, queuedContentInfo);
+        const response: DownloadContentResponse = {
+          name: queuedContentInfo.contentName,
+          mediaInfo: queuedContentInfo.mediaInfo,
+          pipelineInfo: makeTaskPipelineInfo(queuedContentInfo.pipelineExec).pipelineDetails,
+        };
+        sendResponse(res, response);
       } catch (e) {
         sendErrorAsResponse(res, e, {
           code: 500,

@@ -1,12 +1,12 @@
 import { ActionReducerMapBuilder, Draft, createAction } from "@reduxjs/toolkit";
-import { DfUiError, ensureDfUiError } from "../utils/error";
-import { AppStartListening } from "./listener";
-import { z } from "zod";
-import { fetchJson } from "../utils/fetch";
 import { logger, parseResponseBody } from "df-downloader-common";
+import { DfContentDownloadInfo } from "df-downloader-common/models/df-content-download-info";
 import { isEqual, isFunction } from "lodash";
 import { createSelectorCreator, lruMemoize } from "reselect";
-import { DfContentDownloadInfo } from "df-downloader-common/models/df-content-download-info";
+import { z } from "zod";
+import { DfUiError, ensureDfUiError } from "../utils/error";
+import { fetchJson } from "../utils/fetch";
+import { AppStartListening } from "./listener";
 
 export const createQueryActions = <START_PAYLOAD, SUCCESS_PAYLOAD, ERROR_PAYLOAD_DETAILS = any>(
   queryNamespace: string,
@@ -66,16 +66,16 @@ export function addFetchListener<
           ...requestOpts,
         });
         const result = parseResponseBody(jsonResponse, responseSchema);
-        if (result.data) {
-          const successPayload = opts.generateSuccessPayload(result.data);
-          listenerApi.dispatch(queryActions.success(successPayload));
-        } else {
+        if (result.error) {
           console.error(`Error fetching ${url} - ${result.error}`);
           console.error("Raw payload: ", jsonResponse);
           listenerApi.dispatch(queryActions.failed(ensureDfUiError<ERROR_PAYLOAD_DETAILS>(result.error)));
+        } else {
+          const successPayload = opts.generateSuccessPayload(result.data);
+          listenerApi.dispatch(queryActions.success(successPayload));
         }
       } catch (e) {
-        logger.log("error", `Error fetching ${url} - ${e}`);
+        logger.log("error", `Caught error fetching ${url} - ${e}`);
         logger.log("error", "Raw payload: ", jsonResponse);
         listenerApi.dispatch(queryActions.failed(ensureDfUiError<ERROR_PAYLOAD_DETAILS>(e)));
       }

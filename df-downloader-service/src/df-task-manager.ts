@@ -259,7 +259,7 @@ export class DfTaskManager {
   }
 }
 
-const makeTaskPipelineInfo = (
+export const makeTaskPipelineInfo = (
   taskPipelineExecution: SubtitlesTaskPipelineExecution | DownloadTaskPipelineExecution
 ): TaskPipelineInfo => {
   const { pipelineType, id, startTime, isCompleted } = taskPipelineExecution;

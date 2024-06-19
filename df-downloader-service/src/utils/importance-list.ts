@@ -1,3 +1,7 @@
+type ImportanceOpts = {
+  mustMatch?: boolean;
+};
+
 /**
  * Finds the item in the given array with the highest importance, as determined by a separate list of importance levels.
  *
@@ -10,8 +14,9 @@ export const getMostImportantItem = <IMPORTANCE_LIST_TYPE, ITEM_LIST_TYPE>(
   importanceList: IMPORTANCE_LIST_TYPE,
   items: ITEM_LIST_TYPE[],
   importanceIndexGetter: (importanceList: IMPORTANCE_LIST_TYPE, item: ITEM_LIST_TYPE) => number,
-  mustMatch: boolean = false
+  opts: ImportanceOpts = {}
 ): ITEM_LIST_TYPE | undefined => {
+  const { mustMatch = false } = opts;
   const [mostImportantItem, itemImportanceIndex] = items.reduce(
     ([currentMostImportantItem, currentHighestImportanceIndex], currentItem) => {
       const itemImportanceIndex = importanceIndexGetter(importanceList, currentItem);

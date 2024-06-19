@@ -1,5 +1,4 @@
 import { z, ZodTypeAny } from "zod";
-import { fromZodError } from "zod-validation-error";
 //TODO: This seems messier than it should be
 export const ErrorResponseError = z.object({
   message: z.string(),
@@ -37,17 +36,12 @@ export const parseResponseBody = <T extends ZodTypeAny>(
     };
   }
 
-  if (!responseBody.data) {
-    throw new Error("No response data");
-  }
-
   const successResult = dataSchema.safeParse(responseBody.data);
   if (successResult.success) {
     return {
       data: successResult.data,
     };
   }
-
   throw successResult.error;
 };
 

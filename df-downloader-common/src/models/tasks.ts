@@ -3,6 +3,7 @@ import { MediaType } from "../config/df-config.js";
 import { mapFilterEmpty } from "../utils/general.js";
 import { DfContentInfo } from "./df-content-info.js";
 import { DownloadProgressInfo } from "./download-progress-info.js";
+import { MediaInfo } from "./media-info.js";
 
 export const PipelineResultStatus = z.enum(["success", "failed", "cancelled"]);
 export type PipelineResultStatus = z.infer<typeof PipelineResultStatus>;
@@ -166,6 +167,13 @@ export const AddTaskRequest = z.object({
   mediaType: z.string().optional(),
 });
 export type AddTaskRequest = z.infer<typeof AddTaskRequest>;
+
+export const DownloadContentResponse = z.object({
+  name: z.string(),
+  mediaInfo: MediaInfo,
+  pipelineInfo: TaskPipelineDetails,
+});
+export type DownloadContentResponse = z.infer<typeof DownloadContentResponse>;
 
 const ChangePriorityAction = z.object({
   action: z.literal("change_priority"),
