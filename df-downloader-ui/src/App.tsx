@@ -3,6 +3,7 @@ import { useEffect } from "react";
 import { useSelector } from "react-redux";
 import { Route, Routes } from "react-router-dom";
 import "./App.css";
+import { AppNotReadyPage } from "./AppNotReadyPage.tsx";
 import { AuthPage } from "./components/auth/auth-page.component";
 import { DownloadsPage } from "./routes/downloads/downloads.component";
 import { DfContentPage } from "./routes/home/home.component";
@@ -11,14 +12,13 @@ import { SettingsElement, SettingsPage } from "./routes/settings/settings.compon
 import { SettingsRouteElement, isSettingsRoute, settingsRoutes } from "./routes/settings/settings.routes";
 import { queryCurrentUser } from "./store/auth-user/auth-user.actions";
 import { selectAuthUser } from "./store/auth-user/auth-user.selector";
-import { queryServiceInfo } from "./store/service-info/service-info.actions";
-import { store } from "./store/store";
-import { theme } from "./themes/theme";
+import { queryConfigSection } from "./store/config/config.action.ts";
 import { queryDfUserInfo } from "./store/df-user/df-user.actions";
 import { selectIsLoading } from "./store/general.selector.ts";
+import { queryServiceInfo } from "./store/service-info/service-info.actions";
 import { selectServiceError } from "./store/service-info/service-info.selector.ts";
-import { AppNotReadyPage } from "./AppNotReadyPage.tsx";
-import { queryConfigSection } from "./store/config/config.action.ts";
+import { store } from "./store/store";
+import { theme } from "./themes/theme";
 
 function App() {
   return (
@@ -52,7 +52,13 @@ const makeRoutes = (routes: SettingsRouteElement[]) => {
   const toReturn: React.ReactElement[] = [];
   routes.forEach((route) =>
     isSettingsRoute(route)
-      ? toReturn.push(<Route path={route.path} element={<SettingsElement>{route.element}</SettingsElement>} />)
+      ? toReturn.push(
+          <Route
+            key={`route-settings-${route.path}`}
+            path={route.path}
+            element={<SettingsElement>{route.element}</SettingsElement>}
+          />
+        )
       : toReturn.push(...makeRoutes(route.routes))
   );
   return toReturn;
@@ -78,11 +84,13 @@ const MainApp = () => {
       >
         <Toolbar />
         <Routes>
-          <Route index element={<DfContentPage />} />
-          <Route path="content" element={<DfContentPage />} />
-          <Route path="downloads" element={<DownloadsPage />} />
-          <Route path="auth" element={<AuthPage />} />
-          <Route element={<SettingsPage />}>{routes}</Route>
+          <Route key="route-index" index element={<DfContentPage />} />
+          <Route key="route-content" path="content" element={<DfContentPage />} />
+          <Route key="route-downloads" path="downloads" element={<DownloadsPage />} />
+          <Route key="route-auth" path="auth" element={<AuthPage />} />
+          <Route key="route-settings" element={<SettingsPage />}>
+            {routes}
+          </Route>
         </Routes>
       </Stack>
     </Box>
