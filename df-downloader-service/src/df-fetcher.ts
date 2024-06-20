@@ -54,6 +54,7 @@ function extractMeta(elements: Element[]): PageMeta {
       }
     }
   });
+  toReturn.tags = toReturn.tags.sort((a, b) => a.localeCompare(b));
   return toReturn;
 }
 
