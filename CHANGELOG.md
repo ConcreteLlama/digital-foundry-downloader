@@ -13,6 +13,8 @@
 - Content Metadata
   - Auto-refresh when opening content item
   - Refresh before download and when download is triggered (useful for delayed auto downloads as this could result in better match for desired format)
+- Automatic Downloads
+  - Automatic download is now skipped if the content is already downloading or downloaded (for example if you have download delay of 10 minutes but manually trigger the download before, it will now not perform a second unnecessary download)
 
 ### Bug fixes
 

@@ -2,6 +2,7 @@ import {
   CURRENT_DATA_VERSION,
   DfContentEntry,
   DfContentEntryUpdate,
+  DfContentEntryUtils,
   DfContentInfo,
   DfContentInfoUtils,
   DfContentStatus,
@@ -405,7 +406,9 @@ export class DigitalFoundryContentManager {
       await this.db.addContents(this.dfUserManager.getCurrentTier() || "NONE", newContentInfos);
       for (const content of include) {
         serviceLocator.notifier.newContentDetected(content.title);
-        this.downloadContentIn(content, autoDownloadConfig.downloadDelay);
+        this.downloadContentIn(content, autoDownloadConfig.downloadDelay, {
+          skipIfDownloadingOrDownloaded: true,
+        });
       }
     } else {
       await this.db.addContents(this.dfUserManager.getCurrentTier() || "NONE", newContentInfos);
@@ -422,17 +425,40 @@ export class DigitalFoundryContentManager {
     return updated;
   }
 
-  async downloadContentIn(content: string | DfContentInfo, delay: number): Promise<void> {
+  async downloadContentIn(
+    content: string | DfContentInfo,
+    delay: number,
+    opts: {
+      skipIfDownloadingOrDownloaded?: boolean;
+    } = {}
+  ): Promise<void> {
+    const { skipIfDownloadingOrDownloaded } = opts;
+    const contentName = typeof content === "string" ? content : content.name;
     return new Promise<void>((resolve, reject) => {
       if (delay) {
         logger.log(
           "info",
-          `Queueing download for ${typeof content === "string" ? content : content.name} ${
-            delay && delay >= 0 ? `in ${delay}ms` : "immediately"
-          }`
+          `Queueing download for ${contentName} ${delay && delay >= 0 ? `in ${delay}ms` : "immediately"}`
         );
       }
-      setTimeout(() => {
+      setTimeout(async () => {
+        if (skipIfDownloadingOrDownloaded) {
+          if (this.taskManager.hasPipelineForContent(contentName)) {
+            logger.log("info", `Skipping download for ${contentName} as it is already downloading or downloaded`);
+            return resolve();
+          }
+          const contentEntry = await this.db.getContentEntry(contentName).catch((e) => {
+            logger.log(
+              "error",
+              `Failed to get content entry for ${contentName} when checking if already downloaded: ${e}`
+            );
+            return undefined;
+          });
+          if (contentEntry && DfContentEntryUtils.hasDownload(contentEntry)) {
+            logger.log("info", `Skipping download for ${contentName} as it is already downloaded`);
+            return resolve();
+          }
+        }
         this.downloadContent(content)
           .then(() => resolve())
           .catch((err) => reject(err));
