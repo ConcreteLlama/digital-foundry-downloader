@@ -10,7 +10,7 @@ import { selectQueryPipelineIds } from "../../../store/df-tasks/tasks.selector.t
 import { store } from "../../../store/store.ts";
 import { theme } from "../../../themes/theme.ts";
 import { formatDate } from "../../../utils/date.ts";
-import { YouTubeEmbed } from "../../youtube-embed.tsx";
+import { YouTubeEmbed } from "../../general/youtube-embed.tsx";
 import { DfTagList } from "../df-tag-list.component.tsx";
 import { DownloadedInfoList } from "../downloaded-info/downloaded-info-list.component.tsx";
 import { MediaInfoList } from "../media-info/media-info-list.component.tsx";
