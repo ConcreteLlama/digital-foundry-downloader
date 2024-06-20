@@ -1,7 +1,7 @@
-import Refresh from "@mui/icons-material/Refresh";
-import { Box, Button, IconButton, Stack, Typography, useMediaQuery } from "@mui/material";
+import { Box, Button, Stack, Typography, useMediaQuery } from "@mui/material";
 import { DfContentInfoUtils, secondsToHHMMSS } from "df-downloader-common";
 import { Image } from "mui-image";
+import { useEffect } from "react";
 import { useSelector } from "react-redux";
 import { useDfContentEntry } from "../../../hooks/use-df-content-entry.ts";
 import { refreshDfContentMeta } from "../../../store/df-content/df-content.action.ts";
@@ -23,6 +23,9 @@ export type DfContentInfoItemDetailProps = {
 export const DfContentInfoItemDetail = ({ dfContentName }: DfContentInfoItemDetailProps) => {
   const belowMd = useMediaQuery(theme.breakpoints.down("md"));
   const dfContentEntry = useDfContentEntry(dfContentName);
+  useEffect(() => {
+    store.dispatch(refreshDfContentMeta.start(dfContentName));
+  }, [dfContentName]);
   const downloadingPipelineIds = useSelector(
     selectQueryPipelineIds({
       filter: {
@@ -117,24 +120,6 @@ export const DfContentInfoItemDetail = ({ dfContentName }: DfContentInfoItemDeta
           <MediaInfoList contentEntry={dfContentEntry} />
         </Box>
       </Stack>
-      <Box
-        sx={{
-          display: "flex",
-          justifyContent: "right",
-          alignItems: "center",
-        }}
-      >
-        <Typography variant="caption">Refresh content metadata</Typography>
-        <IconButton
-          size="small"
-          aria-label="Refresh content metadata"
-          onClick={() => {
-            store.dispatch(refreshDfContentMeta.start(dfContentName));
-          }}
-        >
-          <Refresh />
-        </IconButton>
-      </Box>
     </ContentItemDetailContainer>
   ) : (
     <Typography>ERROR</Typography>
