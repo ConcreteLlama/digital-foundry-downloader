@@ -10,6 +10,7 @@ import { selectQueryPipelineIds } from "../../../store/df-tasks/tasks.selector.t
 import { store } from "../../../store/store.ts";
 import { theme } from "../../../themes/theme.ts";
 import { formatDate } from "../../../utils/date.ts";
+import { YouTubeEmbed } from "../../youtube-embed.tsx";
 import { DfTagList } from "../df-tag-list.component.tsx";
 import { DownloadedInfoList } from "../downloaded-info/downloaded-info-list.component.tsx";
 import { MediaInfoList } from "../media-info/media-info-list.component.tsx";
@@ -63,8 +64,15 @@ export const DfContentInfoItemDetail = ({ dfContentName }: DfContentInfoItemDeta
       <Typography variant="h4" align="center">
         {contentInfo.title}
       </Typography>
-      <Box sx={{ display: "flex", justifyContent: "center" }}>
-        <Image src={DfContentInfoUtils.getThumbnailUrl(contentInfo, 1200, 600)} width={belowMd ? "90%" : "70%"}></Image>
+      <Box sx={{ display: "flex", justifyContent: "center", paddingY: belowMd ? "10px" : "30px" }}>
+        {contentInfo.youtubeVideoId ? (
+          <YouTubeEmbed videoId={contentInfo.youtubeVideoId} width={belowMd ? "90%" : "70%"} />
+        ) : (
+          <Image
+            src={DfContentInfoUtils.getThumbnailUrl(contentInfo, 1200, 600)}
+            width={belowMd ? "90%" : "70%"}
+          ></Image>
+        )}
       </Box>
       <DfTagList tags={contentInfo.tags || []} sx={{ alignSelf: "center" }} />
       <Box
@@ -83,7 +91,6 @@ export const DfContentInfoItemDetail = ({ dfContentName }: DfContentInfoItemDeta
           Published on {formatDate(contentInfo.publishedDate)}
         </Typography>{" "}
       </Box>
-
       <Typography>{contentInfo.description}</Typography>
       <Stack spacing={4} sx={{ marginTop: "16px" }}>
         {Boolean(pipelineIds?.length) && (
