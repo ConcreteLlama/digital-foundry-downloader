@@ -46,7 +46,8 @@ export abstract class DfDownloaderOperationalDb {
     if (!existingContent) {
       throw new Error(`Content ${dfContentName} not found`);
     }
-    const contentEntry = DfContentEntryUtils.addSubs(existingContent, downloadLocation, subsInfo);
+    // Note: For now, we can only replace subs, not add them. So we use setSubs.
+    const contentEntry = DfContentEntryUtils.setSubs(existingContent, downloadLocation, [subsInfo]);
     return this.setContentEntries([contentEntry]);
   }
   async addDownloads(downloadInfos: DownloadInfoWithName[]) {

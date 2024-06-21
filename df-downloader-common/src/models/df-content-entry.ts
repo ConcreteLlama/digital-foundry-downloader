@@ -1,7 +1,7 @@
 import { z } from "zod";
+import { DfContentDownloadInfo, DfContentSubtitleInfo } from "./df-content-download-info.js";
 import { DfContentInfo, DfContentInfoUtils } from "./df-content-info.js";
 import { DfContentStatusInfo } from "./df-content-status.js";
-import { DfContentDownloadInfo, DfContentSubtitleInfo } from "./df-content-download-info.js";
 import { MediaInfo } from "./media-info.js";
 
 export const CURRENT_DATA_VERSION = "2.0.2";
@@ -48,6 +48,14 @@ export const DfContentEntryUtils = {
     }
     download.subtitles = download.subtitles ?? [];
     download.subtitles.push(subs);
+    return entry;
+  },
+  setSubs: (entry: DfContentEntry, downloadLocation: string, subs: DfContentSubtitleInfo[]): DfContentEntry => {
+    const download = entry.downloads.find((d) => d.downloadLocation === downloadLocation);
+    if (!download) {
+      throw new Error(`Download ${downloadLocation} not found for content ${entry.name}`);
+    }
+    download.subtitles = subs;
     return entry;
   },
   removeDownload: (entry: DfContentEntry, downloadLocation: string): DfContentEntry => {
