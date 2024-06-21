@@ -69,12 +69,24 @@ export const fetchSubs = async (videoId: string, language: string) => {
   if (!captionsResponse.ok) {
     throw new Error(`Failed to fetch captions: ${captionsResponse.statusText}`);
   }
-  return await captionsResponse.text();
+  // Try to get the duration; if we can't, we'll just use the video length field
+  let durationMs: number | undefined = (parseInt(scriptJson.videoDetails.lengthSeconds) || 0) * 1000;
+  (scriptJson.streamingData?.formats as any[])?.some((format) => {
+    if (format.approxDurationMs) {
+      durationMs = parseInt(format.approxDurationMs);
+      return true;
+    }
+    return false;
+  });
+  return {
+    subsText: await captionsResponse.text(),
+    durationMs,
+  };
 };
 
 export type YoutubeSubtitleLine = {
-  start: number;
-  dur: number;
+  start: number; // Start time in seconds
+  dur: number; // Duration in seconds
   text: string;
 };
 
@@ -93,8 +105,11 @@ export const parseSubs = (subs: string): YoutubeSubtitleLine[] => {
 };
 
 export const fetchAndParseSubs = async (videoId: string, language: string) => {
-  const subs = await fetchSubs(videoId, language);
-  return parseSubs(subs);
+  const { subsText, durationMs } = await fetchSubs(videoId, language);
+  return {
+    subs: parseSubs(subsText),
+    durationMs,
+  };
 };
 
 export const youtubeSubsToSrt = (subs: YoutubeSubtitleLine[]): string => {
