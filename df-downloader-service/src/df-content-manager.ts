@@ -23,7 +23,7 @@ import { DfTaskManager } from "./df-task-manager.js";
 import { DfUserManager } from "./df-user-manager.js";
 import { serviceLocator } from "./services/service-locator.js";
 import { sanitizeContentName } from "./utils/df-utils.js";
-import { deleteFile, ensureDirectory } from "./utils/file-utils.js";
+import { deleteFile, ensureDirectory, fileExists } from "./utils/file-utils.js";
 import { getMostImportantItem } from "./utils/importance-list.js";
 import { dfFetchWorkerQueue, fileScannerQueue } from "./utils/queue-utils.js";
 
@@ -574,9 +574,17 @@ export class DigitalFoundryContentManager {
     if (!contentEntry.downloads.find((d) => d.downloadLocation === downloadLocation)) {
       throw new Error(`Download not found for content ${contentEntry.name}`);
     }
-    const deleted = await deleteFile(downloadLocation);
-    if (!deleted) {
-      throw new Error(`Failed to delete file ${downloadLocation}`);
+    const downloadExists = await fileExists(downloadLocation);
+    if (downloadExists) {
+      const deleted = await deleteFile(downloadLocation);
+      if (!deleted) {
+        throw new Error(`Failed to delete file ${downloadLocation}`);
+      }
+    } else {
+      logger.log(
+        "info",
+        `Download ${downloadLocation} for ${contentEntry.name} does not exist, removing from database`
+      );
     }
     await this.db.removeDownload(contentEntry.name, downloadLocation);
   }
