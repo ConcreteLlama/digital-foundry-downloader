@@ -37,7 +37,7 @@
 
 - Task Management
   - Added status message to subtitle tasks
-  - Implemented task pausing and cancelling
+  - Added pausing and cancelling task states to improve UI button states (e.g. can no longer try to pause/start a pausing task)
 - Dependency Management
   - Removed unused dependencies
 
