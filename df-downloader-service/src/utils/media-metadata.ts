@@ -1,10 +1,11 @@
-import { logger } from "df-downloader-common";
-import { configService } from "../config/config.js";
-import { SubtitleInfo } from "../media-utils/subtitles/subtitles.js";
 import { spawn } from "child_process";
+import { logger } from "df-downloader-common";
 import ffmpegPathImport from "ffmpeg-static";
-import { fileExists, moveFile, setDateOnFile } from "./file-utils.js";
 import _ from "lodash";
+import { configService } from "../config/config.js";
+import { languageToSubsLanguage } from "../media-utils/subtitles/srt-utils.js";
+import { SubtitleInfo } from "../media-utils/subtitles/subtitles.js";
+import { fileExists, moveFile, setDateOnFile } from "./file-utils.js";
 
 if (!ffmpegPathImport) {
   throw new Error("FFmpeg path not found");
@@ -58,7 +59,7 @@ export const injectMediaMetadata = async (mediaFilePath: string, meta: MediaMeta
     ffmpegArgs.push("-metadata", `genre=${tagListStr}`);
   }
   if (subtitles) {
-    ffmpegArgs.push("-metadata:s:s:0", `language=${subtitles.language}`);
+    ffmpegArgs.push("-metadata:s:s:0", `language=${languageToSubsLanguage(subtitles.language)}`);
   }
   ffmpegArgs.push(workingFilename);
 

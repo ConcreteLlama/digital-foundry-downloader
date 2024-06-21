@@ -81,3 +81,10 @@ export const generateSrt = (lines: SrtLine[]): string => {
     })
     .join("\n");
 };
+
+export const languageToSubsLanguage = (language: string): string => {
+  if (language === "en") {
+    return "eng";
+  }
+  return language;
+};

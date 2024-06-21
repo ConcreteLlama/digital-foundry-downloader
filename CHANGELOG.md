@@ -15,12 +15,18 @@
   - Refresh before download and when download is triggered (useful for delayed auto downloads as this could result in better match for desired format)
 - Automatic Downloads
   - Automatic download is now skipped if the content is already downloading or downloaded (for example if you have download delay of 10 minutes but manually trigger the download before, it will now not perform a second unnecessary download)
+- Subtitles
+  - Use correct eng language code when injecting eng subs
+  - YouTube
+    - Implemented a rudimentary method to detect and handle sponsored videos that contain additional content at the start. Since the downloaded videos from DF do not include this sponsored content, it could cause the subtitles to be significantly out of sync. Current is to offset the subtitles and remove the irrelevant ones if the YouTube video length exceeds our video length by more than 5 seconds (this works entirely on time difference and doesn't do anything fancy like try to understand the subs)
 
 ### Bug fixes
 
 - UI
   - Fixed console errors related to unique keys
   - Added keys to all routes
+- Content management
+  - Don't error if file no longer exists when trying to delete, instead just treat it as successfully deleted
 
 ## Version 2.2.3 (2024-04-27)
 
