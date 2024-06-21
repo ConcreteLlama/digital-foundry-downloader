@@ -28,6 +28,11 @@
 - Content management
   - Don't error if file no longer exists when trying to delete, instead just treat it as successfully deleted
 
+### Known issues
+
+- Subtitles
+  - Fetching subtitles on a video that already has them does not replace the subs. Currently the only option is to re-download the video.
+
 ## Version 2.2.3 (2024-04-27)
 
 - Task Management
