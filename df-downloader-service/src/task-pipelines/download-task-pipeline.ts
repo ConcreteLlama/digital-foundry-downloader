@@ -86,6 +86,7 @@ export const createDownloadTaskPipeline = (opts: DownloadTaskPipelineOpts) => {
           return null;
         }
       },
+      continueOnFail: true,
       taskManager: subtitlesTaskManager,
     })
     .next({

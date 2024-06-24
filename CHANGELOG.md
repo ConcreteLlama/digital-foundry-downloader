@@ -1,6 +1,13 @@
 # Changelog
 
-## Version 2.2.4 (2024-06-18 to 2024-06-20)
+## Version 2.2.5 (2024-06-24)
+
+### Bug fixes
+
+- Subtitles
+  - Fixed bug where downloads would fail if subtitles could not be found (some content will not have subtitles at all, and regardless of this the download should still succeed)
+
+## Version 2.2.4 (2024-06-20)
 
 ### New Features
 
@@ -41,7 +48,7 @@
 - Dependency Management
   - Removed unused dependencies
 
-## Version 2.2.2 (2024-04-20 to 2024-04-27)
+## Version 2.2.2 (2024-04-27)
 
 - Documentation
   - Updated README and Docker run sample
@@ -49,7 +56,7 @@
   - Fixed archive page scanning after page structure change
   - Set max width on modal
 
-## Version 2.2.1 (2024-02-04 to 2024-04-20)
+## Version 2.2.1 (2024-04-20)
 
 - Task Management
   - Introduced task manager, allowing pause, resume, cancel, force start
