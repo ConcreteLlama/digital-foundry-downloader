@@ -7,6 +7,7 @@
     "dev": "vite",
     "add-common": "yalc add df-downloader-common",
     "build": "tsc && vite build",
+    "full-build": "npm i && npm run add-common && npm run build",
     "tsc": "tsc",
     "watch": "tsc -w",
     "lint": "eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0",
