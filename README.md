@@ -113,7 +113,7 @@ docker build . -t  concretellama/digital-foundry-downloader
 
 You can build this into a docker container and deploy it somewhere. Ensure you have volumes mapped for /db /config, /working_dir and /destination_dir and all environment variables setup.
 
-> **_NOTE:_**  /working_dir and /destination_dir mappings should not map to the same directory on the host machine, and one should not map to a subdirectory as the other. This can cause issues and I haven't had the time to investigate why.
+> **_NOTE:_**  /working_dir and /destination_dir mappings should not map to the same directory on the host machine, and one should not map to a subdirectory of the other. This can cause issues and I haven't had the time to investigate why.
 
 If you have docker ready to go then you can easily run this by checking out the docker_run.sample.sh
 
