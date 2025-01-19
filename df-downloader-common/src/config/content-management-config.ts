@@ -10,3 +10,10 @@ export const ContentManagementConfig = z.object({
 });
 export type ContentManagementConfig = z.infer<typeof ContentManagementConfig>;
 export const ContentManagementConfigKey = "contentManagement";
+
+export const ContainerContentManagementConfig = ContentManagementConfig.extend({
+  /** The directory where downloaded files are stored */
+  destinationDir: z.string().default("/destination_dir").transform(() => "/destination_dir"),
+  /** The directory where temporary working files are stored (partial downloads etc) */
+  workDir: z.string().default("/working_dir").transform(() => "/working_dir"),
+});

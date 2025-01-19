@@ -1,5 +1,11 @@
 # Changelog
 
+## Version 2.2.6 
+
+### Bug fixes
+
+- Fix an issue on first run where container path was set to be relative to the services directory. This would result in downloads never actually being saved to the host machine. The working dir and destination dirs are now forces to /working_dir and /destination_dir when running in a container.
+
 ## Version 2.2.5 (2024-06-24)
 
 ### Bug fixes

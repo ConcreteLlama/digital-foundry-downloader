@@ -1,11 +1,11 @@
-import { fromZodError } from "zod-validation-error";
-import express from "express";
-import { configService } from "../../config/config.js";
 import {
-  DfDownloaderConfig,
   DfDownloaderConfigKey,
-  DfDownloaderConfigKeys,
+  DfDownloaderConfigKeys
 } from "df-downloader-common/config/df-downloader-config.js";
+import express from "express";
+import { DfDownloaderServiceConfigSchema } from "../../config/config-schema.js";
+import { fromZodError } from "zod-validation-error";
+import { configService } from "../../config/config.js";
 import { sendError, sendResponse } from "../utils/utils.js";
 
 export const makeConfigRouter = () => {
@@ -23,9 +23,9 @@ export const makeConfigRouter = () => {
     const field = req.params.field as DfDownloaderConfigKey | undefined;
     let parseConfig;
     if (field) {
-      parseConfig = DfDownloaderConfig.shape[field].safeParse(req.body);
+      parseConfig = DfDownloaderServiceConfigSchema.shape[field].safeParse(req.body);
     } else {
-      parseConfig = DfDownloaderConfig.partial().safeParse(req.body);
+      parseConfig = DfDownloaderServiceConfigSchema.partial().safeParse(req.body);
     }
     if (!parseConfig.success) {
       const error = fromZodError(parseConfig.error);

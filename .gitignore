@@ -4,7 +4,6 @@ node_modules
 dist
 *.bat
 update_remote.sh
-update_dockerhub.sh
 .yalc
 yalc.lock
 TODO.txt

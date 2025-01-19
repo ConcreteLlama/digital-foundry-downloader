@@ -1,12 +1,12 @@
+import { logger } from "df-downloader-common";
+import { DfDownloaderConfig } from "df-downloader-common/config/df-downloader-config.js";
 import fs, { mkdirSync } from "fs";
 import path from "path";
 import YAML from "yaml";
-import { DfDownloaderConfig } from "df-downloader-common/config/df-downloader-config.js";
-import { ConfigService } from "./config-service.js";
 import { fromZodError } from "zod-validation-error";
 import { code_dir } from "../utils/file-utils.js";
-import { logger } from "df-downloader-common";
-import { raw } from "express";
+import { DfDownloaderServiceConfigSchema } from "./config-schema.js";
+import { ConfigService } from "./config-service.js";
 
 export class FileConfig extends ConfigService {
   constructor(private cachedConfig: DfDownloaderConfig, private configFilePath: fs.PathLike) {
@@ -30,7 +30,7 @@ export class FileConfig extends ConfigService {
 
     const configPlain = YAML.parse(configStr) || {};
     const patched = this.patchConfig(configPlain);
-    const result = DfDownloaderConfig.safeParse(configPlain);
+    const result = DfDownloaderServiceConfigSchema.safeParse(configPlain);
     if (!result.success) {
       throw new Error(fromZodError(result.error).toString());
     }

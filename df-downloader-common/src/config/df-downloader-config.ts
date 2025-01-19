@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { ContentManagementConfig, ContentManagementConfigKey } from "./content-management-config.js";
+import { ContainerContentManagementConfig, ContentManagementConfig, ContentManagementConfigKey } from "./content-management-config.js";
 import { DownloadsConfig, DownloadsConfigKey } from "./download-config.js";
 import { DefaultRestApiConfig, RestApiConfig, RestApiConfigKey } from "./rest-config.js";
 import { NotificationsConfig, NotificationsConfigKey } from "./notifications-config.js";
@@ -30,3 +30,7 @@ export type DfDownloaderConfig = z.infer<typeof DfDownloaderConfig>;
 export type DfDownloaderConfigInput = z.input<typeof DfDownloaderConfig>;
 export type DfDownloaderConfigKey = Extract<keyof DfDownloaderConfig, string>;
 export const DfDownloaderConfigKeys = Object.keys(DfDownloaderConfig.shape) as DfDownloaderConfigKey[];
+
+export const DfDownloaderContainerConfig = DfDownloaderConfig.extend({
+  [ContentManagementConfigKey]: ContainerContentManagementConfig.default({}),
+});
