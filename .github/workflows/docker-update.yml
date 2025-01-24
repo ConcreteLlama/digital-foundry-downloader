@@ -15,10 +15,6 @@ jobs:
     - name: Checkout repository
       uses: actions/checkout@v4
 
-    - name: Test DOCKERHUB_USERNAME set
-      run: |
-        echo "${{ vars.DOCKERHUB_USERNAME }}"
-
     - name: Log in to Docker Hub
       uses: docker/login-action@v3
       with:
@@ -34,21 +30,13 @@ jobs:
         VERSION=$(grep -m1 '"version"' package.json | awk -F: '{ print $2 }' | sed 's/[",]//g' | tr -d '[[:space:]]')
         echo "VERSION=$VERSION" >> $GITHUB_ENV
 
-    - name: Test env vars etc
-      run: |
-        echo "DOCKERHUB_USERNAME=${{ vars.DOCKERHUB_USERNAME }}"
-        echo "VERSION=${{ env.VERSION }}"
-        TAG_1=${{ vars.DOCKERHUB_USERNAME }}/digital-foundry-downloader:${{ github.ref == 'refs/heads/main' && 'latest' || 'development' }}
-        TAG_2=${{ vars.DOCKERHUB_USERNAME }}/digital-foundry-downloader:v${{ env.VERSION }}${{ github.ref == 'refs/heads/main' && '' || '-development' }}
-        echo "TAG_1=$TAG_1"
-        echo "TAG_2=$TAG_2"
-    #   - name: Build and push Docker image
-    #     uses: docker/build-push-action@v6
-    #     with:
-    #       context: .
-    #       push: true
-    #       tags: |
-    #         ${{ vars.DOCKERHUB_USERNAME }}/digital-foundry-downloader:${{ github.ref == 'refs/heads/main' && 'latest' || 'development' }}
-    #         ${{ vars.DOCKERHUB_USERNAME }}/digital-foundry-downloader:v${{ env.VERSION }}${{ github.ref == 'refs/heads/main' && '' || '-development' }}
-    #       labels: |
-    #         version=${{ env.VERSION }}
+    - name: Build and push Docker image
+      uses: docker/build-push-action@v6
+      with:
+        context: .
+        push: false
+        tags: |
+          ${{ vars.DOCKERHUB_USERNAME }}/digital-foundry-downloader:${{ github.ref == 'refs/heads/main' && 'latest' || 'development' }}
+          ${{ vars.DOCKERHUB_USERNAME }}/digital-foundry-downloader:v${{ env.VERSION }}${{ github.ref == 'refs/heads/main' && '' || '-development' }}
+        labels: |
+          version=${{ env.VERSION }}
