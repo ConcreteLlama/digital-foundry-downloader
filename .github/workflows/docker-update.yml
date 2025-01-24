@@ -15,6 +15,10 @@ jobs:
     - name: Checkout repository
       uses: actions/checkout@v4
 
+    - name: Test DOCKERHUB_USERNAME set
+      run: |
+        echo "${{ vars.DOCKERHUB_USERNAME }}"
+
     - name: Log in to Docker Hub
       uses: docker/login-action@v3
       with:
