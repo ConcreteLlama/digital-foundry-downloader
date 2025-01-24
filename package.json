@@ -5,6 +5,7 @@
   "main": "index.js",
   "scripts": {
     "install-all-deps": "cd df-downloader-common && npm i && cd ../df-downloader-ui && npm i && cd ../df-downloader-service && npm i",
+    "update-package-locks": "cd df-downloader-common && npm i --package-locks-only && cd ../df-downloader-ui && npm i --package-locks-only && cd ../df-downloader-service && npm i --package-locks-only && npm i --package-locks-only",
     "build": "cd df-downloader-common && npm i && npm run build && cd ../df-downloader-ui && npm run full-build && cd ../df-downloader-service && npm run full-build && npm run get-ui",
     "start": "cd df-downloader-service && npm run start",
     "dev:service": "cd df-downloader-service && npm run dev",
@@ -12,8 +13,13 @@
     "remove:code": "cd df-downloader-common && npm run remove && cd ../df-downloader-ui && npm run remove && cd ../df-downloader-service && npm run remove",
     "remove:config": "cd df-downloader-service && npm run remove:config",
     "remove:data": "cd df-downloader-service && npm run remove:data",
-    "remove:all": "npm run remove:config && npm run remove:data && npm run remove:code"
+    "remove:all": "npm run remove:config && npm run remove:data && npm run remove:code",
+    "update-versions": "node scripts/update-versions.js",
+    "prepare": "husky install"
   },
   "author": "",
-  "license": "ISC"
+  "license": "ISC",
+  "devDependencies": {
+    "husky": "^8.0.0"
+  }
 }
