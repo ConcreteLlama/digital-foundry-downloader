@@ -12,7 +12,8 @@
     "watch": "tsc -w",
     "lint": "eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0",
     "preview": "vite preview",
-    "reinstall-deps": "npx rimraf node_modules && npm i && npm run add-common && npm i"
+    "reinstall-deps": "npx rimraf node_modules && npm i && npm run add-common && npm i",
+    "check-build": "tsc --noEmit"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.0.8",
