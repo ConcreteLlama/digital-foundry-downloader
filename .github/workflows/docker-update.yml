@@ -34,7 +34,7 @@ jobs:
       uses: docker/build-push-action@v6
       with:
         context: .
-        push: false
+        push: true
         tags: |
           ${{ vars.DOCKERHUB_USERNAME }}/digital-foundry-downloader:${{ github.ref == 'refs/heads/main' && 'latest' || 'development' }}
           ${{ vars.DOCKERHUB_USERNAME }}/digital-foundry-downloader:v${{ env.VERSION }}${{ github.ref == 'refs/heads/main' && '' || '-development' }}

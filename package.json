@@ -15,7 +15,8 @@
     "remove:data": "cd df-downloader-service && npm run remove:data",
     "remove:all": "npm run remove:config && npm run remove:data && npm run remove:code",
     "update-versions": "node scripts/update-versions.js",
-    "prepare": "husky install"
+    "prepare": "husky install",
+    "check-build": "cd df-downloader-service && npm run check-build && cd ../df-downloader-ui && npm run check-build"
   },
   "author": "",
   "license": "ISC",

@@ -19,8 +19,10 @@ import { queryServiceInfo } from "./store/service-info/service-info.actions";
 import { selectServiceError } from "./store/service-info/service-info.selector.ts";
 import { store } from "./store/store";
 import { theme } from "./themes/theme";
+import { dfDownloaderVersion } from "df-downloader-common";
 
 function App() {
+  console.log(`Starting app with version ${dfDownloaderVersion}`)
   return (
     <ThemeProvider theme={theme}>
       <MainContainer />

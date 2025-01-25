@@ -26,6 +26,7 @@ const updateAllVersions = (dir) => {
       updateAllVersions(fullPath);
     }
   });
+  fs.writeFileSync(path.join(projectRoot, 'df-downloader-common', 'src', 'df-downloader-version.ts'), `export const dfDownloaderVersion = '${rootVersion}';\n`);
 };
 
 updateAllVersions(projectRoot);
