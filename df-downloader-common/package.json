@@ -1,6 +1,6 @@
 {
   "name": "df-downloader-common",
-  "version": "2.2.6",
+  "version": "2.2.7",
   "description": "",
   "private": true,
   "main": "index.js",
