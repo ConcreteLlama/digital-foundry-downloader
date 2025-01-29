@@ -136,7 +136,3 @@ export const bytesToHumanReadable = (bytes: number, si = false) => {
   }
   return `${bytes} B`;
 };
-
-export const sanitizeFileName = (fileName: string) => {
-  return fileName.replace(/[^a-zA-Z0-9-_]/g, "_");
-};

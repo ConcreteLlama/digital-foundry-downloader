@@ -23,9 +23,10 @@ import { DfTaskManager } from "./df-task-manager.js";
 import { DfUserManager } from "./df-user-manager.js";
 import { serviceLocator } from "./services/service-locator.js";
 import { sanitizeContentName } from "./utils/df-utils.js";
-import { deleteFile, ensureDirectory, fileExists } from "./utils/file-utils.js";
+import { deleteFile, ensureDirectory, fileExists, listAllFiles } from "./utils/file-utils.js";
 import { getMostImportantItem } from "./utils/importance-list.js";
 import { dfFetchWorkerQueue, fileScannerQueue } from "./utils/queue-utils.js";
+import { makePossibleFilenames } from "./utils/filename-match.js";
 
 export class DigitalFoundryContentManager {
   private dfUserManager: DfUserManager;
@@ -262,6 +263,8 @@ export class DigitalFoundryContentManager {
 
     const notDownloaded = contentEntries.filter((contentEntry) => contentEntry.downloads.length === 0);
     logger.log("info", "Scanning for existing files");
+    const allFiles = await listAllFiles(contentManagementConfig.destinationDir, { recursive: true });
+    logger.log('debug', `All files in ${contentManagementConfig.destinationDir}: ${allFiles.join(", ")}`);
     while (notDownloaded.length > 0) {
       const toCheck = notDownloaded.splice(0, 50);
       const toAddDownload: DownloadInfoWithName[] = [];
@@ -269,14 +272,17 @@ export class DigitalFoundryContentManager {
         toCheck.map(async (contentEntry) => {
           const { contentInfo } = contentEntry;
           const fileMatch = await transformFirstMatchAsync(contentInfo.mediaInfo, async (mediaInfo) => {
-            const fileNameWithMediaType = DfContentInfoUtils.makeFileName(contentInfo, mediaInfo, true);
-            const fileNameWithoutMediaType = DfContentInfoUtils.makeFileName(contentInfo, mediaInfo, false);
-            const filenames: string[] = [fileNameWithMediaType, fileNameWithoutMediaType];
-            mediaInfo.mediaFilename && filenames.push(mediaInfo.mediaFilename);
-            for (const contentFilename of filenames) {
-              const fullFilename = path.join(contentManagementConfig.destinationDir, contentFilename);
+            const possibleFileNames = makePossibleFilenames(contentInfo, mediaInfo, configService.config.contentManagement.filenameTemplate);
+            const matchingFilenames = possibleFileNames.filter((possibleFilename) => allFiles.includes(possibleFilename.filename));
+            if (matchingFilenames.length === 0) {
+              return false;
+            }
+            for (const possibleFilename of matchingFilenames) {
               try {
+                const { filename: fullFilename, exactMediaMatch } = possibleFilename;
+                // Ensure we can acces the file
                 await fileScannerQueue.addWork(() => fs.access(fullFilename));
+                // Stat the file to get file info
                 const fileInfo = await fileScannerQueue.addWork(() => fs.stat(fullFilename));
                 if (!fileInfo) {
                   continue;
@@ -284,7 +290,7 @@ export class DigitalFoundryContentManager {
                 return {
                   matchingFileName: fullFilename,
                   matchingFileStats: fileInfo,
-                  exactMatch: contentFilename === fileNameWithMediaType,
+                  exactMatch: exactMediaMatch,
                   mediaInfo,
                 };
               } catch (e) {

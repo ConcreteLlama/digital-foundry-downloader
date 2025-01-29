@@ -4,6 +4,7 @@ import {
   DfContentInfoUtils,
   DfUserInfo,
   MediaInfo,
+  MediaInfoUtils,
   fileSizeStringToBytes,
   logger,
 } from "df-downloader-common";
@@ -12,7 +13,7 @@ import htmlparser2 from "htmlparser2";
 import { configService } from "./config/config.js";
 import { sanitizeContentName } from "./utils/df-utils.js";
 import { getBody, getBodyOfChild } from "./utils/dom-utils.js";
-import { extractFilenameFromUrl } from "./utils/file-utils.js";
+import { extractFilenameFromUrl, sanitizeFilename } from "./utils/file-utils.js";
 import { extractYoutubeVideoId } from "./utils/youtube.js";
 
 type PageMeta = {
@@ -97,7 +98,7 @@ function makeDfVideoUrl(videoName: string) {
 }
 
 export const makeDfDownloadParams = (dfContent: DfContentInfo, mediaInfo: MediaInfo) => {
-  const filename = DfContentInfoUtils.makeFileName(dfContent, mediaInfo);
+  const filename = mediaInfo.mediaFilename || sanitizeFilename(`${dfContent.name}_${mediaInfo.mediaType}.${MediaInfoUtils.getExtension(mediaInfo)}`);
   const downloadDestination = `${configService.config.contentManagement.workDir}/${filename}`;
   const headers = {
     ...makeAuthHeaders(),

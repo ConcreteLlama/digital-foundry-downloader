@@ -10,6 +10,8 @@ import { DownloadTask, DownloadTaskManager } from "../tasks/download-task.js";
 import { MetadataTask } from "../tasks/metadata-task.js";
 import { MoveFileSetDateTask } from "../tasks/move-file-set-date-task.js";
 import { SubtitlesTaskBuilder, SubtitlesTaskManager } from "../tasks/subtitles-task.js";
+import { makeFilenamePath } from "df-downloader-common/utils/filename-template-utils.js";
+import { sanitizeFilePath } from "../utils/file-utils.js";
 
 type DownloadTaskPipelineOpts = {
   downloadTaskManager: DownloadTaskManager;
@@ -107,16 +109,17 @@ export const createDownloadTaskPipeline = (opts: DownloadTaskPipelineOpts) => {
       stepName: "Move File",
       taskCreator: ({ context }) => {
         const { dfContentInfo, mediaInfo } = context;
-        const filename = DfContentInfoUtils.makeFileName(dfContentInfo, mediaInfo);
+        const rawFilename = makeFilenamePath(dfContentInfo, mediaInfo, configService.config.contentManagement.filenameTemplate);
+        const sanitizedFilename = sanitizeFilePath(rawFilename).fullPath;
         const config = configService.config;
         const contentManagementConfig = config.contentManagement;
-        const destination = path.join(contentManagementConfig.destinationDir, filename);
+        const destination = path.join(contentManagementConfig.destinationDir, sanitizedFilename);
         context.finalLocation = destination;
         if (context.downloadLocation !== destination) {
           return MoveFileSetDateTask(
             context.downloadLocation,
             destination,
-            { clobber: true },
+            { clobber: true, mkdirp: true },
             dfContentInfo.publishedDate
           );
         }

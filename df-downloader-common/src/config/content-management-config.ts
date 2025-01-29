@@ -1,6 +1,9 @@
 import { z } from "zod";
+import { DfFilenameTemplateVar } from "../utils/filename-template-utils.js";
 
 export const ContentManagementConfig = z.object({
+  /** The pattern to use for the output filename */
+  filenameTemplate: z.string().default(`{{${DfFilenameTemplateVar.CONTENT_URL_NAME}}}.{{${DfFilenameTemplateVar.EXTENSION}}}`),
   /** If set, the service will scan the destination directory for existing files and add them to the database as downloaded */
   scanForExistingFiles: z.boolean().default(true),
   /** The directory where downloaded files are stored */

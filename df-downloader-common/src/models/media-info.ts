@@ -19,9 +19,15 @@ export const MediaInfoUtils = {
         try {
           const toReturn = stringToDuration(mediaInfo.duration);
           return toReturn;
-        } catch (e) {}
+        } catch (e) { }
       }
     }
     return 0;
+  },
+  getExtension(mediaInfo: MediaInfo) {
+    if (mediaInfo.mediaFilename) {
+      return mediaInfo.mediaFilename.split(".").pop() || "mp4";
+    }
+    return mediaInfo.mediaType === "MP3" ? "mp3" : "mp4";
   },
 };
