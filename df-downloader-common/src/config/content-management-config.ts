@@ -6,6 +6,8 @@ export const ContentManagementConfig = z.object({
   filenameTemplate: z.string().default(`{{${DfFilenameTemplateVar.CONTENT_URL_NAME}}}.{{${DfFilenameTemplateVar.EXTENSION}}}`),
   /** If set, the service will scan the destination directory for existing files and add them to the database as downloaded */
   scanForExistingFiles: z.boolean().default(true),
+  /** Maximum depth to scan for files in the destination directory */
+  maxScanDepth: z.number().min(0).default(3),
   /** The directory where downloaded files are stored */
   destinationDir: z.string().default("df_downloads"),
   /** The directory where temporary working files are stored (partial downloads etc) */

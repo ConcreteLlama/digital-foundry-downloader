@@ -48,32 +48,34 @@ export async function moveFile(source: string, dest: string, options: mv.Options
 type ListFilesOpts = {
   recursive?: boolean;
   maxDepth?: number;
-  fullPath?: boolean;
 }
-const listAllFilesInternal = async (dir: string, opts: ListFilesOpts, depth: number) => {
-  const { recursive = false, maxDepth = Infinity, fullPath = true } = opts;
+const listAllFilesInternal = async (dirPaths: string[], opts: ListFilesOpts, depth: number): Promise<FilePathInfo[]> => {
+  const { recursive = false, maxDepth = Infinity } = opts;
   if (depth > maxDepth) {
     return [];
   }
-  const files = await fs.promises.readdir(dir, { withFileTypes: true });
-  const fileNames: string[] = [];
+  const files = await fs.promises.readdir(dirPaths.join(path.sep), { withFileTypes: true });
+  const filePathInfos: FilePathInfo[] = [];
   for (const file of files) {
     if (file.isBlockDevice() || file.isCharacterDevice() || file.isSocket() || file.isSymbolicLink()) {
       continue;
     }
     if (file.isFile()) {
-      const fileName = fullPath ? path.join(dir, file.name) : file.name;
-      fileNames.push(fileName);
-    } else if (recursive && file.isDirectory()) {
-      const subDir = path.join(dir, file.name);
-      const subFiles = await listAllFilesInternal(subDir, opts, depth + 1);
-      fileNames.push(...subFiles);
+      filePathInfos.push({
+        filename: file.name,
+        fullPath: path.join(...dirPaths, file.name),
+        dirs: dirPaths,
+        parts: [...dirPaths, file.name],
+      });
+    } else if (recursive && file.isDirectory() && depth < maxDepth) {
+      const subFiles = await listAllFilesInternal([...dirPaths, file.name], opts, depth + 1);
+      filePathInfos.push(...subFiles);
     }
   }
-  return fileNames;
+  return filePathInfos;
 }
 export const listAllFiles = async (dir: string, opts: ListFilesOpts) => {
-  return listAllFilesInternal(dir, opts, 0);
+  return listAllFilesInternal([dir], opts, 0);
 }
 
 export function extractFilenameFromUrl(url: string) {

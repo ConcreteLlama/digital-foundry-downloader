@@ -23,7 +23,7 @@ import { DfTaskManager } from "./df-task-manager.js";
 import { DfUserManager } from "./df-user-manager.js";
 import { serviceLocator } from "./services/service-locator.js";
 import { sanitizeContentName } from "./utils/df-utils.js";
-import { deleteFile, ensureDirectory, fileExists, listAllFiles } from "./utils/file-utils.js";
+import { deleteFile, ensureDirectory, fileExists, FilePathInfo, listAllFiles } from "./utils/file-utils.js";
 import { getMostImportantItem } from "./utils/importance-list.js";
 import { dfFetchWorkerQueue, fileScannerQueue } from "./utils/queue-utils.js";
 import { makePossibleFilenames } from "./utils/filename-match.js";
@@ -262,9 +262,14 @@ export class DigitalFoundryContentManager {
     const contentEntries = await this.db.getAllContentEntries();
 
     const notDownloaded = contentEntries.filter((contentEntry) => contentEntry.downloads.length === 0);
-    logger.log("info", "Scanning for existing files");
-    const allFiles = await listAllFiles(contentManagementConfig.destinationDir, { recursive: true });
-    logger.log('debug', `All files in ${contentManagementConfig.destinationDir}: ${allFiles.join(", ")}`);
+    const { destinationDir, maxScanDepth } = contentManagementConfig;
+    logger.log("info", `Scanning for existing files in ${destinationDir} with max depth ${maxScanDepth}`);
+    if (notDownloaded.length === 0) {
+      logger.log("info", "No content entries to scan for existing files");
+      return;
+    }
+    const allFiles = await listAllFiles(destinationDir, { recursive: true, maxDepth: maxScanDepth });
+    logger.log('debug', `All files in ${destinationDir}: ${allFiles.map((f) => f.fullPath).join(", ")}`);
     while (notDownloaded.length > 0) {
       const toCheck = notDownloaded.splice(0, 50);
       const toAddDownload: DownloadInfoWithName[] = [];
@@ -273,22 +278,39 @@ export class DigitalFoundryContentManager {
           const { contentInfo } = contentEntry;
           const fileMatch = await transformFirstMatchAsync(contentInfo.mediaInfo, async (mediaInfo) => {
             const possibleFileNames = makePossibleFilenames(contentInfo, mediaInfo, configService.config.contentManagement.filenameTemplate);
-            const matchingFilenames = possibleFileNames.filter((possibleFilename) => allFiles.includes(possibleFilename.filename));
-            if (matchingFilenames.length === 0) {
+            const matchingFilePathInfos = possibleFileNames.reduce((acc: {
+              exactMediaMatch: boolean;
+              filePathInfo: FilePathInfo;
+            }[], possibleFile) => {
+              const matches = allFiles.filter((file) => file.filename === possibleFile.filename);
+              if (matches) {
+                for (const match of matches) {
+                  acc.push({
+                    exactMediaMatch: possibleFile.exactMediaMatch,
+                    filePathInfo: match,
+                  });
+                }
+              }
+              return acc;
+            }, []);
+            if (matchingFilePathInfos.length === 0) {
               return false;
             }
-            for (const possibleFilename of matchingFilenames) {
+            logger.log('silly', `Matching filenames for ${contentInfo.name}: ${matchingFilePathInfos.map((v) => v.filePathInfo.fullPath).join(", ")}`);
+            for (const possibleFilename of matchingFilePathInfos) {
               try {
-                const { filename: fullFilename, exactMediaMatch } = possibleFilename;
+                const { filePathInfo, exactMediaMatch } = possibleFilename;
+                const fullFileName = filePathInfo.fullPath;
+                console.log(fullFileName);
                 // Ensure we can acces the file
-                await fileScannerQueue.addWork(() => fs.access(fullFilename));
+                await fileScannerQueue.addWork(() => fs.access(fullFileName));
                 // Stat the file to get file info
-                const fileInfo = await fileScannerQueue.addWork(() => fs.stat(fullFilename));
+                const fileInfo = await fileScannerQueue.addWork(() => fs.stat(fullFileName));
                 if (!fileInfo) {
                   continue;
                 }
                 return {
-                  matchingFileName: fullFilename,
+                  matchingFileName: fullFileName,
                   matchingFileStats: fileInfo,
                   exactMatch: exactMediaMatch,
                   mediaInfo,
