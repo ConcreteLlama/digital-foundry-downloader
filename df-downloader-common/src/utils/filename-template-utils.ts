@@ -3,6 +3,7 @@ import Handlebars from 'handlebars';
 import { DfContentInfo, DummyContentInfo } from "../models/df-content-info.js";
 import { MediaInfo, MediaInfoUtils } from "../models/media-info.js";
 import { commonReplacements, sanitizeFilePath, testFilePath } from "./file-utils.js";
+import { errorToString } from "./error.js";
 
 Handlebars.registerHelper('ifIn', function (this: any, list, elem, options) {
     if (!Array.isArray(list)) {
@@ -145,8 +146,18 @@ export const makeFilenameWithTemplate = (contentInfo: DfContentInfo, mediaInfo: 
     return toReturn;
 };
 
+export class TestTemplateError extends Error {
+    constructor(message: string, readonly reason: 'unknown-var' | 'invalid-template', err?: any) {
+        super(message);
+    }
+} 
 export const testTemplate = (template: string): string => {
-    const parsed = Handlebars.parse(template);
+    let parsed: ReturnType<typeof Handlebars.parse>;
+    try {
+        parsed = Handlebars.parse(template);
+    } catch (e: any) {
+        throw new TestTemplateError(`Invalid template: ${errorToString(e)}`, 'invalid-template', e);
+    }
     for (const statement of parsed.body as any) {
         if (statement.type !== 'MustacheStatement') {
             continue;
@@ -154,7 +165,7 @@ export const testTemplate = (template: string): string => {
         if (statement.path) {
             const varName = statement.path.original;
             if (!DfFilenameTemplateVarNames.includes(varName as DfFilenameTemplateVarName)) {
-                throw new Error(`Unknown template variable: ${varName}`);
+                throw new TestTemplateError(`Unknown template variable: ${varName}`, 'unknown-var');
             }
         }
     }
