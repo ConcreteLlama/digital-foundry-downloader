@@ -1,6 +1,6 @@
-import { DfContentInfo, MediaInfo, MediaInfoUtils } from "df-downloader-common";
-import { oldSanitizeFileName, sanitizeFilename, sanitizeFilePath } from "./file-utils.js";
-import { DfFilenameTemplateVar, makeFilenamePath } from "df-downloader-common/utils/filename-template-utils.js";
+import { DfContentInfo, MediaInfo, MediaInfoUtils, oldSanitizeFileName, sanitizeFilename } from "df-downloader-common";
+import { sanitizeFilePath } from "./file-utils.js";
+import { DfFilenameTemplateVar, makeFilenameWithTemplate } from "df-downloader-common/utils/filename-template-utils.js";
 
 type PossibleFilename = {
     filename: string;
@@ -18,7 +18,7 @@ export const makePossibleFilenames = (dfContentInfo: DfContentInfo, mediaInfo: M
         makePossibleFilename(`${oldSanitizeFileName(dfContentInfo.name)}.${extension}`, false),
         makePossibleFilename(`${oldSanitizeFileName(`${dfContentInfo.name}_${mediaInfo.mediaType}`)}.${extension}`, true),
         makePossibleFilename(mediaInfo.mediaFilename || sanitizeFilename(`${dfContentInfo.title}.${extension}`), true),
-        makePossibleFilename(sanitizeFilePath(makeFilenamePath(dfContentInfo, mediaInfo, currentTemplate)).filename, 
+        makePossibleFilename(sanitizeFilePath(makeFilenameWithTemplate(dfContentInfo, mediaInfo, currentTemplate)).filename, 
             currentTemplate.includes(DfFilenameTemplateVar.DOWNLOAD_FILENAME || currentTemplate.includes(DfFilenameTemplateVar.FORMAT))),
     ]
     return Array.from(new Set(toReturn));

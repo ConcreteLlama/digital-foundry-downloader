@@ -1,9 +1,16 @@
 import { z } from "zod";
-import { DfFilenameTemplateVar } from "../utils/filename-template-utils.js";
+import { DfFilenameTemplateVar, testTemplate } from "../utils/filename-template-utils.js";
+import { makeErrorMessage } from "../utils/general.js";
 
 export const ContentManagementConfig = z.object({
   /** The pattern to use for the output filename */
-  filenameTemplate: z.string().default(`{{${DfFilenameTemplateVar.CONTENT_URL_NAME}}}.{{${DfFilenameTemplateVar.EXTENSION}}}`),
+  filenameTemplate: z.string().default(`{{${DfFilenameTemplateVar.CONTENT_URL_NAME}}}.{{${DfFilenameTemplateVar.EXTENSION}}}`).superRefine((val, ctx) => {
+    try {
+      testTemplate(val);
+    } catch (e) {
+      return ctx.addIssue({ code: z.ZodIssueCode.custom, message: makeErrorMessage(e) });
+    }
+  }),
   /** If set, the service will scan the destination directory for existing files and add them to the database as downloaded */
   scanForExistingFiles: z.boolean().default(true),
   /** Maximum depth to scan for files in the destination directory */

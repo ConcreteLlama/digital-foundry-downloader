@@ -63,3 +63,29 @@ export const DfContentInfoUtils = {
     return dfContentInfo.mediaInfo.find((mediaInfo) => mediaInfo.mediaType === mediaType);
   },
 };
+
+export const DummyContentInfo: DfContentInfo = {
+  name: "johns-japanese-crt-adventure",
+  title: "John's Japanese CRT Adventure",
+  description: "John does some retro stuff in Japan while lugging around a CRT",
+  mediaInfo: [
+    {
+      mediaType: "h264",
+      mediaFilename: "Johns Japanese CRT Adventure.mp4",
+    },
+    {
+      mediaType: "HEVC",
+      mediaFilename: "Johns Japanese CRT Adventure HEVC.mp4",
+    }
+  ],
+  thumbnailUrl: "",
+  youtubeVideoId: "",
+  dataPaywalled: false,
+  publishedDate: new Date("2021-01-01T00:14:00Z"),
+  tags: [
+    "retro",
+    "japan",
+    "crt",
+    "john"
+  ],
+};

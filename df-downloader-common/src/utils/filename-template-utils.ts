@@ -1,11 +1,30 @@
-import { DfContentInfo } from "../models/df-content-info.js";
-import { MediaInfo, MediaInfoUtils } from "../models/media-info.js";
-import Mustache from "mustache";
 import { format } from "date-fns";
+import Handlebars from 'handlebars';
+import { DfContentInfo, DummyContentInfo } from "../models/df-content-info.js";
+import { MediaInfo, MediaInfoUtils } from "../models/media-info.js";
+import { commonReplacements, sanitizeFilePath, testFilePath } from "./file-utils.js";
+
+Handlebars.registerHelper('ifIn', function (this: any, list, elem, options) {
+    if (!Array.isArray(list)) {
+        list = list(this);
+    }
+    if (list.indexOf(elem) > -1) {
+        return options.fn(this);
+    }
+    return options.inverse(this);
+});
+
+Handlebars.registerHelper('ifTag', function (this: any, tag, options) {
+    if (this.tags.includes(tag)) {
+        return options.fn(this);
+    }
+    return options.inverse(this);
+});
+
 
 type DfTemplateVarDefinition = {
     description: string;
-    valueExtractor: (contentInfo: DfContentInfo, mediaInfo: MediaInfo) => string;
+    valueExtractor: (contentInfo: DfContentInfo, mediaInfo: MediaInfo) => any;
 }
 
 export enum DfFilenameTemplateVar {
@@ -15,6 +34,7 @@ export enum DfFilenameTemplateVar {
     FORMAT = "format",
     AUDIO_ENCODING = "audio-encoding",
     VIDEO_ENCODING = "video-encoding",
+    TAGS = "tags",
     EXTENSION = "ext",
     DAY = "DD",
     MONTH = "MM",
@@ -46,6 +66,10 @@ export const DfFilenameTemplateVarDefinitions: Record<DfFilenameTemplateVarName,
     "format": {
         description: "The format of the media",
         valueExtractor: (_, mediaInfo) => mediaInfo.mediaType,
+    },
+    "tags": {
+        description: "The tags of the content",
+        valueExtractor: (contentInfo) => contentInfo.tags,
     },
     "audio-encoding": {
         description: "The audio encoding of the media",
@@ -101,16 +125,45 @@ export const DfFilenameTemplateVarDefinitions: Record<DfFilenameTemplateVarName,
     },
 };
 
-export const generateFilenameTemplateVarMap = (contentInfo: DfContentInfo, mediaInfo: MediaInfo) => Object.entries(DfFilenameTemplateVarDefinitions).reduce((acc, [key, { valueExtractor }]) => {
-    acc[key] = () => valueExtractor(contentInfo, mediaInfo);
+const generateFilenameTemplateVarMap = (contentInfo: DfContentInfo, mediaInfo: MediaInfo) => Object.entries(DfFilenameTemplateVarDefinitions).reduce((acc, [key, { valueExtractor }]) => {
+    acc[key] = valueExtractor(contentInfo, mediaInfo);
     return acc;
-}, {} as Record<string, (() => string)>);
+}, {} as Record<string, (() => (string | string[]))>);
 
-export const makeFilenamePath = (contentInfo: DfContentInfo, mediaInfo: MediaInfo, template: string) => {
-    const toReturn = Mustache.render(template, generateFilenameTemplateVarMap(contentInfo, mediaInfo));
+export const makeFilenameWithTemplate = (contentInfo: DfContentInfo, mediaInfo: MediaInfo, templateStr: string) => {
+    const template = Handlebars.compile(templateStr, {
+        noEscape: true
+    });
+    let toReturn = template(generateFilenameTemplateVarMap(contentInfo, mediaInfo));
     const extension = MediaInfoUtils.getExtension(mediaInfo);
     if (!toReturn.endsWith(extension)) {
-        return `${toReturn}.${extension}`;
+        toReturn += `.${extension}`;
     }
+    toReturn = sanitizeFilePath(toReturn, {
+        additionalReplacemenets: commonReplacements
+    });
     return toReturn;
 };
+
+export const testTemplate = (template: string): string => {
+    const parsed = Handlebars.parse(template);
+    for (const statement of parsed.body as any) {
+        if (statement.type !== 'MustacheStatement') {
+            continue;
+        }
+        if (statement.path) {
+            const varName = statement.path.original;
+            if (!DfFilenameTemplateVarNames.includes(varName as DfFilenameTemplateVarName)) {
+                throw new Error(`Unknown template variable: ${varName}`);
+            }
+        }
+    }
+    // Now use the dummy DF content info to test the template
+    const filenamePath = makeFilenameWithTemplate(
+        DummyContentInfo,
+        DummyContentInfo.mediaInfo[0],
+        template
+    );
+    testFilePath(filenamePath);
+    return filenamePath;
+}

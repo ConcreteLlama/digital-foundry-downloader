@@ -18,4 +18,5 @@ export * from "./user.js";
 export * from "./auth.js";
 export * from "./preview.js";
 export * from "./test-session-id.js";
+export * from "./template.js";
 export * from "./subtitles.js";

@@ -7,13 +7,14 @@ import {
   MediaInfoUtils,
   fileSizeStringToBytes,
   logger,
+  sanitizeFilename,
 } from "df-downloader-common";
 import { Document, Element } from "domhandler";
 import htmlparser2 from "htmlparser2";
 import { configService } from "./config/config.js";
 import { sanitizeContentName } from "./utils/df-utils.js";
 import { getBody, getBodyOfChild } from "./utils/dom-utils.js";
-import { extractFilenameFromUrl, sanitizeFilename } from "./utils/file-utils.js";
+import { extractFilenameFromUrl } from "./utils/file-utils.js";
 import { extractYoutubeVideoId } from "./utils/youtube.js";
 
 type PageMeta = {

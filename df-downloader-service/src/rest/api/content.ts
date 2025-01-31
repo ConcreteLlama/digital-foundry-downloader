@@ -1,20 +1,26 @@
 import {
+  DeleteDownloadRequest,
   DfContentEntrySearchBody,
   DfContentEntrySearchUtils,
   DfContentEntryUtils,
   DfContentInfoRefreshMetaRequest,
   DfContentInfoRefreshMetaResponse,
+  DfContentInfoUtils,
   DfContentQueryResponse,
-  DeleteDownloadRequest,
   DfContentStatus,
   DfTagsResponse,
   secondsToHHMMSS,
+  TestTemplateRequest,
+  TestTemplateResponse,
 } from "df-downloader-common";
+import { testTemplate } from "df-downloader-common/utils/filename-template-utils.js";
 import express, { Request, Response } from "express";
+import path from "path";
 import { DigitalFoundryContentManager } from "../../df-content-manager.js";
 import { sanitizeContentName } from "../../utils/df-utils.js";
 import { queryParamToInteger, queryParamToString, queryParamToStringArray } from "../../utils/query-utils.js";
-import { sendResponse, zodParseHttp } from "../utils/utils.js";
+import { makeFilePathWithTemplate } from "../../utils/template-utils.js";
+import { sendErrorAsResponse, sendResponse, zodParseHttp } from "../utils/utils.js";
 
 export const makeContentApiRouter = (contentManager: DigitalFoundryContentManager) => {
   const router = express.Router();
@@ -108,6 +114,51 @@ export const makeContentApiRouter = (contentManager: DigitalFoundryContentManage
       await contentManager.deleteDownload(contentEntry, downloadInfo.downloadLocation);
       return sendResponse(res, {
         message: `Download deleted for ${searchProps.contentName} at ${searchProps.downloadLocation}`,
+      });
+    });
+  });
+
+  router.post("/preview-move", async (req: Request, res: Response) => {
+    await zodParseHttp(TestTemplateRequest, req, res, async (body) => {
+      const contentEntries = await contentManager.db.getAllContentEntries();
+      try {
+        testTemplate(body.templateString);
+      } catch (e) {
+        return sendErrorAsResponse(res, e);
+      }
+      // TODO: Move this into its own utility fn so we can reuse it for actual move task
+      const results: TestTemplateResponse = {
+        templateString: body.templateString,
+        results: contentEntries.reduce((acc, {contentInfo, downloads}) => {
+          if (!downloads.length) {
+            return acc;
+          }
+          const files = downloads.reduce((acc, download) => {
+            const mediaInfo = DfContentInfoUtils.getMediaInfo(contentInfo, download.format);
+            if (mediaInfo) {
+              const oldFilename = path.normalize(download.downloadLocation);
+              const newFilename = path.normalize(makeFilePathWithTemplate(contentInfo, mediaInfo, body.templateString));
+              if (oldFilename !== newFilename) {
+                acc.push({
+                  oldFilename: oldFilename,
+                  newFilename: newFilename,
+                });     
+              }       
+            }
+            return acc;
+          }, [] as TestTemplateResponse['results']['0']['files'])
+          if (files.length) {
+            acc.push({
+              contentName: contentInfo.name,
+              files,
+            });
+          }
+          return acc;
+        }, [] as TestTemplateResponse['results'])
+      }
+      return sendResponse(res, {
+        templateString: body.templateString,
+        results,
       });
     });
   });

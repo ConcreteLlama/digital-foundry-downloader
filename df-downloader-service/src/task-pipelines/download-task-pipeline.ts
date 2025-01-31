@@ -1,5 +1,4 @@
-import { DfContentInfo, DfContentInfoUtils, MediaInfo, makeErrorMessage } from "df-downloader-common";
-import path from "path";
+import { DfContentInfo, MediaInfo, makeErrorMessage } from "df-downloader-common";
 import { configService } from "../config/config.js";
 import { makeMediaMeta } from "../df-mpeg-meta.js";
 import { DownloadUrlOpt } from "../download/download-url.js";
@@ -10,8 +9,7 @@ import { DownloadTask, DownloadTaskManager } from "../tasks/download-task.js";
 import { MetadataTask } from "../tasks/metadata-task.js";
 import { MoveFileSetDateTask } from "../tasks/move-file-set-date-task.js";
 import { SubtitlesTaskBuilder, SubtitlesTaskManager } from "../tasks/subtitles-task.js";
-import { makeFilenamePath } from "df-downloader-common/utils/filename-template-utils.js";
-import { sanitizeFilePath } from "../utils/file-utils.js";
+import { makeFilePathWithTemplate } from "../utils/template-utils.js";
 
 type DownloadTaskPipelineOpts = {
   downloadTaskManager: DownloadTaskManager;
@@ -109,11 +107,7 @@ export const createDownloadTaskPipeline = (opts: DownloadTaskPipelineOpts) => {
       stepName: "Move File",
       taskCreator: ({ context }) => {
         const { dfContentInfo, mediaInfo } = context;
-        const rawFilename = makeFilenamePath(dfContentInfo, mediaInfo, configService.config.contentManagement.filenameTemplate);
-        const sanitizedFilename = sanitizeFilePath(rawFilename).fullPath;
-        const config = configService.config;
-        const contentManagementConfig = config.contentManagement;
-        const destination = path.join(contentManagementConfig.destinationDir, sanitizedFilename);
+        const destination = makeFilePathWithTemplate(dfContentInfo, mediaInfo, configService.config.contentManagement.filenameTemplate);
         context.finalLocation = destination;
         if (context.downloadLocation !== destination) {
           return MoveFileSetDateTask(
