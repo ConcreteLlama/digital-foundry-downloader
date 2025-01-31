@@ -127,7 +127,7 @@ export const DfFilenameTemplateVarDefinitions: Record<DfFilenameTemplateVarName,
 };
 
 export const helperVars: Record<string, string> = {
-    "ifIn": "Check if a value is in a list",
+    "ifIn": "Check if a value is in a list. For example {{#ifIn tags 'retro'}}Retro/{{/ifIn}} will put any content with the tag 'retro' in a 'Retro' directory.",
     "ifTag": `Check if a tag is in the content's tags. For example "{{#ifTag 'retro'}}Retro/{{/ifTag}} will put any content with the tag 'retro' in a 'Retro' directory.`,
 };
 
