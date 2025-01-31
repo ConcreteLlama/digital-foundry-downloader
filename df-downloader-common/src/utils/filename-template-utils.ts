@@ -69,7 +69,7 @@ export const DfFilenameTemplateVarDefinitions: Record<DfFilenameTemplateVarName,
         valueExtractor: (_, mediaInfo) => mediaInfo.mediaType,
     },
     "tags": {
-        description: "The tags of the content",
+        description: "The tags of the content. This is an array and will produce a comma separated list.",
         valueExtractor: (contentInfo) => contentInfo.tags,
     },
     "audio-encoding": {
@@ -124,6 +124,11 @@ export const DfFilenameTemplateVarDefinitions: Record<DfFilenameTemplateVarName,
         description: "The date and time in the format YYYY-MM-DD_HH-mm-ss",
         valueExtractor: (contentInfo) => format(contentInfo.publishedDate, "yyyy-MM-dd_HH-mm-ss"),
     },
+};
+
+export const helperVars: Record<string, string> = {
+    "ifIn": "Check if a value is in a list",
+    "ifTag": `Check if a tag is in the content's tags. For example "{{#ifTag 'retro'}}Retro/{{/ifTag}} will put any content with the tag 'retro' in a 'Retro' directory.`,
 };
 
 const generateFilenameTemplateVarMap = (contentInfo: DfContentInfo, mediaInfo: MediaInfo) => Object.entries(DfFilenameTemplateVarDefinitions).reduce((acc, [key, { valueExtractor }]) => {

@@ -1,38 +1,11 @@
 import { ContentManagementConfig } from "df-downloader-common/config/content-management-config";
-import { testTemplate, TestTemplateError } from "df-downloader-common/utils/filename-template-utils";
-import { useEffect, useState } from "react";
-import { CheckboxElement, TextFieldElement, useWatch } from "react-hook-form-mui";
+import { CheckboxElement } from "react-hook-form-mui";
 import { useSelector } from "react-redux";
 import { selectServiceInfo } from "../../store/service-info/service-info.selector";
 import { ZodNumberField } from "../zod-fields/zod-number-field.component.tsx";
 import { ZodTextField } from "../zod-fields/zod-text-field.component";
 import { DfSettingsSectionForm } from "./df-settings-section-form.component";
-
-type TemplateExample = {
-  value: string;
-  unknownVarMessage?: string;
-  error?: any;
-}
-const makeTemplateExample = (filenameTemplate: string, currentValue?: TemplateExample | null): TemplateExample => {
-  try {
-    return {
-      value: testTemplate(filenameTemplate)
-    }
-  } catch (e: any) {
-    if (e instanceof TestTemplateError) {
-      if (e.reason === 'unknown-var') {
-        return {
-          value: "",
-          unknownVarMessage: e.message
-        }
-      }
-    }
-    return {
-      value: currentValue?.value || "",
-      error: e
-    }
-  }
-}
+import { TemplateBuilderField } from "./template/template-builder-field.tsx";
 
 export const ContentManagementSettingsForm = () => {
   return <DfSettingsSectionForm sectionName="contentManagement" title="Content Management Settings">
@@ -42,20 +15,8 @@ export const ContentManagementSettingsForm = () => {
 }
 
 const ContentManagement = () => {
-  // How to get current "filenameTemplate" value?
-  const filenameTemplate = useWatch({
-    name: "filenameTemplate",
-  }) as string;
-  const [templateExample, setTemplateExample] = useState<TemplateExample | null>();
   const serviceInfo = useSelector(selectServiceInfo);
   const isContainer = serviceInfo ? serviceInfo.isContainer : true;
-  useEffect(() => {
-    return setTemplateExample(makeTemplateExample(filenameTemplate, templateExample));
-  }, [filenameTemplate]);
-  const templateHelperText = `${
-        templateExample?.value ? `${templateExample.value}` : ""}${
-        templateExample?.error ? ` (template currently invalid)` : ""}${
-        templateExample?.unknownVarMessage ? `${templateExample.unknownVarMessage}` : ""}`;
   return (<>
     <CheckboxElement
       name="scanForExistingFiles"
@@ -76,23 +37,7 @@ const ContentManagement = () => {
       disabled={isContainer}
       zodString={ContentManagementConfig.shape.destinationDir._def.innerType}
     />
-    <TextFieldElement
-      name="filenameTemplate"
-      label="Filename Template"
-      helperText={templateHelperText}
-      autoComplete="off"
-      validation={{
-        required: "Filename template is required",
-        validate: (value: string) => {
-          try {
-            testTemplate(value);
-            return true;
-          } catch (e: any) {
-            return e.message;
-          }
-        }
-      }}
-    />
+    <TemplateBuilderField/>
     <ZodTextField
       name="workDir"
       label="Work Directory"
