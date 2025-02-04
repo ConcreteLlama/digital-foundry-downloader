@@ -1,12 +1,13 @@
 import { z } from "zod";
 import { DfFilenameTemplateVar, testTemplate } from "../utils/filename-template-utils.js";
 import { makeErrorMessage } from "../utils/general.js";
+import { DummyContentInfos } from "../models/df-content-info.js";
 
 export const ContentManagementConfig = z.object({
   /** The pattern to use for the output filename */
   filenameTemplate: z.string().default(`{{${DfFilenameTemplateVar.CONTENT_URL_NAME}}}.{{${DfFilenameTemplateVar.EXTENSION}}}`).superRefine((val, ctx) => {
     try {
-      testTemplate(val);
+      testTemplate(val, DummyContentInfos[0]);
     } catch (e) {
       return ctx.addIssue({ code: z.ZodIssueCode.custom, message: makeErrorMessage(e) });
     }

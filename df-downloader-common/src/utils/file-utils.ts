@@ -143,7 +143,8 @@ const invalidChars = /[<>:"/\\|?*\x00-\x1F]/g;
 const reservedNames = /^(con|prn|aux|nul|com[0-9]|lpt[0-9])$/i;
 
 export const commonReplacements: Replacement[] = [
-  ['\'', ''],
+  // Replace all quote types (', `, ") and commas
+  [/[`'",]/g, ''],
   // replace newlines
   [/\r\n/g, ' '],
   [/\r/g, ' '],
@@ -155,7 +156,7 @@ export const oldSanitizeFileName = (fileName: string) => {
 };
 
 type Replacement = (string | [RegExp | string, string]);
-type SanitizeFilenameOptions = {
+export type SanitizeFilenameOptions = {
   additionalReplacemenets?: Replacement[];
 };
 export const sanitizeFilename = (filename: string, opts: SanitizeFilenameOptions = {}) => {

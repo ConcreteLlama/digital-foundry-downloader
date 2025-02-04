@@ -9,9 +9,10 @@ import {
   DfContentQueryResponse,
   DfContentStatus,
   DfTagsResponse,
+  DummyContentInfos,
   secondsToHHMMSS,
-  TestTemplateRequest,
-  TestTemplateResponse,
+  PreviewMoveRequest,
+  PreviewMoveResponse,
 } from "df-downloader-common";
 import { testTemplate } from "df-downloader-common/utils/filename-template-utils.js";
 import express, { Request, Response } from "express";
@@ -119,15 +120,15 @@ export const makeContentApiRouter = (contentManager: DigitalFoundryContentManage
   });
 
   router.post("/preview-move", async (req: Request, res: Response) => {
-    await zodParseHttp(TestTemplateRequest, req, res, async (body) => {
+    await zodParseHttp(PreviewMoveRequest, req, res, async (body) => {
       const contentEntries = await contentManager.db.getAllContentEntries();
       try {
-        testTemplate(body.templateString);
+        testTemplate(body.templateString, DummyContentInfos[0]);
       } catch (e) {
         return sendErrorAsResponse(res, e);
       }
       // TODO: Move this into its own utility fn so we can reuse it for actual move task
-      const results: TestTemplateResponse = {
+      const results: PreviewMoveResponse = {
         templateString: body.templateString,
         results: contentEntries.reduce((acc, {contentInfo, downloads}) => {
           if (!downloads.length) {
@@ -146,7 +147,7 @@ export const makeContentApiRouter = (contentManager: DigitalFoundryContentManage
               }       
             }
             return acc;
-          }, [] as TestTemplateResponse['results']['0']['files'])
+          }, [] as PreviewMoveResponse['results']['0']['files'])
           if (files.length) {
             acc.push({
               contentName: contentInfo.name,
@@ -154,7 +155,7 @@ export const makeContentApiRouter = (contentManager: DigitalFoundryContentManage
             });
           }
           return acc;
-        }, [] as TestTemplateResponse['results'])
+        }, [] as PreviewMoveResponse['results'])
       }
       return sendResponse(res, {
         templateString: body.templateString,

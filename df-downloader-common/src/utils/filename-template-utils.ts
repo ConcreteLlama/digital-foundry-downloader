@@ -1,6 +1,6 @@
 import { format } from "date-fns";
 import Handlebars from 'handlebars';
-import { DfContentInfo, DummyContentInfo } from "../models/df-content-info.js";
+import { DfContentInfo } from "../models/df-content-info.js";
 import { MediaInfo, MediaInfoUtils } from "../models/media-info.js";
 import { commonReplacements, sanitizeFilePath, testFilePath } from "./file-utils.js";
 import { errorToString } from "./error.js";
@@ -156,7 +156,8 @@ export class TestTemplateError extends Error {
         super(message);
     }
 } 
-export const testTemplate = (template: string): string => {
+
+export const testTemplate = (template: string, contentInfo: DfContentInfo, mediaInfo?: MediaInfo): string => {
     let parsed: ReturnType<typeof Handlebars.parse>;
     try {
         parsed = Handlebars.parse(template);
@@ -176,8 +177,8 @@ export const testTemplate = (template: string): string => {
     }
     // Now use the dummy DF content info to test the template
     const filenamePath = makeFilenameWithTemplate(
-        DummyContentInfo,
-        DummyContentInfo.mediaInfo[0],
+        contentInfo,
+        mediaInfo || contentInfo.mediaInfo[0],
         template
     );
     testFilePath(filenamePath);

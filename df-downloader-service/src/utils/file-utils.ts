@@ -1,16 +1,9 @@
-import { logger, sanitizeFilename } from "df-downloader-common";
+import { logger, sanitizeFilename, SanitizeFilenameOptions } from "df-downloader-common";
 import mv from "mv";
 import fs from "node:fs";
 import path, { dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { utimes } from "utimes";
-
-export type FilePathInfo = {
-  parts: string[];
-  dirs: string[];
-  filename: string;
-  fullPath: string;
-}
 
 export function checkDir(path: fs.PathLike) {
   if (fs.existsSync(path)) {
@@ -45,6 +38,18 @@ export async function moveFile(source: string, dest: string, options: mv.Options
   });
 }
 
+export type FilePathInfo = {
+  /** Each constituent part of the path (directories + filename) */
+  parts: string[];
+  /** The directories in the path */
+  dirs: string[];
+  /** The filename */
+  filename: string;
+  /** The file extension */
+  extenstion?: string;
+  /** The full path */
+  fullPath: string;
+}
 type ListFilesOpts = {
   recursive?: boolean;
   maxDepth?: number;
@@ -65,6 +70,7 @@ const listAllFilesInternal = async (dirPaths: string[], opts: ListFilesOpts, dep
         filename: file.name,
         fullPath: path.join(...dirPaths, file.name),
         dirs: dirPaths,
+        extenstion: file.name.split('.').pop(),
         parts: [...dirPaths, file.name],
       });
     } else if (recursive && file.isDirectory() && depth < maxDepth) {
@@ -113,15 +119,19 @@ export const deleteFile = async (path: string) => {
     .catch(() => false);
 };
 
-export const sanitizeFilePath = (filePath: string): FilePathInfo => {
+export const sanitizeFilePath = (filePath: string, sanitizeOpt: SanitizeFilenameOptions = {}): FilePathInfo => {
   // Split on either Windows or Unix path separator
   const pathSeparator = /[\\/]/;
   // split the filename by path separator
-  const parts = filePath.split(pathSeparator).map((part) => sanitizeFilename(part));
+  const parts = filePath.split(pathSeparator).map((part) => sanitizeFilename(part, sanitizeOpt));
+  const filename = parts[parts.length - 1];
   return {
     parts,
     dirs: parts.length > 1 ? parts.slice(0, -1) : [],
-    filename: parts[parts.length - 1],
+    filename,
     fullPath: parts.join('/'),
+    extenstion: filename.split('.').pop(),
   }
 };
+
+export const pathIsEqual = (path1: string, path2: string) => path.resolve(path1) === path.resolve(path2);

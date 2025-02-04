@@ -1,4 +1,5 @@
-import { Box, Button, Grid, InputAdornment, List, ListItemButton, Typography } from "@mui/material";
+import { Box, Button, FormHelperText, Grid, InputAdornment, List, ListItemButton, Typography } from "@mui/material";
+import { DfContentInfo, MediaInfo, randomDummyContentInfo } from "df-downloader-common";
 import { DfFilenameTemplateVarDefinitions, helperVars, testTemplate, TestTemplateError } from "df-downloader-common/utils/filename-template-utils";
 import { useEffect, useRef, useState } from "react";
 import { useFormContext, useWatch } from "react-hook-form";
@@ -9,10 +10,10 @@ type TemplateExample = {
   unknownVarMessage?: string;
   error?: any;
 }
-const makeTemplateExample = (filenameTemplate: string, currentValue?: TemplateExample | null): TemplateExample => {
+const makeTemplateExample = (filenameTemplate: string, contentInfo: DfContentInfo, mediaInfo: MediaInfo, currentValue?: TemplateExample | null): TemplateExample => {
   try {
     return {
-      value: testTemplate(filenameTemplate)
+      value: testTemplate(filenameTemplate, contentInfo, mediaInfo),
     }
   } catch (e: any) {
     if (e instanceof TestTemplateError) {
@@ -29,6 +30,8 @@ const makeTemplateExample = (filenameTemplate: string, currentValue?: TemplateEx
     }
   }
 }
+
+const randomMediaInfo = (contentInfo: DfContentInfo) => contentInfo.mediaInfo[Math.floor(Math.random() * contentInfo.mediaInfo.length)];
 
 export const TemplateBuilderField = () => {
   const context = useFormContext();
@@ -52,10 +55,16 @@ export const TemplateBuilderField = () => {
   const [showVariableList, setShowVariableList] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const [cursorPosition, setCursorPosition] = useState<number | null>(null);
+  const [ dummyContentInfo, setDummyContentInfo ] = useState<DfContentInfo>(randomDummyContentInfo());
+  const [ dummyMediaInfo, setDummyMediaInfo ] = useState<MediaInfo>(randomMediaInfo(dummyContentInfo));
 
   useEffect(() => {
-    return setTemplateExample(makeTemplateExample(template, templateExample));
-  }, [template]);
+    setDummyMediaInfo(randomMediaInfo(dummyContentInfo));
+  }, [dummyContentInfo]);
+
+  useEffect(() => {
+    return setTemplateExample(makeTemplateExample(template, dummyContentInfo, dummyMediaInfo, templateExample));
+  }, [template, dummyContentInfo]);
   const templateHelperText = `${templateExample?.value ? `${templateExample.value}` : ""}${templateExample?.error ? ` (template currently invalid)` : ""}${templateExample?.unknownVarMessage ? `${templateExample.unknownVarMessage}` : ""}`;
 
   const handleTagSelect = (selectedOption: string) => {
@@ -110,6 +119,7 @@ export const TemplateBuilderField = () => {
           name="filenameTemplate"
           label="Filename Template"
           helperText={templateHelperText}
+          FormHelperTextProps={{onClick: () => setDummyContentInfo(randomDummyContentInfo(dummyContentInfo.name))}}
           autoComplete="off"
           value={template}
           onChange={handleTemplateChange}

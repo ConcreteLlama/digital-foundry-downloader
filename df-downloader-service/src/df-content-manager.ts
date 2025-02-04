@@ -1,32 +1,27 @@
 import {
+  bytesToHumanReadable,
   CURRENT_DATA_VERSION,
   DfContentEntry,
   DfContentEntryUpdate,
   DfContentEntryUtils,
   DfContentInfo,
-  DfContentInfoUtils,
   DfContentStatus,
-  MediaInfo,
-  bytesToHumanReadable,
   fileSizeStringToBytes,
   filterContentInfos,
   getMediaTypeIndex,
-  logger,
-  transformFirstMatchAsync,
+  logger
 } from "df-downloader-common";
-import fs from "fs/promises";
-import path from "path";
 import { configService } from "./config/config.js";
 import { DbInitInfo, DfDownloaderOperationalDb, DownloadInfoWithName } from "./db/df-operational-db.js";
 import { DfContentInfoReference, forEachArchivePage, getMediaInfo, makeDfContentUrl } from "./df-fetcher.js";
 import { DfTaskManager } from "./df-task-manager.js";
 import { DfUserManager } from "./df-user-manager.js";
 import { serviceLocator } from "./services/service-locator.js";
+import { findExistingContent } from "./utils/content-finder.js";
 import { sanitizeContentName } from "./utils/df-utils.js";
-import { deleteFile, ensureDirectory, fileExists, FilePathInfo, listAllFiles } from "./utils/file-utils.js";
+import { deleteFile, ensureDirectory, fileExists, pathIsEqual } from "./utils/file-utils.js";
 import { getMostImportantItem } from "./utils/importance-list.js";
-import { dfFetchWorkerQueue, fileScannerQueue } from "./utils/queue-utils.js";
-import { makePossibleFilenames } from "./utils/filename-match.js";
+import { dfFetchWorkerQueue } from "./utils/queue-utils.js";
 
 export class DigitalFoundryContentManager {
   private dfUserManager: DfUserManager;
@@ -261,104 +256,42 @@ export class DigitalFoundryContentManager {
     const contentManagementConfig = configService.config.contentManagement;
     const contentEntries = await this.db.getAllContentEntries();
 
-    const notDownloaded = contentEntries.filter((contentEntry) => contentEntry.downloads.length === 0);
     const { destinationDir, maxScanDepth } = contentManagementConfig;
     logger.log("info", `Scanning for existing files in ${destinationDir} with max depth ${maxScanDepth}`);
-    if (notDownloaded.length === 0) {
-      logger.log("info", "No content entries to scan for existing files");
-      return;
-    }
-    const allFiles = await listAllFiles(destinationDir, { recursive: true, maxDepth: maxScanDepth });
-    logger.log('debug', `All files in ${destinationDir}: ${allFiles.map((f) => f.fullPath).join(", ")}`);
-    while (notDownloaded.length > 0) {
-      const toCheck = notDownloaded.splice(0, 50);
-      const toAddDownload: DownloadInfoWithName[] = [];
-      await Promise.allSettled(
-        toCheck.map(async (contentEntry) => {
-          const { contentInfo } = contentEntry;
-          const fileMatch = await transformFirstMatchAsync(contentInfo.mediaInfo, async (mediaInfo) => {
-            const possibleFileNames = makePossibleFilenames(contentInfo, mediaInfo, configService.config.contentManagement.filenameTemplate);
-            const matchingFilePathInfos = possibleFileNames.reduce((acc: {
-              exactMediaMatch: boolean;
-              filePathInfo: FilePathInfo;
-            }[], possibleFile) => {
-              const matches = allFiles.filter((file) => file.filename === possibleFile.filename);
-              if (matches) {
-                for (const match of matches) {
-                  acc.push({
-                    exactMediaMatch: possibleFile.exactMediaMatch,
-                    filePathInfo: match,
-                  });
-                }
-              }
-              return acc;
-            }, []);
-            if (matchingFilePathInfos.length === 0) {
-              return false;
-            }
-            logger.log('silly', `Matching filenames for ${contentInfo.name}: ${matchingFilePathInfos.map((v) => v.filePathInfo.fullPath).join(", ")}`);
-            for (const possibleFilename of matchingFilePathInfos) {
-              try {
-                const { filePathInfo, exactMediaMatch } = possibleFilename;
-                const fullFileName = filePathInfo.fullPath;
-                console.log(fullFileName);
-                // Ensure we can acces the file
-                await fileScannerQueue.addWork(() => fs.access(fullFileName));
-                // Stat the file to get file info
-                const fileInfo = await fileScannerQueue.addWork(() => fs.stat(fullFileName));
-                if (!fileInfo) {
-                  continue;
-                }
-                return {
-                  matchingFileName: fullFileName,
-                  matchingFileStats: fileInfo,
-                  exactMatch: exactMediaMatch,
-                  mediaInfo,
-                };
-              } catch (e) {
-                // File not found, continue loop
-              }
-            }
-            return false;
-          });
-          if (fileMatch) {
-            const { matchingFileName, matchingFileStats, exactMatch } = fileMatch;
-            let bestMatch: MediaInfo;
-            if (exactMatch) {
-              logger.log("info", `Found exact match for ${contentInfo.name} at ${matchingFileName}`);
-              bestMatch = fileMatch.mediaInfo;
-            } else {
-              logger.log(
-                "info",
-                `Found inexact match for ${contentInfo.name} at ${matchingFileName}, finding closest match`
-              );
-              const matchingMediaInfos: [MediaInfo, number][] = contentInfo.mediaInfo.map((mediaInfo) => {
-                try {
-                  const sizeDifference = Math.abs(
-                    fileSizeStringToBytes(mediaInfo.size || "0") - matchingFileStats.size
-                  );
-                  return [mediaInfo, sizeDifference];
-                } catch (e: any) {
-                  return [mediaInfo, -1];
-                }
-              });
-              bestMatch = matchingMediaInfos.sort(([, a], [, b]) => a - b)[0][0];
-            }
-            toAddDownload.push({
-              name: contentInfo.name,
-              downloadInfo: {
-                format: bestMatch.mediaType,
-                downloadLocation: matchingFileName,
-                size: bytesToHumanReadable(matchingFileStats.size),
-                downloadDate: matchingFileStats.birthtime,
-              },
-            });
-          }
-        })
+
+    const fileMatches = await findExistingContent(destinationDir, maxScanDepth, contentEntries);
+    const toAddDownload: DownloadInfoWithName[] = [];
+    for (const fileMatch of fileMatches.matches) {
+      const { closestMatch, filePathInfo } = fileMatch;
+      if (closestMatch.contentEntry.downloads.some((d) => pathIsEqual(d.downloadLocation, filePathInfo.fullPath))) {
+        logger.log("debug", `Download for ${closestMatch.contentEntry.name} already exists (${filePathInfo.fullPath}), skipping`);
+        continue;
+      }
+      if (closestMatch.percentageDiff > 10) {
+        logger.log(
+          "info",
+          `Closest match for ${closestMatch.contentEntry.name} is ${closestMatch.mediaInfo.mediaType} but size differs by ${closestMatch.percentageDiff.toFixed(2)}% - skipping`
+        );
+        continue;
+      }
+      const { contentEntry, mediaInfo } = closestMatch;
+      const { contentInfo } = contentEntry;
+      logger.log(
+        "info",
+        `Adding download for ${contentEntry.name} (${contentInfo.title}) with media type ${mediaInfo.mediaType}`
       );
-      await this.db.addDownloads(toAddDownload);
+      toAddDownload.push({
+        name: contentInfo.name,
+        downloadInfo: {
+          format: mediaInfo.mediaType,
+          downloadLocation: filePathInfo.fullPath,
+          size: bytesToHumanReadable(fileMatch.fileStats.size),
+          downloadDate: fileMatch.fileStats.mtime,
+        },
+      });
     }
 
+    await this.db.addDownloads(toAddDownload);
     logger.log("info", "Finished scanning for existing files");
   }
 
@@ -392,12 +325,11 @@ export class DigitalFoundryContentManager {
     const noMediaInfoContents = [...this.noMediaContentInfos.values()];
     logger.log(
       "info",
-      `Checking for new content${
-        noMediaInfoContents.length
-          ? ` and media info for the following media with no media infos: ${noMediaInfoContents
-              .map((v) => v.contentRef.name)
-              .join(", ")}`
-          : ""
+      `Checking for new content${noMediaInfoContents.length
+        ? ` and media info for the following media with no media infos: ${noMediaInfoContents
+          .map((v) => v.contentRef.name)
+          .join(", ")}`
+        : ""
       }`
     );
     const autoDownloadConfig = configService.config.automaticDownloads;
@@ -513,8 +445,7 @@ export class DigitalFoundryContentManager {
     const updatedContentInfo = await this.getUpdateMediaInfo(contentName).catch((e) => {
       logger.log(
         "error",
-        `Failed to get updated media info for ${contentName}${
-          contentInfoArg ? " - using existing cached version" : ""
+        `Failed to get updated media info for ${contentName}${contentInfoArg ? " - using existing cached version" : ""
         }: ${e}`
       );
     });
@@ -549,11 +480,11 @@ export class DigitalFoundryContentManager {
             size: size ? bytesToHumanReadable(size) : undefined,
             subtitles: subtitles
               ? [
-                  {
-                    service: subtitles.service,
-                    language: subtitles.language,
-                  },
-                ]
+                {
+                  service: subtitles.service,
+                  language: subtitles.language,
+                },
+              ]
               : undefined,
           });
         }
@@ -599,7 +530,7 @@ export class DigitalFoundryContentManager {
   }
 
   async deleteDownload(contentEntry: DfContentEntry, downloadLocation: string) {
-    if (!contentEntry.downloads.find((d) => d.downloadLocation === downloadLocation)) {
+    if (!contentEntry.downloads.find((d) => pathIsEqual(d.downloadLocation, downloadLocation))) {
       throw new Error(`Download not found for content ${contentEntry.name}`);
     }
     const downloadExists = await fileExists(downloadLocation);

@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-export const TestTemplateRequest = z.object({
+export const PreviewMoveRequest = z.object({
     templateString: z.string(),
     contentNames: z.union([z.literal('all'), z.array(z.string())]).transform((value) => {
         if (typeof value === 'string' && value.trim().toLowerCase() === 'all') {
@@ -9,9 +9,9 @@ export const TestTemplateRequest = z.object({
         return value;
     }),
 });
-export type TestTemplateRequest = z.infer<typeof TestTemplateRequest>;
+export type PreviewMoveRequest = z.infer<typeof PreviewMoveRequest>;
 
-export const TestTemplateResponse = z.object({
+export const PreviewMoveResponse = z.object({
     templateString: z.string(),
     results: z.array(z.object({
         contentName: z.string(),
@@ -21,4 +21,4 @@ export const TestTemplateResponse = z.object({
         }))
     }))
 });
-export type TestTemplateResponse = z.infer<typeof TestTemplateResponse>;
+export type PreviewMoveResponse = z.infer<typeof PreviewMoveResponse>;
