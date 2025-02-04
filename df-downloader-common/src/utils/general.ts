@@ -107,3 +107,12 @@ export const makeErrorMessage = (e: any) => {
 export const capitalizeFirstLetter = (s: string) => {
   return s.charAt(0).toUpperCase() + s.slice(1);
 };
+
+export const splitPromiseSettledResult = <T>(results: PromiseSettledResult<T>[]) => results.reduce((acc, result) => {
+  if (result.status === 'fulfilled') {
+    acc.fulfilled.push(result.value);
+  } else {
+    acc.rejected.push(result.reason);
+  }
+  return acc;
+}, { fulfilled: [] as T[], rejected: [] as any[] });

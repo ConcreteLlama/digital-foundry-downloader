@@ -5,7 +5,7 @@
   "main": "index.js",
   "scripts": {
     "install-all-deps": "cd df-downloader-common && npm i && cd ../df-downloader-ui && npm i && cd ../df-downloader-service && npm i",
-    "update-package-locks": "cd df-downloader-common && npm i --package-locks-only && cd ../df-downloader-ui && npm i --package-locks-only && cd ../df-downloader-service && npm i --package-locks-only && npm i --package-locks-only",
+    "update-package-locks": "npm i --package-locks-only && cd df-downloader-common && npm i --package-locks-only && cd ../df-downloader-ui && npm i --package-locks-only && cd ../df-downloader-service && npm i --package-locks-only && npm i --package-locks-only",
     "build": "cd df-downloader-common && npm i && npm run build && cd ../df-downloader-ui && npm run full-build && cd ../df-downloader-service && npm run full-build && npm run get-ui",
     "start": "cd df-downloader-service && npm run start",
     "dev:service": "cd df-downloader-service && npm run dev",

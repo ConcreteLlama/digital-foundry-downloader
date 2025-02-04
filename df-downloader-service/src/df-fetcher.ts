@@ -4,8 +4,10 @@ import {
   DfContentInfoUtils,
   DfUserInfo,
   MediaInfo,
+  MediaInfoUtils,
   fileSizeStringToBytes,
   logger,
+  sanitizeFilename,
 } from "df-downloader-common";
 import { Document, Element } from "domhandler";
 import htmlparser2 from "htmlparser2";
@@ -97,7 +99,7 @@ function makeDfVideoUrl(videoName: string) {
 }
 
 export const makeDfDownloadParams = (dfContent: DfContentInfo, mediaInfo: MediaInfo) => {
-  const filename = DfContentInfoUtils.makeFileName(dfContent, mediaInfo);
+  const filename = mediaInfo.mediaFilename || sanitizeFilename(`${dfContent.name}_${mediaInfo.mediaType}.${MediaInfoUtils.getExtension(mediaInfo)}`);
   const downloadDestination = `${configService.config.contentManagement.workDir}/${filename}`;
   const headers = {
     ...makeAuthHeaders(),

@@ -137,6 +137,77 @@ export const bytesToHumanReadable = (bytes: number, si = false) => {
   return `${bytes} B`;
 };
 
-export const sanitizeFileName = (fileName: string) => {
+// Characters that are not allowed
+const invalidChars = /[<>:"/\\|?*\x00-\x1F]/g;
+// Windows reserved names (these are not allowed as filenames). They can be part of a filename but not the whole filename.
+const reservedNames = /^(con|prn|aux|nul|com[0-9]|lpt[0-9])$/i;
+
+export const commonReplacements: Replacement[] = [
+  // Replace all quote types (', `, ") and commas
+  [/[`'",]/g, ''],
+  // replace newlines
+  [/\r\n/g, ' '],
+  [/\r/g, ' '],
+  [/\n/g, ' '],
+]
+
+export const oldSanitizeFileName = (fileName: string) => {
   return fileName.replace(/[^a-zA-Z0-9-_]/g, "_");
 };
+
+type Replacement = (string | [RegExp | string, string]);
+export type SanitizeFilenameOptions = {
+  additionalReplacemenets?: Replacement[];
+};
+export const sanitizeFilename = (filename: string, opts: SanitizeFilenameOptions = {}) => {
+  const { additionalReplacemenets } = opts;
+  let sanitized = filename;
+  if (additionalReplacemenets) {
+      for (const replacement of additionalReplacemenets) {
+        if (typeof replacement === "string") {
+          sanitized = sanitized.replace(replacement, "_");
+        } else {
+          sanitized = sanitized.replace(replacement[0], replacement[1]);
+        }
+      }
+  }
+  sanitized = sanitized.replace(invalidChars, "_");
+  if (reservedNames.test(sanitized)) {
+    sanitized = "_" + sanitized;
+  }
+  // Trim any leading/trailing whitespace and dots
+  sanitized = sanitized.trim().replace(/^\.+/, "").replace(/\.+$/, "");
+  return sanitized;
+};
+export const sanitizeFilePath = (filePath: string, opts: SanitizeFilenameOptions = {}) => {
+  const parts = filePath.split(/([\\/])/); // Split by / or \ and keep the separators
+  let sanitizedPath = '';
+  for (let i = 0; i < parts.length; i += 2) {
+    const part = parts[i];
+    const separator = parts[i + 1] || '';
+    sanitizedPath += sanitizeFilename(part, opts) + separator;
+  }
+
+  return sanitizedPath;
+};
+
+/** Checks if a filename is safe. Thows */
+export const testFilename = (filename: string, noThrow: boolean = false) => {
+  if (invalidChars.test(filename)) {
+    if (noThrow) {
+      return false;
+    }
+    throw new Error("Invalid characters in filename");
+  }
+  if (reservedNames.test(filename)) {
+    if (noThrow) {
+      return false;
+    }
+    throw new Error("Filename is a reserved name in Windows and may cause issues");
+  }
+  return true;
+}
+
+export const testFilePath = (filePath: string, noThrow: boolean = false) => {
+  return filePath.split(/\/|\\/).every((part) => testFilename(part, noThrow));
+}
