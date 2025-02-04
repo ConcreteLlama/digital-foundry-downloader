@@ -1,4 +1,4 @@
-import { Box, Button, FormHelperText, Grid, InputAdornment, List, ListItemButton, Typography } from "@mui/material";
+import { Box, Button, Grid, InputAdornment, List, ListItemButton, Typography } from "@mui/material";
 import { DfContentInfo, MediaInfo, randomDummyContentInfo } from "df-downloader-common";
 import { DfFilenameTemplateVarDefinitions, helperVars, testTemplate, TestTemplateError } from "df-downloader-common/utils/filename-template-utils";
 import { useEffect, useRef, useState } from "react";
