@@ -1,11 +1,15 @@
 import {
+  DfTaskType,
   DownloadProgressInfo,
   TaskInfo,
   TaskPipelineInfo,
   TaskPipelineStatus,
+  TaskState,
+  isClearMissingFilesTaskInfo,
   isDownloadTaskInfo,
+  isMoveFilesTaskInfo,
   mapFilterEmpty,
-  mapFilterFalsey,
+  mapFilterFalsey
 } from "df-downloader-common";
 import _ from "lodash";
 import { createSelector } from "reselect";
@@ -40,6 +44,9 @@ export const selectPipelinesFromIds = (pipelineIds: string[]) =>
 
 export const selectPipelineDetails = (pipelineId: string) =>
   createSelector(selectPipelines, (pipelines) => pipelines[pipelineId]?.pipelineDetails);
+
+export const selectPipelineField = <K extends keyof TaskPipelineInfo>(pipelineId: string, field: K) =>
+  createDeepEqualSelector(selectPipeline(pipelineId), (pipeline) => pipeline?.[field]);
 
 export const selectDetailsForPipelineIds = (pipelineIds: string[]) =>
   createDeepEqualSelector(selectPipelines, (pipelines) =>
@@ -210,12 +217,12 @@ export const selectPipelinesForContent = (
 
 export const selectPipelineIdsForContent = (contentName: string, completionStatus: "complete" | "incomplete" | "all") =>
   createDeepEqualSelector(selectPipelinesForContent(contentName, completionStatus), (pipelines) => {
-    return mapFilterFalsey(pipelines, (pipeline) => pipeline.pipelineDetails.id);
+    return mapFilterFalsey(pipelines, (pipeline) => pipeline.id);
   });
 
 export const selectActivePipelineIdsForContent = (contentName: string) =>
   createDeepEqualSelector(selectPipelinesForContent(contentName, "incomplete"), (pipelines) => {
-    return mapFilterFalsey(pipelines, (pipeline) => !pipeline.pipelineStatus.isComplete && pipeline.pipelineDetails.id);
+    return mapFilterFalsey(pipelines, (pipeline) => !pipeline.pipelineStatus.isComplete && pipeline.id);
   });
 
 export const selectActivePipelineIdsForMediaType = (contentName: string, mediaType: string) =>
@@ -237,3 +244,73 @@ export const selectDownoadingProgressField = <
   stepId: string,
   key: K
 ) => createSelector(selectDownloadTask(pipelineId, stepId), (task) => task?.status?.currentProgress?.[key] as V);
+
+
+
+type TaskFilter = {
+  state?: TaskState;
+  taskType?: DfTaskType;
+}
+type TaskSort = {
+  by: "priority";
+  order: "asc" | "desc";
+};
+type TaskQuery = {
+  filter?: TaskFilter;
+  sort?: TaskSort;
+};
+
+const selectTasks = (state: RootState) => state.tasks.tasks;
+export const selectTaskIds = (state: RootState) => state.tasks.taskIds;
+export const selectTask = (taskId: string) =>
+  createSelector(selectTasks, (tasks) => tasks[taskId]);
+
+const applyTaskFilter = (task: TaskInfo, filter?: TaskFilter) => {
+  if (!filter) return true;
+  if (filter.state && task.status?.state !== filter.state) return false;
+  if (filter.taskType && task.taskType !== filter.taskType) return false;
+  return true;
+};
+
+const taskPriorityComparator = (a: TaskInfo, b: TaskInfo) => {
+  return a.priority - b.priority;
+};
+
+export const selectQueryTaskIds = (query?: TaskQuery) =>
+  createDeepEqualSelector([selectTaskIds, selectTasks], (ids, tasks) => {
+    return ids
+      .filter((id) => applyTaskFilter(tasks[id], query?.filter))
+      .sort((a, b) => {
+        const sort = query?.sort || {
+          by: "priority",
+          order: "asc",
+        };
+        if (sort.by === "priority") {
+          return sort.order === "asc"
+            ? taskPriorityComparator(tasks[a], tasks[b])
+            : taskPriorityComparator(tasks[b], tasks[a]);
+        }
+        return 0;
+      });
+  });
+
+export const selectQueryTasks = (query?: TaskQuery) =>
+  createDeepEqualSelector([selectQueryTaskIds(query), selectTasks], (ids, tasks) => {
+    return mapFilterFalsey(ids, (id) => tasks[id]);
+  });
+
+export const selectTasksByType = (taskType: DfTaskType) =>
+  createDeepEqualSelector(selectTasks, (tasks) => Object.values(tasks).filter((task) => task.taskType === taskType));
+
+export const selectTasksByIs = <T extends TaskInfo>(is: (value: any) => value is T) => 
+  createDeepEqualSelector(selectTasks, (tasks) => Object.values(tasks).filter(is) as T[]);
+
+export const selectBatchMoveFilesTasks = createDeepEqualSelector(
+  selectTasksByIs(isMoveFilesTaskInfo),
+  (tasks) => tasks,
+);
+
+export const selectClearMissingFilesTasks = createDeepEqualSelector(
+  selectTasksByIs(isClearMissingFilesTaskInfo),
+  (tasks) => tasks,
+);

@@ -15,12 +15,12 @@ export const tasksMiddleware: Middleware = (storeApi) => (next) => (action) => {
     const prevCompletedTasks = new Map<string, string>();
     for (const task of Object.values(prevState.tasks.taskPipelines)) {
       if (task.pipelineStatus.isComplete) {
-        prevCompletedTasks.set(task.pipelineDetails.id, task.pipelineDetails.dfContent.name);
+        prevCompletedTasks.set(task.id, task.pipelineDetails.dfContent.name);
       }
     }
     for (const task of Object.values(newState.tasks.taskPipelines)) {
       if (task.pipelineStatus.isComplete) {
-        if (!prevCompletedTasks.has(task.pipelineDetails.id)) {
+        if (!prevCompletedTasks.has(task.id)) {
           const dfContentName = task.pipelineDetails.dfContent.name;
           storeApi.dispatch(fetchSingleDfContentEntry.start(dfContentName));
         }

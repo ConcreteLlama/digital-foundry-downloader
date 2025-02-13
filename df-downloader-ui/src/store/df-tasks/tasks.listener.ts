@@ -1,13 +1,13 @@
-import { DownloadContentResponse, TaskResponse } from "df-downloader-common";
+import { DownloadContentResponse, TasksResponse } from "df-downloader-common";
 import { z } from "zod";
 import { API_URL } from "../../config";
 import { fetchSingleDfContentEntry } from "../df-content/df-content.action.ts";
 import { AppStartListening } from "../listener";
 import { addFetchListener } from "../utils";
-import { controlTaskPipeline, queryTasks, startDownload } from "./tasks.action";
+import { controlTaskAction, queryTasks, startDownload } from "./tasks.action";
 
 export const startListeningTasks = (startListening: AppStartListening) => {
-  addFetchListener(startListening, queryTasks, TaskResponse, () => [`${API_URL}/tasks/list`]);
+  addFetchListener(startListening, queryTasks, TasksResponse, () => [`${API_URL}/tasks/list`]);
   addFetchListener(startListening, startDownload, DownloadContentResponse, (payload) => [
     `${API_URL}/tasks/task`,
     {
@@ -18,7 +18,7 @@ export const startListeningTasks = (startListening: AppStartListening) => {
       body: JSON.stringify(payload),
     },
   ]);
-  addFetchListener(startListening, controlTaskPipeline, z.any(), (payload) => [
+  addFetchListener(startListening, controlTaskAction, z.any(), (payload) => [
     `${API_URL}/tasks/control`,
     {
       method: "POST",

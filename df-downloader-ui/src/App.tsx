@@ -7,9 +7,10 @@ import { AppNotReadyPage } from "./AppNotReadyPage.tsx";
 import { AuthPage } from "./components/auth/auth-page.component";
 import { DownloadsPage } from "./routes/downloads/downloads.component";
 import { DfContentPage } from "./routes/home/home.component";
-import { Nav } from "./routes/nav/nav.components";
-import { SettingsElement, SettingsPage } from "./routes/settings/settings.component";
-import { SettingsRouteElement, isSettingsRoute, settingsRoutes } from "./routes/settings/settings.routes";
+import { Nav, NavPage } from "./routes/nav/nav.components";
+import { isNestedRoute, NestedRouteElement } from "./routes/nav/nested-routes.tsx";
+import { settingsRouteDefinitions } from "./routes/settings/settings.routes";
+import { toolsRouteDefinitions } from "./routes/tools/tools.routes.tsx";
 import { queryCurrentUser } from "./store/auth-user/auth-user.actions";
 import { selectAuthUser } from "./store/auth-user/auth-user.selector";
 import { queryConfigSection } from "./store/config/config.action.ts";
@@ -19,10 +20,10 @@ import { queryServiceInfo } from "./store/service-info/service-info.actions";
 import { selectServiceError } from "./store/service-info/service-info.selector.ts";
 import { store } from "./store/store";
 import { theme } from "./themes/theme";
-import { dfDownloaderVersion } from "df-downloader-common";
+import { setIntervalImmediate } from "./utils/timer.ts";
+import { queryTasks } from "./store/df-tasks/tasks.action.ts";
 
 function App() {
-  console.log(`Starting app with version ${dfDownloaderVersion}`)
   return (
     <ThemeProvider theme={theme}>
       <MainContainer />
@@ -50,31 +51,42 @@ const MainContainer = () => {
   );
 };
 
-const makeRoutes = (routes: SettingsRouteElement[]) => {
+const makeRoutes = (routes: NestedRouteElement[]) => {
   const toReturn: React.ReactElement[] = [];
   routes.forEach((route) =>
-    isSettingsRoute(route)
+    isNestedRoute(route)
       ? toReturn.push(
-          <Route
-            key={`route-settings-${route.path}`}
-            path={route.path}
-            element={<SettingsElement>{route.element}</SettingsElement>}
-          />
-        )
+        <Route
+          key={`route-${route.path}`}
+          path={route.path}
+          element={route.element}
+        />
+      )
       : toReturn.push(...makeRoutes(route.routes))
   );
   return toReturn;
 };
-const routes = makeRoutes(settingsRoutes.routes);
+const settingsRoutes = makeRoutes(settingsRouteDefinitions.routes);
+const toolsRoutes = makeRoutes(toolsRouteDefinitions.routes);
 
 const MainApp = () => {
   useEffect(() => {
     store.dispatch(queryConfigSection.start("dev"));
   }, []);
+  useEffect(() => {
+    const interval = setIntervalImmediate(() => {
+      store.dispatch(queryTasks.start());
+    }, 1000);
+    return () => {
+      clearInterval(interval);
+    };
+  }, []);
   return (
-    <Box sx={{ display: "flex", width: "100vw" }}>
+    <Box sx={{ display: "flex", width: "100vw" }} key="main-app">
       <Nav />
       <Stack
+        key={"main-app-stack"}
+        id="main-app-stack"
         sx={{
           flex: "1 1 auto",
           height: "100vh",
@@ -84,14 +96,17 @@ const MainApp = () => {
           },
         }}
       >
-        <Toolbar />
+        <Toolbar id="toolbar-spacer"/>
         <Routes>
-          <Route key="route-index" index element={<DfContentPage />} />
-          <Route key="route-content" path="content" element={<DfContentPage />} />
-          <Route key="route-downloads" path="downloads" element={<DownloadsPage />} />
-          <Route key="route-auth" path="auth" element={<AuthPage />} />
-          <Route key="route-settings" element={<SettingsPage />}>
-            {routes}
+          <Route key="route-index" id="route-index" index element={<DfContentPage />}/>
+          <Route key="route-df-content" id="route-df-content" path="content" element={<DfContentPage />} />
+          <Route key="route-downloads" id="route-downloads" path="downloads" element={<DownloadsPage />} />
+          <Route key="route-auth" id="route-auth" path="auth" element={<AuthPage />} />
+          <Route key="route-settings" id="route-settings" element={<NavPage />}>
+            {settingsRoutes}
+          </Route>
+          <Route key="route-tools" id="route-tools" element={<NavPage />}>
+            {toolsRoutes}
           </Route>
         </Routes>
       </Stack>

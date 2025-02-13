@@ -1,29 +1,22 @@
+import { DndContext, DragEndEvent } from "@dnd-kit/core";
 import { Box, Button, Divider, Stack, Typography, useMediaQuery } from "@mui/material";
 import { useDispatch, useSelector } from "react-redux";
+import { Fragment } from "react/jsx-runtime";
+import { clearCompletedPipelines } from "../../api/tasks.ts";
+import { controlTaskAction } from "../../store/df-tasks/tasks.action.ts";
 import {
   selectCompletedPipelineIds,
   selectDownloadingPipelineIds,
   selectPostProcessingPipelineIds,
 } from "../../store/df-tasks/tasks.selector.ts";
-import { DraggableTaskInfo, DraggableTaskInfoData, TaskInfo } from "./task-info.component.tsx";
-import { Fragment } from "react/jsx-runtime";
-import { API_URL } from "../../config.ts";
-import { postJson } from "../../utils/fetch.ts";
-import { DndContext, DragEndEvent } from "@dnd-kit/core";
-import { controlTaskPipeline } from "../../store/df-tasks/tasks.action.ts";
 import { theme } from "../../themes/theme.ts";
-
-const sendClearCompletedTasksRequest = async () => {
-  await postJson(`${API_URL}/tasks/clear_completed`, {});
-};
+import { DraggableTaskInfo, DraggableTaskInfoData, TaskInfo } from "./task-info.component.tsx";
 
 export const TaskList = () => {
   const downloadingTasks = useSelector(selectDownloadingPipelineIds);
   const postProcessingTasks = useSelector(selectPostProcessingPipelineIds);
   const completedTasks = useSelector(selectCompletedPipelineIds);
-  const onClearCompleted = () => {
-    sendClearCompletedTasksRequest().catch((e) => console.error(e));
-  };
+  const onClearCompleted = () => clearCompletedPipelines().catch((e) => console.error(e));
   const belowSm = useMediaQuery(theme.breakpoints.down("sm"));
 
   return (
@@ -91,7 +84,7 @@ const DraggableTaskInfoSet = (props: TaskInfoSetProps) => {
     const { pipelineId, stepId } = activeData;
     const newPosition = overData.position;
     dispatch(
-      controlTaskPipeline.start({
+      controlTaskAction.start({
         pipelineExecutionId: pipelineId,
         stepId,
         action: {

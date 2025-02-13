@@ -1,18 +1,33 @@
 import {
   BasicTaskInfo,
+  ClearMissingFilesTaskInfo,
+  ContentMoveFileInfo,
   ControlPipelineRequest,
+  ControlRequest,
+  ControlTaskRequest,
   DfContentInfo,
   DownloadTaskInfo,
   DownloadTaskStatus,
   LanguageCode,
   MediaInfo,
+  MoveFilesRequest,
+  MoveFilesTaskInfo,
+  MoveFilesTaskResult,
+  REMOVE_EMPTY_DIRS_TASK_TYPE,
+  RemoveEmptyDirsTaskInfo,
+  SCAN_FOR_EXISTING_CONTENT_TASK_TYPE,
+  ScanForExistingContentTaskInfo,
   StepDetails,
-  TaskPipelineAction,
+  TaskAction,
+  TaskInfo,
   TaskPipelineInfo,
   TaskPipelineUtils,
+  TaskStatus,
   getMediaType,
   isChangePositionAction,
   isChangePriorityAction,
+  isControlPipelineRequest,
+  isRemoveEmptyDirsTaskInfo,
   isShiftAction,
   makeErrorMessage,
 } from "df-downloader-common";
@@ -41,6 +56,11 @@ import {
 } from "./task-pipelines/subtitles-task-pipeline.js";
 import { DownloadTask, DownloadTaskManager, isDownloadTask } from "./tasks/download-task.js";
 import { SubtitlesTaskManager } from "./tasks/subtitles-task.js";
+import { BatchMoveFilesTask, isBatchMoveFilesTask, makeMoveFilesTaskStatus } from "./tasks/batch-move-files-task.js";
+import { DigitalFoundryContentManager } from "./df-content-manager.js";
+import { ClearMissingFilesTask, isClearMissingFilesTask } from "./tasks/clear-missing-files-task.js";
+import { isScanForExistingContentTask, ScanForExistingContentTask } from "./tasks/scan-for-content-task.js";
+import { isRemoveEmptyDirsTask, RemoveEmptyDirsTask } from "./tasks/remove-empty-dirs-task.js";
 
 type DfTaskManagerOpts = {
   autoClearCompletedPipelines?: boolean;
@@ -51,14 +71,13 @@ type DfTaskManagerOpts = {
  * other task pipelines that may be added in the future).
  */
 export class DfTaskManager {
-  readonly downloadTaskManager: DownloadTaskManager;
-  readonly subtitlesTaskManager: SubtitlesTaskManager;
-  readonly fileTaskManager: TaskManager;
-
   readonly subtitleTaskPipeline: SubtitlesTaskPipeline;
   readonly downloadTaskPipeline: DownloadTaskPipeline;
 
+  readonly maintenanceOperationsTaskManager: TaskManager;
+
   readonly pipelineExecutions = new Map<string, SubtitlesTaskPipelineExecution | DownloadTaskPipelineExecution>();
+  readonly tasks = new Map<string, ManagedTask<any, any>>();
 
   autoClearCompletedPipelines: boolean;
 
@@ -66,7 +85,7 @@ export class DfTaskManager {
     this.autoClearCompletedPipelines = autoClearCompletedPipelines;
     const downloadConfig = configService.config.downloads;
 
-    this.downloadTaskManager = new DownloadTaskManager({
+    const downloadTaskManager = new DownloadTaskManager({
       concurrentTasks: downloadConfig.maxSimultaneousDownloads,
       retries: {
         maxRetries: downloadConfig.maxRetries,
@@ -74,20 +93,23 @@ export class DfTaskManager {
         retryDelayMultiplier: 2,
       },
     });
-    this.fileTaskManager = new TaskManager({
+    const fileTaskManager = new TaskManager({
       concurrentTasks: 5,
     });
-    this.subtitlesTaskManager = new SubtitlesTaskManager({
+    const subtitlesTaskManager = new SubtitlesTaskManager({
       concurrentTasks: 5,
     });
     this.subtitleTaskPipeline = createSubtitlesTaskPipeline({
-      subtitlesTaskManager: this.subtitlesTaskManager,
-      fileTaskManager: this.fileTaskManager,
+      subtitlesTaskManager: subtitlesTaskManager,
+      fileTaskManager: fileTaskManager,
     });
     this.downloadTaskPipeline = createDownloadTaskPipeline({
-      downloadTaskManager: this.downloadTaskManager,
-      subtitlesTaskManager: this.subtitlesTaskManager,
-      fileTaskManager: this.fileTaskManager,
+      downloadTaskManager: downloadTaskManager,
+      subtitlesTaskManager: subtitlesTaskManager,
+      fileTaskManager: fileTaskManager,
+    });
+    this.maintenanceOperationsTaskManager = new TaskManager({
+      concurrentTasks: 1,
     });
   }
 
@@ -95,7 +117,7 @@ export class DfTaskManager {
     this.pipelineExecutions.set(pipelineExecution.id, pipelineExecution);
     pipelineExecution.once("completed", () => {
       if (this.autoClearCompletedPipelines) {
-        this.clearCompletedTask(pipelineExecution.id);
+        this.clearCompletedPipelineExec(pipelineExecution.id);
       }
     });
   }
@@ -149,7 +171,37 @@ export class DfTaskManager {
     return subtitleExecution;
   }
 
-  clearCompletedTasks() {
+  batchMoveFiles(toMove: ContentMoveFileInfo[], overwrite: boolean, removeRecordIfMissing: boolean) {
+    const fileMoveTask = this.maintenanceOperationsTaskManager.addTask(BatchMoveFilesTask(toMove, {
+      overwrite: overwrite,
+      removeRecordIfMissing: removeRecordIfMissing,
+      db: serviceLocator.db,
+    }, {
+      maxConcurrent: 10,
+    }));
+    this.tasks.set(fileMoveTask.task.id, fileMoveTask);
+    return fileMoveTask;
+  }
+
+  clearMissingFiles() {
+    const removeMissingFilesTask = this.maintenanceOperationsTaskManager.addTask(ClearMissingFilesTask());
+    this.tasks.set(removeMissingFilesTask.task.id, removeMissingFilesTask);
+    return removeMissingFilesTask;
+  }
+
+  scanForExistingContent(contentManager: DigitalFoundryContentManager) {
+    const scanForExistingContentTask = this.maintenanceOperationsTaskManager.addTask(ScanForExistingContentTask(contentManager));
+    this.tasks.set(scanForExistingContentTask.task.id, scanForExistingContentTask);
+    return scanForExistingContentTask;
+  }
+
+  removeEmptyDirs(dir: string) {
+    const removeEmptyDirsTask = this.maintenanceOperationsTaskManager.addTask(RemoveEmptyDirsTask(dir));
+    this.tasks.set(removeEmptyDirsTask.task.id, removeEmptyDirsTask);
+    return removeEmptyDirsTask;
+  }
+
+  clearCompletedPipelineExecs() {
     this.pipelineExecutions.forEach((execution, name) => {
       if (execution.isCompleted) {
         this.pipelineExecutions.delete(name);
@@ -157,14 +209,29 @@ export class DfTaskManager {
     });
   }
 
-  clearCompletedTask(id: string) {
+  clearCompletedPipelineExec(id: string) {
     const execution = this.pipelineExecutions.get(id);
     if (execution && execution.isCompleted) {
       this.pipelineExecutions.delete(id);
     }
   }
 
-  private controlTaskManagerTask(managedTask: GenericManagedTask, action: TaskPipelineAction) {
+  clearCompletedTasks() {
+    this.tasks.forEach((task, name) => {
+      if (task.isCompleted()) {
+        this.tasks.delete(name);
+      }
+    });
+  }
+
+  clearCompletedTask(id: string) {
+    const task = this.tasks.get(id);
+    if (task && task.isCompleted()) {
+      this.tasks.delete(id);
+    }
+  }
+
+  private controlTaskManagerTask(managedTask: GenericManagedTask, action: TaskAction) {
     if (isChangePriorityAction(action)) {
       managedTask.changePriority(action.priority);
     } else if (isShiftAction(action)) {
@@ -196,7 +263,7 @@ export class DfTaskManager {
       throw new Error(`No task with id ${pipelineExecutionId}`);
     }
     if (action === "clear") {
-      this.clearCompletedTask(pipelineExecutionId);
+      this.clearCompletedPipelineExec(pipelineExecutionId);
       return;
     }
     const step = stepId ? pipeline.getStepById(stepId) : pipeline.getCurrentStep();
@@ -205,6 +272,26 @@ export class DfTaskManager {
       throw new Error(`No curent task for taskInfo ${pipelineExecutionId}`);
     }
     this.controlTaskManagerTask(managedTask, action);
+  }
+
+  controlTask(controlTaskRequest: ControlTaskRequest) {
+    if (controlTaskRequest.action === "clear") {
+      this.clearCompletedTask(controlTaskRequest.taskId);
+      return;
+    }
+    const task = this.tasks.get(controlTaskRequest.taskId);
+    if (!task) {
+      throw new Error(`No task with id ${controlTaskRequest.taskId}`);
+    }
+    this.controlTaskManagerTask(task, controlTaskRequest.action);
+  }
+
+  control(controlRequest: ControlRequest) {
+    if (isControlPipelineRequest(controlRequest)) {
+      this.controlPipeline(controlRequest);
+    } else {
+      this.controlTask(controlRequest);
+    }
   }
 
   private getTaskPipelineExecutionArray() {
@@ -216,8 +303,17 @@ export class DfTaskManager {
     return pipeline ? makeTaskPipelineInfo(pipeline) : undefined;
   }
 
+  getTaskInfo(id: string): TaskInfo | undefined {
+    const task = this.tasks.get(id);
+    return task ? makeTaskInfo(task, null) : undefined;
+  }
+
   getAllPipelineInfos(): TaskPipelineInfo[] {
     return this.getTaskPipelineExecutionArray().map((pipeline) => makeTaskPipelineInfo(pipeline));
+  }
+
+  getAllTaskInfos(): TaskInfo[] {
+    return Array.from(this.tasks.values()).map((managedTask) => makeTaskInfo(managedTask, null));
   }
 
   getPipelineInfosInStage(stage: string): TaskPipelineInfo[] {
@@ -282,6 +378,9 @@ export const makeTaskPipelineInfo = (
   }
 
   return {
+    id,
+    type: "pipeline",
+    pipelineType,
     pipelineDetails: {
       id,
       type: pipelineType,
@@ -312,12 +411,22 @@ export const makeTaskPipelineInfo = (
   };
 };
 
+//TODO: All of these task infos are getting quite over the top, I should refactor this
+
 const makeTaskInfo = (
   managedTask: ManagedTask<any, any>,
   positionInfo: PriorityPositionInfo | null
 ): BasicTaskInfo | DownloadTaskInfo => {
   if (isDownloadTask(managedTask.task)) {
     return makeDownloadSubtaskInfo(managedTask, positionInfo);
+  } else if (isBatchMoveFilesTask(managedTask.task)) {
+    return makeMoveFilesTaskInfo(managedTask, positionInfo);
+  } else if (isClearMissingFilesTask(managedTask.task)) {
+    return makeClearMissingFilesTaskInfo(managedTask, positionInfo);
+  } else if (isScanForExistingContentTask(managedTask.task)) {
+    return makeScanForExistingContentTaskInfo(managedTask, positionInfo);
+  } else if (isRemoveEmptyDirsTask(managedTask.task)) {
+    return makeRemoveEmptyDirsTaskInfo(managedTask, positionInfo);
   } else {
     return makeBasicTaskInfo(managedTask, positionInfo);
   }
@@ -332,24 +441,34 @@ const makeCommonTaskInfo = (
   const taskResult = task.result;
   const taskError = taskResult?.status === "failed" ? taskResult.error : undefined;
   return {
+    id: task.id,
+    type: "task",
     taskType: task.taskType,
     priority: positionInfo ? positionInfo.priority : -1,
     position: positionInfo ? positionInfo.position : -1,
     priorityPosition: positionInfo ? positionInfo.priorityPosition : -1,
     status:
       task && taskState
-        ? {
-            id: task.id,
-            state: taskState,
-            pauseTrigger: task.pauseTrigger || undefined,
-            attempt: managedTask.attempt,
-            message: task.getStatusMessage(),
-            error: taskError ? makeErrorMessage(taskError) : undefined,
-            forceStarted: task.forceRunFlag || undefined,
-          }
+        ? makeCommonTaskStatusInfo(managedTask)
         : null,
   };
 };
+
+const makeCommonTaskStatusInfo = (managedTask: GenericManagedTask): TaskStatus => {
+  const task = managedTask.task;
+  const taskState = task.getTaskState();
+  const taskResult = task.result;
+  const taskError = taskResult?.status === "failed" ? taskResult.error : undefined;
+  return {
+    state: taskState,
+    pauseTrigger: task.pauseTrigger || undefined,
+    isComplete: task.isCompleted(),
+    attempt: managedTask.attempt,
+    message: task.getStatusMessage(),
+    error: taskError ? makeErrorMessage(taskError) : undefined,
+    forceStarted: task.forceRunFlag || undefined,
+  };
+}
 
 const makeBasicTaskInfo = (
   managedTask: GenericManagedTask,
@@ -361,6 +480,102 @@ const makeBasicTaskInfo = (
   };
 };
 
+const makeMoveFilesTaskInfo = (
+  managedTask: ManagedTask<BatchMoveFilesTask>,
+  positionInfo: PriorityPositionInfo | null
+): MoveFilesTaskInfo => {
+  const task = managedTask.task;
+  const taskState = task.getTaskState();
+  const taskResult = task.result;
+  let resultData: MoveFilesTaskResult | null = null;
+  const progressStatus = makeMoveFilesTaskStatus(task);
+  if (taskResult?.status) {
+    const taskErrors = taskResult.status === 'failed' ? [taskResult.error] : taskResult.status === 'success' ? taskResult.result.errors || [] : [];
+    resultData = {
+      moved: progressStatus.moved,
+      failed: progressStatus.failed,
+      recordRemoved: progressStatus.recordRemoved,
+      total: progressStatus.total,
+      errors: taskErrors.map(makeErrorMessage),
+    }
+  }
+  return {
+    ...makeCommonTaskInfo(managedTask, positionInfo),
+    taskType: "batch_move_files",
+    capabilities: ["pause", "cancel"],
+    status:
+      task && taskState
+        ? {
+          ...makeCommonTaskStatusInfo(managedTask),
+          currentProgress: progressStatus,
+        }
+        : null,
+    result: resultData,
+  };
+}
+
+const makeClearMissingFilesTaskInfo = (
+  managedTask: ManagedTask<ClearMissingFilesTask>,
+  positionInfo: PriorityPositionInfo | null
+): ClearMissingFilesTaskInfo => {
+  const task = managedTask.task;
+  const taskState = task.getTaskState();
+  const taskResult = task.result;
+  const taskStatus = task.getStatus();
+  return {
+    ...makeCommonTaskInfo(managedTask, positionInfo),
+    taskType: "clear_missing_files",
+    capabilities: [],
+    status:
+      task && taskState
+        ? {
+          ...makeCommonTaskStatusInfo(managedTask),
+          ...taskStatus,
+        }
+        : null,
+    result: taskResult?.status === "success" ? taskResult.result : null,
+  };
+}
+
+const makeScanForExistingContentTaskInfo = (
+  managedTask: ManagedTask<ScanForExistingContentTask>,
+  positionInfo: PriorityPositionInfo | null
+): ScanForExistingContentTaskInfo => {
+  const task = managedTask.task;
+  const taskState = task.getTaskState();
+  const taskResult = task.result;
+  const taskStatus = task.getStatus();
+  return {
+    ...makeCommonTaskInfo(managedTask, positionInfo),
+    taskType: SCAN_FOR_EXISTING_CONTENT_TASK_TYPE,
+    capabilities: [],
+    status:
+      task && taskState
+        ? {
+          ...makeCommonTaskStatusInfo(managedTask),
+        }
+        : null,
+    result: taskResult?.status === "success" ? {
+      foundFiles: taskResult.result.foundFiles.map((file) => file.downloadInfo.downloadLocation),
+    } : null,
+  }
+}
+
+const makeRemoveEmptyDirsTaskInfo = (
+  managedTask: ManagedTask<RemoveEmptyDirsTask>,
+  positionInfo: PriorityPositionInfo | null
+): RemoveEmptyDirsTaskInfo => {
+  return {
+    ...makeCommonTaskInfo(managedTask, positionInfo),
+    taskType: REMOVE_EMPTY_DIRS_TASK_TYPE,
+    capabilities: [],
+    status: makeCommonTaskStatusInfo(managedTask),
+    result: managedTask.task.result?.status === "success" ? {
+      removedDirs: managedTask.task.result.result,
+    } : null,
+  };
+}
+
 const makeDownloadSubtaskInfo = (
   managedTask: ManagedTask<DownloadTask>,
   positionInfo: PriorityPositionInfo | null
@@ -371,9 +586,9 @@ const makeDownloadSubtaskInfo = (
   const status: DownloadTaskStatus | null =
     task && commonTaskInfo.status
       ? {
-          ...commonTaskInfo.status,
-          currentProgress: downloadStatus ? makeDownloadProgressInfo(downloadStatus, managedTask.attempt) : undefined,
-        }
+        ...commonTaskInfo.status,
+        currentProgress: downloadStatus ? makeDownloadProgressInfo(downloadStatus, managedTask.attempt) : undefined,
+      }
       : null;
   return {
     ...commonTaskInfo,

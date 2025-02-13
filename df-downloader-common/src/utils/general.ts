@@ -92,15 +92,13 @@ export const mapFilterFalsey = <INPUT, OUTPUT>(
   }, [] as OUTPUT[]);
 };
 
-export const makeErrorMessage = (e: any) => {
+export const makeErrorMessage = (e: any): string => {
   if (e?.message) {
-    return e.message;
+    return typeof e.message === "string" ? e.message : JSON.stringify(e.message);
   } else if (typeof e === "string") {
     return e;
-  } else if (e?.toString) {
-    return e.toString();
-  } else {
-    return "Unknown error";
+  } else{
+    return JSON.stringify(e);
   }
 };
 

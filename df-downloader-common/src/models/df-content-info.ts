@@ -104,6 +104,9 @@ export const DummyContentInfos: DfContentInfo[] = [{
   ],
   thumbnailUrl: "",
   youtubeVideoId: "",
+  tags: [
+    "DF Direct",
+  ],
   dataPaywalled: false,
   publishedDate: new Date("2032-10-09T17:12:01Z"),
 }, {

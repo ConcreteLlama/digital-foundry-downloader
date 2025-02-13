@@ -1,10 +1,10 @@
 {
   "name": "df-downloader-ui",
   "private": true,
-  "version": "2.2.7",
+  "version": "2.3.0",
   "type": "module",
   "scripts": {
-    "dev": "vite",
+    "dev": "vite --force",
     "add-common": "yalc add df-downloader-common",
     "build": "tsc && vite build",
     "full-build": "npm i && npm run add-common && npm run build",

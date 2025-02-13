@@ -30,47 +30,8 @@ export const DfContentEntryUtils = {
     statusInfo,
     downloads: [],
   }),
-  addDownload: (entry: DfContentEntry, download: DfContentDownloadInfo): DfContentEntry => {
-    const downloads = entry.downloads ?? [];
-    const existingFileIndex = downloads.findIndex((d) => d.downloadLocation === download.downloadLocation);
-    if (existingFileIndex === -1) {
-      downloads.push(download);
-    } else {
-      downloads[existingFileIndex] = download;
-    }
-    entry.downloads = downloads;
-    return entry;
-  },
-  addSubs: (entry: DfContentEntry, downloadLocation: string, subs: DfContentSubtitleInfo): DfContentEntry => {
-    const download = entry.downloads.find((d) => d.downloadLocation === downloadLocation);
-    if (!download) {
-      throw new Error(`Download ${downloadLocation} not found for content ${entry.name}`);
-    }
-    download.subtitles = download.subtitles ?? [];
-    download.subtitles.push(subs);
-    return entry;
-  },
-  setSubs: (entry: DfContentEntry, downloadLocation: string, subs: DfContentSubtitleInfo[]): DfContentEntry => {
-    const download = entry.downloads.find((d) => d.downloadLocation === downloadLocation);
-    if (!download) {
-      throw new Error(`Download ${downloadLocation} not found for content ${entry.name}`);
-    }
-    download.subtitles = subs;
-    return entry;
-  },
-  removeDownload: (entry: DfContentEntry, downloadLocation: string): DfContentEntry => {
-    entry.downloads = entry.downloads.filter((d) => d.downloadLocation !== downloadLocation);
-    return entry;
-  },
-  clearDownloads: (entry: DfContentEntry): DfContentEntry => {
-    entry.downloads = [];
-    return entry;
-  },
   hasDownload: (entry: DfContentEntry): boolean => {
     return entry.downloads.length > 0;
-  },
-  getDownload: (entry: DfContentEntry, downloadLocation: string): DfContentDownloadInfo | undefined => {
-    return entry.downloads.find((d) => d.downloadLocation === downloadLocation);
   },
   getDownloadForFormat: (entry: DfContentEntry, format: string): DfContentDownloadInfo | undefined => {
     return entry.downloads.find((d) => d.format === format);

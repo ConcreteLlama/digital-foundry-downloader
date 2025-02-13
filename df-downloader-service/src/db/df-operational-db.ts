@@ -13,6 +13,8 @@ import {
   mapFilterEmpty,
 } from "df-downloader-common";
 import { DfContentDownloadInfo, DfContentSubtitleInfo } from "df-downloader-common/models/df-content-download-info.js";
+import { pathIsEqual } from "../utils/file-utils.js";
+import { ServiceContentUtils } from "../utils/service-content-utils.js";
 
 const defaultQueryParams: DfContentInfoQueryParams = {
   limit: Infinity,
@@ -38,7 +40,7 @@ export abstract class DfDownloaderOperationalDb {
     if (!existingContent) {
       throw new Error(`Content ${dfContentName} not found`);
     }
-    const updated = DfContentEntryUtils.addDownload(existingContent, downloadInfo);
+    const updated = ServiceContentUtils.addDownload(existingContent, downloadInfo);
     return this.addOrUpdateEntries(updated);
   }
   async subsGenerated(dfContentName: string, downloadLocation: string, subsInfo: DfContentSubtitleInfo) {
@@ -47,7 +49,7 @@ export abstract class DfDownloaderOperationalDb {
       throw new Error(`Content ${dfContentName} not found`);
     }
     // Note: For now, we can only replace subs, not add them. So we use setSubs.
-    const contentEntry = DfContentEntryUtils.setSubs(existingContent, downloadLocation, [subsInfo]);
+    const contentEntry = ServiceContentUtils.setSubs(existingContent, downloadLocation, [subsInfo]);
     return this.setContentEntries([contentEntry]);
   }
   async addDownloads(downloadInfos: DownloadInfoWithName[]) {
@@ -58,7 +60,7 @@ export abstract class DfDownloaderOperationalDb {
         logger.log("warn", `Content ${downloadInfo.name} not found, cannot add download info`);
         return;
       }
-      return DfContentEntryUtils.addDownload(existingEntry, downloadInfo.downloadInfo);
+      return ServiceContentUtils.addDownload(existingEntry, downloadInfo.downloadInfo);
     });
     await this.setContentEntries(replacementEntries);
   }
@@ -67,9 +69,17 @@ export abstract class DfDownloaderOperationalDb {
     if (!existingContent) {
       throw new Error(`Content ${dfContentName} not found`);
     }
-    const updated = DfContentEntryUtils.removeDownload(existingContent, downloadLocation);
-    return this.addOrUpdateEntries(updated);
+    existingContent.downloads = existingContent.downloads.filter((d) => !pathIsEqual(d.downloadLocation, downloadLocation));
+    return this.addOrUpdateEntries(existingContent);
   }
+  async moveDownload(dfContentName: string, oldDownloadLocation: string, newDownloadLocation: string) {
+    const existingContent = await this.getContentEntry(dfContentName);
+    if (!existingContent) {
+      throw new Error(`Content ${dfContentName} not found`);
+    }
+    const updated = ServiceContentUtils.moveDownload(existingContent, oldDownloadLocation, newDownloadLocation);
+    return this.addOrUpdateEntries(updated);
+  };
   async updateContentStatusInfo(dfContentName: string, statusInfo: Partial<DfContentStatusInfo>) {
     const existingContent = await this.getContentEntry(dfContentName);
     if (!existingContent) {

@@ -5,21 +5,10 @@ import { useDispatch, useSelector } from "react-redux";
 import { TaskList } from "../../components/tasks/task-list.component.tsx";
 import { queryConfigSection, updateConfigSection } from "../../store/config/config.action.ts";
 import { selectConfigSection } from "../../store/config/config.selector.ts";
-import { queryTasks } from "../../store/df-tasks/tasks.action";
-import { store } from "../../store/store";
 import { theme } from "../../themes/theme.ts";
-import { setIntervalImmediate } from "../../utils/timer";
 import { DownloadsPageContainer } from "./downloads.styles";
 
 export const DownloadsPage = () => {
-  useEffect(() => {
-    const interval = setIntervalImmediate(() => {
-      store.dispatch(queryTasks.start());
-    }, 1000);
-    return () => {
-      clearInterval(interval);
-    };
-  }, []);
   const belowMd = useMediaQuery(theme.breakpoints.down("md"));
 
   return (

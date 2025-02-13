@@ -4,6 +4,7 @@ import { DigitalFoundryContentManager } from "../../df-content-manager.js";
 import { serviceLocator } from "../../services/service-locator.js";
 import { sanitizeContentName } from "../../utils/df-utils.js";
 import { zodParseHttp } from "../utils/utils.js";
+import { ServiceContentUtils } from "../../utils/service-content-utils.js";
 
 export const makeSubtitlesRouter = (contentManager: DigitalFoundryContentManager) => {
   const router = express.Router();
@@ -27,7 +28,7 @@ export const makeSubtitlesRouter = (contentManager: DigitalFoundryContentManager
             message: "Content not downloaded; cannot generate subtitles",
           });
         }
-        const downloadInfo = DfContentEntryUtils.getDownload(content, mediaFilePath);
+        const downloadInfo = ServiceContentUtils.getDownloadByLocation(content, mediaFilePath);
         if (!downloadInfo) {
           return res.status(404).send({
             message: `Could not find download info for "${contentName}" in "${mediaFilePath}"`,

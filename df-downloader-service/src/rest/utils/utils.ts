@@ -53,11 +53,11 @@ export const sendResponse = (res: Response, data: any, opts: Partial<ResponseOpt
   return sendResponseWithData(res, makeSuccessResponse(data), ensureResponseOptions(opts, 200));
 };
 
-export const zodParseHttp = async <T extends z.ZodRawShape, R = void | Promise<void>>(
-  schema: z.ZodObject<T> | z.ZodEffects<z.ZodObject<T>>,
+export const zodParseHttp = async <T extends z.ZodType<any, any, any>, R = void | Promise<void>>(
+  schema: T,
   req: Request,
   res: Response,
-  handler: (data: z.infer<z.ZodObject<T>>) => R
+  handler: (data: z.infer<T>) => R
 ) => {
   const result = schema.safeParse(req.body);
   if (!result.success) {

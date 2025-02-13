@@ -3,10 +3,8 @@ import PauseButtonIcon from "@mui/icons-material/Pause";
 import StartButtonIcon from "@mui/icons-material/PlayArrow";
 import StopButton from "@mui/icons-material/Stop";
 import { ButtonGroup, IconButton, Tooltip } from "@mui/material";
-import { ControlPipelineRequest, TaskPipelineAction } from "df-downloader-common";
 import { Fragment, useState } from "react";
 import { useSelector } from "react-redux";
-import { API_URL } from "../../config";
 import { ResumeIcon } from "../../icons/resume-icon.component.tsx";
 import {
   selectBasicTaskField,
@@ -15,16 +13,10 @@ import {
   selectTaskState,
   selectTaskStatusField,
 } from "../../store/df-tasks/tasks.selector.ts";
-import { postJson } from "../../utils/fetch";
 import { BasicDialog } from "../general/basic-dialog.component.tsx";
+import { controlPipeline, clearPipeline } from "../../api/tasks.ts";
 
-const sendTaskControlRequest = async (pipelineExecutionId: string, action: TaskPipelineAction) => {
-  const body: ControlPipelineRequest = {
-    pipelineExecutionId,
-    action,
-  };
-  await postJson(`${API_URL}/tasks/control`, body);
-};
+
 
 type TaskControlsProps = {
   pipelineId: string;
@@ -49,13 +41,13 @@ export const TaskControls = ({ pipelineId }: TaskControlsProps) => {
   return (
     <ButtonGroup>
       {isComplete ? (
-        <IconButton onClick={() => sendTaskControlRequest(pipelineId, "clear")}>
+        <IconButton onClick={() => clearPipeline(pipelineId)}>
           <ClearIcon />
         </IconButton>
       ) : (
         <Fragment>
           {startButton}
-          <IconButton disabled={!cancelEnabled} onClick={() => sendTaskControlRequest(pipelineId, "cancel")}>
+          <IconButton disabled={!cancelEnabled} onClick={() => controlPipeline(pipelineId, "cancel")}>
             <StopButton />
           </IconButton>{" "}
         </Fragment>
@@ -71,7 +63,7 @@ type ActionButtonProps = {
 const ResumeButton = ({ pipelineId, disabled }: ActionButtonProps) => {
   return (
     <Tooltip title="Resume">
-      <IconButton disabled={disabled} onClick={() => sendTaskControlRequest(pipelineId, "resume")}>
+      <IconButton disabled={disabled} onClick={() => controlPipeline(pipelineId, "resume")}>
         <ResumeIcon />
       </IconButton>
     </Tooltip>
@@ -81,7 +73,7 @@ const ResumeButton = ({ pipelineId, disabled }: ActionButtonProps) => {
 const PauseButton = ({ pipelineId, disabled }: ActionButtonProps) => {
   return (
     <Tooltip title="Pause">
-      <IconButton disabled={disabled} onClick={() => sendTaskControlRequest(pipelineId, "pause")}>
+      <IconButton disabled={disabled} onClick={() => controlPipeline(pipelineId, "pause")}>
         <PauseButtonIcon />
       </IconButton>
     </Tooltip>
@@ -97,7 +89,7 @@ const ForceStartButton = ({ pipelineId, disabled }: ActionButtonProps) => {
     setConfirmDialogOpen(false);
   };
   const onConfirm = () => {
-    sendTaskControlRequest(pipelineId, "force_start");
+    controlPipeline(pipelineId, "force_start");
     closeConfirmDialog();
   };
   return (

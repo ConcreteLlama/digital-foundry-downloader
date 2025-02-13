@@ -2,7 +2,7 @@ import { Box, Card, Typography } from "@mui/material";
 import { DownloadProgressUtils, DownloadTaskInfo, bytesToHumanReadable } from "df-downloader-common";
 import prettyMs from "pretty-ms";
 import { useSelector } from "react-redux";
-import { selectPipelineDetails } from "../../store/df-tasks/tasks.selector.ts";
+import { selectPipelineDetails, selectPipelineField } from "../../store/df-tasks/tasks.selector.ts";
 import { DfDownloadProgressBar } from "../tasks/download-progress-bar.component";
 import { TaskStatusDetail } from "../tasks/task-status-detail/task-status-detail.component.tsx";
 import { getTaskTypeIcon } from "../tasks/task-type-icon.ts";
@@ -31,9 +31,10 @@ export const PipelineInfoSummaryDetail = ({ pipelineId }: TaskComponentProps) =>
   if (!taskDetails) {
     return <Typography>{`Task ${pipelineId} not found`}</Typography>;
   }
+  const taskPipelineType = useSelector(selectPipelineField(pipelineId, "pipelineType"));
   const mediaType = taskDetails.mediaType;
   const startTime = taskDetails.queuedTime;
-  const TaskTypeIcon = getTaskTypeIcon(taskDetails.type);
+  const TaskTypeIcon = getTaskTypeIcon(taskPipelineType);
   return (
     <Card variant="outlined" sx={{ padding: "0.5rem" }}>
       <Box

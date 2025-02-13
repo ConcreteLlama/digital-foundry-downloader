@@ -1,5 +1,20 @@
 # Changelog
 
+## Version 2.3.0
+
+### Features
+
+- Added file templates in Content Management settings allowing you to specify custom naming based on info from the content.
+  - Example: `{{#ifTag 'df direct'}}DF Direct/{{/ifTag}}{{YYYY}}/{{download-filename}}` - this will put all DF Directs into a DF Direct directory, and all content will go into YEAR/FILENAME
+    - So `DF RETRO Analogue Pocket Review HEVC.mp4` would go to `2021\DF RETRO Analogue Pocket Review HEVC.mp4.mp4`
+    - `DF Direct 199 1080p H264.mp4` would go to `DF Direct\2025\DF Direct 199 1080p H264.mp4a.mp4`
+- Added various tools for file maintenance including:
+  - Reorganize files - a tool to allow you to reorganize your existing downloads based on the current configured template
+  - Maintenance tools:
+    - Clear Missing Files - removes references to files that no longer exist (e..g if you've downloaded something with the tool but since deleted it)
+    - Scan for existing content - Scans directory for existing content and adds it to the DB
+    - Clear empty directories - clears empty directories (useful if you've moved files around a lot from templates)
+
 ## Version 2.2.6 
 
 ### Bug fixes

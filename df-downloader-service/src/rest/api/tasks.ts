@@ -1,4 +1,4 @@
-import { AddTaskRequest, ControlPipelineRequest, DownloadContentResponse, TaskResponse } from "df-downloader-common";
+import { AddTaskRequest, ControlRequest, DownloadContentResponse, TasksResponse } from "df-downloader-common";
 import express, { Request, Response } from "express";
 import { DigitalFoundryContentManager } from "../../df-content-manager.js";
 import { makeTaskPipelineInfo } from "../../df-task-manager.js";
@@ -9,21 +9,24 @@ export const makeDownloadsApiRouter = (contentManager: DigitalFoundryContentMana
   const taskManager = contentManager.taskManager;
 
   router.get("/list", async (req: Request, res: Response) => {
-    const queuedContent: TaskResponse = {
-      taskPipelines: taskManager.getAllPipelineInfos(),
+    const taskPipelines = taskManager.getAllPipelineInfos();
+    const tasks = taskManager.getAllTaskInfos();
+    const queuedContent: TasksResponse = {
+      taskPipelines: taskPipelines,
+      tasks: tasks,
     };
     return sendResponse(res, queuedContent);
   });
 
   router.get("/task/:id", async (req: Request, res: Response) => {
-    const queuedContent = taskManager.getPipelineInfo(req.params.id);
+    const queuedContent = taskManager.getPipelineInfo(req.params.id) || taskManager.getTaskInfo(req.params.id);
     return sendResponse(res, queuedContent);
   });
 
   router.post("/control", async (req: Request, res: Response) => {
-    await zodParseHttp(ControlPipelineRequest, req, res, async (data) => {
+    await zodParseHttp(ControlRequest, req, res, async (data) => {
       try {
-        taskManager.controlPipeline(data);
+        taskManager.control(data);
         sendResponse(res, {});
       } catch (e) {
         sendErrorAsResponse(res, e, {
@@ -33,7 +36,8 @@ export const makeDownloadsApiRouter = (contentManager: DigitalFoundryContentMana
     });
   });
 
-  router.post("/clear_completed", async (req: Request, res: Response) => {
+  router.post("/clear-completed/", async (req: Request, res: Response) => {
+    taskManager.clearCompletedPipelineExecs();
     taskManager.clearCompletedTasks();
     sendResponse(res, {});
   });

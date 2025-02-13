@@ -14,7 +14,9 @@ import { makeSubtitlesRouter } from "./api/subtitles.js";
 export const makeApiRouter = (contentManager: DigitalFoundryContentManager, jwtManager: JwtManager) => {
   const router = express.Router({ mergeParams: true });
 
-  router.use(express.json());
+  router.use(express.json({
+    limit: "50mb",
+  }));
   router.use(express.urlencoded({ extended: true }));
 
   router.use("/content", authenticateMiddleware(jwtManager), makeContentApiRouter(contentManager));
@@ -22,7 +24,7 @@ export const makeApiRouter = (contentManager: DigitalFoundryContentManager, jwtM
   router.use("/config", authenticateMiddleware(jwtManager), makeConfigRouter());
   router.use("/df-user", authenticateMiddleware(jwtManager), makeDfUserInfoRouter(contentManager));
   router.use("/subtitles", authenticateMiddleware(jwtManager), makeSubtitlesRouter(contentManager));
-  router.use("/service-info", authenticateMiddleware(jwtManager), makeServiceInfoRouter());
+  router.use("/service-info", makeServiceInfoRouter());
   router.use("/preview", makePreviewRouter(contentManager));
   router.use("/auth", makeAuthRouter(jwtManager));
 

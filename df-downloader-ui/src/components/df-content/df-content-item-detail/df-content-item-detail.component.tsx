@@ -3,9 +3,9 @@ import { DfContentInfoUtils, secondsToHHMMSS } from "df-downloader-common";
 import { Image } from "mui-image";
 import { useEffect } from "react";
 import { useSelector } from "react-redux";
+import { clearPipeline } from "../../../api/tasks.ts";
 import { useDfContentEntry } from "../../../hooks/use-df-content-entry.ts";
 import { refreshDfContentMeta } from "../../../store/df-content/df-content.action.ts";
-import { controlTaskPipeline } from "../../../store/df-tasks/tasks.action.ts";
 import { selectQueryPipelineIds } from "../../../store/df-tasks/tasks.selector.ts";
 import { store } from "../../../store/store.ts";
 import { theme } from "../../../themes/theme.ts";
@@ -49,7 +49,7 @@ export const DfContentInfoItemDetail = ({ dfContentName }: DfContentInfoItemDeta
   const pipelineIds = [...downloadingPipelineIds, ...postProcessingPipelineIds, ...completedPipelineIds];
   const clearCompletedPipelines = () => {
     completedPipelineIds.forEach((pipelineId) => {
-      store.dispatch(controlTaskPipeline.start({ pipelineExecutionId: pipelineId, action: "clear" }));
+      clearPipeline(pipelineId);
     });
   };
   if (!dfContentEntry) {

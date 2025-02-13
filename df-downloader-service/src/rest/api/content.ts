@@ -1,27 +1,29 @@
 import {
+  ContentMoveFileInfo,
   DeleteDownloadRequest,
   DfContentEntrySearchBody,
   DfContentEntrySearchUtils,
   DfContentEntryUtils,
   DfContentInfoRefreshMetaRequest,
   DfContentInfoRefreshMetaResponse,
-  DfContentInfoUtils,
   DfContentQueryResponse,
   DfContentStatus,
   DfTagsResponse,
   DummyContentInfos,
-  secondsToHHMMSS,
+  isMoveFilesWithListRequest,
+  MoveFilesRequest,
   PreviewMoveRequest,
   PreviewMoveResponse,
+  secondsToHHMMSS
 } from "df-downloader-common";
 import { testTemplate } from "df-downloader-common/utils/filename-template-utils.js";
 import express, { Request, Response } from "express";
-import path from "path";
 import { DigitalFoundryContentManager } from "../../df-content-manager.js";
 import { sanitizeContentName } from "../../utils/df-utils.js";
 import { queryParamToInteger, queryParamToString, queryParamToStringArray } from "../../utils/query-utils.js";
-import { makeFilePathWithTemplate } from "../../utils/template-utils.js";
 import { sendErrorAsResponse, sendResponse, zodParseHttp } from "../utils/utils.js";
+import { ServiceContentUtils } from "../../utils/service-content-utils.js";
+import { configService } from "../../config/config.js";
 
 export const makeContentApiRouter = (contentManager: DigitalFoundryContentManager) => {
   const router = express.Router();
@@ -106,7 +108,7 @@ export const makeContentApiRouter = (contentManager: DigitalFoundryContentManage
           message: "Content not found",
         });
       }
-      const downloadInfo = DfContentEntryUtils.getDownload(contentEntry, searchProps.downloadLocation);
+      const downloadInfo = ServiceContentUtils.getDownloadByLocation(contentEntry, searchProps.downloadLocation);
       if (!downloadInfo) {
         return res.status(404).send({
           message: `Download not found for content ${searchProps.contentName}`,
@@ -127,40 +129,47 @@ export const makeContentApiRouter = (contentManager: DigitalFoundryContentManage
       } catch (e) {
         return sendErrorAsResponse(res, e);
       }
-      // TODO: Move this into its own utility fn so we can reuse it for actual move task
+      const moveFileList = await contentManager.getFileMoveList(body.templateString);
       const results: PreviewMoveResponse = {
         templateString: body.templateString,
-        results: contentEntries.reduce((acc, {contentInfo, downloads}) => {
-          if (!downloads.length) {
-            return acc;
-          }
-          const files = downloads.reduce((acc, download) => {
-            const mediaInfo = DfContentInfoUtils.getMediaInfo(contentInfo, download.format);
-            if (mediaInfo) {
-              const oldFilename = path.normalize(download.downloadLocation);
-              const newFilename = path.normalize(makeFilePathWithTemplate(contentInfo, mediaInfo, body.templateString));
-              if (oldFilename !== newFilename) {
-                acc.push({
-                  oldFilename: oldFilename,
-                  newFilename: newFilename,
-                });     
-              }       
-            }
-            return acc;
-          }, [] as PreviewMoveResponse['results']['0']['files'])
-          if (files.length) {
-            acc.push({
-              contentName: contentInfo.name,
-              files,
-            });
-          }
-          return acc;
-        }, [] as PreviewMoveResponse['results'])
+        results: moveFileList,
       }
-      return sendResponse(res, {
-        templateString: body.templateString,
-        results,
+      return sendResponse(res, results);
+    });
+  });
+
+  router.post("/move-files", async (req: Request, res: Response) => {
+    await zodParseHttp(MoveFilesRequest, req, res, async (body) => {
+      const toMove: ContentMoveFileInfo[] = isMoveFilesWithListRequest(body) ? body.toMove : await contentManager.getFileMoveList(body.template)
+      const taskInfo = contentManager.taskManager.batchMoveFiles(toMove, body.overwrite, body.removeRecordIfMissing);
+      res.status(200).send({
+        message: "Batch move files request initiated",
+        taskId: taskInfo.task.id,
       });
+    });
+  });
+
+  router.post("/clear-missing-files", async (req: Request, res: Response) => {
+    const task = contentManager.taskManager.clearMissingFiles();
+    return sendResponse(res, {
+      message: "Clear missing files task initiated",
+      taskId: task.task.id,
+    });
+  });
+
+  router.post("/scan-for-existing-content", async (req: Request, res: Response) => {
+    const task = contentManager.taskManager.scanForExistingContent(contentManager);
+    return sendResponse(res, {
+      message: "Scan for existing content task initiated",
+      taskId: task.task.id,
+    });
+  });
+  
+  router.post("/remove-empty-dirs", async (req: Request, res: Response) => {
+    const task = contentManager.taskManager.removeEmptyDirs(configService.config.contentManagement.destinationDir);
+    return sendResponse(res, {
+      message: "Remove empty directories task initiated",
+      taskId: task.task.id,
     });
   });
 

@@ -2,7 +2,7 @@ import { DraggableAttributes, useDraggable, useDroppable } from "@dnd-kit/core";
 import { SyntheticListenerMap } from "@dnd-kit/core/dist/hooks/utilities/useSyntheticListeners";
 import { Box } from "@mui/material";
 import { useSelector } from "react-redux";
-import { selectBasicTaskField, selectCurrentStep, selectPipelineDetails } from "../../store/df-tasks/tasks.selector.ts";
+import { selectBasicTaskField, selectCurrentStep, selectPipelineDetails, selectPipelineField } from "../../store/df-tasks/tasks.selector.ts";
 import { EllipsisTooltipText } from "../general/ellipsis-tooltip-text.component.tsx";
 import { TaskInfoCard } from "./task-info.styles.tsx";
 import { TaskStatusDetail } from "./task-status-detail/task-status-detail.component.tsx";
@@ -80,9 +80,9 @@ type TaskHeaderItemProps = {
 };
 export const TaskHeaderItem = ({ pipelineId, draggableProps }: TaskHeaderItemProps) => {
   const { dfContent, mediaType } = useSelector(selectPipelineDetails(pipelineId));
-  const pipelineDetails = useSelector(selectPipelineDetails(pipelineId));
+  const taskPipelineType = useSelector(selectPipelineField(pipelineId, "pipelineType"));
   const { ref, listeners, attributes } = draggableProps || {};
-  const TaskTypeIcon = getTaskTypeIcon(pipelineDetails.type);
+  const TaskTypeIcon = getTaskTypeIcon(taskPipelineType);
   return (
     <Box
       ref={ref}

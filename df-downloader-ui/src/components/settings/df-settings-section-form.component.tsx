@@ -63,6 +63,53 @@ export const DfSettingsSectionForm = ({ sectionName, title, children, onSubmit }
   }
 };
 
+type InlineDfSettingsSectionProps = {
+  sectionName: keyof DfDownloaderConfig;
+  children: React.ReactNode;
+  onSubmit?: () => void;
+};
+/**
+ * This is a smaller version of the DfSettingsSectionForm that is meant to be used inline with other components (e.g. if just wanting to update a single field).
+ * It does not include a title, divider or submit button.
+ */
+export const InlineDfSettingsSection = ({ sectionName, children, onSubmit }: InlineDfSettingsSectionProps) => {
+  useEffect(() => {
+    store.dispatch(queryConfigSection.start(sectionName));
+  }, [sectionName]);
+  const currentSettings = useSelector(selectConfigSection(sectionName));
+  const configLoading = useSelector(selectConfigLoading);
+  const configError = useSelector(selectConfigError);
+  const zodSchema = DfDownloaderConfig.shape[sectionName];
+  if (configError) {
+    return <Typography>{configError.message}</Typography>;
+  } else if (configLoading || !currentSettings) {
+    return <Loading />;
+  } else {
+    return (
+      <CurrentSettingsContext.Provider
+        value={{
+          [sectionName]: currentSettings,
+        }}
+      >
+        <FormContainer
+          resolver={zodResolver(zodSchema)}
+          defaultValues={currentSettings as any}
+          onSuccess={(data) => {
+            console.log('inline df settings section form', data);
+            store.dispatch(updateConfigSection.start({ section: sectionName, value: data }));
+            onSubmit?.();
+          }}
+          onError={(error) => {
+            logger.log("error", error);
+          }}
+        >
+          {children}
+        </FormContainer>
+      </CurrentSettingsContext.Provider>
+    );
+  }
+}
+
 const SubmitButton = () => {
   const { isDirty } = useFormState();
   return (

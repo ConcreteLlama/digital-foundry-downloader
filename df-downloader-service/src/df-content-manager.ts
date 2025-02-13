@@ -1,10 +1,12 @@
 import {
   bytesToHumanReadable,
+  ContentMoveFileInfo,
   CURRENT_DATA_VERSION,
   DfContentEntry,
   DfContentEntryUpdate,
   DfContentEntryUtils,
   DfContentInfo,
+  DfContentInfoUtils,
   DfContentStatus,
   fileSizeStringToBytes,
   filterContentInfos,
@@ -22,6 +24,7 @@ import { sanitizeContentName } from "./utils/df-utils.js";
 import { deleteFile, ensureDirectory, fileExists, pathIsEqual } from "./utils/file-utils.js";
 import { getMostImportantItem } from "./utils/importance-list.js";
 import { dfFetchWorkerQueue } from "./utils/queue-utils.js";
+import { getFileMoveList } from "./utils/template-utils.js";
 
 export class DigitalFoundryContentManager {
   private dfUserManager: DfUserManager;
@@ -42,7 +45,7 @@ export class DigitalFoundryContentManager {
     configService.on("configUpdated:contentManagement", ({ newValue, oldValue }) => {
       if (newValue.destinationDir !== oldValue.destinationDir) {
         ensureDirectory(newValue.destinationDir);
-        this.scanForExistingFiles();
+        this.taskManager.scanForExistingContent(this);
       }
       if (newValue.workDir !== oldValue.workDir) {
         ensureDirectory(newValue.workDir);
@@ -75,7 +78,8 @@ export class DigitalFoundryContentManager {
       await this.patchMetas();
     }
     if (contentManagementConfig.scanForExistingFiles) {
-      await this.scanForExistingFiles();
+      const scanTask = this.taskManager.scanForExistingContent(this);
+      await scanTask.awaitResult();
     }
     logger.log(
       "info",
@@ -293,6 +297,7 @@ export class DigitalFoundryContentManager {
 
     await this.db.addDownloads(toAddDownload);
     logger.log("info", "Finished scanning for existing files");
+    return toAddDownload;
   }
 
   async getNewContentList() {
@@ -555,4 +560,9 @@ export class DigitalFoundryContentManager {
   get scanInProgress() {
     return this.metaFetchesInProgress > 0 || this.currentFetchQueueSize > 0;
   }
+
+  getFileMoveList(template: string) {
+    return this.db.getAllContentEntries().then((contentEntries) => getFileMoveList(contentEntries, template));
+  }
+            
 }

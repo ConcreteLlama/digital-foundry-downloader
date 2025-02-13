@@ -1,14 +1,5 @@
 import { Box, useMediaQuery } from "@mui/material";
-import { Outlet } from "react-router-dom";
 import { theme } from "../../themes/theme";
-
-export const SettingsPage = () => {
-  return (
-    <Box sx={{ display: "flex", padding: 4 }}>
-      <Outlet />
-    </Box>
-  );
-};
 
 export type SettingsElementProps = {
   children: React.ReactNode;

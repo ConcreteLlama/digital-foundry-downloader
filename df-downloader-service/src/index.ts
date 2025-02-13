@@ -10,6 +10,7 @@ import { logger } from "df-downloader-common";
 import { makeRoutes } from "./rest/routes.js";
 import { loadServices } from "./services/service-loader.js";
 import { JwtManager } from "./rest/auth/jwt.js";
+import { serviceLocator } from "./services/service-locator.js";
 
 process
   .on("unhandledRejection", (reason, p) => {
@@ -23,6 +24,7 @@ async function start() {
   logger.level = configService.config.logging.logLevel;
   const db = await DfLowDb.create();
   const dbInitInfo = await db.init();
+  serviceLocator.setDb(db);
   const dfContentManager = new DigitalFoundryContentManager(db);
   loadServices();
   if (configService.config.restApi) {

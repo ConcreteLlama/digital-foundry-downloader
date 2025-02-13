@@ -29,7 +29,7 @@ export const DfContentStatusSummary = ({ content }: DfContentStatusSummaryProps)
         }}
       >
         {pipelineIds.map((pipelineId) => (
-          <PipelineInfoSummary pipelineId={pipelineId} />
+          <PipelineInfoSummary pipelineId={pipelineId} key={`pipeline-info-summary-${pipelineId}`}/>
         ))}
       </Stack>
     );

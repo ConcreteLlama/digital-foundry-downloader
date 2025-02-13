@@ -16,7 +16,8 @@ Handlebars.registerHelper('ifIn', function (this: any, list, elem, options) {
 });
 
 Handlebars.registerHelper('ifTag', function (this: any, tag, options) {
-    if (this.tags.includes(tag)) {
+    const tags = this.tags?.map((tag: string) => tag.toLowerCase()) || [];
+    if (tags.includes(tag.toLowerCase())) {
         return options.fn(this);
     }
     return options.inverse(this);
@@ -50,6 +51,12 @@ export enum DfFilenameTemplateVar {
 };
 export const DfFilenameTemplateVarNames = Object.values(DfFilenameTemplateVar);
 export type DfFilenameTemplateVarName = typeof DfFilenameTemplateVarNames[number];
+
+export const requireAtLeastOneOf: DfFilenameTemplateVar[] = [
+    DfFilenameTemplateVar.CONTENT_URL_NAME,
+    DfFilenameTemplateVar.TITLE,
+    DfFilenameTemplateVar.DOWNLOAD_FILENAME,
+]
 
 export const DfFilenameTemplateVarDefinitions: Record<DfFilenameTemplateVarName, DfTemplateVarDefinition> = {
     "content-url-name": {
@@ -164,6 +171,7 @@ export const testTemplate = (template: string, contentInfo: DfContentInfo, media
     } catch (e: any) {
         throw new TestTemplateError(`Invalid template: ${errorToString(e)}`, 'invalid-template', e);
     }
+    let hasRequiredVar = false;
     for (const statement of parsed.body as any) {
         if (statement.type !== 'MustacheStatement') {
             continue;
@@ -173,7 +181,13 @@ export const testTemplate = (template: string, contentInfo: DfContentInfo, media
             if (!DfFilenameTemplateVarNames.includes(varName as DfFilenameTemplateVarName)) {
                 throw new TestTemplateError(`Unknown template variable: ${varName}`, 'unknown-var');
             }
+            if (requireAtLeastOneOf.includes(varName as DfFilenameTemplateVar)) {
+                hasRequiredVar = true;
+            }
         }
+    }
+    if (!hasRequiredVar) {
+        throw new TestTemplateError(`Template must contain at least one of: ${requireAtLeastOneOf.join(', ')}`, 'invalid-template');
     }
     // Now use the dummy DF content info to test the template
     const filenamePath = makeFilenameWithTemplate(

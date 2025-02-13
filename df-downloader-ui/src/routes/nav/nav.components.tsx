@@ -10,17 +10,19 @@ import {
   SwipeableDrawer,
   Toolbar,
   Typography,
-  useMediaQuery,
+  useMediaQuery
 } from "@mui/material";
 import { useState } from "react";
+import { useSelector } from "react-redux";
+import { Outlet } from "react-router-dom";
 import { AuthUserInfo } from "../../components/auth/auth-user-info.component";
 import { DfUserInfo } from "../../components/df-user-info/df-user-info.component";
 import { CumulativeDownloadInfo } from "../../components/tasks/cumulative-download-info.component";
+import { selectConfigSectionField } from "../../store/config/config.selector.ts";
 import { theme } from "../../themes/theme";
 import { SettingsNav } from "../settings/settings-nav.component";
+import { ToolsNav } from "../tools/tools-nav.component.tsx";
 import { NavItem } from "./nav-item.component";
-import { selectConfigSectionField } from "../../store/config/config.selector.ts";
-import { useSelector } from "react-redux";
 
 export const Nav = () => {
   const useMobileLayout = useMediaQuery(theme.breakpoints.down("md"));
@@ -34,10 +36,10 @@ export const Nav = () => {
   return (
     <Box>
       <CssBaseline />
-      <AppBar component="nav" position="fixed" sx={{ zIndex: (theme) => theme.zIndex.drawer + 1 }}>
-        <Toolbar sx={{ display: "flex", justifyContent: "space-between" }}>
+      <AppBar id="app-bar" component="nav" position="fixed" sx={{ zIndex: (theme) => theme.zIndex.drawer + 1 }}>
+        <Toolbar id="toolbar" sx={{ display: "flex", justifyContent: "space-between" }}>
           {useMobileLayout ? (
-            <IconButton onClick={() => setDrawerOpenState(!drawerOpen)}>
+            <IconButton id="drawer-open-button" onClick={() => setDrawerOpenState(!drawerOpen)}>
               <MenuIcon />
             </IconButton>
           ) : (
@@ -66,14 +68,23 @@ export const Nav = () => {
         }}
       >
         <Toolbar />
-        <Box sx={{ overflow: "auto" }}>
+        <Box sx={{ overflow: "auto" }} id="sidebar">
           <List>
             <NavItem to="/content" text="Content" icon={VideoCameraIcon} onItemSelected={onItemSelected} />
             <NavItem to="/downloads" text="Downloads" icon={DownloadIcon} onItemSelected={onItemSelected} />
+            <ToolsNav onItemSelected={onItemSelected} />
             <SettingsNav onItemSelected={onItemSelected} />
           </List>
         </Box>
       </SwipeableDrawer>
+    </Box>
+  );
+};
+
+export const NavPage = () => {
+  return (
+    <Box sx={{ display: "flex", padding: 4 }}>
+      <Outlet />
     </Box>
   );
 };

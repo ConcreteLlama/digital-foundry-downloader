@@ -1,48 +1,26 @@
+import CodeIcon from "@mui/icons-material/Code";
+import DataObjectIcon from "@mui/icons-material/DataObject";
+import DownloadIcon from "@mui/icons-material/Download";
+import DownloadingIcon from "@mui/icons-material/Downloading";
+import FolderIcon from "@mui/icons-material/Folder";
+import NotificationsIcon from "@mui/icons-material/Notifications";
+import RadarIcon from "@mui/icons-material/Radar";
+import SettingsIcon from "@mui/icons-material/Settings";
+import SubtitlesIcon from "@mui/icons-material/Subtitles";
+import { AutomaticDownloadsSettingsForm } from "../../components/settings/automatic-download-settings-form.component";
+import { ContentDetectionSettingsForm } from "../../components/settings/content-detection-settings-form.component";
 import { ContentManagementSettingsForm } from "../../components/settings/content-management-settings.component";
+import { DevSettingsForm } from "../../components/settings/dev-settings-form.component.tsx";
 import { DfSettingsForm } from "../../components/settings/df-settings.component";
 import { DownloadsSettingsForm } from "../../components/settings/downloads-settings.component";
-import DownloadIcon from "@mui/icons-material/Download";
-import FolderIcon from "@mui/icons-material/Folder";
-import { DfLogoIcon } from "../../icons/df-logo.component";
-import React from "react";
 import { MetadataSettingsForm } from "../../components/settings/metadata-settings-form.component";
-import SettingsIcon from "@mui/icons-material/Settings";
-import DataObjectIcon from "@mui/icons-material/DataObject";
-import SubtitlesIcon from "@mui/icons-material/Subtitles";
-import RadarIcon from "@mui/icons-material/Radar";
-import DownloadingIcon from "@mui/icons-material/Downloading";
-import { SubtitlesSettingsForm } from "../../components/settings/subtitles-settings-form.component";
-import { ContentDetectionSettingsForm } from "../../components/settings/content-detection-settings-form.component";
-import { AutomaticDownloadsSettingsForm } from "../../components/settings/automatic-download-settings-form.component";
-import NotificationsIcon from "@mui/icons-material/Notifications";
-import CodeIcon from "@mui/icons-material/Code";
 import { NotificationSettingsForm } from "../../components/settings/notification-settings.component";
-import { DevSettingsForm } from "../../components/settings/dev-settings-form.component.tsx";
+import { SubtitlesSettingsForm } from "../../components/settings/subtitles-settings-form.component";
+import { DfLogoIcon } from "../../icons/df-logo.component";
+import { NestedSubRoute } from "../nav/nested-routes.ts";
+import { SettingsElement } from "./settings.component.tsx";
 
-export type SettingsRoute = {
-  path: string;
-  element: JSX.Element;
-  name: string;
-  icon?: React.FC;
-  devOnly?: boolean;
-};
-export const isSettingsRoute = (route: SettingsRouteElement): route is SettingsRoute => {
-  return (route as SettingsRoute).path !== undefined;
-};
-
-export type SettingsSubRoute = {
-  name: string;
-  icon?: React.FC;
-  routes: SettingsRouteElement[];
-  devOnly?: boolean;
-};
-export const isSettingsSubRoute = (route: SettingsRouteElement): route is SettingsSubRoute => {
-  return (route as SettingsSubRoute).routes !== undefined;
-};
-
-export type SettingsRouteElement = SettingsRoute | SettingsSubRoute;
-
-export const settingsRoutes: SettingsSubRoute = {
+export const settingsRouteDefinitions: NestedSubRoute = {
   name: "Settings",
   icon: SettingsIcon,
   routes: [
@@ -101,5 +79,5 @@ export const settingsRoutes: SettingsSubRoute = {
       icon: CodeIcon,
       devOnly: true,
     },
-  ],
+  ].map((route) => ({ ...route, element: <SettingsElement>{route.element}</SettingsElement> })),
 };

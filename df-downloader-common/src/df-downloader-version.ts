@@ -1,1 +1,1 @@
-export const dfDownloaderVersion = '2.2.7';
+export const dfDownloaderVersion = '2.3.0';

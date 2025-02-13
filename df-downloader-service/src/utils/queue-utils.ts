@@ -33,6 +33,22 @@ export class WorkerQueue {
     });
   }
 
+  pause() {
+    this.queue.pause();
+  }
+
+  resume() {
+    this.queue.resume();
+  }
+
+  async cancel() {
+    return new Promise<void>((resolve, reject) => {
+      this.queue.destroy(() => {
+        resolve();
+      });
+    });
+  }
+
   getQueueSize() {
     return (this.queue as any).length;
   }

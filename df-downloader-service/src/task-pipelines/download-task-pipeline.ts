@@ -10,6 +10,7 @@ import { MetadataTask } from "../tasks/metadata-task.js";
 import { MoveFileSetDateTask } from "../tasks/move-file-set-date-task.js";
 import { SubtitlesTaskBuilder, SubtitlesTaskManager } from "../tasks/subtitles-task.js";
 import { makeFilePathWithTemplate } from "../utils/template-utils.js";
+import { pathIsEqual } from "../utils/file-utils.js";
 
 type DownloadTaskPipelineOpts = {
   downloadTaskManager: DownloadTaskManager;
@@ -109,7 +110,7 @@ export const createDownloadTaskPipeline = (opts: DownloadTaskPipelineOpts) => {
         const { dfContentInfo, mediaInfo } = context;
         const destination = makeFilePathWithTemplate(dfContentInfo, mediaInfo, configService.config.contentManagement.filenameTemplate);
         context.finalLocation = destination;
-        if (context.downloadLocation !== destination) {
+        if (!pathIsEqual(context.downloadLocation, destination)) {
           return MoveFileSetDateTask(
             context.downloadLocation,
             destination,
