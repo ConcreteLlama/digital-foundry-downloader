@@ -12,7 +12,7 @@ export const RemoveEmptyDirsToolView = () => {
     const RemoveEmptyDirsTask = RemoveEmptyDirsTasks[0];
     return RemoveEmptyDirsTask ?
                 <RemoveEmptyDirsTaskInfoView task={RemoveEmptyDirsTask} /> :
-                <Typography>Scan your configured storage for existing content</Typography>
+                <Typography>Remove empty directories in your configured destination directory</Typography>
 }
 
 type RemoveEmptyDirsTaskInfoViewProps = {
