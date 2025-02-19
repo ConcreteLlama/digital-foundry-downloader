@@ -22,7 +22,7 @@ export const AuthFormDialog = () => {
     setMode("login");
   };
   return (
-    <Dialog open={true} fullWidth maxWidth={"lg"}>
+    <Dialog open={true} fullWidth maxWidth={"lg"} id="auth-form-dialog">
       <DialogTitle>
         <Typography>Login</Typography>
       </DialogTitle>

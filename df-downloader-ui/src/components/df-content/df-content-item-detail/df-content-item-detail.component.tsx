@@ -58,7 +58,7 @@ export const DfContentInfoItemDetail = ({ dfContentName }: DfContentInfoItemDeta
   }
   const { contentInfo } = dfContentEntry;
   const { statusInfo } = dfContentEntry;
-  const queuedContentStatus = statusInfo.status;
+  const queuedContentAvailability = statusInfo.availability;
   return dfContentEntry ? (
     <ContentItemDetailContainer>
       <Typography variant="h4" align="center">
@@ -109,7 +109,7 @@ export const DfContentInfoItemDetail = ({ dfContentName }: DfContentInfoItemDeta
             ))}
           </Stack>
         )}
-        {queuedContentStatus === "PAYWALLED" && <Typography>Content is paywalled</Typography>}
+        {queuedContentAvailability === "PAYWALLED" && <Typography>Content is paywalled</Typography>}
         {dfContentEntry.downloads.length > 0 ? (
           <Box>
             <Typography variant="h6" sx={{ paddingBottom: 2 }}>

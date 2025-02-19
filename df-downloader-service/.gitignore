@@ -1,5 +1,4 @@
-db*.json
-.db.json.tmp
+db/*
 public
 config/*
 work_dir

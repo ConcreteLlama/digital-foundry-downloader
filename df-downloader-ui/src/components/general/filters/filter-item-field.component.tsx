@@ -1,6 +1,6 @@
 import { Button, Divider, Grid, Stack, Typography } from "@mui/material";
 import { red } from "@mui/material/colors";
-import { DfContentStatus, StringFilter, TagFilter } from "df-downloader-common";
+import { DfContentAvailability, StringFilter, TagFilter } from "df-downloader-common";
 import { Fragment, useEffect } from "react";
 import { AutocompleteElement, CheckboxElement, MultiSelectElement } from "react-hook-form-mui";
 import { useSelector } from "react-redux";
@@ -27,7 +27,7 @@ export const FilterItemField = ({ parentFieldName, remove, mode }: FilterItemFie
       {mode === "contentEntry" && (
         <Fragment>
           <Divider>AND</Divider>
-          <ContentStatusField fieldName={`${parentFieldName}.status`} />
+          <ContentAvailabilityField fieldName={`${parentFieldName}.availability`} />
         </Fragment>
       )}
       {remove && (
@@ -91,19 +91,19 @@ const TagFilterField = ({ fieldName }: TagFilterFieldProps) => {
   );
 };
 
-type ContentStatusFieldProps = {
+type ContentAvailabilityFieldProps = {
   fieldName: string;
 };
 
-export const ContentStatusField = ({ fieldName }: ContentStatusFieldProps) => {
+export const ContentAvailabilityField = ({ fieldName }: ContentAvailabilityFieldProps) => {
   return (
     <Stack sx={{ gap: 2 }}>
-      <Typography>Status</Typography>
+      <Typography>Availability</Typography>
       <MultiSelectElement
         variant="outlined"
         name={fieldName}
-        label="Status"
-        options={Object.values(DfContentStatus)}
+        label="Availability"
+        options={Object.values(DfContentAvailability)}
         showChips
       />
     </Stack>

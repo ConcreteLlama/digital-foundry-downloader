@@ -84,7 +84,7 @@ export type ThumbnailBackgroundPageProps = {
 export const ThumbnailBackgroundPage = ({ children }: ThumbnailBackgroundPageProps) => {
   const useGallery = useMediaQuery(theme.breakpoints.up("md"));
   return (
-    <Paper sx={{ width: "100vw", height: "100vh" }}>
+    <Paper sx={{ width: "100vw", height: "100vh" }} id="thumbnail-background-page">
       {useGallery ? <CollageBackground /> : <BigImageBackground refresh={10000} />}
       {children}
     </Paper>

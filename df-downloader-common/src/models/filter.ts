@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { DfContentStatus } from "./df-content-status.js";
+import { DfContentAvailability } from "./df-content-status.js";
 import { DfContentInfo } from "./df-content-info.js";
 import { DfContentEntry } from "./df-content-entry.js";
 
@@ -118,18 +118,18 @@ export const ContentInfoFilterUtils = {
     return true;
   },
 };
-const ContentStatusArrayEnum = z
-  .union([z.nativeEnum(DfContentStatus), z.nativeEnum(DfContentStatus).array()])
+const ContentAvailabilityArrayEnum = z
+  .union([z.nativeEnum(DfContentAvailability), z.nativeEnum(DfContentAvailability).array()])
   .refine((value) => (Array.isArray(value) ? value : [value]));
 
 export const ContentEntryFilter = ContentInfoFilter.extend({
-  status: ContentStatusArrayEnum.optional(),
+  availability: ContentAvailabilityArrayEnum.optional(),
 });
 export type ContentEntryFilter = z.infer<typeof ContentEntryFilter>;
 
 export const ContentEntryFilterUtils = {
   matches: (contentEntryFilter: ContentEntryFilter, contentEntry: DfContentEntry): boolean => {
-    if (contentEntryFilter.status && !contentEntryFilter.status.includes(contentEntry.statusInfo.status)) {
+    if (contentEntryFilter.availability && !contentEntryFilter.availability.includes(contentEntry.statusInfo.availability)) {
       return false;
     }
     return ContentInfoFilterUtils.matches(contentEntryFilter, contentEntry.contentInfo);

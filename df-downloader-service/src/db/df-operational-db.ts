@@ -1,22 +1,15 @@
 import {
+  DfContentAvailability,
+  DfContentAvailabilityInfo,
   DfContentEntry,
-  DfContentEntryCreate,
-  DfContentEntryUpdate,
-  DfContentEntryUtils,
   DfContentInfo,
   DfContentInfoQueryParams,
-  DfContentStatus,
-  DfContentStatusInfo,
   DfTagInfo,
-  DfUserInfo,
-  logger,
-  mapFilterEmpty,
+  DfUserInfo
 } from "df-downloader-common";
 import { DfContentDownloadInfo, DfContentSubtitleInfo } from "df-downloader-common/models/df-content-download-info.js";
-import { pathIsEqual } from "../utils/file-utils.js";
-import { ServiceContentUtils } from "../utils/service-content-utils.js";
 
-const defaultQueryParams: DfContentInfoQueryParams = {
+export const defaultQueryParams: DfContentInfoQueryParams = {
   limit: Infinity,
   page: 1,
   tagMode: "or",
@@ -24,144 +17,116 @@ const defaultQueryParams: DfContentInfoQueryParams = {
   sortDirection: "desc",
 };
 
-export type DbInitInfo = {
-  firstRun: boolean;
-};
+export type ContentInfoWithAvailability = {
+  contentInfo: DfContentInfo;
+  availability: DfContentAvailability;
+}
+
+export type ContentAvailabilityParams = {
+  contentName: string;
+  availability: DfContentAvailability;
+}
 
 export type DownloadInfoWithName = {
   name: string;
   downloadInfo: DfContentDownloadInfo;
 };
+export type RemoveDownloadOpts = {
+  contentName: string;
+  downloadLocation: string;
+};
+export type MoveDownloadOpts = {
+  contentName: string;
+  oldLocation: string;
+  newLocation: string;
+};
+export type AddContentEntryOpts = {
+  contentInfo: DfContentInfo;
+  statusInfo: DfContentAvailabilityInfo;
+}
+export type DfDbQueryResult = {
+  params: DfContentInfoQueryParams;
+  totalResults: number;
+  totalDurationSeconds: number;
+  queryResult: DfContentEntry[];
+}
 
 export abstract class DfDownloaderOperationalDb {
-  abstract init(): Promise<DbInitInfo>; //Returns true if this is first run
-  async contentDownloaded(dfContentName: string, downloadInfo: DfContentDownloadInfo) {
-    const existingContent = await this.getContentEntry(dfContentName);
-    if (!existingContent) {
-      throw new Error(`Content ${dfContentName} not found`);
-    }
-    const updated = ServiceContentUtils.addDownload(existingContent, downloadInfo);
-    return this.addOrUpdateEntries(updated);
-  }
-  async subsGenerated(dfContentName: string, downloadLocation: string, subsInfo: DfContentSubtitleInfo) {
-    const existingContent = await this.getContentEntry(dfContentName);
-    if (!existingContent) {
-      throw new Error(`Content ${dfContentName} not found`);
-    }
-    // Note: For now, we can only replace subs, not add them. So we use setSubs.
-    const contentEntry = ServiceContentUtils.setSubs(existingContent, downloadLocation, [subsInfo]);
-    return this.setContentEntries([contentEntry]);
-  }
-  async addDownloads(downloadInfos: DownloadInfoWithName[]) {
-    const existingEntries = await this.getContentEntryList(downloadInfos.map((downloadInfo) => downloadInfo.name));
-    const replacementEntries = mapFilterEmpty(existingEntries, (existingEntry, idx) => {
-      const downloadInfo = downloadInfos[idx];
-      if (!existingEntry) {
-        logger.log("warn", `Content ${downloadInfo.name} not found, cannot add download info`);
-        return;
-      }
-      return ServiceContentUtils.addDownload(existingEntry, downloadInfo.downloadInfo);
-    });
-    await this.setContentEntries(replacementEntries);
-  }
-  async removeDownload(dfContentName: string, downloadLocation: string) {
-    const existingContent = await this.getContentEntry(dfContentName);
-    if (!existingContent) {
-      throw new Error(`Content ${dfContentName} not found`);
-    }
-    existingContent.downloads = existingContent.downloads.filter((d) => !pathIsEqual(d.downloadLocation, downloadLocation));
-    return this.addOrUpdateEntries(existingContent);
-  }
-  async moveDownload(dfContentName: string, oldDownloadLocation: string, newDownloadLocation: string) {
-    const existingContent = await this.getContentEntry(dfContentName);
-    if (!existingContent) {
-      throw new Error(`Content ${dfContentName} not found`);
-    }
-    const updated = ServiceContentUtils.moveDownload(existingContent, oldDownloadLocation, newDownloadLocation);
-    return this.addOrUpdateEntries(updated);
-  };
-  async updateContentStatusInfo(dfContentName: string, statusInfo: Partial<DfContentStatusInfo>) {
-    const existingContent = await this.getContentEntry(dfContentName);
-    if (!existingContent) {
-      throw new Error(`Content ${dfContentName} not found`);
-    }
-    const newStatusInfo = { ...existingContent.statusInfo, ...statusInfo };
-    existingContent.statusInfo = newStatusInfo;
-    return this.addOrUpdateEntries(existingContent);
-  }
-  async updateContentEntry(dfContentName: string, updates: DfContentEntryUpdate) {
-    const existingContent = await this.getContentEntry(dfContentName);
-    if (!existingContent) {
-      throw new Error(`Content ${dfContentName} not found`);
-    }
-    const updated = DfContentEntryUtils.update(existingContent, updates);
-    return (await this.addOrUpdateEntries(updated))[0];
-  }
-  async updateContentInfo(dfContentName: string, updates: DfContentInfo) {
-    const existingContent = await this.getContentEntry(dfContentName);
-    if (!existingContent) {
-      throw new Error(`Content ${dfContentName} not found`);
-    }
-    const updated = DfContentEntryUtils.update(existingContent, {
-      name: dfContentName,
-      contentInfo: updates,
-    });
-    return (await this.addOrUpdateEntries(updated))[0];
-  }
-  addContents(userTier: string | undefined, dfContents: DfContentInfo[]) {
-    return this.addOrUpdateEntries(
-      ...dfContents.map((dfContent) =>
-        dfContent.dataPaywalled
-          ? DfContentEntryUtils.create(dfContent.name, dfContent, {
-              status: DfContentStatus.PAYWALLED,
-              userTierWhenUnavailable: userTier,
-            })
-          : DfContentEntryUtils.create(dfContent.name, dfContent, { status: DfContentStatus.AVAILABLE })
-      )
-    );
-  }
-  protected abstract setContentEntries(contentEntries: DfContentEntry[]): Promise<void>;
-  public async addOrUpdateEntries(...contentInfos: DfContentEntryCreate[]): Promise<DfContentEntry[]> {
-    const existingEntries = await this.getContentEntryList(contentInfos.map((contentInfo) => contentInfo.name));
-    const replacementEntries = existingEntries.map((existingEntry, idx) => {
-      const contentInfo = contentInfos[idx];
-      if (!existingEntry) {
-        return DfContentEntryUtils.create(contentInfo.name, contentInfo.contentInfo, contentInfo.statusInfo);
-      }
-      return DfContentEntryUtils.update(existingEntry, contentInfo);
-    });
-    await this.setContentEntries(replacementEntries);
-    return replacementEntries;
-  }
-  public async updateEntries(...contentEntries: DfContentEntryUpdate[]): Promise<DfContentEntry[]> {
-    const existingEntries = await this.getContentEntryList(contentEntries.map((contentInfo) => contentInfo.name));
-    const { replacementEntries, missingEntries } = existingEntries.reduce(
-      (acc, existingEntry, idx) => {
-        const contentInfo = contentEntries[idx];
-        if (existingEntry) {
-          acc.replacementEntries.push(DfContentEntryUtils.update(existingEntry, contentInfo));
-        } else {
-          missingEntries.push(contentEntries[idx].name);
-        }
+  abstract init(): Promise<void>; //Returns true if this is first run
+
+  abstract getAllContentNames(): Promise<string[]>;
+  abstract getContentEntryList(contentNames: string[]): Promise<(DfContentEntry | undefined)[]>;
+  abstract getContentEntryMap(contentNames: string[]): Promise<Map<string, DfContentEntry>>;
+  abstract getAllContentEntries(): Promise<DfContentEntry[]>;
+
+  abstract getContentStatusInfos(contentNames: string[]): Promise<Record<string, DfContentAvailabilityInfo>>;
+  abstract getContentDownloadInfos(contentNames: string[]): Promise<Record<string, DfContentDownloadInfo[]>>;
+  
+  abstract getAllContentStatusInfos(): Promise<Record<string, DfContentAvailabilityInfo>>;
+  abstract getAllContentDownloadInfos(): Promise<Record<string, DfContentDownloadInfo[]>>;
+
+  abstract isFirstRunComplete(): Promise<boolean>;
+  abstract setFirstRunComplete(isComplete: boolean): Promise<void>;
+
+  abstract getAllTags(): Promise<DfTagInfo[]>;
+
+  abstract getContentEntry(contentName: string): Promise<DfContentEntry | undefined>;
+  abstract setContentInfos(contentInfos: DfContentInfo[]): Promise<void>;
+  abstract setContentStatuses(contentStatuses: Record<string, DfContentAvailabilityInfo>): Promise<void>;
+  abstract setContentAvailailabilities(contentAvailabilities: ContentAvailabilityParams[], userTier: string): Promise<void>;
+  abstract removeContentInfos(contentNames: string[]): Promise<void>;
+  abstract setDfUserInfo(user?: DfUserInfo): Promise<void>;
+  abstract getDfUserInfo(): Promise<DfUserInfo | undefined>;
+  abstract addDownloads(downloadInfos: DownloadInfoWithName[]): Promise<void>;
+  abstract removeDownloads(downloads: RemoveDownloadOpts[]): Promise<void>;
+  abstract moveDownloads(moves: MoveDownloadOpts[]): Promise<{
+    missingFiles: MoveDownloadOpts[];
+  }>;
+  abstract subsGenerated(dfContentName: string, downloadLocation: string, subsInfo: DfContentSubtitleInfo): Promise<void>;
+  protected abstract doQuery(params: DfContentInfoQueryParams): Promise<DfDbQueryResult>;
+
+  async setContentInfosWithAvailability(contentInfosWithStatuses: ContentInfoWithAvailability[], userTier: string) {
+    const [ contentInfos, availabilityParams ] = contentInfosWithStatuses.reduce(
+      (acc, entry) => {
+        acc[0].push(entry.contentInfo);
+        acc[1].push({ contentName: entry.contentInfo.name, availability: entry.availability });
         return acc;
       },
-      { replacementEntries: [], missingEntries: [] } as {
-        replacementEntries: DfContentEntry[];
-        missingEntries: string[];
-      }
+      [[], []] as [DfContentInfo[], ContentAvailabilityParams[]]
     );
-    await this.setContentEntries(replacementEntries);
-    if (missingEntries.length > 0) {
-      logger.log("warn", `Missing entries for update: ${missingEntries.join(", ")}`);
-    }
-    return replacementEntries;
+    await this.setContentInfos(contentInfos);
+    await this.setContentAvailailabilities(availabilityParams, userTier)
   }
-  abstract getContentEntryList(contentNames: string[]): Promise<(DfContentEntry | undefined)[]>;
-  abstract getContentInfoMap(contentNames: string[]): Promise<Map<string, DfContentEntry>>;
-  abstract getAllContentEntries(): Promise<DfContentEntry[]>;
-  abstract getContentEntry(contentName: string): Promise<DfContentEntry | undefined>;
-  removeContentInfo(contentName: string): Promise<void> {
+
+  contentDownloaded(dfContentName: string, downloadInfo: DfContentDownloadInfo) {
+    return this.addDownloads([{ name: dfContentName, downloadInfo }]);
+  }
+  async removeDownload(dfContentName: string, downloadLocation: string) {
+    return this.removeDownloads([{ contentName: dfContentName, downloadLocation }]);
+  }
+  async moveDownload(dfContentName: string, oldDownloadLocation: string, newDownloadLocation: string) {
+    return this.moveDownloads([{ contentName: dfContentName, oldLocation: oldDownloadLocation, newLocation: newDownloadLocation }]);
+  };
+  async setContentInfo(contentInfo: DfContentInfo) {
+    return this.setContentInfos([contentInfo]);
+  }
+  async setContentStatus(contentName: string, contentStatus: DfContentAvailabilityInfo) {
+    return this.setContentStatuses({ [contentName]: contentStatus });
+  }
+  removeContentInfo(contentName: string) {
     return this.removeContentInfos([contentName]);
+  }
+  async addContentEntries(entries: AddContentEntryOpts[]) {
+    const { contentInfos, statusInfos } = entries.reduce(
+      (acc, entry) => {
+        acc.contentInfos.push(entry.contentInfo);
+        acc.statusInfos[entry.contentInfo.name] = entry.statusInfo;
+        return acc;
+      },
+      { contentInfos: [] as DfContentInfo[], statusInfos: {} as Record<string, DfContentAvailabilityInfo> }
+    );
+    await this.setContentInfos(contentInfos);
+    await this.setContentStatuses(statusInfos);
   }
   async getMostRecentContentInfo() {
     const allContentEntries = await this.getAllContentEntries();
@@ -172,79 +137,14 @@ export abstract class DfDownloaderOperationalDb {
       return b.contentInfo.publishedDate.getTime() - a.contentInfo.publishedDate.getTime();
     })[0];
   }
-  async getAllTags(): Promise<DfTagInfo[]> {
-    const allContentEntries = await this.getAllContentEntries();
-    const tagMap = new Map<string, number>();
-    allContentEntries.forEach((contentEntry) => {
-      contentEntry.contentInfo.tags?.forEach((tag) => {
-        tagMap.set(tag, (tagMap.get(tag) || 0) + 1);
-      });
-    });
-    return Array.from(tagMap, ([tag, count]) => ({ tag, count })).sort((a, b) => b.count - a.count);
-  }
-  async query(params: Partial<DfContentInfoQueryParams>) {
-    params = Object.fromEntries(Object.entries(params).filter(([k, v]) => v));
-    params = {
+
+  query(queryParams: Partial<DfContentInfoQueryParams>) {
+    queryParams = Object.fromEntries(Object.entries(queryParams).filter(([k, v]) => v));
+    const params = {
       ...defaultQueryParams,
-      ...params,
+      ...queryParams,
     };
-    let { page, limit, search, tags, tagMode, status, sortBy, sortDirection } = params as DfContentInfoQueryParams;
-    tags = tags?.map((tag) => tag.toLowerCase());
-    search = search?.toLowerCase();
-    const allContentEntries = await this.getAllContentEntries();
-    const filtered =
-      search || tags || status
-        ? allContentEntries.filter((contentEntry) => {
-            if (search) {
-              if (!contentEntry.contentInfo.title.toLowerCase().includes(search)) {
-                return false;
-              }
-            }
-            if (tags) {
-              const lowerTags = contentEntry.contentInfo.tags?.map((tag) => tag.toLowerCase());
-              if (tagMode !== "and") {
-                if (!lowerTags?.find((tag) => tags!.includes(tag))) {
-                  return false;
-                }
-              } else {
-                if (!lowerTags) {
-                  return false;
-                }
-                for (const tag of tags) {
-                  if (!lowerTags.includes(tag)) {
-                    return false;
-                  }
-                }
-              }
-            }
-            if (status) {
-              if (!status.includes(contentEntry.statusInfo.status)) {
-                return false;
-              }
-            }
-            return true;
-          })
-        : allContentEntries;
-    const pageIdx = page - 1;
-    const start = pageIdx === 0 && limit === Infinity ? 0 : pageIdx * limit;
-    const sorted = filtered.sort((a, b) => {
-      let compareResult;
-      if (sortBy === "date") {
-        compareResult = a.contentInfo.publishedDate.getTime() - b.contentInfo.publishedDate.getTime();
-      } else {
-        compareResult = a.contentInfo.title.localeCompare(b.contentInfo.title);
-      }
-      return sortDirection === "asc" ? compareResult : compareResult * -1;
-    });
-    return {
-      params,
-      totalResults: sorted.length,
-      totalDurationSeconds: DfContentEntryUtils.getTotalDuration(filtered),
-      queryResult: sorted.slice(start, start + limit),
-    };
+    return this.doQuery(params);
   }
-  abstract removeContentInfos(contentNames: string[]): Promise<void>;
-  abstract setDfUserInfo(user?: DfUserInfo): Promise<void>;
-  abstract getDfUserInfo(): Promise<DfUserInfo | undefined>;
-  abstract setFirstRunComplete(): Promise<void>;
+  
 }

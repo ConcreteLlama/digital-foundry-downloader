@@ -82,7 +82,7 @@ export const FetchSubtitlesDialog = (props: FetchSubtitlesDialogProps) => {
   };
 
   return (
-    <Dialog open={open} onClose={onClose}>
+    <Dialog open={open} onClose={onClose} id="fetch-subtitles-dialog">
       <DialogTitle>Fetch Subtitles</DialogTitle>
       <DialogContent>
         {configLoading ? (

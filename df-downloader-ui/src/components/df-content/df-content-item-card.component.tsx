@@ -1,7 +1,7 @@
 import { CardActionArea, CardActions, Divider, Typography } from "@mui/material";
 import { HoverOverCard } from "../general/hover-card.component";
 import { DfContentInfoItem } from "./df-content-info-item.component.tsx";
-import { DfContentStatusSummary } from "./df-content-status-summary.component";
+import { DfContentAvailabilitySummary } from "./df-content-status-summary.component";
 import { useDfContentEntry } from "../../hooks/use-df-content-entry.ts";
 
 export type DfContentInfoItemCardProps = {
@@ -37,7 +37,7 @@ export const DfContentInfoItemCard = ({ dfContentName, onClick }: DfContentInfoI
           alignItems: "center",
         }}
       >
-        <DfContentStatusSummary content={dfContentEntry} />
+        <DfContentAvailabilitySummary content={dfContentEntry} />
       </CardActions>
     </HoverOverCard>
   );

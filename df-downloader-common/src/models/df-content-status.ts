@@ -1,12 +1,13 @@
 import { z } from "zod";
 
-export enum DfContentStatus {
+export enum DfContentAvailability {
   AVAILABLE = "AVAILABLE",
   PAYWALLED = "PAYWALLED",
+  UNKNOWN = "UNKNOWN",
 }
 
-export const DfContentStatusInfo = z.object({
-  status: z.nativeEnum(DfContentStatus),
-  userTierWhenUnavailable: z.string().optional(),
+export const DfContentAvailabilityInfo = z.object({
+  availability: z.nativeEnum(DfContentAvailability),
+  availabilityInTiers: z.record(z.string(), z.nativeEnum(DfContentAvailability)),
 });
-export type DfContentStatusInfo = z.infer<typeof DfContentStatusInfo>;
+export type DfContentAvailabilityInfo = z.infer<typeof DfContentAvailabilityInfo>;

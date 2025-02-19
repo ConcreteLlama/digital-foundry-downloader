@@ -31,6 +31,7 @@ const makeInitialContext = <OPERATION_PARAMETERS, TASK_OPTS, RESULT_TYPE>(operat
     taskOpts,
     operations: operationParameters.map(opParams => ({ params: opParams })),
     workerQueue: new WorkerQueue({
+        namePrefix: `batch-op-queue-${Math.random()}`,
         concurrent: opts.maxConcurrent,
     }),
 })

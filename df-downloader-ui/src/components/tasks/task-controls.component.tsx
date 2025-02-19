@@ -95,6 +95,7 @@ const ForceStartButton = ({ pipelineId, disabled }: ActionButtonProps) => {
   return (
     <Fragment>
       <BasicDialog
+        id="force-start-dialog"
         open={confirmDialogOpen}
         onClose={closeConfirmDialog}
         title={"Force Start"}

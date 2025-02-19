@@ -27,7 +27,7 @@ export const AuthUserInfo = ({ mode }: AuthUserInfoProps) => {
   const user = useSelector(selectAuthUser);
   return user ? (
     <Box sx={{ display: "flex", alignItems: "center", gap: "10px" }}>
-      <ChangePasswordFormDialog onClose={() => setChangePasswordOpen(false)} open={changePasswordOpen} />
+      <ChangePasswordFormDialog onClose={() => setChangePasswordOpen(false)} open={changePasswordOpen}/>
       {mode === "full" && <Typography>{`${user.id}${devModeEnabled ? " (dev)" : ""}`}</Typography>}
       <IconButton onClick={handleClick}>{devModeEnabled ? <DevIcon /> : <Avatar />}</IconButton>
       <Menu

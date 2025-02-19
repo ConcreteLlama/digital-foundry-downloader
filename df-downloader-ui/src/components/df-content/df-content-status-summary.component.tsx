@@ -1,5 +1,5 @@
 import { Stack, Typography } from "@mui/material";
-import { DfContentEntry, DfContentEntryUtils, DfContentStatus } from "df-downloader-common";
+import { DfContentEntry, DfContentEntryUtils, DfContentAvailability } from "df-downloader-common";
 import { useState } from "react";
 import { useSelector } from "react-redux";
 import { fetchSingleDfContentEntry } from "../../store/df-content/df-content.action";
@@ -9,11 +9,11 @@ import { DownloadedContentSummary } from "./downloaded-content-info.component";
 import { PipelineInfoSummary } from "./queued-task-info";
 import { StartDownloadingButton } from "./start-download-dialog.component";
 
-export type DfContentStatusSummaryProps = {
+export type DfContentAvailabilitySummaryProps = {
   content: DfContentEntry;
 };
 
-export const DfContentStatusSummary = ({ content }: DfContentStatusSummaryProps) => {
+export const DfContentAvailabilitySummary = ({ content }: DfContentAvailabilitySummaryProps) => {
   const pipelineIds = useSelector(selectActivePipelineIdsForContent(content.name));
   const downloadExists = Boolean(pipelineIds);
   const [prevDownloadExists, setPrevDownloadExists] = useState(downloadExists);
@@ -35,12 +35,14 @@ export const DfContentStatusSummary = ({ content }: DfContentStatusSummaryProps)
     );
   } else {
     const statusInfo = content.statusInfo;
-    const status = statusInfo.status;
+    const availability = statusInfo.availability;
     if (DfContentEntryUtils.hasDownload(content)) {
       return <DownloadedContentSummary content={content} />;
-    } else if (statusInfo.status === DfContentStatus.PAYWALLED) {
+    } else if (availability === DfContentAvailability.PAYWALLED) {
       return <Typography>Paywalled</Typography>;
-    } else if (status === DfContentStatus.AVAILABLE) {
+    } else if (availability === DfContentAvailability.UNKNOWN) {
+      return <Typography>Unknown Availability</Typography>;
+    } else if (availability === DfContentAvailability.AVAILABLE) {
       return <StartDownloadingButton contentEntry={content} label="Available" />;
     }
   }

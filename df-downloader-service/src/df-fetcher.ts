@@ -1,5 +1,6 @@
 import * as CSSSelect from "css-select";
 import {
+  DfContentAvailability,
   DfContentInfo,
   DfContentInfoUtils,
   DfUserInfo,
@@ -78,10 +79,10 @@ function extractDfUserInfo(dom: Document): DfUserInfo | undefined {
   const avatarUrl = (CSSSelect.selectOne(".avatar_image", dom) as Element)?.attribs?.src;
   return username && tier
     ? {
-        username: username,
-        tier: tier,
-        avatarUrl,
-      }
+      username: username,
+      tier: tier,
+      avatarUrl,
+    }
     : undefined;
 }
 
@@ -89,8 +90,8 @@ function makeAuthHeaders(sessionIdOverride?: string): Record<string, string> {
   const dfSessionId = sessionIdOverride || configService.config.digitalFoundry.sessionId;
   return dfSessionId
     ? {
-        cookie: `sessionid=${dfSessionId};`,
-      }
+      cookie: `sessionid=${dfSessionId};`,
+    }
     : {};
 }
 
@@ -222,7 +223,11 @@ export async function fetchArchivePageContentList(page: number = 1) {
   }, [] as DfContentInfoReference[]);
 }
 
-export async function getMediaInfo(name: string): Promise<DfContentInfo> {
+type FetchedContentInfo = {
+  contentInfo: DfContentInfo;
+  availability: DfContentAvailability;
+}
+export async function fetchContentInfo(name: string): Promise<FetchedContentInfo> {
   logger.log("debug", "Getting info for media", name);
   const dfUrl = makeDfVideoUrl(name);
   const response = await fetch(dfUrl, {
@@ -273,17 +278,20 @@ export async function getMediaInfo(name: string): Promise<DfContentInfo> {
       mediaFilename,
     });
   }
-  return DfContentInfoUtils.create(
-    name,
-    meta.title,
-    description,
-    mediaInfos,
-    meta.thumbnail,
-    youtubeVideoId,
-    dataPaywalled,
-    meta.publishedDate,
-    meta.tags
-  );
+  const availability = dataPaywalled === true ? DfContentAvailability.PAYWALLED : DfContentAvailability.AVAILABLE;
+  return {
+    contentInfo: DfContentInfoUtils.create(
+      name,
+      meta.title,
+      description,
+      mediaInfos,
+      meta.thumbnail,
+      youtubeVideoId,
+      meta.publishedDate,
+      meta.tags
+    ),
+    availability,
+  };
 }
 
 export const getMediaUrl = async (name: string, desiredMediaType: string) => {

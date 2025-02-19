@@ -7,15 +7,17 @@ import {
   DfContentEntryUtils,
   DfContentInfo,
   DfContentInfoUtils,
-  DfContentStatus,
+  DfContentAvailability,
+  DfContentAvailabilityInfo,
   fileSizeStringToBytes,
   filterContentInfos,
   getMediaTypeIndex,
-  logger
+  logger,
+  filterEmpty
 } from "df-downloader-common";
 import { configService } from "./config/config.js";
-import { DbInitInfo, DfDownloaderOperationalDb, DownloadInfoWithName } from "./db/df-operational-db.js";
-import { DfContentInfoReference, forEachArchivePage, getMediaInfo, makeDfContentUrl } from "./df-fetcher.js";
+import { ContentInfoWithAvailability, DfDownloaderOperationalDb, DownloadInfoWithName } from "./db/df-operational-db.js";
+import { DfContentInfoReference, forEachArchivePage, fetchContentInfo, makeDfContentUrl } from "./df-fetcher.js";
 import { DfTaskManager } from "./df-task-manager.js";
 import { DfUserManager } from "./df-user-manager.js";
 import { serviceLocator } from "./services/service-locator.js";
@@ -62,20 +64,23 @@ export class DigitalFoundryContentManager {
     });
   }
 
-  async start(dbInitInfo: DbInitInfo) {
+  async start() {
     ensureDirectory(configService.config.contentManagement.destinationDir);
     ensureDirectory(configService.config.contentManagement.workDir);
     const contentManagementConfig = configService.config.contentManagement;
     const contentDetectionConfig = configService.config.contentDetection;
     //TODO: Queue all downloads in "ATTEMPTING_DOWNLOAD" state
     await this.dfUserManager.start();
-    if (dbInitInfo.firstRun) {
-      await this.scanWholeArchive();
-    } else {
+    if (await this.db.isFirstRunComplete()) {
       const newContentList = await this.getNewContentList();
-      // Skip new content list when scanning whole archive so we don't ignore it.
+      // Skip new content list when scanning whole archive so the normal auto download process can work
+      // (this code will only scan and add to DB, not initiate downloads)
       await this.scanWholeArchive(...newContentList.map((contentRef) => contentRef.name));
       await this.patchMetas();
+    } else {
+      logger.log("info", "First run not complete, scanning whole archive");
+      await this.scanWholeArchive();
+      await this.db.setFirstRunComplete(true);
     }
     if (contentManagementConfig.scanForExistingFiles) {
       const scanTask = this.taskManager.scanForExistingContent(this);
@@ -102,38 +107,38 @@ export class DigitalFoundryContentManager {
   }
 
   async scanWholeArchive(...ignoreList: string[]) {
+    const userTier = this.dfUserManager.getCurrentTier() || "NONE";
     try {
       this.metaFetchesInProgress++;
       const contentDetectionConfig = configService.config.contentDetection;
-      logger.log("info", `Scanning whole archive`);
+      logger.log("info", `Scanning whole archive from page 1 to ${contentDetectionConfig.maxArchivePage}`);
       await forEachArchivePage(
         async (contentList) => {
           //We may not have finished completing our first run last time so we should filter the content list
           ignoreList && (contentList = contentList.filter((contentRef) => !ignoreList.includes(contentRef.name)));
-          const existingContentInfos = await this.db.getContentInfoMap(
+          const existingContentInfos = await this.db.getContentEntryMap(
             contentList.map((contentInfo) => contentInfo.name)
           );
           contentList = contentList.filter((content) => {
             const existing = existingContentInfos.get(content.name);
             return !(existing && existing.contentInfo);
           });
-          const contentMetas = await Promise.all(
-            contentList.map((contentRef) =>
+          const contentMetas: ContentInfoWithAvailability[] = await Promise.all(
+            contentList.map(async(contentRef) =>
               dfFetchWorkerQueue.addWork(() => {
                 logger.log("info", `Fetching meta for ${JSON.stringify(contentRef.title)} then adding to ignore list`);
-                return getMediaInfo(sanitizeContentName(contentRef.link));
+                return fetchContentInfo(sanitizeContentName(contentRef.link));
               })
             )
           );
           if (contentMetas.length > 0) {
-            await this.db.addContents(this.dfUserManager.getCurrentTier() || "NONE", contentMetas);
+            await this.db.setContentInfosWithAvailability(contentMetas, userTier);
           }
           return true;
         },
         1,
         contentDetectionConfig.maxArchivePage
       );
-      await this.db.setFirstRunComplete();
     } finally {
       this.metaFetchesInProgress--;
     }
@@ -143,6 +148,7 @@ export class DigitalFoundryContentManager {
   async patchMetas() {
     const contentEntries = await this.db.getAllContentEntries();
     const requiringMetaRefresh = new Set<string>();
+    const contentInfosToUpdate: DfContentInfo[] = [];
     for (const contentEntry of contentEntries) {
       if (!contentEntry.contentInfo) {
         logger.log("debug", `Content entry ${contentEntry.name} has no meta, skipping`);
@@ -183,21 +189,24 @@ export class DigitalFoundryContentManager {
               updatesMade = true;
               return false;
             }
-          } else if (this.dfUserManager.getCurrentTier()) {
+          } else if (contentEntry.statusInfo.availability === DfContentAvailability.UNKNOWN) {
             requiringMetaRefresh.add(contentEntry.name);
           }
           return true;
         });
       }
       if (updatesMade) {
-        await this.db.addOrUpdateEntries(contentEntry);
+        contentInfosToUpdate.push(contentEntry.contentInfo);
       }
+    }
+    if (contentInfosToUpdate.length > 0) {
+      await this.db.setContentInfos(contentInfosToUpdate);
     }
     const requiringUpdate = contentEntries
       .filter(
         (contentEntry) =>
           !contentEntry.contentInfo ||
-          contentEntry.dataVersion !== CURRENT_DATA_VERSION ||
+          contentEntry.contentInfo.dataVersion !== CURRENT_DATA_VERSION ||
           requiringMetaRefresh.has(contentEntry.name)
       )
       .sort((a, b) => b.contentInfo?.publishedDate.getTime() - a.contentInfo?.publishedDate.getTime());
@@ -209,7 +218,8 @@ export class DigitalFoundryContentManager {
   }
 
   async refreshMeta(...contentNames: string[]) {
-    const updatedMetas: DfContentEntry[] = [];
+    const refreshedMetaKeys = new Set<string>();
+    const userTier = this.dfUserManager.getCurrentTier() || "NONE";
     try {
       this.metaFetchesInProgress++;
       while (contentNames.length > 0) {
@@ -218,42 +228,29 @@ export class DigitalFoundryContentManager {
           entryBatch.map((contentName) =>
             dfFetchWorkerQueue.addWork(() => {
               logger.log("info", `${contentName} has out of date meta; fetching info and patching`);
-              return getMediaInfo(contentName);
+              return fetchContentInfo(contentName);
             })
           )
         );
-        const existingEntries = await this.db.getContentInfoMap(entryBatch);
-        const toUpdate: DfContentEntryUpdate[] = [];
+        const toUpdate: ContentInfoWithAvailability[] = [];
         contentInfoResults.forEach((result, idx) => {
           if (result.status === "rejected") {
             logger.log("error", `Failed to fetch meta for ${entryBatch[idx]} ${result.reason}`);
           } else {
-            logger.log("info", `Successfully fetched meta for ${result.value.name}`);
-            const contentName = entryBatch[idx];
-            const contentInfo = result.value;
-            const existingContentEntry = existingEntries.get(contentName);
-            if (existingContentEntry) {
-              existingContentEntry.contentInfo = contentInfo;
-              existingContentEntry.dataVersion = CURRENT_DATA_VERSION;
-              toUpdate.push(existingContentEntry);
-            } else {
-              toUpdate.push({
-                name: contentName,
-                contentInfo,
-                statusInfo: contentInfo.dataPaywalled
-                  ? { userTierWhenUnavailable: this.dfUserManager.getCurrentTier(), status: DfContentStatus.PAYWALLED }
-                  : { status: DfContentStatus.AVAILABLE },
-              });
-            }
+            logger.log("info", `Successfully fetched meta for ${result.value.contentInfo.name}`);
+            const { contentInfo, availability} = result.value;
+            toUpdate.push({
+              contentInfo,
+              availability,
+            });
           }
         });
-        const updated = await this.db.updateEntries(...toUpdate);
-        updatedMetas.push(...updated);
+        await this.db.setContentInfosWithAvailability(toUpdate, userTier);
       }
     } finally {
       this.metaFetchesInProgress--;
     }
-    return updatedMetas;
+    return filterEmpty(await this.db.getContentEntryList([...refreshedMetaKeys]));
   }
 
   async scanForExistingFiles() {
@@ -320,7 +317,7 @@ export class DigitalFoundryContentManager {
     return await Promise.all(
       dfContentReferences.map((contentInfo) =>
         dfFetchWorkerQueue.addWork(() => {
-          return getMediaInfo(contentInfo.name);
+          return fetchContentInfo(contentInfo.name);
         })
       )
     );
@@ -338,10 +335,11 @@ export class DigitalFoundryContentManager {
       }`
     );
     const autoDownloadConfig = configService.config.automaticDownloads;
+    const userTier = this.dfUserManager.getCurrentTier() || "NONE";
     const newContentRefs = [...(await this.getNewContentList()), ...noMediaInfoContents.map((v) => v.contentRef)];
-    const newContentInfos = await this.getContentInfos(newContentRefs);
+    const newContentFetchResults = (await this.getContentInfos(newContentRefs));
     const newNoMediaContentInfoMap = new Map<string, { attempts: number; contentRef: DfContentInfoReference }>();
-    newContentInfos.forEach((contentInfo, idx) => {
+    newContentFetchResults.forEach(({contentInfo}, idx) => {
       if (!contentInfo) {
         return;
       }
@@ -360,15 +358,16 @@ export class DigitalFoundryContentManager {
     });
     this.noMediaContentInfos = newNoMediaContentInfoMap;
     if (autoDownloadConfig.enabled) {
+      const contentInfos = newContentFetchResults.map((result) => result.contentInfo);
       const { include, exclude } = autoDownloadConfig.exclusionFilters?.length
-        ? filterContentInfos(autoDownloadConfig.exclusionFilters, newContentInfos, true)
-        : { include: newContentInfos, exclude: [] };
+        ? filterContentInfos(autoDownloadConfig.exclusionFilters, contentInfos, true)
+        : { include: contentInfos, exclude: [] };
       exclude.length &&
         logger.log(
           "info",
           `Ignoring ${exclude.map((contentInfo) => contentInfo.name).join(", ")} due to exclusion filters`
         );
-      await this.db.addContents(this.dfUserManager.getCurrentTier() || "NONE", newContentInfos);
+      await this.db.setContentInfosWithAvailability(newContentFetchResults, userTier);
       for (const content of include) {
         serviceLocator.notifier.newContentDetected(content.title);
         this.downloadContentIn(content, autoDownloadConfig.downloadDelay, {
@@ -376,18 +375,19 @@ export class DigitalFoundryContentManager {
         });
       }
     } else {
-      await this.db.addContents(this.dfUserManager.getCurrentTier() || "NONE", newContentInfos);
+      await this.db.setContentInfosWithAvailability(newContentFetchResults, userTier);
     }
   }
 
   async getUpdateMediaInfo(contentName: string) {
     logger.log("info", `Getting updated media info for ${contentName}`);
-    const newContentInfo = await getMediaInfo(contentName);
-    if (!newContentInfo) {
+    const fetchResult = await fetchContentInfo(contentName);
+    if (!fetchResult) {
       throw new Error(`Failed to get media info for ${contentName}`);
     }
-    const updated = await this.db.updateContentInfo(contentName, newContentInfo);
-    return updated;
+    const { contentInfo, availability } = fetchResult;
+    await this.db.setContentInfosWithAvailability([{ contentInfo, availability }], this.dfUserManager.getCurrentTier() || "NONE");
+    return fetchResult || null;
   }
 
   async downloadContentIn(
@@ -447,14 +447,15 @@ export class DigitalFoundryContentManager {
       contentName = content.name;
       contentInfoArg = content;
     }
-    const updatedContentInfo = await this.getUpdateMediaInfo(contentName).catch((e) => {
+    const updateResult = await this.getUpdateMediaInfo(contentName).catch((e) => {
       logger.log(
         "error",
         `Failed to get updated media info for ${contentName}${contentInfoArg ? " - using existing cached version" : ""
         }: ${e}`
       );
+      return null;
     });
-    const dfContentInfo = updatedContentInfo?.contentInfo || contentInfoArg;
+    const dfContentInfo = updateResult?.contentInfo || contentInfoArg;
     if (!dfContentInfo) {
       throw new Error(`Unable to find content info for ${contentName}`);
     }
@@ -466,9 +467,8 @@ export class DigitalFoundryContentManager {
     if (!mediaInfo) {
       throw new Error(`Could not get valid media info for ${dfContentInfo.name}`);
     }
-    if (dfContentInfo.dataPaywalled) {
+    if (updateResult?.availability === DfContentAvailability.PAYWALLED) {
       logger.log("info", `Not downloading ${dfContentInfo.name} as data is paywalled; adding to ignore list`);
-      this.db.addContents(this.dfUserManager.getCurrentTier() || "NONE", [dfContentInfo]);
       throw new Error(`Content ${dfContentInfo.name} is paywalled`);
     }
 
@@ -502,36 +502,28 @@ export class DigitalFoundryContentManager {
   }
 
   async userTierChanged(newTier?: string) {
+    logger.log("info", `User tier changed to ${newTier}`);
     const userInfo = this.dfUserManager.currentDfUserInfo;
     if (this.dfUserManager.isUserSignedIn() && userInfo) {
       serviceLocator.notifier.userSignedIn(userInfo.username, userInfo.tier);
-      const allContentEntries = await this.db.getAllContentEntries();
-      const ignoredPaywalledContent = allContentEntries.filter((ignoredContent) => {
-        if (ignoredContent.statusInfo.status !== "PAYWALLED") {
-          return false;
-        }
-        return ignoredContent.statusInfo.userTierWhenUnavailable !== newTier;
-      });
-      ignoredPaywalledContent.forEach((contentInfo) => {
-        contentInfo.statusInfo.status = DfContentStatus.AVAILABLE;
-      });
-      logger.log("info", `Setting all paywalled content to "Available" (may not be accurate)"`);
-      await this.db.addOrUpdateEntries(...ignoredPaywalledContent);
-      await this.patchMetas();
     } else {
       serviceLocator.notifier.userNotSignedIn();
-      //TODO: Either find a way to find *which* tier content belongs to or rescan all content to see whether it's still paywalled
-      const allContentEntries = await this.db.getAllContentEntries();
-      const availableContentEntries = allContentEntries.filter(
-        (contentInfo) => contentInfo.statusInfo.status === "AVAILABLE"
-      );
-      availableContentEntries.forEach((contentInfo) => {
-        contentInfo.statusInfo.status = DfContentStatus.PAYWALLED;
-        contentInfo.statusInfo.userTierWhenUnavailable = "NONE";
-      });
-      logger.log("info", `Setting all available content to "Paywalled" (may not be accurate)"`);
-      await this.db.addOrUpdateEntries(...availableContentEntries);
     }
+    const newTierStr = newTier || 'NONE';
+    const allContentStatuses = await this.db.getAllContentStatusInfos();
+    const toRefresh: string[] = [];
+    for (const [contentName, contentStatus] of Object.entries(allContentStatuses)) {
+      const existingStatusRecord = contentStatus.availabilityInTiers[newTierStr];
+      if (existingStatusRecord && existingStatusRecord !== DfContentAvailability.UNKNOWN) {
+        logger.log("info", `Existing content availability for ${contentName} - setting to ${existingStatusRecord}`);
+        contentStatus.availability = existingStatusRecord;
+      } else {
+        contentStatus.availability = DfContentAvailability.UNKNOWN;
+        toRefresh.push(contentName);
+      }
+    }
+    await this.db.setContentStatuses(allContentStatuses);
+    await this.refreshMeta(...toRefresh);
   }
 
   async deleteDownload(contentEntry: DfContentEntry, downloadLocation: string) {
@@ -561,8 +553,9 @@ export class DigitalFoundryContentManager {
     return this.metaFetchesInProgress > 0 || this.currentFetchQueueSize > 0;
   }
 
-  getFileMoveList(template: string) {
-    return this.db.getAllContentEntries().then((contentEntries) => getFileMoveList(contentEntries, template));
+  async getFileMoveList(template: string) {
+    const allContentEntries = await this.db.getAllContentEntries();
+    return getFileMoveList(allContentEntries, template);
   }
             
 }

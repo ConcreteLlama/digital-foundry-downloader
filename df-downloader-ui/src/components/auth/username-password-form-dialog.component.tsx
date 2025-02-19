@@ -16,7 +16,7 @@ export const UsernamePasswordFormDialog = ({
 }: UsernamePasswordFormDialogProps) => {
   const { register } = useForm();
   return (
-    <Dialog open={true} fullWidth maxWidth={"lg"}>
+    <Dialog open={true} fullWidth maxWidth={"lg"} id="username-password-form-dialog">
       <DialogTitle>
         <Typography>{formName}</Typography>
       </DialogTitle>

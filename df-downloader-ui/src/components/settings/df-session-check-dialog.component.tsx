@@ -22,7 +22,7 @@ export const DfSessionCheckDialog = () => {
   };
   const title = userInfoLoading ? "Checking DigitalFoundry.net Connection" : "Not Connected to DigitalFoundry.net";
   return (
-    <Dialog open={open} fullWidth={true} maxWidth={"md"} fullScreen={fullScreen}>
+    <Dialog open={open} fullWidth={true} maxWidth={"md"} fullScreen={fullScreen} id="df-session-check-dialog">
       <DialogTitle>{title}</DialogTitle>
       <DialogContent>
         <Box sx={{ display: "flex", justifyContent: "center", alignItems: "center" }}>

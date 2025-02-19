@@ -210,7 +210,7 @@ type TemplateSettingsDialogProps = {
   onClose: () => void;
 }
 const TemplateSettingsDialog = ({ open, onClose }: TemplateSettingsDialogProps) => {
-  return <Dialog open={open} onClose={onClose} fullWidth maxWidth="lg">
+  return <Dialog open={open} onClose={onClose} fullWidth maxWidth="lg" id="template-settings-dialog">
     <InlineDfSettingsSection sectionName="contentManagement" onSubmit={onClose}>
       <TemplateSettings open={open} onClose={onClose} />
     </InlineDfSettingsSection>

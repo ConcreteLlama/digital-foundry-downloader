@@ -13,7 +13,7 @@ import {
   Tooltip,
   Typography,
 } from "@mui/material";
-import { DfContentEntry, DfContentEntryUtils, DfContentInfo } from "df-downloader-common";
+import { DfContentAvailability, DfContentEntry, DfContentEntryUtils, DfContentInfo } from "df-downloader-common";
 import { Fragment, useState } from "react";
 import { useSelector } from "react-redux";
 import { startDownload } from "../../store/df-tasks/tasks.action";
@@ -67,7 +67,7 @@ export const StartDownloadingButton = ({ contentEntry, mediaType, label, disable
   const [dialogOpen, setDialogOpen] = useState(false);
   const activePipeline = useSelector(selectActivePipelineIdsForMediaType(contentEntry.name, mediaType || ""));
   const downloadContentInfo = DfContentEntryUtils.getDownloadForFormat(contentEntry, mediaType || "");
-  const contentPaywalled = contentEntry.contentInfo.dataPaywalled;
+  const availability = contentEntry.statusInfo.availability;
 
   let VariantIcon = DownloadIcon;
   let tooltip = "Start Download";
@@ -76,9 +76,13 @@ export const StartDownloadingButton = ({ contentEntry, mediaType, label, disable
     VariantIcon = DownloadingIcon;
     tooltip = "Tasks currently active, cannot download content.";
     buttonDisabled = true;
-  } else if (contentPaywalled) {
+  } else if (availability === DfContentAvailability.PAYWALLED) {
     VariantIcon = DownloadIcon;
     tooltip = "Content is paywalled and cannot be downloaded.";
+    buttonDisabled = true;
+  }  else if (availability === DfContentAvailability.UNKNOWN) {
+    VariantIcon = DownloadIcon;
+    tooltip = "Content has unknown availibility and cannot be downloaded.";
     buttonDisabled = true;
   } else if (downloadContentInfo) {
     VariantIcon = DownloadedIcon;

@@ -34,7 +34,7 @@ export const ChangePasswordFormDialog = ({ onClose, open }: ChangePasswordFormDi
     onClose();
   };
   return passwordChangeSuccess ? (
-    <Dialog open={passwordChangeSuccess} fullWidth maxWidth={"lg"}>
+    <Dialog open={passwordChangeSuccess} fullWidth maxWidth={"lg"} id="change-password-form-dialog">
       <DialogTitle>
         <Typography>Password Changed</Typography>
       </DialogTitle>

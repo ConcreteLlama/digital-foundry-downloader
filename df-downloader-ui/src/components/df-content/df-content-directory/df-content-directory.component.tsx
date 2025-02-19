@@ -40,6 +40,7 @@ export const DfContentInfoDirectory = () => {
   }
   return (
     <Box
+      id="df-content-directory"
       sx={{
         display: "flex",
         flexDirection: "column",
@@ -89,7 +90,7 @@ export const DfContentInfoDirectory = () => {
               ))}
             </List>
           )}
-          <MiddleModal open={Boolean(selectedItem)} onClose={onModalClose}>
+          <MiddleModal open={Boolean(selectedItem)} onClose={onModalClose} id="df-content-item-detail-modal">
             <Box>
               <DfContentInfoItemDetail dfContentName={selectedItem || ""} />
             </Box>

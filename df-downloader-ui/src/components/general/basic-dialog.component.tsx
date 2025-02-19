@@ -1,4 +1,4 @@
-import { Button, Dialog, DialogActions, DialogContent, DialogContentText, DialogTitle } from "@mui/material";
+import { Button, Dialog, DialogActions, DialogContent, DialogContentText, DialogProps, DialogTitle } from "@mui/material";
 
 type BasicDialogProps = {
   title: string;
@@ -7,10 +7,10 @@ type BasicDialogProps = {
   open: boolean;
   onConfirm: () => void;
   onClose: () => void;
-};
-export const BasicDialog = ({ title, content, confirmButtonText, open, onConfirm, onClose }: BasicDialogProps) => {
+} & Partial<DialogProps>;
+export const BasicDialog = ({ title, content, confirmButtonText, open, onConfirm, onClose, ...other }: BasicDialogProps) => {
   return (
-    <Dialog open={open} onClose={onClose}>
+    <Dialog {...other} open={open} onClose={onClose}>
       <DialogTitle>{title}</DialogTitle>
       <DialogContent>
         {typeof content === "string" ? <DialogContentText>{content}</DialogContentText> : content}

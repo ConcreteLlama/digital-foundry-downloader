@@ -37,7 +37,7 @@ export const DeleteDownloadDialog = (props: DeleteDownloadDialogProps) => {
       });
   };
   return (
-    <Dialog open={open} onClose={onClose}>
+    <Dialog open={open} onClose={onClose} id="delete-download-dialog">
       <DialogTitle>Delete Download</DialogTitle>
       <DialogContent>
         <DialogContentText>

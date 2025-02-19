@@ -1,12 +1,12 @@
 import { z } from "zod";
-import { DfContentStatus } from "./df-content-status.js";
+import { DfContentAvailability } from "./df-content-status.js";
 import { DfContentEntry } from "./df-content-entry.js";
 
 export const DfContentInfoQueryParams = z.object({
   search: z.string().optional(),
   page: z.number(),
   limit: z.number(),
-  status: z.array(z.nativeEnum(DfContentStatus)).optional(),
+  availability: z.array(z.nativeEnum(DfContentAvailability)).optional(),
   tags: z.array(z.string()).optional(),
   tagMode: z.enum(["or", "and"]),
   sortBy: z.enum(["date", "name"]),

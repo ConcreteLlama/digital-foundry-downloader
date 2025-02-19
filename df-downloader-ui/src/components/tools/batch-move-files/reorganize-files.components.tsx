@@ -160,7 +160,7 @@ type MoveConfirmDialogProps = {
 }
 const MoveConfirmDialog = ({ open, onClose, onConfirm, totalFiles }: MoveConfirmDialogProps) => {
     return (
-        <Dialog open={open} onClose={onClose}>
+        <Dialog open={open} onClose={onClose} id="move-confirm-dialog">
             <DialogTitle>Move Files</DialogTitle>
             <DialogContent>
                 <Typography>Are you sure you want to move {totalFiles} files?</Typography>

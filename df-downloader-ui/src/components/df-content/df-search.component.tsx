@@ -39,7 +39,7 @@ export const DfAdvancedSearch = ({ open, onClose }: DfAdvancedSearchProps) => {
         }
       : currentSearchValues.filter;
   return (
-    <Dialog open={open} onClose={onClose} fullWidth maxWidth={"lg"} fullScreen={fullScreen}>
+    <Dialog open={open} onClose={onClose} fullWidth maxWidth={"lg"} fullScreen={fullScreen} id="advanced-search-dialog">
       <DialogTitle>
         <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
           <Typography variant="h6">Advanced Search</Typography>

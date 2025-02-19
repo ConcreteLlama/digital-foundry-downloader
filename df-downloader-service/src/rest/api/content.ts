@@ -7,7 +7,7 @@ import {
   DfContentInfoRefreshMetaRequest,
   DfContentInfoRefreshMetaResponse,
   DfContentQueryResponse,
-  DfContentStatus,
+  DfContentAvailability,
   DfTagsResponse,
   DummyContentInfos,
   isMoveFilesWithListRequest,
@@ -58,8 +58,8 @@ export const makeContentApiRouter = (contentManager: DigitalFoundryContentManage
     const query = req.query;
     const limit = queryParamToInteger(query.limit);
     const page = queryParamToInteger(query.page);
-    const status = queryParamToStringArray(query.status)?.map(
-      (value) => DfContentStatus[value as keyof typeof DfContentStatus]
+    const availability = queryParamToStringArray(query.availability)?.map(
+      (value) => DfContentAvailability[value as keyof typeof DfContentAvailability]
     );
     const tags = queryParamToStringArray(query.tags);
     const search = queryParamToString(query.search);
@@ -67,7 +67,7 @@ export const makeContentApiRouter = (contentManager: DigitalFoundryContentManage
     const result = await contentManager.db.query({
       page,
       limit,
-      status,
+      availability,
       tags,
       search,
       tagMode,

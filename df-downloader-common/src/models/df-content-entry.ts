@@ -1,18 +1,13 @@
 import { z } from "zod";
-import { DfContentDownloadInfo, DfContentSubtitleInfo } from "./df-content-download-info.js";
+import { DfContentDownloadInfo } from "./df-content-download-info.js";
 import { DfContentInfo, DfContentInfoUtils } from "./df-content-info.js";
-import { DfContentStatusInfo } from "./df-content-status.js";
+import { DfContentAvailabilityInfo } from "./df-content-status.js";
 import { MediaInfo } from "./media-info.js";
-
-export const CURRENT_DATA_VERSION = "2.0.2";
 
 export const DfContentEntry = z.object({
   name: z.string(),
-  /** The data version indicates whether the metadata needs refreshing, and is not related to the
-   * overall schema (that's handled by DB version) */
-  dataVersion: z.string(),
   contentInfo: DfContentInfo,
-  statusInfo: DfContentStatusInfo,
+  statusInfo: DfContentAvailabilityInfo,
   downloads: DfContentDownloadInfo.array(),
 });
 export type DfContentEntry = z.infer<typeof DfContentEntry>;
@@ -23,9 +18,8 @@ export type DfContentEntryUpdate = Partial<DfContentEntryCreate> & {
 };
 
 export const DfContentEntryUtils = {
-  create: (name: string, contentInfo: DfContentInfo, statusInfo: DfContentStatusInfo): DfContentEntry => ({
+  create: (name: string, contentInfo: DfContentInfo, statusInfo: DfContentAvailabilityInfo): DfContentEntry => ({
     name,
-    dataVersion: CURRENT_DATA_VERSION,
     contentInfo,
     statusInfo,
     downloads: [],

@@ -66,6 +66,12 @@ export const filterAndMap = <INPUT, OUTPUT>(
   }, [] as OUTPUT[]);
 };
 
+export const filterEmpty = <INPUT>(
+  array: (INPUT | null | undefined)[],
+): INPUT[] => {
+  return array.filter((item) => item !== null && item !== undefined) as INPUT[];
+}
+
 export const mapFilterEmpty = <INPUT, OUTPUT>(
   array: INPUT[],
   map: (item: INPUT, index: number) => OUTPUT | null | undefined

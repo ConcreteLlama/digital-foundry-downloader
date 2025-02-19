@@ -1,8 +1,11 @@
 import { z } from "zod";
 import { MediaInfo, MediaInfoUtils } from "./media-info.js";
 
+export const CURRENT_DATA_VERSION = "2.0.2";
+
 export const DfContentInfo = z
   .object({
+    dataVersion: z.string(),
     publishedDate: z.coerce.date(),
     name: z.string(),
     title: z.string(),
@@ -10,7 +13,6 @@ export const DfContentInfo = z
     thumbnailUrl: z.string().optional(),
     youtubeVideoId: z.string().optional(),
     mediaInfo: z.array(MediaInfo),
-    dataPaywalled: z.boolean(),
     tags: z.array(z.string()).optional(),
   })
   .strict();
@@ -25,17 +27,16 @@ export const DfContentInfoUtils = {
     mediaInfo: MediaInfo[],
     thumbnailUrl: string,
     youtubeVideoId: string | undefined,
-    dataPaywalled: boolean,
     publishedDate?: Date,
     tags?: string[]
   ): DfContentInfo => ({
     name,
+    dataVersion: CURRENT_DATA_VERSION,
     title,
     description,
     mediaInfo,
     thumbnailUrl,
     youtubeVideoId,
-    dataPaywalled,
     tags: tags || [],
     publishedDate: publishedDate || DfContentInfoUtils.extractDateFromName(name) || new Date(),
   }),
@@ -66,6 +67,7 @@ export const DfContentInfoUtils = {
 
 export const DummyContentInfos: DfContentInfo[] = [{
   name: "johns-japanese-crt-adventure",
+  dataVersion: CURRENT_DATA_VERSION,
   title: "John's Japanese CRT Adventure",
   description: "John does some retro stuff in Japan while lugging around a CRT",
   mediaInfo: [
@@ -80,7 +82,6 @@ export const DummyContentInfos: DfContentInfo[] = [{
   ],
   thumbnailUrl: "",
   youtubeVideoId: "",
-  dataPaywalled: false,
   publishedDate: new Date("2021-01-01T00:14:00Z"),
   tags: [
     "retro",
@@ -90,6 +91,7 @@ export const DummyContentInfos: DfContentInfo[] = [{
   ],
 }, {
   name: "df-direct-weekly-599",
+  dataVersion: CURRENT_DATA_VERSION,
   title: "DF Direct Weekly 599",
   description: "Digital Foundry Direct Weekly 599 - that's right, the 599th DF Direct Weekly! Not sure this will go down as well as the 299th",
   mediaInfo: [
@@ -107,10 +109,10 @@ export const DummyContentInfos: DfContentInfo[] = [{
   tags: [
     "DF Direct",
   ],
-  dataPaywalled: false,
   publishedDate: new Date("2032-10-09T17:12:01Z"),
 }, {
   name: "alexs-favorite-stutters-of-2025-year-in-review",
+  dataVersion: CURRENT_DATA_VERSION,
   title: "Alex's Favorite Stutters of 2025 - Year in Review",
   description: "Alex goes through his favorite stutters of 2025 - with one stutter so long he managed to make a cup of tea!",
   mediaInfo: [
@@ -129,7 +131,6 @@ export const DummyContentInfos: DfContentInfo[] = [{
   ],
   thumbnailUrl: "",
   youtubeVideoId: "",
-  dataPaywalled: true,
   publishedDate: new Date("2025-12-31T23:59:59Z"),
 }];
 
