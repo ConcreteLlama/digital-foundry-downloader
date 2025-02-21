@@ -2,4 +2,4 @@
 . "$(dirname -- "$0")/_/husky.sh"
 
 npm run update-versions && npm run check-build && git add */package*.json df-downloader-common/src/df-downloader-version.ts
-npm run ensure-changelog && npm run build-changelog
+npm run validate-changelog && npm run build-changelog

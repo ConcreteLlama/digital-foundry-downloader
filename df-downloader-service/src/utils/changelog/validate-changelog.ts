@@ -12,3 +12,4 @@ if (latestVersion !== CURRENT_VERSION) {
     console.error(`Latest version in changelog is ${latestVersion}, but current version is ${CURRENT_VERSION}`);
     process.exit(1);
 }
+console.log(`Changelog is up to date with current version ${CURRENT_VERSION}`);
