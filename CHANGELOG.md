@@ -126,7 +126,9 @@
   - Fixed bug where maxConnections not being honoured
 - Fixed token config and allowed origins for localhost
 
-## 1.0.0+ (2023-03-12)
+## 1.0.0-1.x.x (2023-03-12)
+
+The versioning for releases prior to 2.0 is patchy and may not accurately reflect the changes made in each version.
 
 ### Features
 - Subtitles
@@ -139,8 +141,3 @@
 - Fixed description truncation by pulling from article body instead of meta
 - Fixed bug where ignorelist wasn't being appended to correctly, resulting in duplicate downloads on restart
 - Fixed CSS selectors when getting meta info about videos
-
-## Pre-2.2 Versioning (2022-08-18)
-
-The versioning for releases prior to 2.2 is patchy and may not accurately reflect the changes made in each version.
-
