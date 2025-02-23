@@ -13,10 +13,15 @@ const updateVersion = (filePath) => {
   packageJson.version = rootVersion;
   fs.writeFileSync(filePath, JSON.stringify(packageJson, null, 2) + '\n');
 };
+const head = fs.readFileSync(path.join(projectRoot, '.git', 'HEAD'), 'utf8').trim();
+const branch = head.replace('ref: refs/heads/', '');
 
 // Find all package.json files in subdirectories and update their version
 const updateAllVersions = (dir) => {
   fs.readdirSync(dir).forEach(file => {
+    if (file === 'node_modules' || file === '.git') {
+      return;
+    }
     const fullPath = path.join(dir, file);
     if (fs.statSync(fullPath).isDirectory()) {
       const packageJsonPath = path.join(fullPath, 'package.json');
@@ -26,7 +31,11 @@ const updateAllVersions = (dir) => {
       updateAllVersions(fullPath);
     }
   });
-  fs.writeFileSync(path.join(projectRoot, 'df-downloader-common', 'src', 'df-downloader-version.ts'), `export const dfDownloaderVersion = '${rootVersion}';\n`);
+  const versionTsString = `
+  export const dfDownloaderVersion = '${rootVersion}';
+  export const dfDownloaderBranch = '${branch}';
+`
+  fs.writeFileSync(path.join(projectRoot, 'df-downloader-common', 'src', 'df-downloader-version.ts'), versionTsString);
 };
 
 updateAllVersions(projectRoot);

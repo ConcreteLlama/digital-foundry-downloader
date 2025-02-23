@@ -1,4 +1,6 @@
 import { z } from 'zod';
+import { ZSemVer } from '../utils/zod.js';
+import semver from 'semver';
 
 const ChangeEntriesType = z.enum(["bugfixes", "features", "enhancements", "security", "breaking", "misc"]);
 type ChangeEntriesType = z.infer<typeof ChangeEntriesType>;
@@ -21,7 +23,7 @@ const ChangeEntry: z.ZodType<ChangeEntry> = z.lazy(() =>
 );
 
 const ChangelogVersionEntry = z.object({
-    version: z.string(),
+    version: ZSemVer,
     date: z.string(),
     notes: z.string().optional(),
     changes: z.record(ChangeEntriesType, z.array(ChangeEntry)).optional(),
@@ -48,8 +50,30 @@ const changeEntryToMarkdown = (change: ChangeEntry, level: number): string => {
     }
 };
 
-export const changelogToMarkdown = (changelog: Changelog): string => `# DF Downloader Changelog\n\n${changelog.versions.map(version => {
-    let result = `## ${version.version} (${version.date})\n\n`;
+const getVersionBadge = (version: string, currentVersion: string, latestVersion: string): string => {
+    if (version === currentVersion && version === latestVersion) {
+        return `![Current](https://img.shields.io/badge/current-grey) ![Latest](https://img.shields.io/badge/latest-brightgreen)`;
+    } else if (version === currentVersion) {
+        return `![Current](https://img.shields.io/badge/current-grey) ![Update Available](https://img.shields.io/badge/update%20available-blue)`;
+    } else if (version === latestVersion) {
+        return `![Not Installed](https://img.shields.io/badge/not%20installed-red) ![Latest](https://img.shields.io/badge/latest-brightgreen)`;
+    }
+    return '';
+};
+
+type ChangelogToMardkownOpts = {
+    currentVersion?: string;
+}
+export const changelogToMarkdown = (changelog: Changelog, opts: ChangelogToMardkownOpts = {}): string => {
+    const { currentVersion } = opts;
+    const changelogVersions = changelog.versions.sort((a, b) => semver.rcompare(a.version, b.version));
+    const latestVersion = changelogVersions[0]?.version;
+    return `# DF Downloader Changelog\n\n${changelogVersions.map(version => {
+    let versionHeader = `## ${version.version} (${version.date})`;
+    if (currentVersion) {
+        versionHeader += ` ${getVersionBadge(version.version, currentVersion, latestVersion)}`;
+    }
+    let result = `${versionHeader}\n\n`;
     if (version.notes) {
         result += `${version.notes}\n\n`;
     }
@@ -70,3 +94,4 @@ export const changelogToMarkdown = (changelog: Changelog): string => `# DF Downl
     }
     return result;
 }).join('\n')}`;
+}
