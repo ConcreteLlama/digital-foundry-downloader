@@ -20,6 +20,7 @@
     "date-fns": "^4.1.0",
     "handlebars": "^4.7.8",
     "semver": "^7.7.1",
+    "yaml": "^2.7.0",
     "zod": "^3.24.2",
     "zod-validation-error": "^3.4.0"
   },

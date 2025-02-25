@@ -1,6 +1,8 @@
 import { z } from "zod";
 
-export const UserInfo = z.object({});
+export const UserInfo = z.object({
+  lastVersionAcknowledged: z.string().optional(),
+});
 export type UserInfo = z.infer<typeof UserInfo>;
 
 export const UserAuthenticationInfo = z.object({
@@ -41,3 +43,15 @@ export const BasicUserIdRequest = z.object({
   id: z.string(),
 });
 export type BasicUserIdRequest = z.infer<typeof BasicUserIdRequest>;
+
+export const UpdateUserInfoRequest = z.object({
+  userId: z.string(),
+  userInfo: UserInfo.partial(),
+});
+export type UpdateUserInfoRequest = z.infer<typeof UpdateUserInfoRequest>;
+
+export const UpdateUserInfoResponse = z.object({
+  userId: z.string(),
+  updatedUserInfo: UserInfo,
+});
+export type UpdateUserInfoResponse = z.infer<typeof UpdateUserInfoResponse>;

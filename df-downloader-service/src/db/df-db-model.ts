@@ -1,4 +1,4 @@
-import { DfContentAvailabilityInfo, DfContentDownloadInfo, DfContentInfo, DfUserInfo } from "df-downloader-common";
+import { DfContentAvailabilityInfo, DfContentDownloadInfo, DfContentInfo, DfUserInfo, UserInfo } from "df-downloader-common";
 import { z } from "zod";
 
 export const DfDbSchema = z.object({
@@ -6,13 +6,13 @@ export const DfDbSchema = z.object({
   lastUpdated: z.coerce.date(),
 });
 
-export const DfDbRuntimeSchema = DfDbSchema.extend({
+export const DfContentInfoDbSchema = DfDbSchema.extend({
   contentInfo: z.record(z.string(), DfContentInfo),
 });
-export type DfDbRuntimeSchema = z.infer<typeof DfDbRuntimeSchema>;
+export type DfContentInfoDbSchema = z.infer<typeof DfContentInfoDbSchema>;
 
 export const DfUserDbSchema = DfDbSchema.extend({
-  user: DfUserInfo.optional(),
+  dfUser: DfUserInfo.optional(),
 });
 export type DfUserDbSchema = z.infer<typeof DfUserDbSchema>;
 

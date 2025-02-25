@@ -10,6 +10,7 @@ import { JwtManager } from "./auth/jwt.js";
 import { makePreviewRouter } from "./api/preview.js";
 import { authenticateMiddleware } from "./middleware/authentication.js";
 import { makeSubtitlesRouter } from "./api/subtitles.js";
+import { makeUserRouter } from "./api/user.js";
 
 export const makeApiRouter = (contentManager: DigitalFoundryContentManager, jwtManager: JwtManager) => {
   const router = express.Router({ mergeParams: true });
@@ -23,6 +24,7 @@ export const makeApiRouter = (contentManager: DigitalFoundryContentManager, jwtM
   router.use("/tasks", authenticateMiddleware(jwtManager), makeTasksApiRouter(contentManager));
   router.use("/config", authenticateMiddleware(jwtManager), makeConfigRouter());
   router.use("/df-user", authenticateMiddleware(jwtManager), makeDfUserInfoRouter(contentManager));
+  router.use("/user", authenticateMiddleware(jwtManager), makeUserRouter(contentManager));
   router.use("/subtitles", authenticateMiddleware(jwtManager), makeSubtitlesRouter(contentManager));
   router.use("/service-info", makeServiceInfoRouter());
   router.use("/preview", makePreviewRouter(contentManager));

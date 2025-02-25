@@ -77,10 +77,15 @@ export const makeAuthRouter = (jwtManager: JwtManager) => {
     });
   });
 
-  router.get("/users/:id", authenticateMiddleware(jwtManager), (req: AuthenticatedRequest, res) => {
+  router.get("/users/:id", authenticateMiddleware(jwtManager), async(req: AuthenticatedRequest, res) => {
     const userId = req.params.id;
     if (userId === "me" || userId === req.user?.id) {
-      return sendResponse(res, req.user);
+      const actualId = userId === 'me' ? req.user?.id : userId;
+      if (!actualId) {
+        return res.status(401).send();
+      }
+      const userData = userService.getUser(actualId);
+      return sendResponse(res, userData);
     }
     //not implemented
 

@@ -1,4 +1,4 @@
-import { DfUserInfo, logger, zodParse } from "df-downloader-common";
+import { DfUserInfo, logger, UserInfo, zodParse } from "df-downloader-common";
 import path from "path";
 import { ensureEnvString } from "../../utils/env-utils.js";
 import { ensureDirectory } from "../../utils/file-utils.js";
@@ -51,10 +51,10 @@ export class DfUserDb {
         this.fileDb.scheduleUpdateDb(this.data);
     }
     async setDfUserInfo(user: DfUserInfo): Promise<void> {
-        this.data.user = user;
+        this.data.dfUser = user;
         this.updateDb();
     }
     async getDfUserInfo(): Promise<DfUserInfo | undefined> {
-        return this.data.user;
+        return this.data.dfUser;
     }
 }

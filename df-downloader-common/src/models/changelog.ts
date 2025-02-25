@@ -1,16 +1,18 @@
 import { z } from 'zod';
 import { ZSemVer } from '../utils/zod.js';
+import YAML from 'yaml';
 import semver from 'semver';
 
-const ChangeEntriesType = z.enum(["bugfixes", "features", "enhancements", "security", "breaking", "misc"]);
+const ChangeEntriesType = z.enum(["bugfixes", "features", "enhancements", "maintenance", "security", "misc", "internal"]);
 type ChangeEntriesType = z.infer<typeof ChangeEntriesType>;
 
 const changeEntryNameMap: Record<ChangeEntriesType, string> = {
     bugfixes: "Bug Fixes",
     features: "Features",
     enhancements: "Enhancements",
+    maintenance: "Maintenance",
     security: "Security",
-    breaking: "Breaking Changes",
+    internal: "Internal",
     misc: "Miscellaneous",
 }
 
@@ -35,6 +37,11 @@ export const Changelog = z.object({
 });
 export type Changelog = z.infer<typeof Changelog>;
 
+export const parseChangelog = (changelog: string): Changelog => {
+    const changelogObj = YAML.parse(changelog);
+    return Changelog.parse(changelogObj);
+}
+
 const changeEntryToMarkdown = (change: ChangeEntry, level: number): string => {
     if (typeof change === 'string') {
         return `${'  '.repeat(level)}- ${change}\n`;
@@ -52,23 +59,43 @@ const changeEntryToMarkdown = (change: ChangeEntry, level: number): string => {
 
 const getVersionBadge = (version: string, currentVersion: string, latestVersion: string): string => {
     if (version === currentVersion && version === latestVersion) {
-        return `![Current](https://img.shields.io/badge/current-grey) ![Latest](https://img.shields.io/badge/latest-brightgreen)`;
+        return `![Current](https://img.shields.io/badge/installed-blue) ![Latest](https://img.shields.io/badge/latest-brightgreen)`;
     } else if (version === currentVersion) {
-        return `![Current](https://img.shields.io/badge/current-grey) ![Update Available](https://img.shields.io/badge/update%20available-blue)`;
+        return `![Current](https://img.shields.io/badge/installed-blue) ![Update Available](https://img.shields.io/badge/update%20available-blue)`;
     } else if (version === latestVersion) {
         return `![Not Installed](https://img.shields.io/badge/not%20installed-red) ![Latest](https://img.shields.io/badge/latest-brightgreen)`;
     }
     return '';
 };
 
-type ChangelogToMardkownOpts = {
+export const changelogHasVersionsSince = (version: string, changelog: Changelog): boolean => changelog.versions.some(v => semver.gt(v.version, version));
+
+export type ChangelogToMarkdownOpts = {
     currentVersion?: string;
+    branch?: string;
+    onlyAfterVersion?: string;
+    title?: string;
+    headerNotes?: string;
 }
-export const changelogToMarkdown = (changelog: Changelog, opts: ChangelogToMardkownOpts = {}): string => {
-    const { currentVersion } = opts;
-    const changelogVersions = changelog.versions.sort((a, b) => semver.rcompare(a.version, b.version));
+export const changelogToMarkdown = (changelog: Changelog, opts: ChangelogToMarkdownOpts = {}): string => {
+    const { currentVersion, onlyAfterVersion, branch, title = 'DF Downloader Changelog', headerNotes } = opts;
+    let changelogVersions = changelog.versions.sort((a, b) => semver.rcompare(a.version, b.version));
+    if (onlyAfterVersion) {
+        changelogVersions = changelogVersions.filter(version => semver.gt(version.version, onlyAfterVersion));
+    }
     const latestVersion = changelogVersions[0]?.version;
-    return `# DF Downloader Changelog\n\n${changelogVersions.map(version => {
+    const branchIndicators = branch && branch !== 'main';
+    let header = `# ${title}${branchIndicators ? ` ![Branch](https://img.shields.io/badge/${branch}-blue)` : ''}\n\n`;
+    if (branchIndicators) {
+        header += `> **Warning:** This changelog is for the \`${branch}\` branch and may contain changes that are not yet released to the main stable branch.\n\n`;
+    }
+    if (headerNotes) {
+        header += `${headerNotes}\n\n`;
+    }
+    if (onlyAfterVersion && !changelogVersions.length) {
+        header += `No changelog entries found since version ${onlyAfterVersion}.\n`;
+    }
+    return `${header}\n\n${changelogVersions.map(version => {
     let versionHeader = `## ${version.version} (${version.date})`;
     if (currentVersion) {
         versionHeader += ` ${getVersionBadge(version.version, currentVersion, latestVersion)}`;

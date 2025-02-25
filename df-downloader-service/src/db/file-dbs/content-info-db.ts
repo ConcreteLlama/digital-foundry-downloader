@@ -5,11 +5,11 @@ import path from "path";
 import { ensureEnvString } from "../../utils/env-utils.js";
 import { ensureDirectory, moveFile } from "../../utils/file-utils.js";
 import { CURRENT_VERSION } from "../../version.js";
-import { DfContentStatusDbSchema, DfContentStatusEntry, DfDbRuntimeSchema, DfUserDbSchema } from "../df-db-model.js";
+import { DfContentStatusDbSchema, DfContentStatusEntry, DfContentInfoDbSchema, DfUserDbSchema } from "../df-db-model.js";
 import { FileDb } from "../file-db.js";
 
 export class DfContentInfoDb {
-    private data: DfDbRuntimeSchema;
+    private data: DfContentInfoDbSchema;
     static async create(dbDir: string) {
         const oldDbFilename = path.join(dbDir, "db.json");
         const contentInfoDbFilename = path.join(dbDir, "content-info-db.json");
@@ -20,8 +20,8 @@ export class DfContentInfoDb {
             });
         }
         ensureDirectory(dbDir);
-        const fileDb = await FileDb.create<DfDbRuntimeSchema>({
-            schema: DfDbRuntimeSchema,
+        const fileDb = await FileDb.create<DfContentInfoDbSchema>({
+            schema: DfContentInfoDbSchema,
             filename: contentInfoDbFilename,
             initialData: {
                 contentInfo: {},
@@ -39,7 +39,7 @@ export class DfContentInfoDb {
                 const version = data.version;
                 if (version === CURRENT_VERSION) {
                     logger.log("info", `DB already at version ${CURRENT_VERSION} - no patches to apply`);
-                    data = zodParse(DfDbRuntimeSchema, data);
+                    data = zodParse(DfContentInfoDbSchema, data);
                     return data;
                 }
                 if (!version) {
@@ -145,7 +145,7 @@ export class DfContentInfoDb {
                         const userDbInfo: DfUserDbSchema = {
                             version: CURRENT_VERSION,
                             lastUpdated: new Date(),
-                            user: userInfo,
+                            dfUser: userInfo,
                         }
                         logger.log("info", 'Writing user info to new DB');
                         const userDbFilename = path.join(dbDir, "user-db.json");
@@ -169,12 +169,12 @@ export class DfContentInfoDb {
                     }
                 }
                 logger.log("info", `DB patched to version ${CURRENT_VERSION}`);
-                return zodParse(DfDbRuntimeSchema, data);
+                return zodParse(DfContentInfoDbSchema, data);
             },
         });
-        return new DfContentInfoDb(fileDb, zodParse(DfDbRuntimeSchema, fileDb.getData()));
+        return new DfContentInfoDb(fileDb, zodParse(DfContentInfoDbSchema, fileDb.getData()));
     }
-    private constructor(private readonly fileDb: FileDb<DfDbRuntimeSchema>, data: DfDbRuntimeSchema) {
+    private constructor(private readonly fileDb: FileDb<DfContentInfoDbSchema>, data: DfContentInfoDbSchema) {
         this.data = data;
     }
     private updateDb() {

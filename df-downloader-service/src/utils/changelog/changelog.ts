@@ -1,11 +1,5 @@
-import { Changelog } from "df-downloader-common";
-import YAML from "yaml";
+import { Changelog, parseChangelog } from "df-downloader-common";
 import fs from "fs";
-
-export const parseChangelog = (changelog: string): Changelog => {
-    const changelogObj = YAML.parse(changelog);
-    return Changelog.parse(changelogObj);
-}
 
 export const loadChangelogSync = (changelogPath: string): Changelog => {
     const changelog = fs.readFileSync(changelogPath, { encoding: "utf8" });

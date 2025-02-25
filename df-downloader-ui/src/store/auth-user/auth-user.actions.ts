@@ -1,4 +1,4 @@
-import { AuthErrorResponseData, EmptyResponseData, User, UserInfo } from "df-downloader-common";
+import { AuthErrorResponseData, EmptyResponseData, UpdateUserInfoRequest, UpdateUserInfoResponse, User, UserInfo } from "df-downloader-common";
 import { createQueryActions } from "../utils";
 
 export const queryCurrentUser = createQueryActions<void, User>("authUser", "QUERY_CURRENT_USER");
@@ -9,3 +9,4 @@ export const register = createQueryActions<
   User,
   AuthErrorResponseData
 >("authUser", "REGISTER");
+export const updateUserInfo = createQueryActions<UpdateUserInfoRequest, UpdateUserInfoResponse>("authUser", "UPDATE_USER_INFO");

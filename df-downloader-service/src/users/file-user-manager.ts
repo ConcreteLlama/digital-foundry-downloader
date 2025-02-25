@@ -3,7 +3,7 @@ import fs from "fs";
 import path from "path";
 import YAML from "yaml";
 import { UserService } from "./user-service.js";
-import { UserEntity } from "df-downloader-common";
+import { UserEntity, UserInfo } from "df-downloader-common";
 import { fromZodError } from "zod-validation-error";
 
 const UsersSchema = z.object({
@@ -73,6 +73,19 @@ export class FileUserService implements UserService {
     this.userData.users.set(userId, updated);
     await this.updateUsers();
     return updated;
+  }
+  updateUserInfo(userId: string, userInfo: Partial<UserInfo>): UserEntity | Promise<UserEntity> {
+    const existingUser = this.userData.users.get(userId);
+    if (!existingUser) {
+      throw new Error(`User ${userId} does not exist`);
+    }
+    const patchData = {
+      userInfo: {
+        ...existingUser.userInfo,
+        ...userInfo,
+      },
+    }
+    return this.updateUser(userId, patchData);
   }
   async deleteUser(id: string): Promise<void> {
     this.userData.users.delete(id) && (await this.updateUsers());

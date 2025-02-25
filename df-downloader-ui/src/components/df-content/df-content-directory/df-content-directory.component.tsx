@@ -19,6 +19,7 @@ import { DfContentInfoItemCard } from "../df-content-item-card.component.tsx";
 import { DfContentInfoItemDetail } from "../df-content-item-detail/df-content-item-detail.component.tsx";
 import { DfQuickSearch } from "../df-search-input.component.tsx";
 import { ClearDfSearchButton, DfAdvancedSearchButton } from "../df-search.component.tsx";
+import { ChangelogDialog } from "../../general/changelog.component.tsx";
 
 export const DfContentInfoDirectory = () => {
   const contentKeys = useSelector(selectDfContentEntryCurrentKeys);
@@ -52,6 +53,7 @@ export const DfContentInfoDirectory = () => {
       }}
     >
       <DfSessionCheckDialog />
+      <ChangelogDialog />
       <Stack
         sx={{ position: "sticky", top: 0, zIndex: 1, backgroundColor: "background.default", gap: 1, paddingBottom: 1 }}
       >

@@ -1,1 +1,4 @@
-export const CURRENT_VERSION = "2.3.0";
+import { dfDownloaderBranch, dfDownloaderVersion } from "df-downloader-common";
+
+export const CURRENT_VERSION = dfDownloaderVersion;
+export const CURRENT_BRANCH = dfDownloaderBranch;

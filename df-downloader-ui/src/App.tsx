@@ -10,10 +10,12 @@ import { DfContentPage } from "./routes/home/home.component";
 import { Nav, NavPage } from "./routes/nav/nav.components";
 import { isNestedRoute, NestedRouteElement } from "./routes/nav/nested-routes.tsx";
 import { settingsRouteDefinitions } from "./routes/settings/settings.routes";
+import { systemRouteDefinitions } from "./routes/system/system.routes.tsx";
 import { toolsRouteDefinitions } from "./routes/tools/tools.routes.tsx";
 import { queryCurrentUser } from "./store/auth-user/auth-user.actions";
 import { selectAuthUser } from "./store/auth-user/auth-user.selector";
 import { queryConfigSection } from "./store/config/config.action.ts";
+import { queryTasks } from "./store/df-tasks/tasks.action.ts";
 import { queryDfUserInfo } from "./store/df-user/df-user.actions";
 import { selectIsLoading } from "./store/general.selector.ts";
 import { queryServiceInfo } from "./store/service-info/service-info.actions";
@@ -21,7 +23,6 @@ import { selectServiceError } from "./store/service-info/service-info.selector.t
 import { store } from "./store/store";
 import { theme } from "./themes/theme";
 import { setIntervalImmediate } from "./utils/timer.ts";
-import { queryTasks } from "./store/df-tasks/tasks.action.ts";
 
 function App() {
   return (
@@ -68,6 +69,7 @@ const makeRoutes = (routes: NestedRouteElement[]) => {
 };
 const settingsRoutes = makeRoutes(settingsRouteDefinitions.routes);
 const toolsRoutes = makeRoutes(toolsRouteDefinitions.routes);
+const systemRoutes = makeRoutes(systemRouteDefinitions.routes);
 
 const MainApp = () => {
   useEffect(() => {
@@ -107,6 +109,9 @@ const MainApp = () => {
           </Route>
           <Route key="route-tools" id="route-tools" element={<NavPage />}>
             {toolsRoutes}
+          </Route>
+          <Route key="route-system" id="route-system" element={<NavPage />}>
+            {systemRoutes}
           </Route>
         </Routes>
       </Stack>

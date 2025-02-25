@@ -5,6 +5,7 @@ import { createDeepEqualSelector, createShallowEqualSelector } from "../utils.ts
 const selectSelfLogin = (state: RootState) => state.authUser;
 
 export const selectAuthUser = createDeepEqualSelector(selectSelfLogin, (authUserState) => authUserState.user);
+export const selectUserInfo = createDeepEqualSelector(selectSelfLogin, (authUserState) => authUserState.user?.userInfo);
 export const selectCanRegister = createSelector(selectSelfLogin, (authUserState) => authUserState.canRegister);
 export const selectLoginError = createShallowEqualSelector(
   selectSelfLogin,

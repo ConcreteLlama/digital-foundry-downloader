@@ -1,8 +1,8 @@
-import { EmptyResponseData, User } from "df-downloader-common";
+import { EmptyResponseData, UpdateUserInfoResponse, User } from "df-downloader-common";
+import { API_URL } from "../../config";
 import { AppStartListening } from "../listener";
 import { addFetchListener } from "../utils";
-import { API_URL } from "../../config";
-import { login, logout, queryCurrentUser, register } from "./auth-user.actions";
+import { login, logout, queryCurrentUser, register, updateUserInfo } from "./auth-user.actions";
 import { makeBasicAuth } from "./utils";
 
 export const startListeningAuthUser = (listener: AppStartListening) => {
@@ -38,6 +38,16 @@ export const startListeningAuthUser = (listener: AppStartListening) => {
     {
       method: "POST",
       credentials: "include",
+    },
+  ]);
+  addFetchListener(listener, updateUserInfo, UpdateUserInfoResponse, (userInfoReq) => [
+    `${API_URL}/user`,
+    {
+      method: "PATCH",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(userInfoReq),
     },
   ]);
 };

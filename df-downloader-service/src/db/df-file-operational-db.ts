@@ -1,10 +1,10 @@
-import { DfContentDownloadInfo, DfContentEntry, DfContentEntryUtils, DfContentInfo, DfContentInfoQueryParams, DfContentAvailabilityInfo, DfContentSubtitleInfo, DfTagInfo, DfUserInfo, DfContentAvailability } from "df-downloader-common";
+import { DfContentAvailabilityInfo, DfContentDownloadInfo, DfContentEntry, DfContentEntryUtils, DfContentInfo, DfContentInfoQueryParams, DfContentSubtitleInfo, DfTagInfo, DfUserInfo, UserInfo } from "df-downloader-common";
 import { ensureEnvString } from "../utils/env-utils.js";
+import { DfContentStatusEntry } from "./df-db-model.js";
 import { ContentAvailabilityParams, DfDbQueryResult, DfDownloaderOperationalDb, DownloadInfoWithName, MoveDownloadOpts, RemoveDownloadOpts } from "./df-operational-db.js";
 import { DfContentInfoDb } from "./file-dbs/content-info-db.js";
 import { DfContentAvailabilityDb } from "./file-dbs/content-status-db.js";
 import { DfUserDb } from "./file-dbs/user-db.js";
-import { DfContentStatusEntry } from "./df-db-model.js";
 
 export class DfFileOperationalDb extends DfDownloaderOperationalDb {
     async getAllContentNames(): Promise<string[]> {
@@ -120,7 +120,6 @@ export class DfFileOperationalDb extends DfDownloaderOperationalDb {
     getDfUserInfo() {
         return this.userDb.getDfUserInfo();
     }
-
     async addDownloads(downloadInfos: DownloadInfoWithName[]) {
         return this.contentStatusDb.addDownloads(downloadInfos);
     }

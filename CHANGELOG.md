@@ -1,8 +1,14 @@
 # DF Downloader Changelog
 
+
+
 ## 2.3.0 (2025-02-21)
 
 ### Features
+- Added changlog to the UI
+  - Changelog is now available in the UI under the system menu
+  - Changelog now displays in a dialog when a new version is detected
+  - Will attempt to fetch the changelog from github first as this is the most up to date source and will help identify if the user is on the latest version
 - Added file templates in Content Management settings allowing you to specify custom naming based on info from the content.
   - Example: `{{#ifTag 'df direct'}}DF Direct/{{/ifTag}}{{YYYY}}/{{download-filename}}` - this will put all DF Directs into a DF Direct directory, and all content will go into YEAR/FILENAME
   - So `DF RETRO Analogue Pocket Review HEVC.mp4` would go to `2021\DF RETRO Analogue Pocket Review HEVC.mp4.mp4`
@@ -13,6 +19,14 @@
     - Clear Missing Files - removes references to files that no longer exist (e.g., if you've downloaded something with the tool but since deleted it)
     - Scan for existing content - Scans directory for existing content and adds it to the DB
     - Clear empty directories - clears empty directories (useful if you've moved files around a lot from templates)
+### Internal
+- Split the "database" into 3 separate files
+  - content-info-db.json for content info (description, published date, tags, media infos etc)
+  - content-status-db.json for local status of content (e.g. downloads, availability based on tiers etc)
+  - user-db.json for info about the DF user
+- changelog is now a .yaml file allowing programmatic access to the data
+### Maintenance
+- npm audit fix to address security vulnerabilities
 
 ## 2.2.6 (2024-06-24)
 

@@ -23,6 +23,7 @@ import { theme } from "../../themes/theme";
 import { SettingsNav } from "../settings/settings-nav.component";
 import { ToolsNav } from "../tools/tools-nav.component.tsx";
 import { NavItem } from "./nav-item.component";
+import { SystemNav } from "../system/system-nav.component.tsx";
 
 export const Nav = () => {
   const useMobileLayout = useMediaQuery(theme.breakpoints.down("md"));
@@ -74,6 +75,7 @@ export const Nav = () => {
             <NavItem to="/downloads" text="Downloads" icon={DownloadIcon} onItemSelected={onItemSelected} />
             <ToolsNav onItemSelected={onItemSelected} />
             <SettingsNav onItemSelected={onItemSelected} />
+            <SystemNav onItemSelected={onItemSelected} />
           </List>
         </Box>
       </SwipeableDrawer>

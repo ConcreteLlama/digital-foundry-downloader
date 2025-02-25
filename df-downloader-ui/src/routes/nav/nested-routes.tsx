@@ -94,4 +94,3 @@ export const NestedRouteNavItem = ({ route, level, onItemSelected, keyBase }: Ne
       </Box>
     );
   };
-  

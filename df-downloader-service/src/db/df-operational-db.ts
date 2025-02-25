@@ -5,7 +5,8 @@ import {
   DfContentInfo,
   DfContentInfoQueryParams,
   DfTagInfo,
-  DfUserInfo
+  DfUserInfo,
+  UserInfo
 } from "df-downloader-common";
 import { DfContentDownloadInfo, DfContentSubtitleInfo } from "df-downloader-common/models/df-content-download-info.js";
 

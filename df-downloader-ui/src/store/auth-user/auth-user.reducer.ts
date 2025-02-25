@@ -2,7 +2,7 @@ import { createReducer } from "@reduxjs/toolkit";
 import { AuthErrorResponseData } from "df-downloader-common";
 import { DfUiError } from "../../utils/error";
 import { addQueryCases } from "../utils";
-import { login, logout, queryCurrentUser, register } from "./auth-user.actions";
+import { login, logout, queryCurrentUser, register, updateUserInfo } from "./auth-user.actions";
 import { AuthUserState } from "./auth-user.types";
 
 const initialLoginState: AuthUserState = {
@@ -40,6 +40,14 @@ export const authUserReducer = createReducer(initialLoginState, (builder) => {
   addQueryCases(builder, logout, {
     success: (state) => {
       state.user = null;
+    },
+    failed: (state, payload) => {
+      state.error = payload;
+    },
+  });
+  addQueryCases(builder, updateUserInfo, {
+    success: (state, payload) => {
+      state.user && (state.user.userInfo = payload.updatedUserInfo);
     },
     failed: (state, payload) => {
       state.error = payload;
