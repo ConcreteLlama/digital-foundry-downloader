@@ -17,14 +17,16 @@ versions:
             - "Clear Missing Files - removes references to files that no longer exist (e.g., if you've downloaded something with the tool but since deleted it)"
             - "Scan for existing content - Scans directory for existing content and adds it to the DB"
             - "Clear empty directories - clears empty directories (useful if you've moved files around a lot from templates)"
+      maintenance:
+        - npm audit fix to address security vulnerabilities
       internal:
         - Split the "database" into 3 separate files:
           - content-info-db.json for content info (description, published date, tags, media infos etc)
           - content-status-db.json for local status of content (e.g. downloads, availability based on tiers etc)
           - user-db.json for info about the DF user
         - changelog is now a .yaml file allowing programmatic access to the data
-      maintenance:
-        - npm audit fix to address security vulnerabilities
+        - Various schema changes
+        - Media info now includes both format (e.g. h.264) and type (e.g. VIDEO, AUDIO etc)
 
   - version: "2.2.6"
     date: "2024-06-24"

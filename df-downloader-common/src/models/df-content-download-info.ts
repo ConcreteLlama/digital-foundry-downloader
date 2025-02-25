@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { MediaInfo } from "./media-info.js";
 
 export const DfContentSubtitleInfo = z.object({
   language: z.string(),
@@ -7,9 +8,9 @@ export const DfContentSubtitleInfo = z.object({
 export type DfContentSubtitleInfo = z.infer<typeof DfContentSubtitleInfo>;
 
 export const DfContentDownloadInfo = z.object({
-  format: z.string(),
   downloadDate: z.coerce.date(),
   downloadLocation: z.string(),
+  mediaInfo: MediaInfo,
   size: z.string().optional(),
   subtitles: DfContentSubtitleInfo.array().optional(),
 });

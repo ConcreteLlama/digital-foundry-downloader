@@ -61,7 +61,7 @@ export const DfContentInfoUtils = {
     return MediaInfoUtils.getDurationSeconds(dfContentInfo.mediaInfo);
   },
   getMediaInfo(dfContentInfo: DfContentInfo, mediaType: string) {
-    return dfContentInfo.mediaInfo.find((mediaInfo) => mediaInfo.mediaType === mediaType);
+    return dfContentInfo.mediaInfo.find((mediaInfo) => mediaInfo.format === mediaType);
   },
 };
 
@@ -72,11 +72,13 @@ export const DummyContentInfos: DfContentInfo[] = [{
   description: "John does some retro stuff in Japan while lugging around a CRT",
   mediaInfo: [
     {
-      mediaType: "h264",
+      type: "VIDEO",
+      format: "h264",
       mediaFilename: "Johns Japanese CRT Adventure.mp4",
     },
     {
-      mediaType: "HEVC",
+      type: "VIDEO",
+      format: "HEVC",
       mediaFilename: "Johns Japanese CRT Adventure HEVC.mp4",
     }
   ],
@@ -96,11 +98,13 @@ export const DummyContentInfos: DfContentInfo[] = [{
   description: "Digital Foundry Direct Weekly 599 - that's right, the 599th DF Direct Weekly! Not sure this will go down as well as the 299th",
   mediaInfo: [
     {
-      mediaType: "h264",
+      type: "VIDEO",
+      format: "h264",
       mediaFilename: "DF Direct Weekly 599.mp4",
     },
     {
-      mediaType: "HEVC",
+      type: "VIDEO",
+      format: "HEVC",
       mediaFilename: "DF Direct Weekly 599 HEVC.mp4",
     }
   ],
@@ -117,15 +121,18 @@ export const DummyContentInfos: DfContentInfo[] = [{
   description: "Alex goes through his favorite stutters of 2025 - with one stutter so long he managed to make a cup of tea!",
   mediaInfo: [
     {
-      mediaType: "h264",
+      type: "VIDEO",
+      format: "h264",
       mediaFilename: "Alexs Favorite Stutters of 2025.mp4",
     },
     {
-      mediaType: "HEVC",
+      type: "VIDEO",
+      format: "HEVC",
       mediaFilename: "Alexs Favorite Stutters of 2025 HEVC.mp4",
     },
     {
-      mediaType: "MP3",
+      type: "AUDIO",
+      format: "MP3",
       mediaFilename: "Alexs Favorite Stutters of 2025 audio.mp3",
     }
   ],

@@ -32,7 +32,7 @@ export const PipelineInfoSummaryDetail = ({ pipelineId }: TaskComponentProps) =>
     return <Typography>{`Task ${pipelineId} not found`}</Typography>;
   }
   const taskPipelineType = useSelector(selectPipelineField(pipelineId, "pipelineType"));
-  const mediaType = taskDetails.mediaType;
+  const mediaType = taskDetails.mediaFormat;
   const startTime = taskDetails.queuedTime;
   const TaskTypeIcon = getTaskTypeIcon(taskPipelineType);
   return (

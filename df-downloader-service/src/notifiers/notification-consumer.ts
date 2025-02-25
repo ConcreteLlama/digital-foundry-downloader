@@ -89,7 +89,7 @@ export abstract class DfNotificationConsumer {
   toSummary(dfContent: DfContentInfo, mediaInfo: MediaInfo, finalProgressReport?: DownloadProgressInfo) {
     let toReturn = `Title:          ${dfContent.title}
 Published:      ${dfContent.publishedDate}
-Media type:     ${mediaInfo.mediaType}
+Media fprmat:     ${mediaInfo.format}
 Size:           ${mediaInfo.size}
 Description:    ${dfContent.description}`;
     if (finalProgressReport) {

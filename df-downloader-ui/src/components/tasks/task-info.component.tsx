@@ -79,7 +79,7 @@ type TaskHeaderItemProps = {
   };
 };
 export const TaskHeaderItem = ({ pipelineId, draggableProps }: TaskHeaderItemProps) => {
-  const { dfContent, mediaType } = useSelector(selectPipelineDetails(pipelineId));
+  const { dfContent, mediaFormat } = useSelector(selectPipelineDetails(pipelineId));
   const taskPipelineType = useSelector(selectPipelineField(pipelineId, "pipelineType"));
   const { ref, listeners, attributes } = draggableProps || {};
   const TaskTypeIcon = getTaskTypeIcon(taskPipelineType);
@@ -108,13 +108,13 @@ export const TaskHeaderItem = ({ pipelineId, draggableProps }: TaskHeaderItemPro
         {dfContent?.title || "UNKNOWN"}
       </EllipsisTooltipText>
       <EllipsisTooltipText
-        text={mediaType}
+        text={mediaFormat}
         variant="subtitle1"
         sx={{
           minWidth: "4rem",
         }}
       >
-        {mediaType}
+        {mediaFormat}
       </EllipsisTooltipText>
     </Box>
   );

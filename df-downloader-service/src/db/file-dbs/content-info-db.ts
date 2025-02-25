@@ -1,4 +1,4 @@
-import { DfContentInfo, logger, zodParse } from "df-downloader-common";
+import { DfContentInfo, inferMediaType, logger, mapFilterEmpty, zodParse } from "df-downloader-common";
 import { existsSync } from "fs";
 import fs from "fs/promises";
 import path from "path";
@@ -127,6 +127,16 @@ export class DfContentInfoDb {
                             lastUpdated: new Date(),
                             firstRunComplete: data.firstRunComplete,
                             contentStatuses: Object.entries(data.contentInfo).reduce((acc: Record<string, DfContentStatusEntry>, [key, value]: [string, any]) => {
+                                for (const mediaInfo of value.contentInfo.mediaInfo) {
+                                    mediaInfo.format = mediaInfo.mediaType;
+                                    delete mediaInfo.mediaType;
+                                    mediaInfo.type = inferMediaType({
+                                        mediaFormat: mediaInfo.format,
+                                        audioEncoding: mediaInfo.audioEncoding,
+                                        videoEncoding: mediaInfo.videoEncoding,
+                                        mediaFilename: mediaInfo.mediaFilename,
+                                    });
+                                }
                                 acc[value.name] = {
                                     availability: {
                                         availability: value.statusInfo.status,
@@ -134,7 +144,19 @@ export class DfContentInfoDb {
                                             [userTier]: value.statusInfo.status,
                                         },
                                     },
-                                    downloads: value.downloads,
+                                    downloads: mapFilterEmpty(value.downloads, (download: any) => {
+                                        const format = download.format;
+                                        const mediaInfo = value.contentInfo.mediaInfo.find((media: any) => media.format === format);
+                                        if (!mediaInfo) {
+                                            return null;
+                                        }
+                                        return {
+                                            downloadDate: download.downloadDate,
+                                            downloadLocation: download.downloadLocation,
+                                            size: download.size,
+                                            mediaInfo,
+                                        }
+                                    })  
                                 };
                                 return acc;
                             }, {}),

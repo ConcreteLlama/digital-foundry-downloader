@@ -73,7 +73,7 @@ export const DfFilenameTemplateVarDefinitions: Record<DfFilenameTemplateVarName,
     },
     "format": {
         description: "The format of the media",
-        valueExtractor: (_, mediaInfo) => mediaInfo.mediaType,
+        valueExtractor: (_, mediaInfo) => mediaInfo.format,
     },
     "tags": {
         description: "The tags of the content. This is an array and will produce a comma separated list.",

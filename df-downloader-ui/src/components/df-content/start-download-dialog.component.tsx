@@ -17,18 +17,18 @@ import { DfContentAvailability, DfContentEntry, DfContentEntryUtils, DfContentIn
 import { Fragment, useState } from "react";
 import { useSelector } from "react-redux";
 import { startDownload } from "../../store/df-tasks/tasks.action";
-import { selectActivePipelineIdsForMediaType } from "../../store/df-tasks/tasks.selector.ts";
+import { selectActivePipelineIdsForMediaFormat } from "../../store/df-tasks/tasks.selector.ts";
 import { store } from "../../store/store";
 
 export type StartDownloadDialogProps = {
   contentInfo: DfContentInfo;
-  mediaType?: string;
+  mediaFormat?: string;
   open: boolean;
   onClose: () => void;
 };
 
-export const StartDownloadDialog = ({ contentInfo, mediaType, open, onClose }: StartDownloadDialogProps) => {
-  const dialogContentName = mediaType ? `${contentInfo.title} (${mediaType})` : contentInfo.title;
+export const StartDownloadDialog = ({ contentInfo, mediaFormat, open, onClose }: StartDownloadDialogProps) => {
+  const dialogContentName = mediaFormat ? `${contentInfo.title} (${mediaFormat})` : contentInfo.title;
 
   return (
     <Dialog open={open} onClose={onClose}>
@@ -43,7 +43,7 @@ export const StartDownloadDialog = ({ contentInfo, mediaType, open, onClose }: S
             store.dispatch(
               startDownload.start({
                 name: contentInfo.name,
-                mediaType,
+                mediaFormat,
               })
             );
             onClose();
@@ -58,15 +58,15 @@ export const StartDownloadDialog = ({ contentInfo, mediaType, open, onClose }: S
 
 export type StartDownloadButtonProps = {
   contentEntry: DfContentEntry;
-  mediaType?: string;
+  mediaFormat?: string;
   label?: string;
   disabled?: boolean;
 };
 
-export const StartDownloadingButton = ({ contentEntry, mediaType, label, disabled }: StartDownloadButtonProps) => {
+export const StartDownloadingButton = ({ contentEntry, mediaFormat, label, disabled }: StartDownloadButtonProps) => {
   const [dialogOpen, setDialogOpen] = useState(false);
-  const activePipeline = useSelector(selectActivePipelineIdsForMediaType(contentEntry.name, mediaType || ""));
-  const downloadContentInfo = DfContentEntryUtils.getDownloadForFormat(contentEntry, mediaType || "");
+  const activePipeline = useSelector(selectActivePipelineIdsForMediaFormat(contentEntry.name, mediaFormat || ""));
+  const downloadContentInfo = DfContentEntryUtils.getDownloadForFormat(contentEntry, mediaFormat || "");
   const availability = contentEntry.statusInfo.availability;
 
   let VariantIcon = DownloadIcon;
@@ -93,7 +93,7 @@ export const StartDownloadingButton = ({ contentEntry, mediaType, label, disable
     <Fragment>
       <StartDownloadDialog
         contentInfo={contentEntry.contentInfo}
-        mediaType={mediaType}
+        mediaFormat={mediaFormat}
         open={dialogOpen}
         onClose={() => setDialogOpen(false)}
       />

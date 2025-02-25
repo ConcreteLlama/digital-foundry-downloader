@@ -34,15 +34,10 @@ export const makeSubtitlesRouter = (contentManager: DigitalFoundryContentManager
             message: `Could not find download info for "${contentName}" in "${mediaFilePath}"`,
           });
         }
-        if (!isVideoFormat(downloadInfo.format)) {
+        const mediaInfo = downloadInfo.mediaInfo;
+        if (mediaInfo.type !== "VIDEO") {
           return res.status(400).send({
-            message: `Requested content at file "${mediaFilePath}" is format "${downloadInfo.format}" which is not supported for subtitle generation`,
-          });
-        }
-        const mediaInfo = DfContentEntryUtils.getMediaInfo(content, downloadInfo.format);
-        if (!mediaInfo) {
-          return res.status(400).send({
-            message: `Could not find media info for "${contentName}" in "${downloadInfo.format}"`,
+            message: `Requested content at file "${mediaFilePath}" is format "${mediaInfo.format}" which is not supported for subtitle generation`,
           });
         }
         const subtitleGenerators = subtitlesService

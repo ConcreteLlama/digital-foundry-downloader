@@ -1,7 +1,7 @@
 import DeleteIcon from "@mui/icons-material/Delete";
 import SubtitlesIcon from "@mui/icons-material/Subtitles";
 import { Box, IconButton, Tooltip } from "@mui/material";
-import { DfContentEntry, isVideoFormat } from "df-downloader-common";
+import { DfContentEntry } from "df-downloader-common";
 import { DfContentDownloadInfo } from "df-downloader-common/models/df-content-download-info";
 import { useState } from "react";
 import { DeleteDownloadDialog } from "./delete-download-dialog.component.tsx";
@@ -16,7 +16,7 @@ export const DownloadedItemActions = ({ contentEntry, download }: DownloadedItem
   const [subtitlesDialogOpen, setSubtitlesDialogOpen] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
 
-  const downloadIsVideo = isVideoFormat(download.format);
+  const downloadIsVideo = download.mediaInfo.type === "VIDEO";
 
   const openSubtitlesDialog = () => {
     setSubtitlesDialogOpen(true);

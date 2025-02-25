@@ -1,4 +1,4 @@
-import { DfContentAvailability, DfContentAvailabilityInfo, DfContentSubtitleInfo, logger, zodParse } from "df-downloader-common";
+import { DfContentAvailability, DfContentAvailabilityInfo, DfContentDownloadInfo, DfContentSubtitleInfo, logger, zodParse } from "df-downloader-common";
 import path from "path";
 import { ensureDirectory, pathIsEqual } from "../../utils/file-utils.js";
 import { CURRENT_VERSION } from "../../version.js";
@@ -191,7 +191,7 @@ export class DfContentAvailabilityDb {
         this.updateDb();
         return this.data.contentStatuses;
     }
-    async getContentDownloadInfos(contentNames: string[]): Promise<Record<string, { format: string; downloadDate: Date; downloadLocation: string; subtitles?: { language: string; service: string; }[] | undefined; size?: string | undefined; }[]>> {
+    async getContentDownloadInfos(contentNames: string[]): Promise<Record<string, DfContentDownloadInfo[]>> {
         return this.getTransformContentStatusEntries(contentNames, false, (contentStatus) => contentStatus.downloads);
     }
     async getContentAvailabilityInfos(contentNames: string[]): Promise<Record<string, DfContentAvailabilityInfo>> {

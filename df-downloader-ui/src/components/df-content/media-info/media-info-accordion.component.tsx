@@ -16,9 +16,9 @@ export const MediaInfoAccordion = ({ contentEntry }: MediaInfoListProps) => {
             <AccordionSummary expandIcon={<ExpandMoreIcon />}>
               <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", width: "100%" }}>
                 <Typography>
-                  {mediaInfo.mediaType} ({mediaInfo.size})
+                  {mediaInfo.format} ({mediaInfo.size})
                 </Typography>
-                <StartDownloadingButton contentEntry={contentEntry} mediaType={mediaInfo.mediaType} />
+                <StartDownloadingButton contentEntry={contentEntry} mediaFormat={mediaInfo.format} />
               </Box>
             </AccordionSummary>
             <AccordionDetails>

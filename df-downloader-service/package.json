@@ -12,7 +12,7 @@
     "watch": "tsc --watch",
     "build": "tsc",
     "dev": "env-cmd -f dev.env --silent nodemon --watch dist dist/index.js --delay 1",
-    "dev:restoredb": "env-cmd -f dev.env --silent nodemon --watch dist dist/index.js --delay 1  --exec \"shx cp -r db/db.restore-from.json db/content-info-db.json && node\"",
+    "dev:restoredb": "env-cmd -f dev.env --silent nodemon --watch dist dist/index.js --delay 1  --exec \"cd db && rm -f content-info-db.json user-db.json content-status-db.json && shx cp -r db.restore-from.json db.json && cd.. && node\"",
     "start": "node dist/index.js",
     "get-ui": "rimraf public && shx cp -r ../df-downloader-ui/dist public",
     "build-get-ui": "cd ../df-downloader-ui && npm run build && cd ../df-downloader-service && npm run get-ui",

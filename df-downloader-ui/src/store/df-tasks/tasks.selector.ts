@@ -94,7 +94,7 @@ export const selectBasicTaskField = <K extends keyof TaskInfo, V = TaskInfo[K]>(
 
 type PipelineFilter = {
   contentName?: string;
-  mediaType?: string;
+  mediaFormat?: string;
   state?: "downloading" | "post-processing" | "complete" | "incomplete" | "all";
 };
 
@@ -111,7 +111,7 @@ type PipelineQuery = {
 const applyFilter = (pipeline: TaskPipelineInfo, filter?: PipelineFilter) => {
   if (!filter) return true;
   if (filter.contentName && pipeline.pipelineDetails.dfContent.name !== filter.contentName) return false;
-  if (filter.mediaType && pipeline.pipelineDetails.mediaType !== filter.mediaType) return false;
+  if (filter.mediaFormat && pipeline.pipelineDetails.mediaFormat !== filter.mediaFormat) return false;
   if (filter.state === "downloading") return pipelineIsDownloading(pipeline);
   if (filter.state === "post-processing") return pipelineIsPostProcessing(pipeline);
   if (filter.state === "complete") return pipeline.pipelineStatus.isComplete;
@@ -225,9 +225,9 @@ export const selectActivePipelineIdsForContent = (contentName: string) =>
     return mapFilterFalsey(pipelines, (pipeline) => !pipeline.pipelineStatus.isComplete && pipeline.id);
   });
 
-export const selectActivePipelineIdsForMediaType = (contentName: string, mediaType: string) =>
+export const selectActivePipelineIdsForMediaFormat = (contentName: string, mediaFormat: string) =>
   createDeepEqualSelector(selectPipelinesForContent(contentName, "incomplete"), (pipelines) => {
-    return mapFilterFalsey(pipelines, (pipeline) => pipeline.pipelineDetails.mediaType === mediaType);
+    return mapFilterFalsey(pipelines, (pipeline) => pipeline.pipelineDetails.mediaFormat === mediaFormat);
   });
 
 export const selectDownloadTask = (pipelineId: string, stepId: string) =>

@@ -7,6 +7,7 @@ import {
   MediaInfo,
   MediaInfoUtils,
   fileSizeStringToBytes,
+  inferMediaType,
   logger,
   sanitizeFilename,
 } from "df-downloader-common";
@@ -100,14 +101,14 @@ function makeDfVideoUrl(videoName: string) {
 }
 
 export const makeDfDownloadParams = (dfContent: DfContentInfo, mediaInfo: MediaInfo) => {
-  const filename = mediaInfo.mediaFilename || sanitizeFilename(`${dfContent.name}_${mediaInfo.mediaType}.${MediaInfoUtils.getExtension(mediaInfo)}`);
+  const filename = mediaInfo.mediaFilename || sanitizeFilename(`${dfContent.name}_${mediaInfo.format}.${MediaInfoUtils.getExtension(mediaInfo)}`);
   const downloadDestination = `${configService.config.contentManagement.workDir}/${filename}`;
   const headers = {
     ...makeAuthHeaders(),
     "User-Agent": "DigitalFounload",
   };
   return {
-    url: async () => getMediaUrl(dfContent.name, mediaInfo.mediaType),
+    url: async () => getMediaUrl(dfContent.name, mediaInfo.format),
     destination: downloadDestination,
     headers,
   };
@@ -258,7 +259,7 @@ export async function fetchContentInfo(name: string): Promise<FetchedContentInfo
       size = "0";
     }
     const videoEncoding = getBody(".encoding_video", videoInfoElement);
-    const mediaType = getBody(".name", videoInfoElement) || "";
+    const mediaFormat = getBody(".name", videoInfoElement) || "";
     const audioEncoding = getBody(".encoding_audio", videoInfoElement);
     const aElements = CSSSelect.selectAll("a", videoInfoElement);
     let url: string | undefined = undefined;
@@ -269,10 +270,17 @@ export async function fetchContentInfo(name: string): Promise<FetchedContentInfo
       }
     }
     const mediaFilename = url ? extractFilenameFromUrl(url) : undefined;
+    const mediaType = inferMediaType({
+      mediaFormat,
+      videoEncoding,
+      audioEncoding,
+      mediaFilename,
+    })
     mediaInfos.push({
       duration,
       size,
-      mediaType,
+      format: mediaFormat,
+      type: mediaType,
       videoEncoding,
       audioEncoding,
       mediaFilename,
@@ -294,7 +302,7 @@ export async function fetchContentInfo(name: string): Promise<FetchedContentInfo
   };
 }
 
-export const getMediaUrl = async (name: string, desiredMediaType: string) => {
+export const getMediaUrl = async (name: string, desiredMediaFormat: string) => {
   const downloadUrlOverride = configService.getDevConfigField("downloadUrlOverride");
   if (downloadUrlOverride) {
     return `${downloadUrlOverride}/${name}.mp4`;
@@ -313,7 +321,7 @@ export const getMediaUrl = async (name: string, desiredMediaType: string) => {
   for (const videoInfoElement of videoInfoElements) {
     const videoType = getBody(".name", videoInfoElement);
     if (!videoType) continue;
-    if (videoType === desiredMediaType) {
+    if (videoType === desiredMediaFormat) {
       const aElements = CSSSelect.selectAll("a", videoInfoElement);
       for (const aElement of aElements) {
         if (aElement instanceof Element) {

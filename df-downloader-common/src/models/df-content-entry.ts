@@ -28,13 +28,7 @@ export const DfContentEntryUtils = {
     return entry.downloads.length > 0;
   },
   getDownloadForFormat: (entry: DfContentEntry, format: string): DfContentDownloadInfo | undefined => {
-    return entry.downloads.find((d) => d.format === format);
-  },
-  getMediaInfo: (entry: DfContentEntry, format: string): MediaInfo | undefined => {
-    return DfContentInfoUtils.getMediaInfo(entry.contentInfo, format);
-  },
-  update: (entry: DfContentEntry, updates: DfContentEntryUpdate): DfContentEntry => {
-    return { ...entry, ...updates, downloads: entry.downloads };
+    return entry.downloads.find((d) => d.mediaInfo.format === format);
   },
   getTotalDuration: (dfContentEntries: DfContentEntry[]): number => {
     return DfContentInfoUtils.getTotalDuration(dfContentEntries.map((dfContentEntry) => dfContentEntry.contentInfo));

@@ -46,7 +46,7 @@ export const makeDownloadsApiRouter = (contentManager: DigitalFoundryContentMana
     await zodParseHttp(AddTaskRequest, req, res, async (data) => {
       try {
         const queuedContentInfo = await contentManager.downloadContent(data.name, {
-          mediaType: data.mediaType,
+          mediaFormat: data.mediaFormat,
         });
         const response: DownloadContentResponse = {
           name: queuedContentInfo.contentName,

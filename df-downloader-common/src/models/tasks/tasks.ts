@@ -11,7 +11,7 @@ export type TasksResponse = z.infer<typeof TasksResponse>;
 
 export const AddTaskRequest = z.object({
   name: z.string(),
-  mediaType: z.string().optional(),
+  mediaFormat: z.string().optional(),
 });
 export type AddTaskRequest = z.infer<typeof AddTaskRequest>;
 

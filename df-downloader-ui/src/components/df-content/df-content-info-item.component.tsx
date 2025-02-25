@@ -88,7 +88,7 @@ const DfContentInfoRightPanel = ({ dfContentEntry }: DfContentInfoRightPanelProp
       >
         {pipelineDetails.length > 0 && <Typography>Current tasks:</Typography>}
         {pipelineDetails.map((pipelineDetail) => (
-          <EllipsisTooltipText text={`${pipelineDetail.type} (${pipelineDetail.mediaType})`} key={`tt-${pipelineDetail.id}`} />
+          <EllipsisTooltipText text={`${pipelineDetail.type} (${pipelineDetail.mediaFormat})`} key={`tt-${pipelineDetail.id}`} />
         ))}
       </Stack>
     </Box>

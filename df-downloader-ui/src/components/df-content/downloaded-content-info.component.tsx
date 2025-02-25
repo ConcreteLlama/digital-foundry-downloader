@@ -8,9 +8,9 @@ export type DownloadedContentDetailProps = {
 
 export const DownloadedContentSummary = ({ content }: DownloadedContentDetailProps) => {
   const tooltip = content.downloads
-    .map((download) => `${download.format} - ${formatDate(download.downloadDate)} - ${download.downloadLocation}`)
+    .map((download) => `${download.mediaInfo.format} - ${formatDate(download.downloadDate)} - ${download.downloadLocation}`)
     .join("\n");
-  const formats = content.downloads.map((download) => download.format).join(", ");
+  const formats = content.downloads.map((download) => download.mediaInfo.format).join(", ");
   return (
     <Tooltip title={tooltip}>
       <Typography>{`Downloaded ${formats}`}</Typography>

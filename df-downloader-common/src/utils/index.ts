@@ -6,4 +6,3 @@ export * from "./zod.js";
 export * from "./search.js";
 export * from "./logger.js";
 export * from "./expiry-cache.js";
-export * from "./media-type.js";

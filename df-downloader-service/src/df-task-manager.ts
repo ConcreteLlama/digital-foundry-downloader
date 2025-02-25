@@ -23,7 +23,7 @@ import {
   TaskPipelineInfo,
   TaskPipelineUtils,
   TaskStatus,
-  getMediaType,
+  getMediaFormat,
   isChangePositionAction,
   isChangePriorityAction,
   isControlPipelineRequest,
@@ -141,10 +141,11 @@ export class DfTaskManager {
         notifier.downloadFailed(dfContentInfo, result.error);
         return;
       } else if (isPipelineExecutionSuccessResult(result)) {
+        const finalLocation = result.pipelineResult.downloadLocation;
         notifier.downloadComplete(
           dfContentInfo,
           mediaInfo,
-          downloadLocation,
+          finalLocation,
           makeDownloadProgressInfo(result.pipelineResult.finalDownloadStatus!, result.pipelineResult.attempts || 1)
         );
       }
@@ -386,7 +387,7 @@ export const makeTaskPipelineInfo = (
       type: pipelineType,
       queuedTime: startTime,
       dfContent: taskPipelineExecution.context.dfContentInfo,
-      mediaType: getMediaType(taskPipelineExecution.context.mediaInfo.mediaType)!,
+      mediaFormat: getMediaFormat(taskPipelineExecution.context.mediaInfo.format)!,
       stepOrder: steps.map(({ step }) => step.id),
       steps: steps.reduce((acc, { step, managedTask }) => {
         acc[step.id] = {

@@ -17,21 +17,19 @@ export const getFileMoveList = (contentEntires: DfContentEntry[], template: stri
     }
     const oldFilenames = new Set<string>();
     for (const download of downloads) {
-        const mediaInfo = DfContentInfoUtils.getMediaInfo(contentInfo, download.format);
-        if (mediaInfo) {
-            const oldFilename = path.normalize(download.downloadLocation);
-            if (oldFilenames.has(oldFilename)) {
-                continue;
-            }
-            oldFilenames.add(oldFilename);
-            const newFilename = path.normalize(makeFilePathWithTemplate(contentInfo, mediaInfo, template));
-            if (!pathIsEqual(oldFilename, newFilename)) {
-                acc.push({
-                    contentName: contentInfo.name,
-                    oldFilename: oldFilename,
-                    newFilename: newFilename,
-                });
-            }
+        const mediaInfo = download.mediaInfo;
+        const oldFilename = path.normalize(download.downloadLocation);
+        if (oldFilenames.has(oldFilename)) {
+            continue;
+        }
+        oldFilenames.add(oldFilename);
+        const newFilename = path.normalize(makeFilePathWithTemplate(contentInfo, mediaInfo, template));
+        if (!pathIsEqual(oldFilename, newFilename)) {
+            acc.push({
+                contentName: contentInfo.name,
+                oldFilename: oldFilename,
+                newFilename: newFilename,
+            });
         }
     };
     return acc;

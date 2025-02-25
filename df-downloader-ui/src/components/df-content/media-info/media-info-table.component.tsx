@@ -19,13 +19,13 @@ export const MediaInfoTable = ({ contentEntry }: MediaInfoListProps) => {
       <TableBody>
         {mediaInfo.map((mediaInfo) => {
           return (
-            <TableRow key={`media-info-table-${contentInfo.name}-${mediaInfo.mediaType}`}>
-              <TableCell>{mediaInfo.mediaType}</TableCell>
+            <TableRow key={`media-info-table-${contentInfo.name}-${mediaInfo.format}`}>
+              <TableCell>{mediaInfo.format}</TableCell>
               <TableCell>{mediaInfo.size}</TableCell>
               <TableCell>{mediaInfo.videoEncoding}</TableCell>
               <TableCell>{mediaInfo.audioEncoding}</TableCell>
               <TableCell>
-                <StartDownloadingButton contentEntry={contentEntry} mediaType={mediaInfo.mediaType} />
+                <StartDownloadingButton contentEntry={contentEntry} mediaFormat={mediaInfo.format} />
               </TableCell>
             </TableRow>
           );

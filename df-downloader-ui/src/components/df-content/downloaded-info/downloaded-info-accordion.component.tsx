@@ -29,7 +29,7 @@ const DownloadedInfoAccordian = ({ contentEntry, download }: DownloadedInfoAccor
       <AccordionSummary expandIcon={<ExpandMoreIcon />}>
         <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", width: "100%" }}>
           <Typography>
-            {download.format} ({download.size})
+            {download.mediaInfo.format} ({download.size})
           </Typography>
         </Box>
       </AccordionSummary>

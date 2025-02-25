@@ -124,7 +124,7 @@ const findFileMatches = (fileMatcherInfos: FileMatchInfo[], contentEntry: DfCont
                 }
             }
             if (nameMatched || titleMatched) {
-                const normalizedFormat = getStringMatchInfo(mediaInfo.mediaType);
+                const normalizedFormat = getStringMatchInfo(mediaInfo.format);
                 if (fileMatcherInfo.normalizedFilename.includes(normalizedFormat.normalized)) {
                     fileMatcherInfo.possibleMatches.push({
                         contentEntry,

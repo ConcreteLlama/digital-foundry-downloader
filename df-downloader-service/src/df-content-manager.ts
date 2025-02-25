@@ -11,7 +11,7 @@ import {
   DfContentAvailabilityInfo,
   fileSizeStringToBytes,
   filterContentInfos,
-  getMediaTypeIndex,
+  getMediaFormatIndex,
   logger,
   filterEmpty
 } from "df-downloader-common";
@@ -271,7 +271,7 @@ export class DigitalFoundryContentManager {
       if (closestMatch.percentageDiff > 10) {
         logger.log(
           "info",
-          `Closest match for ${closestMatch.contentEntry.name} is ${closestMatch.mediaInfo.mediaType} but size differs by ${closestMatch.percentageDiff.toFixed(2)}% - skipping`
+          `Closest match for ${closestMatch.contentEntry.name} is ${closestMatch.mediaInfo.format} but size differs by ${closestMatch.percentageDiff.toFixed(2)}% - skipping`
         );
         continue;
       }
@@ -279,12 +279,12 @@ export class DigitalFoundryContentManager {
       const { contentInfo } = contentEntry;
       logger.log(
         "info",
-        `Adding download for ${contentEntry.name} (${contentInfo.title}) with media type ${mediaInfo.mediaType}`
+        `Adding download for ${contentEntry.name} (${contentInfo.title}) with media format ${mediaInfo.format}`
       );
       toAddDownload.push({
         name: contentInfo.name,
         downloadInfo: {
-          format: mediaInfo.mediaType,
+          mediaInfo,
           downloadLocation: filePathInfo.fullPath,
           size: bytesToHumanReadable(fileMatch.fileStats.size),
           downloadDate: fileMatch.fileStats.mtime,
@@ -434,9 +434,9 @@ export class DigitalFoundryContentManager {
   async downloadContent(
     content: string | DfContentInfo,
     {
-      mediaType,
+      mediaFormat,
     }: {
-      mediaType?: string;
+      mediaFormat?: string;
     } = {}
   ) {
     const autoDownloadConfig = configService.config.automaticDownloads;
@@ -460,9 +460,9 @@ export class DigitalFoundryContentManager {
       throw new Error(`Unable to find content info for ${contentName}`);
     }
     const mediaInfo =
-      (mediaType ? dfContentInfo.mediaInfo.find((mediaInfo) => mediaInfo.mediaType === mediaType) : undefined) ||
+      (mediaFormat ? dfContentInfo.mediaInfo.find((mediaInfo) => mediaInfo.format === mediaFormat) : undefined) ||
       getMostImportantItem(autoDownloadConfig.mediaTypes, dfContentInfo.mediaInfo, (mediaTypeList, mediaInfo) =>
-        getMediaTypeIndex(mediaTypeList, mediaInfo.mediaType)
+        getMediaFormatIndex(mediaTypeList, mediaInfo.format)
       );
     if (!mediaInfo) {
       throw new Error(`Could not get valid media info for ${dfContentInfo.name}`);
@@ -479,7 +479,7 @@ export class DigitalFoundryContentManager {
           const finalPipelineResult = pipelineResult.pipelineResult;
           const { size, downloadLocation, mediaInfo, subtitles } = finalPipelineResult;
           this.db.contentDownloaded(dfContentInfo.name, {
-            format: mediaInfo.mediaType,
+            mediaInfo,
             downloadDate: new Date(),
             downloadLocation: downloadLocation,
             size: size ? bytesToHumanReadable(size) : undefined,
