@@ -1,4 +1,4 @@
-import { Button, Dialog, DialogActions, DialogContent, DialogTitle, Paper, Typography } from "@mui/material";
+import { Button, Dialog, DialogActions, DialogContent, DialogTitle, Paper, Typography, useMediaQuery } from "@mui/material";
 import { Changelog, changelogToMarkdown, ChangelogToMarkdownOpts, dfDownloaderBranch, dfDownloaderVersion, logger, parseChangelog, UpdateUserInfoRequest } from "df-downloader-common";
 import { useState } from "react";
 import Markdown from 'react-markdown';
@@ -9,6 +9,7 @@ import { updateUserInfo } from "../../store/auth-user/auth-user.actions.ts";
 import { selectAuthUser } from "../../store/auth-user/auth-user.selector.ts";
 import { store } from "../../store/store.ts";
 import { Loading } from "./loading.component.tsx";
+import { theme } from "../../themes/theme.ts";
 
 const GITHUB_URL = 'https://raw.githubusercontent.com/ConcreteLlama/digital-foundry-downloader/refs/heads';
 const githubChangelogUrl = `${GITHUB_URL}/${dfDownloaderBranch}/df-downloader-service/changelog.yaml`;
@@ -86,8 +87,9 @@ export const ChangelogDialog = () => {
         }
         store.dispatch(updateUserInfo.start(updateUserInfoRequest));
     }
+    const fullScreen = useMediaQuery(theme.breakpoints.down('md'));
     return (
-        <Dialog open={open} onClose={closeDialog} maxWidth="md" fullWidth>
+        <Dialog open={open} onClose={closeDialog} maxWidth="md" fullWidth fullScreen={fullScreen}>
             <DialogTitle>DF Downloader Updated</DialogTitle>
             <DialogContent>
                 <ChangelogDisplay markdownOpts={{
