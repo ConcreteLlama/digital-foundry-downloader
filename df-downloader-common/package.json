@@ -12,7 +12,8 @@
     "yalc": "yalc",
     "build": "mkdirp dist && shx cp package.json dist && cd dist && yalc publish --private --push",
     "start": "node dist/test.js",
-    "remove": "yalc remove df-downloader-common; rimraf dist && rimraf node_modules"
+    "remove": "yalc remove df-downloader-common; rimraf dist && rimraf node_modules",
+    "check-build": "tsc --noEmit"
   },
   "author": "",
   "license": "ISC",

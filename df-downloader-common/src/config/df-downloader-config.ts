@@ -11,7 +11,7 @@ import { ContentDetectionConfig, ContentDetectionConfigKey } from "./content-det
 import { AutomaticDownloadsConfig, AutomaticDownloadsConfigKey } from "./automatic-downloads-config.js";
 import { AuthenticationConfig, AuthenticationConfigKey, DefaultAuthenticationConfig } from "./auth-config.js";
 import { DevConfig, DevConfigKey } from "./dev-config.js";
-import { MediaFormatsConfigKey, MediaFormatsConfig } from "./download-formats-config.js";
+import { MediaFormatsConfigKey, MediaFormatsConfig } from "./media-formats-config.js";
 
 export const DfDownloaderConfig = z.object({
   [DfConfigKey]: DfConfig.default({}),

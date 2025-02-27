@@ -16,7 +16,7 @@
     "remove:all": "npm run remove:config && npm run remove:data && npm run remove:code",
     "update-versions": "node scripts/update-versions.js",
     "prepare": "husky install",
-    "check-build": "cd df-downloader-service && npm run check-build && cd ../df-downloader-ui && npm run check-build",
+    "check-build": "cd df-downloader-common && npm run check-build && cd ../df-downloader-service && npm run check-build && cd ../df-downloader-ui && npm run check-build",
     "build-changelog": "cd df-downloader-service && node dist/utils/changelog/build-changelog.js changelog.yaml ../CHANGELOG.md",
     "validate-changelog": "cd df-downloader-service && node dist/utils/changelog/validate-changelog.js changelog.yaml"
   },
