@@ -13,7 +13,8 @@ import {
   filterContentInfos,
   getMediaFormatIndex,
   logger,
-  filterEmpty
+  filterEmpty,
+  getBestMediaInfoMatch
 } from "df-downloader-common";
 import { configService } from "./config/config.js";
 import { ContentInfoWithAvailability, DfDownloaderOperationalDb, DownloadInfoWithName } from "./db/df-operational-db.js";
@@ -24,7 +25,6 @@ import { serviceLocator } from "./services/service-locator.js";
 import { findExistingContent } from "./utils/content-finder.js";
 import { sanitizeContentName } from "./utils/df-utils.js";
 import { deleteFile, ensureDirectory, fileExists, pathIsEqual } from "./utils/file-utils.js";
-import { getMostImportantItem } from "./utils/importance-list.js";
 import { dfFetchWorkerQueue } from "./utils/queue-utils.js";
 import { getFileMoveList } from "./utils/template-utils.js";
 
@@ -335,6 +335,7 @@ export class DigitalFoundryContentManager {
       }`
     );
     const autoDownloadConfig = configService.config.automaticDownloads;
+    const mediaFormatsConfig = configService.config.mediaFormats;
     const userTier = this.dfUserManager.getCurrentTier() || "NONE";
     const newContentRefs = [...(await this.getNewContentList()), ...noMediaInfoContents.map((v) => v.contentRef)];
     const newContentFetchResults = (await this.getContentInfos(newContentRefs));
@@ -343,8 +344,13 @@ export class DigitalFoundryContentManager {
       if (!contentInfo) {
         return;
       }
-      if (!contentInfo.mediaInfo.length && this.dfUserManager.getCurrentTier()) {
-        logger.log("info", `No media info found for ${contentInfo.name}, adding to no media list`);
+      const matchingMediaInfo = getBestMediaInfoMatch(
+        mediaFormatsConfig.priorities,
+        contentInfo.mediaInfo,
+        { mustMatch: true }
+      );
+      if (!matchingMediaInfo && this.dfUserManager.getCurrentTier()) {
+        logger.log("info", `No suitable media info found for ${contentInfo.name}, adding to no media list`);
         const attempts = this.noMediaContentInfos.get(contentInfo.name)?.attempts || 0;
         if (attempts >= 60 * 24) {
           logger.log("info", `Removing ${contentInfo.name} from no media list as it has been there for over 24 hours`);
@@ -439,7 +445,7 @@ export class DigitalFoundryContentManager {
       mediaFormat?: string;
     } = {}
   ) {
-    const autoDownloadConfig = configService.config.automaticDownloads;
+    const mediaFormatsConfig = configService.config.mediaFormats;
     let contentName: string, contentInfoArg: DfContentInfo | undefined;
     if (typeof content === "string") {
       contentName = sanitizeContentName(content);
@@ -461,9 +467,9 @@ export class DigitalFoundryContentManager {
     }
     const mediaInfo =
       (mediaFormat ? dfContentInfo.mediaInfo.find((mediaInfo) => mediaInfo.format === mediaFormat) : undefined) ||
-      getMostImportantItem(autoDownloadConfig.mediaTypes, dfContentInfo.mediaInfo, (mediaTypeList, mediaInfo) =>
-        getMediaFormatIndex(mediaTypeList, mediaInfo.format)
-      );
+      getBestMediaInfoMatch(mediaFormatsConfig.priorities, dfContentInfo.mediaInfo, {
+        mustMatch: true,
+      });
     if (!mediaInfo) {
       throw new Error(`Could not get valid media info for ${dfContentInfo.name}`);
     }

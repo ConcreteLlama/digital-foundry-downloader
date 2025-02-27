@@ -5,16 +5,17 @@ contentDetection:
   maxArchivePage: 1000
 automaticDownloads:
   enabled: true
-  mediaTypes:
+contentManagement:
+  scanForExistingFiles: true
+  destinationDir: /destination_dir
+  workDir: /working_dir
+mediaFormats:
+  priorities:
     - h.264 (4K)
     - HEVC
     - h.264
     - h.264 (1080p)
     - MP3
-contentManagement:
-  scanForExistingFiles: true
-  destinationDir: /destination_dir
-  workDir: /working_dir
 downloads:
   maxSimultaneousDownloads: 2
   maxConnectionsPerDownload: 5

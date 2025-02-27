@@ -1,28 +1,41 @@
 import { DndContext, DragEndEvent, useDraggable, useDroppable } from "@dnd-kit/core";
 import { arrayMove } from "@dnd-kit/sortable";
 import DragIndicatorIcon from "@mui/icons-material/DragIndicator";
-import { Box, Card, IconButton, List, Stack, Typography } from "@mui/material";
+import { Box, Card, IconButton, List, MenuItem, Select, SelectChangeEvent, Stack, Typography } from "@mui/material";
 import { Controller, useFormContext } from "react-hook-form";
 import { FormLabelInline } from "./form-label-inline";
+import DeleteIcon from "@mui/icons-material/Delete";
 
-interface OrdereableListFormFieldProps {
-  extendable?: boolean;
+type OrdereableListFormFieldProps<VALUE_TYPE extends string = string> = {
   name: string;
   label: string;
+  possibleValues?: Array<VALUE_TYPE>;
+  minSize?: number;
+  description?: string;
+  nonDraggableValues?: Array<VALUE_TYPE>;
+  transformListOrder?: (list: VALUE_TYPE[]) => VALUE_TYPE[];
 }
-interface OrderableListProps {
-  onChange: (value: string[]) => void;
-  possibleValues: Array<string>;
+
+interface OrderableListProps<VALUE_TYPE extends string> {
+  onChange: (value: VALUE_TYPE[]) => void;
+  possibleValues?: Array<VALUE_TYPE>;
+  nonDraggableValues?: Array<VALUE_TYPE>;
+  minSize?: number;
+  values: Array<VALUE_TYPE>;
   name: string;
 }
 
-export const OrderableListFormField = ({ name, label }: OrdereableListFormFieldProps) => {
+export const OrderableListFormField = <VALUE_TYPE extends string>({ name, label, possibleValues, description, nonDraggableValues, transformListOrder, minSize }: OrdereableListFormFieldProps<VALUE_TYPE>) => {
   const { control } = useFormContext();
   return (
     <Controller
       control={control}
       name={name}
       render={({ field: { value, onChange } }) => {
+        const onChangeActual = (newValue: VALUE_TYPE[]) => {
+          const newValueTransformed = transformListOrder ? transformListOrder(newValue) : newValue;
+          onChange(newValueTransformed);
+        }
         return (
           <Box
             sx={{
@@ -33,7 +46,8 @@ export const OrderableListFormField = ({ name, label }: OrdereableListFormFieldP
             }}
           >
             <FormLabelInline>{label}</FormLabelInline>
-            <OrderableList name={name} possibleValues={value} onChange={onChange} />
+            {description && <Typography variant="caption">{description}</Typography>}
+            <OrderableList name={name} possibleValues={possibleValues} values={value} onChange={onChangeActual} nonDraggableValues={nonDraggableValues} minSize={minSize} />
           </Box>
         );
       }}
@@ -41,12 +55,13 @@ export const OrderableListFormField = ({ name, label }: OrdereableListFormFieldP
   );
 };
 
-interface ListItem {
+interface ListItem<VALUE_TYPE extends string> {
   id: string;
-  label: string;
+  label: VALUE_TYPE;
 }
-export const OrderableList = ({ name, possibleValues, onChange }: OrderableListProps) => {
-  const items: ListItem[] = possibleValues.map((value) => ({
+export const OrderableList = <VALUE_TYPE extends string>({ name, possibleValues, values, onChange, nonDraggableValues, minSize }: OrderableListProps<VALUE_TYPE>) => {
+  const nonDraggable = new Set(nonDraggableValues || []);
+  const items: ListItem<VALUE_TYPE>[] = values.map((value) => ({
     id: `${name}-${value}`,
     label: value,
   }));
@@ -58,12 +73,32 @@ export const OrderableList = ({ name, possibleValues, onChange }: OrderableListP
       onChange(newOrder.map((item) => item.label));
     }
   };
+  const removeDisabled = items.length <= (minSize || 0);
+  const handleItemRemoved = (id: string) => {
+    if (removeDisabled) {
+      return;
+    }
+    const newItems = items.filter((item) => item.id !== id);
+    onChange(newItems.map((item) => item.label));
+  }
+  const itemSelected = (event: SelectChangeEvent<string>) => {
+    const value = event.target.value as VALUE_TYPE;
+    onChange([...values, value]);
+  }
+  const itemsNotInList = (possibleValues || []).filter((value) => !items.map((item) => item.label).includes(value));
   return (
-    <Stack>
+    <Stack sx={{ padding: 2 }}>
+      {possibleValues && <Select disabled={itemsNotInList.length === 0}
+        onChange={itemSelected} displayEmpty
+        renderValue={() => itemsNotInList.length === 0 ? "No more items to add" : "Add Item"}>
+        {itemsNotInList.map((value) => (
+          <MenuItem value={value}>{value}</MenuItem>
+        ))}
+      </Select>}
       <DndContext onDragEnd={handleDragEnd}>
         <List>
           {items.map((value) => (
-            <OrderedListItem id={value.id} label={value.label} />
+            <OrderedListItem id={value.id} label={value.label} onRemove={possibleValues ? () => handleItemRemoved(value.id) : undefined} removeDisabled={removeDisabled} draggable={!nonDraggable.has(value.label)} />
           ))}
         </List>
       </DndContext>
@@ -93,9 +128,12 @@ export const OrderableList = ({ name, possibleValues, onChange }: OrderableListP
 interface OrderedListItemProps {
   id: string;
   label: string;
+  draggable?: boolean;
+  onRemove?: (id: string) => void;
+  removeDisabled?: boolean;
 }
 
-const OrderedListItem = ({ id, label }: OrderedListItemProps) => {
+const OrderedListItem = ({ id, label, onRemove, removeDisabled, draggable = true }: OrderedListItemProps) => {
   const { setNodeRef: droppableSetNodeRef } = useDroppable({ id });
   const {
     attributes,
@@ -107,16 +145,19 @@ const OrderedListItem = ({ id, label }: OrderedListItemProps) => {
   });
   const style = transform
     ? {
-        transform: `translate3d(${transform.x}px, ${transform.y}px, 0) scale(1.01)`,
-      }
+      transform: `translate3d(${transform.x}px, ${transform.y}px, 0) scale(1.01)`,
+    }
     : {};
   return (
     <Card ref={droppableSetNodeRef} sx={{ ...style, marginY: 0.5 }}>
       <Box sx={{ display: "flex", justifyContent: "space-between", paddingX: 1, alignItems: "center" }}>
         <Typography>{label}</Typography>
-        <IconButton ref={draggableSetNodeRef} {...listeners} {...attributes}>
-          <DragIndicatorIcon />
-        </IconButton>
+        <Box sx={{ display: "flex", alignItems: "center" }}>
+          {onRemove && <IconButton onClick={() => onRemove(id)} disabled={removeDisabled}><DeleteIcon /></IconButton>}
+          <IconButton ref={draggableSetNodeRef} {...listeners} {...attributes} disabled={!draggable}>
+            <DragIndicatorIcon />
+          </IconButton>
+        </Box>
       </Box>
     </Card>
   );

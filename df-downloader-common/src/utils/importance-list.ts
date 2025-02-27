@@ -16,7 +16,7 @@ export const getMostImportantItem = <IMPORTANCE_LIST_TYPE, ITEM_LIST_TYPE>(
   importanceIndexGetter: (importanceList: IMPORTANCE_LIST_TYPE, item: ITEM_LIST_TYPE) => number,
   opts: ImportanceOpts = {}
 ): ITEM_LIST_TYPE | undefined => {
-  const { mustMatch = false } = opts;
+  const { mustMatch = true } = opts;
   const [mostImportantItem, itemImportanceIndex] = items.reduce(
     ([currentMostImportantItem, currentHighestImportanceIndex], currentItem) => {
       const itemImportanceIndex = importanceIndexGetter(importanceList, currentItem);

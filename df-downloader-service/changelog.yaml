@@ -17,6 +17,12 @@ versions:
           - Changelog is now available in the UI under the system menu
           - Changelog now displays in a dialog when a new version is detected  
           - Will attempt to fetch the changelog from github first as this is the most up to date source and will help identify if the user is on the latest version
+      enhancements:
+        - Media format changes:
+          - "Media formats now configured in its own config section"
+          - Added "Unknown", "Video (Unknown) and "Audio (Unknown)" media formats and changed matching to require a format match:
+            - "This is to prevent the downloader from downloading a file that doesn't match the desired format - previously it would download whatever was available even if no match was found (e.g. archives of a UE5 project)"
+          - It is now possible to add and remove items from the media format list in the UI
       maintenance:
         - npm audit fix to address security vulnerabilities
       internal:
@@ -29,7 +35,7 @@ versions:
         - Media info now includes both format (e.g. h.264) and type (e.g. VIDEO, AUDIO etc)
 
   - version: "2.2.6"
-    date: "2024-06-24"
+    date: "2025-01-25"
     changes:
       bugfixes:
         - "Fix an issue on first run where container path was set to be relative to the services directory. This would result in downloads never actually being saved to the host machine. The working dir and destination dirs are now forced to /working_dir and /destination_dir when running in a container."

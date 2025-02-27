@@ -7,6 +7,7 @@ import NotificationsIcon from "@mui/icons-material/Notifications";
 import RadarIcon from "@mui/icons-material/Radar";
 import SettingsIcon from "@mui/icons-material/Settings";
 import SubtitlesIcon from "@mui/icons-material/Subtitles";
+import VideoSettingsIcon from "@mui/icons-material/VideoSettings";
 import { AutomaticDownloadsSettingsForm } from "../../components/settings/automatic-download-settings-form.component";
 import { ContentDetectionSettingsForm } from "../../components/settings/content-detection-settings-form.component";
 import { ContentManagementSettingsForm } from "../../components/settings/content-management-settings.component";
@@ -19,6 +20,7 @@ import { SubtitlesSettingsForm } from "../../components/settings/subtitles-setti
 import { DfLogoIcon } from "../../icons/df-logo.component";
 import { NestedSubRoute } from "../nav/nested-routes.ts";
 import { SettingsElement } from "./settings.component.tsx";
+import { MediaFormatsSettingsForm } from "../../components/settings/media-format-settings-component.tsx";
 
 export const settingsRouteDefinitions: NestedSubRoute = {
   name: "Settings",
@@ -53,6 +55,12 @@ export const settingsRouteDefinitions: NestedSubRoute = {
       element: <DownloadsSettingsForm />,
       name: "Downloads",
       icon: DownloadIcon,
+    },
+    {
+      path: "/settings/media-formats",
+      element: <MediaFormatsSettingsForm />,
+      name: "Media Formats",
+      icon: VideoSettingsIcon,
     },
     {
       path: "/settings/metadata",

@@ -64,6 +64,16 @@ export class FileConfig extends ConfigService {
         delete rawConfig.subtitles.deepgram;
       }
     }
+    if (rawConfig.automaticDownloads) {
+      if (rawConfig.automaticDownloads.mediaTypes) {
+        patched = true;
+        rawConfig.mediaFormats = {
+          ...(rawConfig.mediaFormats || {}),
+          priorities: rawConfig.automaticDownloads.mediaTypes
+        }
+        delete rawConfig.automaticDownloads.mediaTypes;
+      }
+    }
     patched && logger.log("info", `Config pathed to latest schema`);
     return patched;
   }

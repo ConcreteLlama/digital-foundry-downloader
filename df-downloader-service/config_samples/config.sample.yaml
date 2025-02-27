@@ -17,15 +17,19 @@
 #   enabled: true
 
 #   # The media types that are accetable for automatic downloads in order of preference
-#   mediaTypes:
+#   # The maximum number of concurrent downloads
+#   # Default: 2
+#   downloadDelay: 20000
+
+# Config pertaining to media formats for automatic downloads and downloads triggered without speicfying a format
+# mediaFormats:
+#   # The priorities for media formats. If an item is not in the list, it will not be downloaded unless explicitly specified
+#   priorities:
 #     - h.264 (4K)
 #     - HEVC
 #     - h.264
 #     - h.264 (1080p)
 #     - MP3
-#   # The maximum number of concurrent downloads
-#   # Default: 2
-#   downloadDelay: 20000
 
 # # Exclusion filters for automatic downloads - if a content entry matches any of these filters, it will not be downloaded
 #   exclusionFilters:

@@ -1,20 +1,19 @@
+import { AutomaticDownloadsConfig } from "df-downloader-common/config/automatic-downloads-config";
 import { Fragment } from "react";
-import { OrderableListFormField } from "../general/ordered-list-form-field.component";
+import { CheckboxElement, useWatch } from "react-hook-form-mui";
+import { FilterList } from "../general/filters/filter-list.component";
 import { ZodNumberField } from "../zod-fields/zod-number-field.component";
 import { DfSettingsSectionForm } from "./df-settings-section-form.component";
-import { AutomaticDownloadsConfig } from "df-downloader-common/config/automatic-downloads-config";
-import { FilterList } from "../general/filters/filter-list.component";
-import { CheckboxElement, useWatch } from "react-hook-form-mui";
 
 export const AutomaticDownloadsSettingsForm = () => {
   return (
     <DfSettingsSectionForm sectionName="automaticDownloads" title="Automatic Downloads">
-      <AutoConfigSettings />
+      <AutomaticDownloadConfigSettings />
     </DfSettingsSectionForm>
   );
 };
 
-const AutoConfigSettings = () => {
+const AutomaticDownloadConfigSettings = () => {
   const enabled = useWatch<AutomaticDownloadsConfig>({
     name: "enabled",
   });
@@ -25,7 +24,6 @@ const AutoConfigSettings = () => {
         label="Enable Automatic Downloads"
         helperText="Whether automatic downloads are enabled"
       />
-      <OrderableListFormField name="mediaTypes" label="Media Type Priorities" extendable={false} />
       {enabled && (
         <Fragment>
           <ZodNumberField
