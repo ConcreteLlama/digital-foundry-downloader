@@ -11,15 +11,15 @@ RUN npm i yalc@1.0.0-pre.53 -g
 
 COPY df-downloader-common ./df-downloader-common
 
-RUN cd df-downloader-common && npm install && npm run build && npx rimraf node_modules
+RUN cd df-downloader-common && npm ci && npm run build && npx rimraf node_modules
 
 COPY df-downloader-ui ./df-downloader-ui
 
-RUN cd df-downloader-ui && yalc add df-downloader-common && npm install && npm run build && npx rimraf node_modules
+RUN cd df-downloader-ui && yalc add df-downloader-common && npm ci && npm run build && npx rimraf node_modules
 
 COPY df-downloader-service ./df-downloader-service
 
-RUN cd df-downloader-service && yalc add df-downloader-common && npm install
+RUN cd df-downloader-service && yalc add df-downloader-common && npm ci
 RUN cd df-downloader-service && npm run build
 RUN cd df-downloader-service && npm run get-ui
 
