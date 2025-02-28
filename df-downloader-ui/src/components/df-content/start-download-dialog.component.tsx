@@ -94,7 +94,7 @@ export const StartDownloadingButton = ({ contentEntry, mediaFormat, label, disab
     VariantIcon = DownloadedIcon;
     tooltip = "Download again";
     buttonDisabled = false;
-  } else if (!mediaMatchesAvailable) {
+  } else if (!mediaFormat && !mediaMatchesAvailable) {
     VariantIcon = DownloadIcon;
     tooltip = "No downloads are available in the desired media format(s); open content to see available formats or change your Media Formats settings.";
     buttonDisabled = true;
