@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-export const MediaFormat = z.enum(["HEVC", "h.264 (4K)", "h.264 (1080p)", "h.264", "MP3", "Video (Unknown)", "Audio (Unknown)", "Unknown"]);
+export const MediaFormat = z.enum(["HEVC", "h.264 (4K)", "h.264 (1080p)", "h.264", "MP3", "Video (Unknown)", "Video (Any)", "Audio (Unknown)", "Audio (Any)", "Unknown", "Any"]);
 export type MediaFormat = z.infer<typeof MediaFormat>;
 
 export const AllMediaFormats: string[] = MediaFormat.options;

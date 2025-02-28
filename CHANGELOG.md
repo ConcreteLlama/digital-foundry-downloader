@@ -22,7 +22,8 @@
 ### Enhancements
 - Media format changes
   - Media formats now configured in its own config section
-  - Added "Unknown", "Video (Unknown) and "Audio (Unknown)" media formats and changed matching to require a format match
+  - Added "Any", "Video (Any) and "Audio (Any)" media formats and changed matching to require a format match
+    - Any is a catch-all for any media type, Video (Any) is any video format, Audio (Any) is any audio format
     - This is to prevent the downloader from downloading a file that doesn't match the desired format - previously it would download whatever was available even if no match was found (e.g. archives of a UE5 project)
   - It is now possible to add and remove items from the media format list in the UI
 ### Maintenance

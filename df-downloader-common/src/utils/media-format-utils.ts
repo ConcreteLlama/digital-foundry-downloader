@@ -10,104 +10,111 @@ const mediaFormatToRegexMap: Partial<Record<MediaFormat, RegExp>> = {
 };
 
 export const mediaFormatMatches = (mediaFormat: MediaFormat, mediaInfo: MediaInfo) => {
-    if (mediaFormat === "Video (Unknown)") {
-        return mediaInfo.type === "VIDEO";
-    } else if (mediaFormat === "Audio (Unknown)") {
-        return mediaInfo.type === "AUDIO";
-    } else if (mediaFormat === "Unknown") {
-        return mediaInfo.type === "UNKNOWN";
-    } else {
-        return mediaFormatToRegexMap[mediaFormat]?.test(mediaInfo.format) || false;
-    }
+  const mediaFormatRegexp = mediaFormatToRegexMap[mediaFormat];
+  if (mediaFormat === "Any") {
+    return true;
+  } else if (mediaFormat === "Video (Any)") {
+    return mediaInfo.type === "VIDEO";
+  } else if (mediaFormat === "Audio (Any)") {
+    return mediaInfo.type === "AUDIO";
+  } else if (mediaFormat === "Unknown") {
+    return mediaInfo.type === "UNKNOWN";
+  } else if (mediaFormat === "Video (Unknown)") {
+    return mediaInfo.type === "VIDEO" && !getMediaFormat(mediaInfo.format);
+  } else if (mediaFormat === "Audio (Unknown)") {
+    return mediaInfo.type === "AUDIO" && !getMediaFormat(mediaInfo.format);
+  } else {
+    return mediaFormatToRegexMap[mediaFormat]?.test(mediaInfo.format) || false;
+  }
 }
 
 export const getMatchingMediaFormat = (
-    mediaFormatPriorityList: MediaFormat[],
-    mediaInfo: MediaInfo
-  ) => {
-    for (const mediaFormat of mediaFormatPriorityList) {
-      if (mediaFormatMatches(mediaFormat, mediaInfo)) {
-        return mediaFormat;
-      }
+  mediaFormatPriorityList: MediaFormat[],
+  mediaInfo: MediaInfo
+) => {
+  for (const mediaFormat of mediaFormatPriorityList) {
+    if (mediaFormatMatches(mediaFormat, mediaInfo)) {
+      return mediaFormat;
     }
-    return null;
-  };
-
-  /**
-   * Get the index of the media type in the priority list
-   * @param mediaTypePriorityList The list of media types in order of priority
-   * @param mediaType The media type to find the index of
-   * @returns
-   */
-  export const getMediaFormatIndex = (mediaTypePriorityList: MediaFormat[], mediaInfo: MediaInfo) => {
-    return mediaTypePriorityList.findIndex((priorityMediaFormat) => mediaFormatMatches(priorityMediaFormat, mediaInfo));
-  };
-  
-  export const isAudioFormat = (mediaFormat: string | MediaFormat) => audioFormats.has(getMediaFormat(mediaFormat)!);
-  export const isVideoFormat = (mediaFormat: string | MediaFormat) => videoFormats.has(getMediaFormat(mediaFormat)!);
-  
-  export const getMediaFormat = (mediaTypeString: string) => {
-    for (const [mediaType, mediaTypeRegex] of Object.entries(mediaFormatToRegexMap) as [MediaFormat, RegExp][]) {
-      if (mediaTypeRegex.test(mediaTypeString)) {
-        return mediaType;
-      }
-    }
-    return null;
-  };
-
-  export type RawMediaInfo = {
-    videoEncoding?: string;
-    audioEncoding?: string;
-    mediaFormat: string;
-    mediaFilename?: string;
   }
+  return null;
+};
 
-export const inferMediaTypeAndFormat = ({ audioEncoding, videoEncoding, mediaFormat, mediaFilename}: RawMediaInfo) => {
-    const inferredType = inferMediaType({ audioEncoding, videoEncoding, mediaFormat, mediaFilename });
-    const inferredFormat = inferMediaFormat({ audioEncoding, videoEncoding, mediaFormat, mediaFilename }, inferredType);
-    return { mediaType: inferredType, mediaFormat: inferredFormat };
+/**
+ * Get the index of the media type in the priority list
+ * @param mediaTypePriorityList The list of media types in order of priority
+ * @param mediaType The media type to find the index of
+ * @returns
+ */
+export const getMediaFormatIndex = (mediaTypePriorityList: MediaFormat[], mediaInfo: MediaInfo) => {
+  return mediaTypePriorityList.findIndex((priorityMediaFormat) => mediaFormatMatches(priorityMediaFormat, mediaInfo));
+};
+
+export const isAudioFormat = (mediaFormat: string | MediaFormat) => audioFormats.has(getMediaFormat(mediaFormat)!);
+export const isVideoFormat = (mediaFormat: string | MediaFormat) => videoFormats.has(getMediaFormat(mediaFormat)!);
+
+export const getMediaFormat = (mediaTypeString: string) => {
+  for (const [mediaType, mediaTypeRegex] of Object.entries(mediaFormatToRegexMap) as [MediaFormat, RegExp][]) {
+    if (mediaTypeRegex.test(mediaTypeString)) {
+      return mediaType;
+    }
+  }
+  return null;
+};
+
+export type RawMediaInfo = {
+  videoEncoding?: string;
+  audioEncoding?: string;
+  mediaFormat: string;
+  mediaFilename?: string;
 }
 
-export const inferMediaType = ({ audioEncoding, videoEncoding, mediaFormat, mediaFilename}: RawMediaInfo): MediaType => {
-    const hasAudio = audioEncoding && audioEncoding !== "-";
-    const hasVideo = videoEncoding && videoEncoding !== "-";
-    if (hasAudio && hasVideo) {
-      return "VIDEO";
-    }
-    if (hasAudio) {
-      return "AUDIO";
-    }
-    if (isVideoFormat(mediaFormat)) {
-      return "VIDEO";
-    }
-    if (isAudioFormat(mediaFormat)) {
-      return "AUDIO";
-    }
-    if (mediaFilename?.endsWith(".mp3")) {
-      return "AUDIO";
-    }
-    if (mediaFilename?.endsWith(".mp4") || mediaFilename?.endsWith(".mkv") || mediaFilename?.endsWith(".avi")) {
-      return "VIDEO";
-    }
-    if (mediaFormat === "ZIP" || mediaFormat === "RAR" || mediaFilename?.endsWith(".zip") || mediaFilename?.endsWith(".rar")) {
-      return "ARCHIVE";
-    }
-    return "UNKNOWN";
+export const inferMediaTypeAndFormat = ({ audioEncoding, videoEncoding, mediaFormat, mediaFilename }: RawMediaInfo) => {
+  const inferredType = inferMediaType({ audioEncoding, videoEncoding, mediaFormat, mediaFilename });
+  const inferredFormat = inferMediaFormat({ audioEncoding, videoEncoding, mediaFormat, mediaFilename }, inferredType);
+  return { mediaType: inferredType, mediaFormat: inferredFormat };
+}
+
+export const inferMediaType = ({ audioEncoding, videoEncoding, mediaFormat, mediaFilename }: RawMediaInfo): MediaType => {
+  const hasAudio = audioEncoding && audioEncoding !== "-";
+  const hasVideo = videoEncoding && videoEncoding !== "-";
+  if (hasAudio && hasVideo) {
+    return "VIDEO";
   }
-  
-export const inferMediaFormat = ({ audioEncoding, videoEncoding, mediaFormat, mediaFilename}: RawMediaInfo, typeHint?: MediaType): MediaFormat => {
-    const matchedMediaFormat = getMediaFormat(mediaFormat);
-    if (matchedMediaFormat) {
-      return matchedMediaFormat;
-    }
-    const mediaType = typeHint ? typeHint : inferMediaType({ audioEncoding, videoEncoding, mediaFormat, mediaFilename });
-    switch (mediaType) {
-        case "VIDEO":
-            return "Video (Unknown)";
-        case "AUDIO":
-            return "Audio (Unknown)";
-        case "ARCHIVE":
-        case "UNKNOWN":
-            return "Unknown";
-        }
-    };
+  if (hasAudio) {
+    return "AUDIO";
+  }
+  if (isVideoFormat(mediaFormat)) {
+    return "VIDEO";
+  }
+  if (isAudioFormat(mediaFormat)) {
+    return "AUDIO";
+  }
+  if (mediaFilename?.endsWith(".mp3")) {
+    return "AUDIO";
+  }
+  if (mediaFilename?.endsWith(".mp4") || mediaFilename?.endsWith(".mkv") || mediaFilename?.endsWith(".avi")) {
+    return "VIDEO";
+  }
+  if (mediaFormat === "ZIP" || mediaFormat === "RAR" || mediaFilename?.endsWith(".zip") || mediaFilename?.endsWith(".rar")) {
+    return "ARCHIVE";
+  }
+  return "UNKNOWN";
+}
+
+export const inferMediaFormat = ({ audioEncoding, videoEncoding, mediaFormat, mediaFilename }: RawMediaInfo, typeHint?: MediaType): MediaFormat => {
+  const matchedMediaFormat = getMediaFormat(mediaFormat);
+  if (matchedMediaFormat) {
+    return matchedMediaFormat;
+  }
+  const mediaType = typeHint ? typeHint : inferMediaType({ audioEncoding, videoEncoding, mediaFormat, mediaFilename });
+  switch (mediaType) {
+    case "VIDEO":
+      return "Video (Unknown)";
+    case "AUDIO":
+      return "Audio (Unknown)";
+    case "ARCHIVE":
+    case "UNKNOWN":
+      return "Unknown";
+  }
+};

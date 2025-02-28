@@ -11,12 +11,12 @@ export const MediaFormatsSettingsForm = () => {
 };
 
 const description = `This determines the priority order when automatically downloading items or triggering a download without specifying the media type. Items not in the list will be ignored. ` + 
-    `Unknown is a catch-all for any media format that is not explicitly listed. Similarly, Video (Unknown) and Audio (Unknown) are catch-alls for video and audio formats respectively.`;
+    `Any is a catch-all for any media format that is not explicitly listed. Similarly, Video (Any) and Audio (Any) are catch-alls for video and audio formats respectively.`;
 
 const MediaFormatsSettings = () => {
     return (
         <OrderableListFormField name="priorities" label="Media Format Priorities" possibleValues={MediaFormat.options}
-            nonDraggableValues={["Unknown"]}
+            nonDraggableValues={["Any"]}
             minSize={1}
             transformListOrder={transformListOrder}
             description={description} />
@@ -25,17 +25,17 @@ const MediaFormatsSettings = () => {
 };
 
 const transformListOrder = (list: MediaFormat[]) => {
-    let unknownIndex = -1;
+    let anyIndex = -1;
     let audioUnknownIndex = -1;
     let videoUnknownIndex = -1;
     let lastNonUnknownAudioIndex = -1;
     let lastNonUnknownVideoIndex = -1;
     list.forEach((mediaFormat, index) => {
-        if (mediaFormat === "Unknown") {
-            unknownIndex = index;
-        } else if (mediaFormat === "Audio (Unknown)") {
+        if (mediaFormat === "Any") {
+            anyIndex = index;
+        } else if (mediaFormat === "Audio (Any)") {
             audioUnknownIndex = index;
-        } else if (mediaFormat === "Video (Unknown)") {
+        } else if (mediaFormat === "Video (Any)") {
             videoUnknownIndex = index;
         } else if (audioFormats.has(mediaFormat)) {
             lastNonUnknownAudioIndex = index;
@@ -45,18 +45,18 @@ const transformListOrder = (list: MediaFormat[]) => {
     });
     const videoUnknownNeedsMoving = videoUnknownIndex !== -1 && videoUnknownIndex < lastNonUnknownVideoIndex;
     const audioUnknownNeedsMoving = audioUnknownIndex !== -1 && audioUnknownIndex < lastNonUnknownAudioIndex;
-    if (unknownIndex !== -1 && !videoUnknownNeedsMoving && !audioUnknownNeedsMoving) {
-        const newList = (list.filter((mediaFormat) => mediaFormat !== "Unknown") as MediaFormat[]);
-        newList.push("Unknown");
+    if (anyIndex !== -1 && !videoUnknownNeedsMoving && !audioUnknownNeedsMoving) {
+        const newList = (list.filter((mediaFormat) => mediaFormat !== "Any") as MediaFormat[]);
+        newList.push("Any");
         return newList;
     } else if (videoUnknownNeedsMoving || audioUnknownNeedsMoving) {
         const newList = list.slice();
         if (videoUnknownNeedsMoving) {
-            newList.splice(lastNonUnknownVideoIndex + 1, 0, "Video (Unknown)");
+            newList.splice(lastNonUnknownVideoIndex + 1, 0, "Video (Any)");
             newList.splice(videoUnknownIndex, 1);
         }
         if (audioUnknownNeedsMoving) {
-            newList.splice(lastNonUnknownAudioIndex + 1, 0, "Audio (Unknown)");
+            newList.splice(lastNonUnknownAudioIndex + 1, 0, "Audio (Any)");
             newList.splice(audioUnknownIndex, 1);
         }
         return newList;

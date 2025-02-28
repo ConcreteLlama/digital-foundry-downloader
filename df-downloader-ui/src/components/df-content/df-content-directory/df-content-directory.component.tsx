@@ -20,10 +20,17 @@ import { DfContentInfoItemDetail } from "../df-content-item-detail/df-content-it
 import { DfQuickSearch } from "../df-search-input.component.tsx";
 import { ClearDfSearchButton, DfAdvancedSearchButton } from "../df-search.component.tsx";
 import { ChangelogDialog } from "../../general/changelog.component.tsx";
+import { queryConfigSection } from "../../../store/config/config.action.ts";
+import { selectConfigLoading } from "../../../store/config/config.selector.ts";
 
 export const DfContentInfoDirectory = () => {
+  useEffect(() => {
+    store.dispatch(queryConfigSection.start("mediaFormats"));
+  }, []);
   const contentKeys = useSelector(selectDfContentEntryCurrentKeys);
   const contentLoading = useSelector(selectIsLoading("dfContent"));
+  const configLoading = useSelector(selectConfigLoading);
+  const loading = contentLoading || configLoading;
   const totalItems = useSelector(selectTotalContentItems);
   const resultsInTop = useMediaQuery(theme.breakpoints.up("md"));
   const { currentPage, numPages, limit } = useSelector(selectPageInfo);
@@ -68,7 +75,7 @@ export const DfContentInfoDirectory = () => {
         <Stack sx={{ justifyItems: "center" }}>
           {!resultsInTop && <SearchResultCounts totalItems={totalItems} currentPage={currentPage} limit={limit} />}
           {contentKeys.length === 0 ? (
-            contentLoading ? (
+            loading ? (
               <Loading />
             ) : (
               <Typography
