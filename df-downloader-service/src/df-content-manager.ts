@@ -169,14 +169,8 @@ export class DigitalFoundryContentManager {
         continue;
       } else {
         contentEntry.contentInfo.mediaInfo = contentEntry.contentInfo.mediaInfo.filter((mediaInfo) => {
-          try {
-            fileSizeStringToBytes(mediaInfo.size || "None");
-          } catch (e) {
-            logger.log(
-              "info",
-              `Media info for https://www.digitalfoundry.net/${contentEntry.name} contains invalid entry with unparseable size field, setting to 0`
-            );
-            mediaInfo.size = "0";
+          if (mediaInfo.size === undefined) {
+            mediaInfo.size = 0;
             updatesMade = true;
           }
           if (mediaInfo.mediaFilename) {
@@ -271,7 +265,7 @@ export class DigitalFoundryContentManager {
       if (closestMatch.percentageDiff > 10) {
         logger.log(
           "info",
-          `Closest match for ${closestMatch.contentEntry.name} is ${closestMatch.mediaInfo.format} but size differs by ${closestMatch.percentageDiff.toFixed(2)}% - skipping`
+          `Closest match for ${closestMatch.contentEntry.name} is ${closestMatch.mediaInfo.formatString} but size differs by ${closestMatch.percentageDiff.toFixed(2)}% - skipping`
         );
         continue;
       }
@@ -279,7 +273,7 @@ export class DigitalFoundryContentManager {
       const { contentInfo } = contentEntry;
       logger.log(
         "info",
-        `Adding download for ${contentEntry.name} (${contentInfo.title}) with media format ${mediaInfo.format}`
+        `Adding download for ${contentEntry.name} (${contentInfo.title}) with media format ${mediaInfo.formatString}`
       );
       toAddDownload.push({
         name: contentInfo.name,
@@ -466,7 +460,7 @@ export class DigitalFoundryContentManager {
       throw new Error(`Unable to find content info for ${contentName}`);
     }
     const mediaInfo =
-      (mediaFormat ? dfContentInfo.mediaInfo.find((mediaInfo) => mediaInfo.format === mediaFormat) : undefined) ||
+      (mediaFormat ? dfContentInfo.mediaInfo.find((mediaInfo) => mediaInfo.formatString === mediaFormat) : undefined) ||
       getBestMediaInfoMatch(mediaFormatsConfig.priorities, dfContentInfo.mediaInfo, {
         mustMatch: true,
       });

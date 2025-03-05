@@ -2,7 +2,7 @@ import { z } from "zod";
 import { DfContentDownloadInfo } from "./df-content-download-info.js";
 import { DfContentInfo, DfContentInfoUtils } from "./df-content-info.js";
 import { DfContentAvailabilityInfo } from "./df-content-status.js";
-import { MediaInfo } from "./media-info.js";
+import { MediaInfo } from "./media-info/media-info.js";
 
 export const DfContentEntry = z.object({
   name: z.string(),
@@ -28,7 +28,7 @@ export const DfContentEntryUtils = {
     return entry.downloads.length > 0;
   },
   getDownloadForFormat: (entry: DfContentEntry, format: string): DfContentDownloadInfo | undefined => {
-    return entry.downloads.find((d) => d.mediaInfo.format === format);
+    return entry.downloads.find((d) => d.mediaInfo.formatString === format);
   },
   getTotalDuration: (dfContentEntries: DfContentEntry[]): number => {
     return DfContentInfoUtils.getTotalDuration(dfContentEntries.map((dfContentEntry) => dfContentEntry.contentInfo));

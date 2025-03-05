@@ -1,11 +1,10 @@
-import { DfContentInfo, inferMediaType, logger, mapFilterEmpty, zodParse } from "df-downloader-common";
+import { DfContentInfo, inferMediaInfo, logger, mapFilterEmpty, zodParse } from "df-downloader-common";
 import { existsSync } from "fs";
 import fs from "fs/promises";
 import path from "path";
-import { ensureEnvString } from "../../utils/env-utils.js";
 import { ensureDirectory, moveFile } from "../../utils/file-utils.js";
 import { CURRENT_VERSION } from "../../version.js";
-import { DfContentStatusDbSchema, DfContentStatusEntry, DfContentInfoDbSchema, DfUserDbSchema } from "../df-db-model.js";
+import { DfContentInfoDbSchema, DfContentStatusDbSchema, DfContentStatusEntry, DfUserDbSchema } from "../df-db-model.js";
 import { FileDb } from "../file-db.js";
 
 export class DfContentInfoDb {
@@ -40,7 +39,10 @@ export class DfContentInfoDb {
                 if (version === CURRENT_VERSION) {
                     logger.log("info", `DB already at version ${CURRENT_VERSION} - no patches to apply`);
                     data = zodParse(DfContentInfoDbSchema, data);
-                    return data;
+                    return {
+                        data,
+                        patched: false,
+                    };
                 }
                 if (!version) {
                     logger.log("info", `Patching DB version to 1.0.0`);
@@ -127,16 +129,17 @@ export class DfContentInfoDb {
                             lastUpdated: new Date(),
                             firstRunComplete: data.firstRunComplete,
                             contentStatuses: Object.entries(data.contentInfo).reduce((acc: Record<string, DfContentStatusEntry>, [key, value]: [string, any]) => {
-                                for (const mediaInfo of value.contentInfo.mediaInfo) {
-                                    mediaInfo.format = mediaInfo.mediaType;
-                                    delete mediaInfo.mediaType;
-                                    mediaInfo.type = inferMediaType({
-                                        mediaFormat: mediaInfo.format,
-                                        audioEncoding: mediaInfo.audioEncoding,
-                                        videoEncoding: mediaInfo.videoEncoding,
+                                value.contentInfo.mediaInfo = (value.contentInfo.mediaInfo || []).map((mediaInfo: any) => {
+                                    return inferMediaInfo({
+                                        format: mediaInfo.mediaType,
+                                        videoProperties: mediaInfo.videoEncoding,
+                                        audioProperties: mediaInfo.audioEncoding,
+                                        duration: mediaInfo.duration,
+                                        size: mediaInfo.size,
+                                        videoId: mediaInfo.videoId,
                                         mediaFilename: mediaInfo.mediaFilename,
-                                    });
-                                }
+                                    })
+                                });
                                 acc[value.name] = {
                                     availability: {
                                         availability: value.statusInfo.status,
@@ -146,7 +149,7 @@ export class DfContentInfoDb {
                                     },
                                     downloads: mapFilterEmpty(value.downloads, (download: any) => {
                                         const format = download.format;
-                                        const mediaInfo = value.contentInfo.mediaInfo.find((media: any) => media.format === format);
+                                        const mediaInfo = value.contentInfo.mediaInfo.find((media: any) => media.formatString === format);
                                         if (!mediaInfo) {
                                             return null;
                                         }
@@ -191,7 +194,10 @@ export class DfContentInfoDb {
                     }
                 }
                 logger.log("info", `DB patched to version ${CURRENT_VERSION}`);
-                return zodParse(DfContentInfoDbSchema, data);
+                return {
+                    data,
+                    patched: true,
+                };
             },
         });
         return new DfContentInfoDb(fileDb, zodParse(DfContentInfoDbSchema, fileDb.getData()));

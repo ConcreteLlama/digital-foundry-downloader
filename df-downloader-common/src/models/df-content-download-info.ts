@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { MediaInfo } from "./media-info.js";
+import { MediaInfo } from "./media-info/media-info.js";
 
 export const DfContentSubtitleInfo = z.object({
   language: z.string(),

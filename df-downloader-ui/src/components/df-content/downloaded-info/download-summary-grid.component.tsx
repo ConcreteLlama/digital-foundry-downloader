@@ -22,7 +22,7 @@ export const DownloadSummaryGrid = ({ contentEntry, download, sx }: DownloadSumm
         Format:
       </Grid>
       <Grid item xs={9}>
-        {download.mediaInfo.format}
+        {download.mediaInfo.formatString}
       </Grid>
 
       <Grid item xs={3}>

@@ -1,4 +1,4 @@
-import { DfContentEntryUtils, GenerateSubtitlesRequest, isVideoFormat } from "df-downloader-common";
+import { DfContentEntryUtils, GenerateSubtitlesRequest } from "df-downloader-common";
 import express from "express";
 import { DigitalFoundryContentManager } from "../../df-content-manager.js";
 import { serviceLocator } from "../../services/service-locator.js";
@@ -37,7 +37,7 @@ export const makeSubtitlesRouter = (contentManager: DigitalFoundryContentManager
         const mediaInfo = downloadInfo.mediaInfo;
         if (mediaInfo.type !== "VIDEO") {
           return res.status(400).send({
-            message: `Requested content at file "${mediaFilePath}" is format "${mediaInfo.format}" which is not supported for subtitle generation`,
+            message: `Requested content at file "${mediaFilePath}" is format "${mediaInfo.formatString}" which is not supported for subtitle generation`,
           });
         }
         const subtitleGenerators = subtitlesService

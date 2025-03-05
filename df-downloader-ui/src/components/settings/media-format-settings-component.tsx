@@ -1,4 +1,7 @@
-import { audioFormats, MediaFormat, videoFormats } from "df-downloader-common";
+import { Alert, Snackbar, Stack, Typography } from "@mui/material";
+import { describeFormatMatcher, MediaFormat, MediaFormatMatchers, sortFormatMatchers } from "df-downloader-common";
+import _ from "lodash";
+import { useState } from "react";
 import { OrderableListFormField } from "../general/ordered-list-form-field.component.tsx";
 import { DfSettingsSectionForm } from "./df-settings-section-form.component.tsx";
 
@@ -10,56 +13,68 @@ export const MediaFormatsSettingsForm = () => {
     );
 };
 
-const description = `This determines the priority order when automatically downloading items or triggering a download without specifying the media type. Items not in the list will be ignored. ` + 
-    `Any is a catch-all for any media format that is not explicitly listed. Similarly, Video (Any) and Audio (Any) are catch-alls for video and audio formats respectively.`;
-
 const MediaFormatsSettings = () => {
+    const [movedItems, setMovedItems] = useState<boolean>(false);
+    // If moved items trigger a snackbar, this will be useful
+    const closeSnackbar = () => {
+        setMovedItems(false);
+    };
+    const Description = (
+        <Stack spacing={2} padding={2}>
+            <Typography variant="body2">
+                This determines the priority order when automatically downloading items or triggering a download without specifying the media type.
+            </Typography>
+            <Typography variant="body2">
+                Items not in the list will be ignored. <strong>Any</strong> will match anything, <strong>Video</strong> will match any video regardless of format, <strong>HEVC</strong> will match HEVC at any resolution, etc.
+            </Typography>
+            <Typography variant="body2">
+                Items that are a subset of another item (for example, <strong>HEVC</strong> is a subset of <strong>HEVC (4K)</strong>, will automatically be moved below the last item it's a subset of.
+            </Typography>
+            <Typography variant="body2">
+                Example:
+            </Typography>
+            <Typography variant="body2" component="div" sx={{ fontFamily: 'monospace', padding: 1, borderRadius: 1 }}>
+                Video, HEVC (4K), HEVC, HEVC (1080p)
+            </Typography>
+            <Typography variant="body2">
+                will automatically be rearranged to:
+            </Typography>
+            <Typography variant="body2" component="div" sx={{ fontFamily: 'monospace', padding: 1, borderRadius: 1 }}>
+                HEVC (4K), HEVC (1080p), HEVC, Video
+            </Typography>
+        </Stack>
+    );
+
     return (
-        <OrderableListFormField name="priorities" label="Media Format Priorities" possibleValues={MediaFormat.options}
-            nonDraggableValues={["Any"]}
-            minSize={1}
-            transformListOrder={transformListOrder}
-            description={description} />
+        <>
+            <OrderableListFormField name="priorities" label="Media Format Priorities" possibleValues={MediaFormat.options.map((item) => ({
+                value: item,
+                description: describeFormatMatcher(MediaFormatMatchers[item])
+            }))}
+                nonDraggableValues={["Any"]}
+                minSize={1}
+                transformListOrder={(oldValue, newValue) => {
+                    const sorted = sortFormatMatchers(newValue);
+                    if (oldValue?.length === newValue?.length) {
+                        setMovedItems(!_.isEqual(sorted, newValue));
+                    }
+                    return sorted;
+                }}
+                description={Description} />
+            <Snackbar
+                open={movedItems}
+                autoHideDuration={5000}
+                onClose={closeSnackbar}
+                anchorOrigin={{ vertical: "bottom", horizontal: "right" }}
+            ><Alert
+                onClose={closeSnackbar}
+                severity="info"
+                variant="filled"
+                sx={{ width: '100%' }}
+            >
+                    Some items were automatically rearranged due to matching criteria being a subset of another item.
+                </Alert></Snackbar>
+        </>
 
     );
 };
-
-const transformListOrder = (list: MediaFormat[]) => {
-    let anyIndex = -1;
-    let audioUnknownIndex = -1;
-    let videoUnknownIndex = -1;
-    let lastNonUnknownAudioIndex = -1;
-    let lastNonUnknownVideoIndex = -1;
-    list.forEach((mediaFormat, index) => {
-        if (mediaFormat === "Any") {
-            anyIndex = index;
-        } else if (mediaFormat === "Audio (Any)") {
-            audioUnknownIndex = index;
-        } else if (mediaFormat === "Video (Any)") {
-            videoUnknownIndex = index;
-        } else if (audioFormats.has(mediaFormat)) {
-            lastNonUnknownAudioIndex = index;
-        } else if (videoFormats.has(mediaFormat)) {
-            lastNonUnknownVideoIndex = index;
-        }
-    });
-    const videoUnknownNeedsMoving = videoUnknownIndex !== -1 && videoUnknownIndex < lastNonUnknownVideoIndex;
-    const audioUnknownNeedsMoving = audioUnknownIndex !== -1 && audioUnknownIndex < lastNonUnknownAudioIndex;
-    if (anyIndex !== -1 && !videoUnknownNeedsMoving && !audioUnknownNeedsMoving) {
-        const newList = (list.filter((mediaFormat) => mediaFormat !== "Any") as MediaFormat[]);
-        newList.push("Any");
-        return newList;
-    } else if (videoUnknownNeedsMoving || audioUnknownNeedsMoving) {
-        const newList = list.slice();
-        if (videoUnknownNeedsMoving) {
-            newList.splice(lastNonUnknownVideoIndex + 1, 0, "Video (Any)");
-            newList.splice(videoUnknownIndex, 1);
-        }
-        if (audioUnknownNeedsMoving) {
-            newList.splice(lastNonUnknownAudioIndex + 1, 0, "Audio (Any)");
-            newList.splice(audioUnknownIndex, 1);
-        }
-        return newList;
-    }
-    return list;
-}

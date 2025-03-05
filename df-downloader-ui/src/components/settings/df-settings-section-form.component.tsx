@@ -95,7 +95,6 @@ export const InlineDfSettingsSection = ({ sectionName, children, onSubmit }: Inl
           resolver={zodResolver(zodSchema)}
           defaultValues={currentSettings as any}
           onSuccess={(data) => {
-            console.log('inline df settings section form', data);
             store.dispatch(updateConfigSection.start({ section: sectionName, value: data }));
             onSubmit?.();
           }}

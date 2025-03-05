@@ -37,13 +37,19 @@ export class DfContentAvailabilityDb {
                 if (version === CURRENT_VERSION) {
                     logger.log("info", `DB already at version ${CURRENT_VERSION} - no patches to apply`);
                     data = zodParse(DfContentStatusDbSchema, data);
-                    return data;
+                    return {
+                        data,
+                        patched: false,
+                    };
                 }
                 while (data.version !== CURRENT_VERSION) {
                     data.version = "2.3.0";
                 }
                 logger.log("info", `DB patched to version ${CURRENT_VERSION}`);
-                return zodParse(DfContentStatusDbSchema, data)
+                return {
+                    data,
+                    patched: true,
+                };
             },
         });
         return new DfContentAvailabilityDb(fileDb, zodParse(DfContentStatusDbSchema, fileDb.getData()));

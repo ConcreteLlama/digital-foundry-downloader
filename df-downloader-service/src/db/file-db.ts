@@ -7,7 +7,10 @@ import fs from "fs";
 type FileDbOpts<T = any, Z extends z.ZodType<T> = z.ZodType<T>> = {
     schema: Z;
     filename: string;
-    patchRoutine: (data: any) => Promise<T>;
+    patchRoutine: (data: any) => Promise<{
+        data: any,
+        patched: boolean,
+    }>;
     initialData: T;
     backupDestination?: ((data: any) => Promise<string> | string) | string;
 }
@@ -25,7 +28,11 @@ export class FileDb<T> {
             await copyFile(filename, backupLocation);
         }
         try {
-            const patchedData = await patchRoutine(data);
+            const { data: patchedData, patched } = await patchRoutine(data);
+            if (!patched) {
+                logger.log("info", "Data not patched, removing backup");
+                await fs.promises.rm(backupLocation);
+            }
             const parsed = schema.safeParse(patchedData);
             if (!parsed.success) {
                 throw new Error(parsed.error.errors.join("\n"));

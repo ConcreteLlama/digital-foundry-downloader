@@ -10,7 +10,6 @@ import {
   DownloadTaskStatus,
   LanguageCode,
   MediaInfo,
-  MoveFilesRequest,
   MoveFilesTaskInfo,
   MoveFilesTaskResult,
   REMOVE_EMPTY_DIRS_TASK_TYPE,
@@ -23,15 +22,14 @@ import {
   TaskPipelineInfo,
   TaskPipelineUtils,
   TaskStatus,
-  getMediaFormat,
   isChangePositionAction,
   isChangePriorityAction,
   isControlPipelineRequest,
-  isRemoveEmptyDirsTaskInfo,
   isShiftAction,
-  makeErrorMessage,
+  makeErrorMessage
 } from "df-downloader-common";
 import { configService } from "./config/config.js";
+import { DigitalFoundryContentManager } from "./df-content-manager.js";
 import { makeDfDownloadParams } from "./df-fetcher.js";
 import { DownloadContextStatus } from "./download/downloader/fsm/download-context.js";
 import { SubtitleGenerator } from "./media-utils/subtitles/subtitles.js";
@@ -54,13 +52,12 @@ import {
   SubtitlesTaskPipelineExecution,
   createSubtitlesTaskPipeline,
 } from "./task-pipelines/subtitles-task-pipeline.js";
-import { DownloadTask, DownloadTaskManager, isDownloadTask } from "./tasks/download-task.js";
-import { SubtitlesTaskManager } from "./tasks/subtitles-task.js";
 import { BatchMoveFilesTask, isBatchMoveFilesTask, makeMoveFilesTaskStatus } from "./tasks/batch-move-files-task.js";
-import { DigitalFoundryContentManager } from "./df-content-manager.js";
 import { ClearMissingFilesTask, isClearMissingFilesTask } from "./tasks/clear-missing-files-task.js";
-import { isScanForExistingContentTask, ScanForExistingContentTask } from "./tasks/scan-for-content-task.js";
-import { isRemoveEmptyDirsTask, RemoveEmptyDirsTask } from "./tasks/remove-empty-dirs-task.js";
+import { DownloadTask, DownloadTaskManager, isDownloadTask } from "./tasks/download-task.js";
+import { RemoveEmptyDirsTask, isRemoveEmptyDirsTask } from "./tasks/remove-empty-dirs-task.js";
+import { ScanForExistingContentTask, isScanForExistingContentTask } from "./tasks/scan-for-content-task.js";
+import { SubtitlesTaskManager } from "./tasks/subtitles-task.js";
 
 type DfTaskManagerOpts = {
   autoClearCompletedPipelines?: boolean;
@@ -387,7 +384,7 @@ export const makeTaskPipelineInfo = (
       type: pipelineType,
       queuedTime: startTime,
       dfContent: taskPipelineExecution.context.dfContentInfo,
-      mediaFormat: getMediaFormat(taskPipelineExecution.context.mediaInfo.format)!,
+      mediaFormat: taskPipelineExecution.context.mediaInfo.formatString,
       stepOrder: steps.map(({ step }) => step.id),
       steps: steps.reduce((acc, { step, managedTask }) => {
         acc[step.id] = {

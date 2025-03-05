@@ -1,5 +1,6 @@
 import { z } from "zod";
-import { MediaInfo, MediaInfoUtils } from "./media-info.js";
+import { MediaInfo, MediaInfoUtils } from "./media-info/media-info.js";
+import { makeVideoProps } from "./media-info/video-properties.js";
 
 export const CURRENT_DATA_VERSION = "2.0.2";
 
@@ -61,7 +62,7 @@ export const DfContentInfoUtils = {
     return MediaInfoUtils.getDurationSeconds(dfContentInfo.mediaInfo);
   },
   getMediaInfo(dfContentInfo: DfContentInfo, mediaType: string) {
-    return dfContentInfo.mediaInfo.find((mediaInfo) => mediaInfo.format === mediaType);
+    return dfContentInfo.mediaInfo.find((mediaInfo) => mediaInfo.formatString === mediaType);
   },
 };
 
@@ -73,13 +74,19 @@ export const DummyContentInfos: DfContentInfo[] = [{
   mediaInfo: [
     {
       type: "VIDEO",
-      format: "h264",
+      formatString: "h264",
       mediaFilename: "Johns Japanese CRT Adventure.mp4",
+      encoding: "h264",
+      videoProperties: makeVideoProps("1080p", "60fps"),
+      audioProperties: null,
     },
     {
       type: "VIDEO",
-      format: "HEVC",
+      formatString: "HEVC",
       mediaFilename: "Johns Japanese CRT Adventure HEVC.mp4",
+      encoding: "HEVC",
+      videoProperties: makeVideoProps("4K", "60fps"),
+      audioProperties: null,
     }
   ],
   thumbnailUrl: "",
@@ -99,13 +106,19 @@ export const DummyContentInfos: DfContentInfo[] = [{
   mediaInfo: [
     {
       type: "VIDEO",
-      format: "h264",
+      formatString: "h264",
       mediaFilename: "DF Direct Weekly 599.mp4",
+      encoding: "h264",
+      videoProperties: makeVideoProps("1080p", "60fps"),
+      audioProperties: null,
     },
     {
       type: "VIDEO",
-      format: "HEVC",
+      formatString: "HEVC",
       mediaFilename: "DF Direct Weekly 599 HEVC.mp4",
+      encoding: "HEVC",
+      videoProperties: makeVideoProps("4K", "60fps"),
+      audioProperties: null,
     }
   ],
   thumbnailUrl: "",
@@ -122,18 +135,27 @@ export const DummyContentInfos: DfContentInfo[] = [{
   mediaInfo: [
     {
       type: "VIDEO",
-      format: "h264",
+      formatString: "h264",
       mediaFilename: "Alexs Favorite Stutters of 2025.mp4",
+      encoding: "h264",
+      videoProperties: makeVideoProps("4K", "60fps"),
+      audioProperties: null,
     },
     {
       type: "VIDEO",
-      format: "HEVC",
+      formatString: "HEVC",
       mediaFilename: "Alexs Favorite Stutters of 2025 HEVC.mp4",
+      encoding: "HEVC",
+      videoProperties: makeVideoProps("4K", "60fps"),
+      audioProperties: null,
     },
     {
       type: "AUDIO",
-      format: "MP3",
+      formatString: "MP3",
       mediaFilename: "Alexs Favorite Stutters of 2025 audio.mp3",
+      encoding: "MP3",
+      videoProperties: makeVideoProps("4K", "60fps"),
+      audioProperties: null,
     }
   ],
   thumbnailUrl: "",

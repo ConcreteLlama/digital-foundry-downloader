@@ -38,7 +38,7 @@ type DownloadedInfoTableRowProps = {
 const DownloadedInfoTableRow = ({ download, contentEntry }: DownloadedInfoTableRowProps) => {
   return (
     <TableRow>
-      <TableCell>{download.mediaInfo.format}</TableCell>
+      <TableCell>{download.mediaInfo.formatString}</TableCell>
       <TableCell>{download.size}</TableCell>
       <TableCell>
         <SubtitlesInfo subtitles={download.subtitles || []} />

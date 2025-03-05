@@ -1,7 +1,7 @@
 import { format } from "date-fns";
 import Handlebars from 'handlebars';
 import { DfContentInfo } from "../models/df-content-info.js";
-import { MediaInfo, MediaInfoUtils } from "../models/media-info.js";
+import { MediaInfo, MediaInfoUtils } from "../models/media-info/media-info.js";
 import { commonReplacements, sanitizeFilePath, testFilePath } from "./file-utils.js";
 import { errorToString } from "./error.js";
 
@@ -73,7 +73,7 @@ export const DfFilenameTemplateVarDefinitions: Record<DfFilenameTemplateVarName,
     },
     "format": {
         description: "The format of the media",
-        valueExtractor: (_, mediaInfo) => mediaInfo.format,
+        valueExtractor: (_, mediaInfo) => mediaInfo.formatString,
     },
     "tags": {
         description: "The tags of the content. This is an array and will produce a comma separated list.",
@@ -81,11 +81,11 @@ export const DfFilenameTemplateVarDefinitions: Record<DfFilenameTemplateVarName,
     },
     "audio-encoding": {
         description: "The audio encoding of the media",
-        valueExtractor: (_, mediaInfo) => mediaInfo.audioEncoding || "unknown",
+        valueExtractor: (_, mediaInfo) => mediaInfo.audioProperties || "unknown",
     },
     "video-encoding": {
         description: "The video encoding of the media",
-        valueExtractor: (_, mediaInfo) => mediaInfo.videoEncoding || "unknown",
+        valueExtractor: (_, mediaInfo) => mediaInfo.videoProperties || "unknown",
     },
     "ext": {
         description: "The file extension of the media",

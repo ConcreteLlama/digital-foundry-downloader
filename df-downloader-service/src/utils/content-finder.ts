@@ -124,7 +124,7 @@ const findFileMatches = (fileMatcherInfos: FileMatchInfo[], contentEntry: DfCont
                 }
             }
             if (nameMatched || titleMatched) {
-                const normalizedFormat = getStringMatchInfo(mediaInfo.format);
+                const normalizedFormat = getStringMatchInfo(mediaInfo.formatString);
                 if (fileMatcherInfo.normalizedFilename.includes(normalizedFormat.normalized)) {
                     fileMatcherInfo.possibleMatches.push({
                         contentEntry,
@@ -151,7 +151,7 @@ const findFileMatches = (fileMatcherInfos: FileMatchInfo[], contentEntry: DfCont
 }
 
 const makeMatchResultWithSizeDiff = (matchResult: ContentMatchResult, stats: Stats): ContentMatchResultWithSizeDiff => {
-    const mediaInfoSize = fileSizeStringToBytes(matchResult.mediaInfo.size || "0");
+    const mediaInfoSize = matchResult.mediaInfo.size || 0;
     return {
         ...matchResult,
         sizeDiff: Math.abs(mediaInfoSize - stats.size),

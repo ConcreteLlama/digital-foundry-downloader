@@ -3,7 +3,7 @@ import { DfContentInfo } from "../df-content-info.js";
 import { TaskInfo } from "./task-info.js";
 import { mapFilterEmpty } from "../../utils/general.js";
 import { isDownloadTaskInfo } from "./download-task.js";
-import { MediaFormat } from "../media-format.js";
+import { MediaFormat } from "../media-info/media-format.js";
 
 export const PipelineResultStatus = z.enum(["success", "failed", "cancelled"]);
 export type PipelineResultStatus = z.infer<typeof PipelineResultStatus>;
@@ -25,7 +25,7 @@ export const TaskPipelineDetails = z.object({
     id: z.string(),
     queuedTime: z.coerce.date().optional(),
     dfContent: DfContentInfo,
-    mediaFormat: MediaFormat,
+    mediaFormat: z.string(),
     destinationPath: z.string().optional(),
     stepOrder: z.string().array(),
     steps: z.record(StepDetails),

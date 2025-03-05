@@ -22,10 +22,11 @@
 ### Enhancements
 - Media format changes
   - Media formats now configured in its own config section
-  - Added "Any", "Video (Any) and "Audio (Any)" media formats and changed matching to require a format match
-    - Any is a catch-all for any media type, Video (Any) is any video format, Audio (Any) is any audio format
-    - This is to prevent the downloader from downloading a file that doesn't match the desired format - previously it would download whatever was available even if no match was found (e.g. archives of a UE5 project)
+  - Audio encoding and video encoding properties are now parsed and form part of the media type matching
+  - Improved media format matching based on the parsed encoding properties. This allows for improved matchers and better handling of different formats with different levels of specificity - This opens the door to the possibility of custom media formats in the future should it be needed, but right now they're hardcoded
+  - Added various new media types - "Any" is a catch-all for any media type, "Video" is any video format, "Audio" is any audio format - "4K", "1440p", "1080p", "720p" are now separate media formats which don't care about the encoding - HEVC and h.264 are now catch-alls for any resolution, and HEVC, 4K etc at various resolutions have been added as media formats
   - It is now possible to add and remove items from the media format list in the UI
+  - Any media formats NOT in the list are now ignored. This helps prevent automatic downloading of unwanted formats (such as RAR archives of UE5 projects)
 ### Maintenance
 - npm audit fix to address security vulnerabilities
 ### Internal

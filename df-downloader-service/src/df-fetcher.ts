@@ -7,9 +7,9 @@ import {
   MediaInfo,
   MediaInfoUtils,
   fileSizeStringToBytes,
-  inferMediaType,
+  inferMediaInfo,
   logger,
-  sanitizeFilename,
+  sanitizeFilename
 } from "df-downloader-common";
 import { Document, Element } from "domhandler";
 import htmlparser2 from "htmlparser2";
@@ -101,14 +101,14 @@ function makeDfVideoUrl(videoName: string) {
 }
 
 export const makeDfDownloadParams = (dfContent: DfContentInfo, mediaInfo: MediaInfo) => {
-  const filename = mediaInfo.mediaFilename || sanitizeFilename(`${dfContent.name}_${mediaInfo.format}.${MediaInfoUtils.getExtension(mediaInfo)}`);
+  const filename = mediaInfo.mediaFilename || sanitizeFilename(`${dfContent.name}_${mediaInfo.formatString}.${MediaInfoUtils.getExtension(mediaInfo)}`);
   const downloadDestination = `${configService.config.contentManagement.workDir}/${filename}`;
   const headers = {
     ...makeAuthHeaders(),
     "User-Agent": "DigitalFounload",
   };
   return {
-    url: async () => getMediaUrl(dfContent.name, mediaInfo.format),
+    url: async () => getMediaUrl(dfContent.name, mediaInfo.formatString),
     destination: downloadDestination,
     headers,
   };
@@ -258,8 +258,8 @@ export async function fetchContentInfo(name: string): Promise<FetchedContentInfo
     } catch (e) {
       size = "0";
     }
-    const videoEncoding = getBody(".encoding_video", videoInfoElement);
-    const mediaFormat = getBody(".name", videoInfoElement) || "";
+    const videoProperties = getBody(".encoding_video", videoInfoElement);
+    const formatString = getBody(".name", videoInfoElement) || "";
     const audioEncoding = getBody(".encoding_audio", videoInfoElement);
     const aElements = CSSSelect.selectAll("a", videoInfoElement);
     let url: string | undefined = undefined;
@@ -270,21 +270,16 @@ export async function fetchContentInfo(name: string): Promise<FetchedContentInfo
       }
     }
     const mediaFilename = url ? extractFilenameFromUrl(url) : undefined;
-    const mediaType = inferMediaType({
-      mediaFormat,
-      videoEncoding,
-      audioEncoding,
-      mediaFilename,
-    })
-    mediaInfos.push({
-      duration,
-      size,
-      format: mediaFormat,
-      type: mediaType,
-      videoEncoding,
-      audioEncoding,
-      mediaFilename,
+    const mediaInfo = inferMediaInfo({
+      duration: duration || null,
+      size: fileSizeStringToBytes(size!),
+      format: formatString,
+      mediaFilename: mediaFilename || null,
+      videoProperties: videoProperties || null,
+      audioProperties: audioEncoding || null,
+      videoId: youtubeVideoId || null,
     });
+    mediaInfos.push(mediaInfo);
   }
   const availability = dataPaywalled === true ? DfContentAvailability.PAYWALLED : DfContentAvailability.AVAILABLE;
   return {

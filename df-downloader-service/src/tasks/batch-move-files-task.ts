@@ -1,4 +1,4 @@
-import { ContentMoveFileInfo, makeErrorMessage, MoveFilesTaskProgressInfo, MoveFilesTaskStatus } from "df-downloader-common";
+import { ContentMoveFileInfo, logger, makeErrorMessage, MoveFilesTaskProgressInfo, MoveFilesTaskStatus } from "df-downloader-common";
 import { BatchOperationTaskBuilder } from "../task-manager/task/batch-operation-task-builder.js";
 import { moveFile } from "../utils/file-utils.js";
 import { DfDownloaderOperationalDb } from "../db/df-operational-db.js";
@@ -21,7 +21,7 @@ export const BatchMoveFilesTask = BatchOperationTaskBuilder(async (moveFileInfo:
     } catch (e: any) {
         if (e.code === 'ENOENT') {
             if (taskOpts.removeRecordIfMissing) {
-                console.log(`File not found, removing record: ${moveFileInfo.contentName}: ${moveFileInfo.oldFilename}`);
+                logger.log('debug', `File not found, removing record: ${moveFileInfo.contentName}: ${moveFileInfo.oldFilename}`);
                 await taskOpts.db.removeDownload(moveFileInfo.contentName, moveFileInfo.oldFilename);
                 return "recordRemoved";
             } else {

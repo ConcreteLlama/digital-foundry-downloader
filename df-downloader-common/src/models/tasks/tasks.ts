@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { MediaInfo } from "../media-info.js";
+import { MediaInfo } from "../media-info/media-info.js";
 import { TaskInfo } from "./task-info.js";
 import { TaskPipelineDetails, TaskPipelineInfo } from "./task-pipeline-info.js";
 

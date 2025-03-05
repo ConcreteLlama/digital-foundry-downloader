@@ -120,3 +120,14 @@ export const splitPromiseSettledResult = <T>(results: PromiseSettledResult<T>[])
   }
   return acc;
 }, { fulfilled: [] as T[], rejected: [] as any[] });
+
+export const isSubsetOf = (a: Set<any>, b: Set<any>) => a.size === 0 ? true : [...a].every((item) => b.has(item));
+
+export const diffSets = (a: Set<any>, b: Set<any>) => {
+  const diff = new Set([...a].filter((item) => !b.has(item)));
+  return diff;
+};
+
+export const arrayIsEqual = (a: any[], b: any[]) => {
+  return a.length === b.length && a.every((item, index) => item === b[index]);
+}

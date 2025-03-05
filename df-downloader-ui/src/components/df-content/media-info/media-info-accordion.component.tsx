@@ -4,6 +4,7 @@ import VideoCameraIcon from "@mui/icons-material/VideoCameraBack";
 import { Accordion, AccordionDetails, AccordionSummary, Box, Stack, Typography } from "@mui/material";
 import { StartDownloadingButton } from "../start-download-dialog.component";
 import { MediaInfoListProps } from "./media-info-list.component";
+import { audioPropertiesToString, bytesToHumanReadable, videoPropertiesToString } from "df-downloader-common";
 
 export const MediaInfoAccordion = ({ contentEntry }: MediaInfoListProps) => {
   const { contentInfo } = contentEntry;
@@ -16,17 +17,17 @@ export const MediaInfoAccordion = ({ contentEntry }: MediaInfoListProps) => {
             <AccordionSummary expandIcon={<ExpandMoreIcon />}>
               <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", width: "100%" }}>
                 <Typography>
-                  {mediaInfo.format} ({mediaInfo.size})
+                  {mediaInfo.formatString} ({bytesToHumanReadable(mediaInfo.size || 0)})
                 </Typography>
-                <StartDownloadingButton contentEntry={contentEntry} mediaFormat={mediaInfo.format} />
+                <StartDownloadingButton contentEntry={contentEntry} mediaFormat={mediaInfo.formatString} />
               </Box>
             </AccordionSummary>
             <AccordionDetails>
               <Box sx={{ display: "grid", gridTemplateColumns: "1fr 10fr", gap: 2 }}>
                 <VideoCameraIcon />
-                <Typography>{mediaInfo.videoEncoding}</Typography>
+                <Typography>{videoPropertiesToString(mediaInfo.videoProperties)}</Typography>
                 <HeadphonesIcon />
-                <Typography>{mediaInfo.audioEncoding}</Typography>
+                <Typography>{audioPropertiesToString(mediaInfo.audioProperties)}</Typography>
               </Box>
             </AccordionDetails>
           </Accordion>
