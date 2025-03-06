@@ -1,6 +1,6 @@
 import { getTaskFriendlyName, getTaskPipelineFriendlyName, TaskPipelineInfo } from "df-downloader-common";
 import { closeSnackbar, VariantType } from "notistack";
-import { clearTask } from "../../api/tasks.ts";
+import { clearPipeline, clearTask } from "../../api/tasks.ts";
 import { TaskEvent, taskEvents } from "../../store/df-tasks/task-events.ts";
 import { triggerSnackbar } from "../../utils/snackbar.tsx";
 
@@ -35,7 +35,7 @@ const registerTaskSnackbarTriggers = () => {
         }
         let snackbarMessage: string = 'Task completed';
         let snackbarSeverity: VariantType = 'success';
-        console.log('Task completed:', task);
+        const clearTaskFn = task.type === 'pipeline' ? clearPipeline : clearTask;
         if (task.type === 'pipeline') {
             const pipelineResult = task.pipelineStatus.pipelineResult;
             const contentTitle = makeContentTitle(task);
@@ -77,7 +77,7 @@ const registerTaskSnackbarTriggers = () => {
             actionButton: {
                 text: 'Clear Task',
                 onClick: (key) => {
-                    clearTask(task.id).then(() => {
+                    clearTaskFn(task.id).then(() => {
                         closeSnackbar(key);
                     }).catch(() => {
                         triggerSnackbar('Failed to clear task', {
