@@ -31,6 +31,7 @@
     "df-downloader-common": "file:.yalc/df-downloader-common",
     "lodash": "^4.17.21",
     "mui-image": "^1.0.7",
+    "notistack": "^3.0.2",
     "pretty-ms": "^8.0.0",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
@@ -55,6 +56,7 @@
     "eslint-plugin-react-refresh": "^0.4.5",
     "typescript": "^5.3.2",
     "vite": "^5.1.6",
+    "vite-plugin-node-polyfills": "^0.23.0",
     "yalc": "^1.0.0-pre.53"
   }
 }

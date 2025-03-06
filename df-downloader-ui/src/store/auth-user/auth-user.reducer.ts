@@ -1,8 +1,10 @@
 import { createReducer } from "@reduxjs/toolkit";
 import { AuthErrorResponseData } from "df-downloader-common";
 import { DfUiError } from "../../utils/error";
+import { triggerSnackbar } from "../../utils/snackbar.tsx";
 import { addQueryCases } from "../utils";
 import { login, logout, queryCurrentUser, register, updateUserInfo } from "./auth-user.actions";
+import { userLoggedOut } from "./auth-user.simple-actions.ts";
 import { AuthUserState } from "./auth-user.types";
 
 const initialLoginState: AuthUserState = {
@@ -52,5 +54,13 @@ export const authUserReducer = createReducer(initialLoginState, (builder) => {
     failed: (state, payload) => {
       state.error = payload;
     },
+  });
+  builder.addCase(userLoggedOut, (state) => {
+    if (state.user) {
+      triggerSnackbar("Your session has expired. Please log in again.", {
+        variant: 'error',
+      });
+    }
+    state.user = null;
   });
 });

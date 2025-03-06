@@ -19,6 +19,7 @@
   - Changelog is now available in the UI under the system menu
   - Changelog now displays in a dialog when a new version is detected
   - Will attempt to fetch the changelog from github first as this is the most up to date source and will help identify if the user is on the latest version
+- Snackbars now display when tasks start and finish, and if the session token expires
 ### Enhancements
 - Media format changes
   - Media formats now configured in its own config section
@@ -27,6 +28,7 @@
   - Added various new media types - "Any" is a catch-all for any media type, "Video" is any video format, "Audio" is any audio format - "4K", "1440p", "1080p", "720p" are now separate media formats which don't care about the encoding - HEVC and h.264 are now catch-alls for any resolution, and HEVC, 4K etc at various resolutions have been added as media formats
   - It is now possible to add and remove items from the media format list in the UI
   - Any media formats NOT in the list are now ignored. This helps prevent automatic downloading of unwanted formats (such as RAR archives of UE5 projects)
+- Automatically return to login page if session token expires
 ### Maintenance
 - npm audit fix to address security vulnerabilities
 ### Internal

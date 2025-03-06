@@ -100,3 +100,20 @@ export const TaskPipelineUtils = {
         );
     },
 };
+
+export const getTaskPipelineFriendlyName = (task: TaskPipelineInfo | string): string => {
+    let pipelineType: string;
+    if (typeof task === "string") {
+        pipelineType = task;
+    } else {
+        pipelineType = task.pipelineType;
+    }
+    switch (pipelineType) {
+        case "download":
+            return "Download";
+        case "subtitles":
+            return "Fetch Subtitles";
+        default:
+            return pipelineType;
+    }
+}

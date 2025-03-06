@@ -100,7 +100,6 @@ export const StartDownloadingButton = ({ contentEntry, mediaFormat, label, disab
     buttonDisabled = true;
     buttonText = "Not Available in Desired Format";
   }
-  console.log('Button disabled:', buttonDisabled);
   return (
     <Fragment>
       <StartDownloadDialog

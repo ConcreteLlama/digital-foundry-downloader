@@ -4,8 +4,9 @@ import { DfContentDownloadInfo } from "df-downloader-common/models/df-content-do
 import { isEqual, isFunction } from "lodash";
 import { createSelectorCreator, lruMemoize } from "reselect";
 import { z } from "zod";
-import { DfUiError, ensureDfUiError } from "../utils/error";
+import { DfUiError, ensureDfUiError, isDfUiError } from "../utils/error";
 import { fetchJson } from "../utils/fetch";
+import { userLoggedOut } from "./auth-user/auth-user.simple-actions.ts";
 import { AppStartListening } from "./listener";
 
 export const createQueryActions = <START_PAYLOAD, SUCCESS_PAYLOAD, ERROR_PAYLOAD_DETAILS = any>(
@@ -74,9 +75,14 @@ export function addFetchListener<
           const successPayload = opts.generateSuccessPayload(result.data);
           listenerApi.dispatch(queryActions.success(successPayload));
         }
-      } catch (e) {
-        logger.log("error", `Caught error fetching ${url} - ${e}`);
+      } catch (e: any) {
+        logger.log("error", `Caught error fetching ${url} - ${JSON.stringify(e)}`);
         logger.log("error", "Raw payload: ", jsonResponse);
+        if (isDfUiError(e)) {
+          if (e.code === 401) {
+            listenerApi.dispatch(userLoggedOut());
+          }
+        }
         listenerApi.dispatch(queryActions.failed(ensureDfUiError<ERROR_PAYLOAD_DETAILS>(e)));
       }
     },

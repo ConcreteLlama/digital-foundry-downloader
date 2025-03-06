@@ -23,6 +23,7 @@ import { selectServiceError } from "./store/service-info/service-info.selector.t
 import { store } from "./store/store";
 import { theme } from "./themes/theme";
 import { setIntervalImmediate } from "./utils/timer.ts";
+import registerTaskSnackbarTriggers from "./components/tasks/task-snackbar-triggers.tsx";
 
 function App() {
   return (
@@ -33,6 +34,10 @@ function App() {
 }
 
 const MainContainer = () => {
+  useEffect(() => {
+    const unregister = registerTaskSnackbarTriggers();
+    return () => unregister();
+}, []);
   useEffect(() => {
     store.dispatch(queryServiceInfo.start());
   }, []);
@@ -98,9 +103,9 @@ const MainApp = () => {
           },
         }}
       >
-        <Toolbar id="toolbar-spacer"/>
+        <Toolbar id="toolbar-spacer" />
         <Routes>
-          <Route key="route-index" id="route-index" index element={<DfContentPage />}/>
+          <Route key="route-index" id="route-index" index element={<DfContentPage />} />
           <Route key="route-df-content" id="route-df-content" path="content" element={<DfContentPage />} />
           <Route key="route-downloads" id="route-downloads" path="downloads" element={<DownloadsPage />} />
           <Route key="route-auth" id="route-auth" path="auth" element={<AuthPage />} />

@@ -7,7 +7,7 @@ export enum DfUiErrorCode {
 // Custom error interface
 export interface DfUiError<T = any> {
   message: string;
-  code: string;
+  code: string | number;
   details: T;
 }
 
