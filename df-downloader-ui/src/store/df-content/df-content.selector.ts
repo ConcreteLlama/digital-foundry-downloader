@@ -7,8 +7,7 @@ const selectContent = (state: RootState) => state.dfContent.content;
 const selectQuery = (state: RootState) => state.dfContent.currentQuery;
 const selectTotalItems = (state: RootState) => state.dfContent.totalItems;
 
-export const selectDfContentEntryList = createDeepEqualSelector(selectContent, (content) => content);
-export const selectDfContentEntryMap = createSelector(selectDfContentEntryList, (content) => content);
+export const selectDfContentEntryMap = createDeepEqualSelector(selectContent, (content) => ({...content}))
 export const selectDfContentEntryCurrentKeys = createShallowEqualSelector(selectSelf, (state) => state.selectedContent);
 export const selectDfContentInfoItem = (key: string) =>
   createSelector(selectDfContentEntryMap, (state) => {
