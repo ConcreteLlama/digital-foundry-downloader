@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { bytesToHumanReadable } from "../../utils/file-utils.js";
 
 export const Resolution = z.object({
     width: z.number(),
@@ -105,21 +106,21 @@ const FramerateNumericalsValues: Record<FramerateAbbrev, {
     min: number,
     max: number,
 }> = {
-    "24fps": {
-        min: 23.97,
-        max: 24,
-    },
-    "30fps": {
-        min: 29.97,
-        max: 30,
+    "120fps": {
+        min: 119.88,
+        max: 120,
     },
     "60fps": {
         min: 59.94,
         max: 60,
     },
-    "120fps": {
-        min: 119.88,
-        max: 120,
+    "30fps": {
+        min: 29.97,
+        max: 30,
+    },
+    "24fps": {
+        min: 23.97,
+        max: 24,
     },
 };
 const framerateMatches = (framerate: number, framerateAbbred: FramerateAbbrev, mode?: 'exact' | 'atLeast') => {
@@ -129,6 +130,15 @@ const framerateMatches = (framerate: number, framerateAbbred: FramerateAbbrev, m
     } else {
         return framerate >= min;
     }
+}
+
+export const getFrameRateAbbrev = (framerate: number): FramerateAbbrev | null => {
+    for (const [abbrev, { min, max }] of Object.entries(FramerateNumericalsValues)) {
+        if (framerate >= min && framerate <= max) {
+            return abbrev as FramerateAbbrev;
+        }
+    }
+    return null;
 }
 
 export const makeVideoProps = (res: ResolutionAbbrev, framerate: FramerateAbbrev, bitrate: number = 15800000): VideoProperties => ({
@@ -206,4 +216,22 @@ export const getResolutionAbbrev = (resolution: Resolution): ResolutionAbbrev | 
         }
     }
     return null;
+}
+
+export const resolutionToString = (resolution: Resolution | null) => {
+    if (!resolution) {
+        return "Unknown resolution";
+    }
+    return `${resolution.width}x${resolution.height}`;
+}
+
+export const bitrateToString = (bitrate: number | null) => {
+    if (!bitrate) {
+        return "Unknown bitrate";
+    }
+    return `${bytesToHumanReadable(bitrate, {
+        si: true,
+        unitGap: false,
+        decimalPlaces: 1,
+    }).toLowerCase()}ps`;
 }

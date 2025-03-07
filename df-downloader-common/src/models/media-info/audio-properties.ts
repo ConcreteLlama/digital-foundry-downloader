@@ -1,10 +1,6 @@
-// Example: AC3 2.0, 448kbps, 48000Hz
-// Regex: /([A-Z0-9]+) ([0-9.]+), ([0-9]+)kbps, ([0-9]+)Hz/
-
 import { z } from "zod";
 
 export const AudioProperties = z.object({
-    rawString: z.string(),
     encoding: z.string().nullable(),
     channels: z.string().nullable(),
     bitrate: z.number().nullable(),
@@ -22,7 +18,6 @@ export const getAudioProperties = (audioProperties?: string | null): AudioProper
     }
     const [_result, encoding, channels, bitrate, sampleRate] = /([A-Z0-9]+) ([0-9.]+), ([0-9]+)kbp?s, ([0-9]+)Hz/.exec(audioProperties) || [];
     return {
-        rawString: audioProperties,
         encoding: encoding || null,
         channels: channels || null,
         bitrate: bitrate ? parseInt(bitrate) * 1000 : null,

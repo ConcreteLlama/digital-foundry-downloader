@@ -2,8 +2,9 @@ import { format } from "date-fns";
 import Handlebars from 'handlebars';
 import { DfContentInfo } from "../models/df-content-info.js";
 import { MediaInfo, MediaInfoUtils } from "../models/media-info/media-info.js";
-import { commonReplacements, sanitizeFilePath, testFilePath } from "./file-utils.js";
+import { bytesToHumanReadable, commonReplacements, sanitizeFilePath, testFilePath } from "./file-utils.js";
 import { errorToString } from "./error.js";
+import { audioPropertiesToString, bitrateToString, getFrameRateAbbrev, getResolutionAbbrev, resolutionToString, videoPropertiesToString } from "../models/index.js";
 
 Handlebars.registerHelper('ifIn', function (this: any, list, elem, options) {
     if (!Array.isArray(list)) {
@@ -16,17 +17,17 @@ Handlebars.registerHelper('ifIn', function (this: any, list, elem, options) {
 });
 
 Handlebars.registerHelper('ifTag', function (this: any, tag, options) {
-    const tags = this.tags?.map((tag: string) => tag.toLowerCase()) || [];
+    const tags = this.tagsArray?.map((tag: string) => tag.toLowerCase()) || [];
     if (tags.includes(tag.toLowerCase())) {
         return options.fn(this);
     }
     return options.inverse(this);
 });
 
-
 type DfTemplateVarDefinition = {
     description: string;
     valueExtractor: (contentInfo: DfContentInfo, mediaInfo: MediaInfo) => any;
+    hidden?: boolean;
 }
 
 export enum DfFilenameTemplateVar {
@@ -34,8 +35,19 @@ export enum DfFilenameTemplateVar {
     TITLE = "title",
     DOWNLOAD_FILENAME = "download-filename",
     FORMAT = "format",
+    AUDIO_PROPERTIES = "audio-properties",
     AUDIO_ENCODING = "audio-encoding",
+    AUDIO_CHANNELS = "audio-channels",
+    AUDIO_BITRATE = "audio-bitrate",
+    AUDIO_SAMPLE_RATE = "audio-sample-rate",
+    VIDEO_PROPERTIES = "video-properties",
     VIDEO_ENCODING = "video-encoding",
+    VIDEO_BITRATE = "video-bitrate",
+    VIDEO_RESOLUTION = "video-resolution",
+    VIDEO_RESOLUTION_LABEL = "video-resolution-label",
+    VIDEO_FRAMERATE = "video-framerate",
+    VIDEO_FRAMERATE_LABEL = "video-framerate-label",
+    RAW_TAGS = "tagsArray",
     TAGS = "tags",
     EXTENSION = "ext",
     DAY = "DD",
@@ -76,16 +88,61 @@ export const DfFilenameTemplateVarDefinitions: Record<DfFilenameTemplateVarName,
         valueExtractor: (_, mediaInfo) => mediaInfo.formatString,
     },
     "tags": {
-        description: "The tags of the content. This is an array and will produce a comma separated list.",
+        description: "A dash-separated list of tags",
+        valueExtractor: (contentInfo) => (contentInfo.tags || []).join('-'),
+    },
+    "tagsArray": {
+        description: "The tags of the content as an array",
         valueExtractor: (contentInfo) => contentInfo.tags,
+        hidden: true,
+    },
+    "audio-properties": {
+        description: "The audio properties of the media",
+        valueExtractor: (_, mediaInfo) => mediaInfo.audioProperties ? audioPropertiesToString(mediaInfo.audioProperties) : "unknown"
+    },
+    "audio-channels": {
+        description: "The number of audio channels",
+        valueExtractor: (_, mediaInfo) => mediaInfo.audioProperties?.channels || "unknown"
     },
     "audio-encoding": {
-        description: "The audio encoding of the media",
-        valueExtractor: (_, mediaInfo) => mediaInfo.audioProperties || "unknown",
+        description: "The audio codec",
+        valueExtractor: (_, mediaInfo) => mediaInfo.audioProperties?.encoding || "unknown"
+    },
+    "audio-bitrate": {
+        description: "The audio bitrate",
+        valueExtractor: (_, {audioProperties}) => audioProperties?.bitrate ? bitrateToString(audioProperties.bitrate) : "unknown"
+    },
+    "audio-sample-rate": {
+        description: "The audio sample rate",
+        valueExtractor: (_, {audioProperties}) => audioProperties?.sampleRate ? `${audioProperties.sampleRate}hz` : "unknown"
+    },
+    "video-properties": {
+        description: "The video properties of the media",
+        valueExtractor: (_, mediaInfo) => mediaInfo.videoProperties ? videoPropertiesToString(mediaInfo.videoProperties) : "unknown"
     },
     "video-encoding": {
-        description: "The video encoding of the media",
-        valueExtractor: (_, mediaInfo) => mediaInfo.videoProperties || "unknown",
+        description: "The video codec",
+        valueExtractor: (_, mediaInfo) => mediaInfo.type === "VIDEO" ? mediaInfo.encoding : "unknown"
+    },
+    "video-bitrate": {
+        description: "The video bitrate",
+        valueExtractor: (_, {videoProperties}) => videoProperties?.bitrate ? bitrateToString(videoProperties.bitrate) : "unknown"
+    },
+    "video-resolution": {
+        description: "The video resolution",
+        valueExtractor: (_, {videoProperties}) => videoProperties?.resolution ? resolutionToString(videoProperties.resolution) : "unknown"
+    },
+    "video-resolution-label": {
+        description: "The video resolution label (e.g. 4K, 1080p)",
+        valueExtractor: (_, {videoProperties}) => videoProperties?.resolution ? getResolutionAbbrev(videoProperties.resolution) : "unknown"
+    },
+    "video-framerate": {
+        description: "The video framerate",
+        valueExtractor: (_, {videoProperties}) => videoProperties?.framerate || "unknown"
+    },
+    "video-framerate-label": {
+        description: "The video framerate label (e.g. 60fps)",
+        valueExtractor: (_, {videoProperties}) => videoProperties?.framerate ? getFrameRateAbbrev(videoProperties.framerate) : "unknown"
     },
     "ext": {
         description: "The file extension of the media",

@@ -78,7 +78,12 @@ export const DummyContentInfos: DfContentInfo[] = [{
       mediaFilename: "Johns Japanese CRT Adventure.mp4",
       encoding: "h264",
       videoProperties: makeVideoProps("1080p", "60fps"),
-      audioProperties: null,
+      audioProperties: {
+        encoding: "AAC",
+        channels: "2.0",
+        bitrate: 320000,
+        sampleRate: 48000
+      },
     },
     {
       type: "VIDEO",
@@ -86,7 +91,12 @@ export const DummyContentInfos: DfContentInfo[] = [{
       mediaFilename: "Johns Japanese CRT Adventure HEVC.mp4",
       encoding: "HEVC",
       videoProperties: makeVideoProps("4K", "60fps"),
-      audioProperties: null,
+      audioProperties: {
+        encoding: "AAC",
+        channels: "2.0",
+        bitrate: 320000,
+        sampleRate: 48000
+      },
     }
   ],
   thumbnailUrl: "",
@@ -110,7 +120,12 @@ export const DummyContentInfos: DfContentInfo[] = [{
       mediaFilename: "DF Direct Weekly 599.mp4",
       encoding: "h264",
       videoProperties: makeVideoProps("1080p", "60fps"),
-      audioProperties: null,
+      audioProperties: {
+        encoding: "AAC",
+        channels: "2.0",
+        bitrate: 320000,
+        sampleRate: 48000
+      },
     },
     {
       type: "VIDEO",
@@ -118,7 +133,12 @@ export const DummyContentInfos: DfContentInfo[] = [{
       mediaFilename: "DF Direct Weekly 599 HEVC.mp4",
       encoding: "HEVC",
       videoProperties: makeVideoProps("4K", "60fps"),
-      audioProperties: null,
+      audioProperties: {
+        encoding: "AAC",
+        channels: "2.0",
+        bitrate: 320000,
+        sampleRate: 48000
+      },
     }
   ],
   thumbnailUrl: "",
@@ -139,7 +159,12 @@ export const DummyContentInfos: DfContentInfo[] = [{
       mediaFilename: "Alexs Favorite Stutters of 2025.mp4",
       encoding: "h264",
       videoProperties: makeVideoProps("4K", "60fps"),
-      audioProperties: null,
+      audioProperties: {
+        encoding: "AAC",
+        channels: "2.0",
+        bitrate: 320000,
+        sampleRate: 48000
+      },
     },
     {
       type: "VIDEO",
@@ -147,15 +172,25 @@ export const DummyContentInfos: DfContentInfo[] = [{
       mediaFilename: "Alexs Favorite Stutters of 2025 HEVC.mp4",
       encoding: "HEVC",
       videoProperties: makeVideoProps("4K", "60fps"),
-      audioProperties: null,
+      audioProperties: {
+        encoding: "AAC",
+        channels: "2.0",
+        bitrate: 320000,
+        sampleRate: 48000
+      },
     },
     {
       type: "AUDIO",
       formatString: "MP3",
       mediaFilename: "Alexs Favorite Stutters of 2025 audio.mp3",
       encoding: "MP3",
-      videoProperties: makeVideoProps("4K", "60fps"),
-      audioProperties: null,
+      videoProperties: null,
+      audioProperties: {
+        channels: "2.0",
+        bitrate: 320000,
+        sampleRate: 48000,
+        encoding: "MP3"
+      }
     }
   ],
   thumbnailUrl: "",

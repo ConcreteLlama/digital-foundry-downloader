@@ -127,11 +127,17 @@ const byteThresholds = {
   }),
 };
 
-export const bytesToHumanReadable = (bytes: number, si = false) => {
+export type BytesToHumanReadableOptions = {
+  si?: boolean;
+  unitGap?: boolean;
+  decimalPlaces?: number;
+};
+export const bytesToHumanReadable = (bytes: number, opts: BytesToHumanReadableOptions = {}) => {
+  const { si = false, unitGap = true, decimalPlaces = 2 } = opts;
   const thresholds = si ? byteThresholds.si : byteThresholds.iec;
   for (const threshold of thresholds) {
     if (bytes < threshold.threshold) {
-      return `${(bytes / threshold.unitValue).toFixed(2)} ${threshold.unit}`;
+      return `${(bytes / threshold.unitValue).toFixed(decimalPlaces)}${unitGap ? ' ' : ''}${threshold.unit}`;
     }
   }
   return `${bytes} B`;

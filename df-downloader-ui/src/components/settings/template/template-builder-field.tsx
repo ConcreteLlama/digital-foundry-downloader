@@ -1,5 +1,5 @@
 import { Box, Button, Collapse, Grid, InputAdornment, List, ListItemButton, TextField, Typography } from "@mui/material";
-import { DfContentInfo, MediaInfo, randomDummyContentInfo } from "df-downloader-common";
+import { DfContentInfo, filterAndMap, MediaInfo, randomDummyContentInfo } from "df-downloader-common";
 import { DfFilenameTemplateVarDefinitions, helperVars, testTemplate, TestTemplateError } from "df-downloader-common/utils/filename-template-utils";
 import { useEffect, useRef, useState } from "react";
 import { useFormContext, useFormState, useWatch } from "react-hook-form";
@@ -49,7 +49,7 @@ export const TemplateBuilderField = ({alwaysExpand = false}: TemplateBuilderFiel
     name: "filenameTemplate",
   }) as string;
   const initialValueRef = useRef<string>(template);
-  const validTags = Object.entries(DfFilenameTemplateVarDefinitions).map(([key, value]) => ({
+  const validTags = filterAndMap(Object.entries(DfFilenameTemplateVarDefinitions), ([,{hidden}]) => !hidden, ([key, value]) => ({
     name: key,
     description: value.description
   }));
@@ -69,7 +69,7 @@ export const TemplateBuilderField = ({alwaysExpand = false}: TemplateBuilderFiel
 
   useEffect(() => {
     return setTemplateExample(makeTemplateExample(template, dummyContentInfo, dummyMediaInfo, templateExample));
-  }, [template, dummyContentInfo]);
+  }, [template, dummyMediaInfo]);
   const templateHelperText = `${templateExample?.value ? `${templateExample.value}` : ""}${templateExample?.error ? ` (template currently invalid: ${templateExample.error})` : ""}${templateExample?.unknownVarMessage ? `${templateExample.unknownVarMessage}` : ""}`;
   if (templateExample?.error) {
     console.log(templateExample.error);
