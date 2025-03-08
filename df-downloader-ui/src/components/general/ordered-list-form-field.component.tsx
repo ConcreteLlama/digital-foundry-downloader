@@ -61,6 +61,7 @@ export const OrderableListFormField = <VALUE_TYPE extends string>({ name, label,
               borderRadius: 1,
               borderColor: `rgba(255, 255, 255, 0.23)`,
               padding: 1,
+              position: "relative",
             }}
           >
             <FormLabelInline>{label}</FormLabelInline>
