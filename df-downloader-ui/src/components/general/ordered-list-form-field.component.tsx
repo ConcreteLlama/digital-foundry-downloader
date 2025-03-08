@@ -114,7 +114,10 @@ export const OrderableList = <VALUE_TYPE extends string>({ name, possibleValues,
       <DndContext onDragEnd={handleDragEnd}>
         <List>
           {items.map((value) => (
-            <OrderedListItem id={value.id} label={value.label} description={descriptionMap.get(value.label)} onRemove={possibleValues ? () => handleItemRemoved(value.id) : undefined} removeDisabled={removeDisabled} draggable={!nonDraggable.has(value.label)} />
+            <OrderedListItem id={value.id} label={value.label} description={descriptionMap.get(value.label)}
+              onRemove={possibleValues ? () => handleItemRemoved(value.id) : undefined}
+              removeDisabled={removeDisabled} draggable={!nonDraggable.has(value.label)}
+              />
           ))}
         </List>
       </DndContext>
@@ -148,7 +151,7 @@ const OrderedListItem = ({ id, label, onRemove, removeDisabled, description, dra
     : {};
   const textValue = <Typography>{label}</Typography>;
   return (
-    <Card ref={droppableSetNodeRef} sx={{ ...style, marginY: 0.5 }}>
+    <Card ref={droppableSetNodeRef} sx={{ ...style, marginY: 0.5, touchAction: "none" }}>
       <Box sx={{ display: "flex", justifyContent: "space-between", paddingX: 1, alignItems: "center" }}>
         {description ? <Tooltip title={description}>{textValue}</Tooltip> : textValue}
         <Box sx={{ display: "flex", alignItems: "center" }}>

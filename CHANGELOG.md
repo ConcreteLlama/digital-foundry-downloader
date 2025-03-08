@@ -20,6 +20,8 @@
   - Changelog now displays in a dialog when a new version is detected
   - Will attempt to fetch the changelog from github first as this is the most up to date source and will help identify if the user is on the latest version
 - Snackbars now display when tasks start and finish, and if the session token expires
+### Bug Fixes
+- Fixed drag and drop on mobile devices (media formats, subtitles providers)
 ### Enhancements
 - Media format changes
   - Media formats now configured in its own config section
