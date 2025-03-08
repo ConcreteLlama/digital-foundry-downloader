@@ -190,9 +190,18 @@ export const DfFilenameTemplateVarDefinitions: Record<DfFilenameTemplateVarName,
     },
 };
 
-export const helperVars: Record<string, string> = {
-    "ifIn": "Check if a value is in a list. For example {{#ifIn tags 'retro'}}Retro/{{/ifIn}} will put any content with the tag 'retro' in a 'Retro' directory.",
-    "ifTag": `Check if a tag is in the content's tags. For example "{{#ifTag 'retro'}}Retro/{{/ifTag}} will put any content with the tag 'retro' in a 'Retro' directory.`,
+type HelperVarDefinition = {
+    description: string;
+    hidden?: boolean;
+}
+export const helperVars: Record<string, HelperVarDefinition> = {
+    "ifIn": {
+        description: "Check if a value is in a list. For example {{#ifIn tags 'retro'}}Retro/{{/ifIn}} will put any content with the tag 'retro' in a 'Retro' directory.",
+        hidden: true,
+    },
+    "ifTag": {
+        description: `Check if a tag is in the content's tags. For example "{{#ifTag 'retro'}}Retro/{{/ifTag}} will put any content with the tag 'retro' in a 'Retro' directory.`,
+    }
 };
 
 const generateFilenameTemplateVarMap = (contentInfo: DfContentInfo, mediaInfo: MediaInfo) => Object.entries(DfFilenameTemplateVarDefinitions).reduce((acc, [key, { valueExtractor }]) => {

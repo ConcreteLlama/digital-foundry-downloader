@@ -183,7 +183,7 @@ export const TemplateBuilderField = ({alwaysExpand = false}: TemplateBuilderFiel
           </List>
           <Typography variant="h6">Helpers</Typography>
           <List>
-            {Object.entries(validHelpers).map(([name, description]) => (
+            {filterAndMap(Object.entries(validHelpers), ([,entry]) => !entry.hidden, ([name, {description}]) => (
               <ListItemButton key={name} onClick={() => handleHelperSelect(name)}>
                 <Grid container spacing={2}>
                   <Grid item xs={4}>
