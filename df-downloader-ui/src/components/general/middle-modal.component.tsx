@@ -1,9 +1,11 @@
 import CloseIcon from "@mui/icons-material/Close";
 import { Box, IconButton, Modal, ModalProps, Stack } from "@mui/material";
 import { ResponsiveModalContainer } from "./middle-modal.styles.ts";
+import { useViewportHeight } from "../../hooks/use-viewport-height.ts";
 
 export const MiddleModal = (props: ModalProps) => {
   const { children, ...other } = props;
+  const viewportHeight = useViewportHeight();
   return (
     <Modal {...other}>
       <ResponsiveModalContainer sx={{ outline: "none" }}>
@@ -21,7 +23,7 @@ export const MiddleModal = (props: ModalProps) => {
           <Box
             sx={{
               overflow: "auto",
-              maxHeight: "94vh",
+              maxHeight: `${viewportHeight*.94}px`, // Adjust the height based on the viewport height
               maxWidth: "99vw",
               "::-webkit-scrollbar": {
                 display: "none",
