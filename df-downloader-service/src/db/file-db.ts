@@ -24,12 +24,13 @@ export class FileDb<T> {
             backupDestination :
             await backupDestination(data) :
             `${filename}.bak`; 
-        if (fs.existsSync(filename)) {
+        const dbExists = fs.existsSync(filename);
+        if (dbExists) {
             await copyFile(filename, backupLocation);
         }
         try {
             const { data: patchedData, patched } = await patchRoutine(data);
-            if (!patched) {
+            if (!patched && dbExists && fs.existsSync(backupLocation)) {
                 logger.log("info", "Data not patched, removing backup");
                 await fs.promises.rm(backupLocation);
             }
