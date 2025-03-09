@@ -90,7 +90,7 @@ export abstract class DfNotificationConsumer {
     let toReturn = `Title:          ${dfContent.title}
 Published:      ${dfContent.publishedDate}
 Media format:     ${mediaInfo.formatString}
-Size:           ${mediaInfo.size}
+Size:           ${bytesToHumanReadable(finalProgressReport?.totalBytes || mediaInfo.size || 0)}
 Description:    ${dfContent.description}`;
     if (finalProgressReport) {
       toReturn += `
