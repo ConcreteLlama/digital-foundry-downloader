@@ -24,6 +24,8 @@ import { store } from "./store/store";
 import { theme } from "./themes/theme";
 import { setIntervalImmediate } from "./utils/timer.ts";
 import registerTaskSnackbarTriggers from "./components/tasks/task-snackbar-triggers.tsx";
+import { BranchCheckDialog } from "./components/general/branch-check.component.tsx";
+import { dfDownloaderBranch } from "df-downloader-common";
 
 function App() {
   return (
@@ -37,7 +39,7 @@ const MainContainer = () => {
   useEffect(() => {
     const unregister = registerTaskSnackbarTriggers();
     return () => unregister();
-}, []);
+  }, []);
   useEffect(() => {
     store.dispatch(queryServiceInfo.start());
   }, []);
@@ -90,6 +92,7 @@ const MainApp = () => {
   }, []);
   return (
     <Box sx={{ display: "flex", width: "100vw" }} key="main-app">
+      {dfDownloaderBranch !== 'main' && <BranchCheckDialog />}
       <Nav />
       <Stack
         key={"main-app-stack"}

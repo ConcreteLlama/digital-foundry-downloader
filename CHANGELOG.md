@@ -2,7 +2,7 @@
 
 
 
-## 2.3.0 (2025-03-06)
+## 2.3.0 (2025-03-11)
 
 ### Features
 - Added file templates in Content Management settings allowing you to specify custom naming based on info from the content.

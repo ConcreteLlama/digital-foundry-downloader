@@ -5,6 +5,7 @@ export const DevConfig = z
     devConfigEnabled: z.boolean().optional(),
     devModeEnabled: z.boolean().optional(),
     downloadUrlOverride: z.string().optional(),
+    disableBranchWarning: z.boolean().optional(),
   })
   .transform((v) => {
     if (Object.keys(v).length === 0) {

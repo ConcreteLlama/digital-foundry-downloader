@@ -33,7 +33,7 @@ const updateAllVersions = (dir) => {
   });
   const versionTsString = `
   export const dfDownloaderVersion = '${rootVersion}';
-  export const dfDownloaderBranch = '${branch}';
+  export const dfDownloaderBranch: string = '${branch}';
 `
   fs.writeFileSync(path.join(projectRoot, 'df-downloader-common', 'src', 'df-downloader-version.ts'), versionTsString);
 };

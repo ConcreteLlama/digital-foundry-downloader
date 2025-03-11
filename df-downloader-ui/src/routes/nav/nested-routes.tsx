@@ -82,11 +82,11 @@ export const NestedRouteNavItem = ({ route, level, onItemSelected, keyBase }: Ne
                   route={route}
                   level={level}
                   onItemSelected={onItemSelected}
-                  key={`${keyBase}-nested-route:${route}:${level}`}
+                  key={`${keyBase}-nested-route:${route.name}:${level}`}
                   keyBase={keyBase}
                 />
               ) : (
-                <NestedSubRouteNavItem subRoute={route} level={level + 1} keyBase={keyBase} icon={RouteIcon} />
+                <NestedSubRouteNavItem subRoute={route} level={level + 1} keyBase={keyBase} icon={RouteIcon} key={`${keyBase}-nested-sub-route:${route.name}:${level}`} />
               );
             })}
           </List>

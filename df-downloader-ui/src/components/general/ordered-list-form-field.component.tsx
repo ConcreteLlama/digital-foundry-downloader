@@ -42,7 +42,7 @@ export const OrderableListFormField = <VALUE_TYPE extends string>({ name, label,
       descriptionMap.set(getValueValue(value), valueDescription);
     });
   }
-  const [ currentValues, setCurrentValues ] = React.useState<VALUE_TYPE[]>(control._formValues[name] || [])
+  const [currentValues, setCurrentValues] = React.useState<VALUE_TYPE[]>(control._formValues[name] || [])
   const possibleValuesValues = possibleValues ? possibleValues.map((value) => getValueValue(value)) : undefined;
   return (
     <Controller
@@ -105,20 +105,23 @@ export const OrderableList = <VALUE_TYPE extends string>({ name, possibleValues,
     onChange([...values, value]);
   }
   const itemsNotInList = (possibleValues || []).filter((value) => !items.map((item) => item.label).includes(getValueValue(value)));
+  console.log(items);
   return (
     <Stack sx={{ padding: 2 }}>
-      {possibleValues && <Select disabled={itemsNotInList.length === 0}
-        onChange={itemSelected} displayEmpty
-        renderValue={() => itemsNotInList.length === 0 ? "No more items to add" : "Add Item"}>
-        {itemsNotInList.map((value) => <MenuItem value={value}>{value}</MenuItem>)}
-      </Select>}
+      {possibleValues &&
+        <Select disabled={itemsNotInList.length === 0}
+          onChange={itemSelected} displayEmpty
+          renderValue={() => itemsNotInList.length === 0 ? "No more items to add" : "Add Item"}>
+          {itemsNotInList.map((value) => <MenuItem value={value} key={`orderable-list-menu-item-${value}`}>{value}</MenuItem>)}
+        </Select>}
       <DndContext onDragEnd={handleDragEnd}>
         <List>
           {items.map((value) => (
             <OrderedListItem id={value.id} label={value.label} description={descriptionMap.get(value.label)}
               onRemove={possibleValues ? () => handleItemRemoved(value.id) : undefined}
               removeDisabled={removeDisabled} draggable={!nonDraggable.has(value.label)}
-              />
+              key={`orderable-list-item-${value.id}`}
+            />
           ))}
         </List>
       </DndContext>
@@ -133,6 +136,7 @@ interface OrderedListItemProps {
   draggable?: boolean;
   onRemove?: (id: string) => void;
   removeDisabled?: boolean;
+  key: string;
 }
 
 const OrderedListItem = ({ id, label, onRemove, removeDisabled, description, draggable = true }: OrderedListItemProps) => {
@@ -152,7 +156,7 @@ const OrderedListItem = ({ id, label, onRemove, removeDisabled, description, dra
     : {};
   const textValue = <Typography>{label}</Typography>;
   return (
-    <Card ref={droppableSetNodeRef} sx={{ ...style, marginY: 0.5, touchAction: "none" }}>
+    <Card ref={droppableSetNodeRef} sx={{ ...style, marginY: 0.5, touchAction: "none" }} key={`orderable-list-item-card-${id}`}>
       <Box sx={{ display: "flex", justifyContent: "space-between", paddingX: 1, alignItems: "center" }}>
         {description ? <Tooltip title={description}>{textValue}</Tooltip> : textValue}
         <Box sx={{ display: "flex", alignItems: "center" }}>

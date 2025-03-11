@@ -1,6 +1,8 @@
 import { AppBar, Box, List, Stack, Typography, useMediaQuery } from "@mui/material";
 import { useEffect, useState } from "react";
 import { useSelector } from "react-redux";
+import { queryConfigSection } from "../../../store/config/config.action.ts";
+import { selectConfigLoading } from "../../../store/config/config.selector.ts";
 import { resetState, updateDfContentQuery } from "../../../store/df-content/df-content.action.ts";
 import {
   selectDfContentEntryCurrentKeys,
@@ -10,18 +12,16 @@ import {
 import { selectIsLoading } from "../../../store/general.selector.ts";
 import { store } from "../../../store/store.ts";
 import { theme } from "../../../themes/theme.ts";
+import { ChangelogDialog } from "../../general/changelog.component.tsx";
 import { Loading } from "../../general/loading.component.tsx";
 import { MiddleModal } from "../../general/middle-modal.component.tsx";
 import { PageSelector } from "../../general/page-selector.component.tsx";
 import { DfSessionCheckDialog } from "../../settings/df-session-check-dialog.component.tsx";
-import { ContentDirectoryListItem } from "./df-content-directory.styles.ts";
 import { DfContentInfoItemCard } from "../df-content-item-card.component.tsx";
 import { DfContentInfoItemDetail } from "../df-content-item-detail/df-content-item-detail.component.tsx";
 import { DfQuickSearch } from "../df-search-input.component.tsx";
 import { ClearDfSearchButton, DfAdvancedSearchButton } from "../df-search.component.tsx";
-import { ChangelogDialog } from "../../general/changelog.component.tsx";
-import { queryConfigSection } from "../../../store/config/config.action.ts";
-import { selectConfigLoading } from "../../../store/config/config.selector.ts";
+import { ContentDirectoryListItem } from "./df-content-directory.styles.ts";
 
 export const DfContentInfoDirectory = () => {
   useEffect(() => {
