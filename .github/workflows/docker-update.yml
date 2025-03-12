@@ -54,7 +54,7 @@ jobs:
         tags: |
           ${{ vars.DOCKERHUB_USERNAME }}/digital-foundry-downloader:${{ env.TAG }}
           ${{ vars.DOCKERHUB_USERNAME }}/digital-foundry-downloader:${{ env.VERSION_TAG }}
-      labels: |
-        version=${{ env.VERSION }}
-      build-args: |
-        GIT_BRANCH=${{ github.ref_name }}
+        labels: |
+          version=${{ env.VERSION }}
+        build-args: |
+          GIT_BRANCH=${{ github.ref_name }}
