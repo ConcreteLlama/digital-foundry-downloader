@@ -7,7 +7,7 @@
   "types": "index.d.ts",
   "type": "module",
   "scripts": {
-    "watch": "tsc-watch --onSuccess \"npm run build\"",
+    "watch": "node scripts/make-version-src.js && tsc-watch --onSuccess \"npm run build\"",
     "preyalcpublish": "node ../scripts/make-version-src.js && tsc",
     "yalc": "yalc",
     "build": "mkdirp dist && shx cp package.json dist && cd dist && yalc publish --private --push",
