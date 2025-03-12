@@ -30,15 +30,31 @@ jobs:
         VERSION=$(grep -m1 '"version"' package.json | awk -F: '{ print $2 }' | sed 's/[",]//g' | tr -d '[[:space:]]')
         echo "VERSION=$VERSION" >> $GITHUB_ENV
 
+    - name: Set Docker image tags
+      id: set_tags
+      run: |
+        if [ "${GITHUB_REF}" == "refs/heads/main" ]; then
+          TAG="latest"
+          VERSION_TAG="v${VERSION}"
+        elif [ "${GITHUB_REF}" == "refs/heads/develop" ]; then
+          TAG="development"
+          VERSION_TAG="v${VERSION}-development"
+        else
+          TAG="experimental"
+          VERSION_TAG="v${VERSION}-experimental"
+        fi
+        echo "TAG=${TAG}" >> $GITHUB_ENV
+        echo "VERSION_TAG=${VERSION_TAG}" >> $GITHUB_ENV
+
     - name: Build and push Docker image
       uses: docker/build-push-action@v6
       with:
         context: .
         push: true
         tags: |
-          ${{ vars.DOCKERHUB_USERNAME }}/digital-foundry-downloader:${{ github.ref == 'refs/heads/main' && 'latest' || github.ref == 'refs/heads/develop' && 'development' || 'experimental' }}
-          ${{ vars.DOCKERHUB_USERNAME }}/digital-foundry-downloader:v${{ env.VERSION }}${{ github.ref == 'refs/heads/main' && '' || github.ref == 'refs/heads/develop' && '-development' || '-experimental' }}
-        labels: |
-          version=${{ env.VERSION }}
-        build-args: |
-          GIT_BRANCH=${{ github.ref_name }}
+          ${{ vars.DOCKERHUB_USERNAME }}/digital-foundry-downloader:${{ env.TAG }}
+          ${{ vars.DOCKERHUB_USERNAME }}/digital-foundry-downloader:${{ env.VERSION_TAG }}
+      labels: |
+        version=${{ env.VERSION }}
+      build-args: |
+        GIT_BRANCH=${{ github.ref_name }}
