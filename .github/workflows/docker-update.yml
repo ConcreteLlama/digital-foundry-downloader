@@ -40,3 +40,5 @@ jobs:
           ${{ vars.DOCKERHUB_USERNAME }}/digital-foundry-downloader:v${{ env.VERSION }}${{ github.ref == 'refs/heads/main' && '' || github.ref == 'refs/heads/develop' && '-development' || '-experimental' }}
         labels: |
           version=${{ env.VERSION }}
+        build-args: |
+          GIT_BRANCH=${{ github.ref_name }}

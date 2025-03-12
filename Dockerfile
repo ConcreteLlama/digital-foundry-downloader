@@ -7,6 +7,10 @@ ENV CONFIG_DIR=/config
 ENV DB_DIR=/db
 ENV CONTAINER_ENV=docker
 
+ARG GIT_BRANCH=unknown
+
+ENV GIT_BRANCH=${GIT_BRANCH}
+
 RUN npm i yalc@1.0.0-pre.53 -g
 
 COPY df-downloader-common ./df-downloader-common

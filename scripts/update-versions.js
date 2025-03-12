@@ -13,29 +13,18 @@ const updateVersion = (filePath) => {
   packageJson.version = rootVersion;
   fs.writeFileSync(filePath, JSON.stringify(packageJson, null, 2) + '\n');
 };
-const head = fs.readFileSync(path.join(projectRoot, '.git', 'HEAD'), 'utf8').trim();
-const branch = head.replace('ref: refs/heads/', '');
 
 // Find all package.json files in subdirectories and update their version
 const updateAllVersions = (dir) => {
-  fs.readdirSync(dir).forEach(file => {
-    if (file === 'node_modules' || file === '.git') {
-      return;
-    }
+  ['df-downloader-common', 'df-downloader-service', 'df-downloader-ui'].forEach(file => {
     const fullPath = path.join(dir, file);
-    if (fs.statSync(fullPath).isDirectory()) {
-      const packageJsonPath = path.join(fullPath, 'package.json');
-      if (fs.existsSync(packageJsonPath)) {
-        updateVersion(packageJsonPath);
-      }
-      updateAllVersions(fullPath);
+    const packageJsonPath = path.join(fullPath, 'package.json');
+    if (fs.existsSync(packageJsonPath)) {
+      updateVersion(packageJsonPath);
+    } else {
+      throw new Error(`No package.json found in ${fullPath}`);
     }
   });
-  const versionTsString = `
-  export const dfDownloaderVersion = '${rootVersion}';
-  export const dfDownloaderBranch: string = '${branch}';
-`
-  fs.writeFileSync(path.join(projectRoot, 'df-downloader-common', 'src', 'df-downloader-version.ts'), versionTsString);
 };
 
 updateAllVersions(projectRoot);
