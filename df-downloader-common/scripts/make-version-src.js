@@ -14,13 +14,13 @@ const getGitBranch = () => {
 }
 
 const branch = getGitBranch();
-const rootPackageJson = JSON.parse(fs.readFileSync(path.join(projectRoot, 'package.json'), 'utf8'));
+const rootPackageJson = JSON.parse(fs.readFileSync(path.join(dir, 'package.json'), 'utf8'));
 const rootVersion = rootPackageJson.version;
 const versionTsString = `
 export const dfDownloaderVersion = '${rootVersion}';
 export const dfDownloaderBranch: string = '${branch}';
 `
-const versionFile = path.join(projectRoot, 'df-downloader-common', 'src', 'df-downloader-version.ts');
+const versionFile = path.join(dir, 'src', 'df-downloader-version.ts');
 console.log(`Updating version src: ${versionFile}`);
 fs.writeFileSync(versionFile, versionTsString);
 
