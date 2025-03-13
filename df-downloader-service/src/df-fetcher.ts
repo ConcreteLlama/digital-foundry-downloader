@@ -17,7 +17,7 @@ import { configService } from "./config/config.js";
 import { sanitizeContentName } from "./utils/df-utils.js";
 import { getBody, getBodyOfChild } from "./utils/dom-utils.js";
 import { extractFilenameFromUrl } from "./utils/file-utils.js";
-import { extractYoutubeVideoId } from "./utils/youtube.js";
+import { extractYoutubeVideoId } from "./utils/youtube/youtube-utils.js";
 
 type PageMeta = {
   publishedDate: Date;

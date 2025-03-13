@@ -102,6 +102,7 @@ export type BaseTaskPipelineStep<
    * A flag that indicates if the pipeline should continue if this step fails.
    */
   readonly continueOnCancel?: boolean;
+  /** A hook to update the context once the task has completed */
 };
 export type TaskPipelineStepNonNullable<
   PREVIOUS_TASK_RESULT,

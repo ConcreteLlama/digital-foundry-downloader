@@ -6,11 +6,14 @@ import { serviceLocator } from "../services/service-locator.js";
 import { TaskManager } from "../task-manager/task-manager.js";
 import { TaskPipelineExecution, makeTaskPipeline } from "../task-manager/task-pipeline.js";
 import { DownloadTask, DownloadTaskManager } from "../tasks/download-task.js";
-import { MetadataTask } from "../tasks/metadata-task.js";
+import { InjectMetadataTask } from "../tasks/inject-metadata-task.js";
 import { MoveFileSetDateTask } from "../tasks/move-file-set-date-task.js";
 import { SubtitlesTaskBuilder, SubtitlesTaskManager } from "../tasks/subtitles-task.js";
 import { makeFilePathWithTemplate } from "../utils/template-utils.js";
 import { pathIsEqual } from "../utils/file-utils.js";
+import { FetchChaptersTask } from "../tasks/fetch-chapters-task.js";
+import { SubtitleInfo } from "../media-utils/subtitles/subtitles.js";
+import { Chapter } from "../utils/chatpers.js";
 
 type DownloadTaskPipelineOpts = {
   downloadTaskManager: DownloadTaskManager;
@@ -91,14 +94,26 @@ export const createDownloadTaskPipeline = (opts: DownloadTaskPipelineOpts) => {
       taskManager: subtitlesTaskManager,
     })
     .next({
+      stepName: "Fetch Chapters",
+      taskCreator: ({ context, previousTaskResult }) => {
+        const { dfContentInfo } = context;
+        return FetchChaptersTask(dfContentInfo);
+      },
+      continueOnFail: true,
+      taskManager: fileTaskManager,
+    })
+    .next({
       stepName: "Inject Metadata",
-      taskCreator: ({ context, previousTaskResult: subtitleInfo, allResults }) => {
+      taskCreator: ({ context, allResults }) => {
         const { dfContentInfo, downloadLocation } = context;
+        const [_downloadTaskResult, subtitlesTaskResult, chaptersTaskResult] = allResults;
         const config = configService.config;
         const metaConfig = config.metadata;
+        const subtitles = subtitlesTaskResult?.status === "success" ? subtitlesTaskResult.result : null;
+        const chapters = chaptersTaskResult?.status === "success" ? chaptersTaskResult.result : null;
         const metaForInjection = metaConfig.injectMetadata ? dfContentInfo : undefined;
-        if (metaForInjection || subtitleInfo) {
-          return MetadataTask(downloadLocation, makeMediaMeta(metaForInjection, subtitleInfo));
+        if (metaForInjection || subtitles || chapters) {
+          return InjectMetadataTask(downloadLocation, makeMediaMeta(metaForInjection, subtitles, chapters));
         }
         return null;
       },

@@ -2,6 +2,11 @@
 
 
 
+## 2.4.0 (2025-03-13)
+
+### Features
+- Chapter info is now extracted from YouTube and injected into the downloaded content
+
 ## 2.3.0 (2025-03-11)
 
 ### Features

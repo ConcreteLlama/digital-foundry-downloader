@@ -2,6 +2,7 @@ import MetadataIcon from "@mui/icons-material/DataObject";
 import DownloadIcon from "@mui/icons-material/Download";
 import MoveIcon from "@mui/icons-material/DriveFileMove";
 import SubtitlesIcon from "@mui/icons-material/Subtitles";
+import ChaptersIcon from "@mui/icons-material/MenuBook";
 import { StepIconProps, Tooltip } from "@mui/material";
 import { styled } from "@mui/system";
 import { TaskState } from "df-downloader-common";
@@ -29,6 +30,8 @@ const getIconComponent = (stepName: string) => {
       return DownloadIcon;
     case "Fetch Subtitles":
       return SubtitlesIcon;
+    case "Fetch Chapters":
+      return ChaptersIcon;
     case "Inject Metadata":
       return MetadataIcon;
     case "Move File":

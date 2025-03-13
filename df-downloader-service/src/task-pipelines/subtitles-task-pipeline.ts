@@ -3,7 +3,7 @@ import { makeMediaMeta } from "../df-mpeg-meta.js";
 import { SubtitleGenerator } from "../media-utils/subtitles/subtitles.js";
 import { TaskManager } from "../task-manager/task-manager.js";
 import { TaskPipelineExecution, makeTaskPipeline } from "../task-manager/task-pipeline.js";
-import { MetadataTask } from "../tasks/metadata-task.js";
+import { InjectMetadataTask } from "../tasks/inject-metadata-task.js";
 import { SubtitlesTaskBuilder, SubtitlesTaskManager } from "../tasks/subtitles-task.js";
 
 type SubtitlesTaskPipelineCreatorOpts = {
@@ -40,7 +40,7 @@ export const createSubtitlesTaskPipeline = (opts: SubtitlesTaskPipelineCreatorOp
       stepName: "Inject Metadata",
       taskCreator: ({ context, previousTaskResult }) => {
         const { fileLocation } = context;
-        return MetadataTask(fileLocation, makeMediaMeta(undefined, previousTaskResult));
+        return InjectMetadataTask(fileLocation, makeMediaMeta(undefined, previousTaskResult));
       },
       taskManager: fileTaskManager,
     })

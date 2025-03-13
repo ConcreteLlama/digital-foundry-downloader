@@ -1,4 +1,9 @@
 versions:
+  - version: "2.4.0"
+    date: "2025-03-13"
+    changes:
+      features:
+        - "Chapter info is now extracted from YouTube and injected into the downloaded content"
   - version: "2.3.0"
     date: "2025-03-11"
     changes:

@@ -3,12 +3,11 @@ import { DfContentInfo } from "../df-content-info.js";
 import { TaskInfo } from "./task-info.js";
 import { mapFilterEmpty } from "../../utils/general.js";
 import { isDownloadTaskInfo } from "./download-task.js";
-import { MediaFormat } from "../media-info/media-format.js";
 
 export const PipelineResultStatus = z.enum(["success", "failed", "cancelled"]);
 export type PipelineResultStatus = z.infer<typeof PipelineResultStatus>;
 
-export const DfStepName = z.enum(["Download", "Fetch Subtitles", "Inject Metadata", "Move File"]);
+export const DfStepName = z.enum(["Download", "Fetch Subtitles", "Fetch Chapters", "Inject Metadata", "Move File"]);
 export type DfStepName = z.infer<typeof DfStepName>;
 
 export const DfPipelineType = z.enum(["download", "subtitles"]);

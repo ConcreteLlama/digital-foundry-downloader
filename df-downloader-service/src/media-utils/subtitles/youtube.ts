@@ -1,6 +1,6 @@
 import { DfContentInfo, LanguageCode, MediaInfoUtils, logger } from "df-downloader-common";
 import { SubtitlesService } from "df-downloader-common/config/subtitles-config.js";
-import { fetchAndParseSubs, youtubeSubsToSrt } from "../../utils/youtube.js";
+import { fetchAndParseSubs, youtubeSubsToSrt } from "../../utils/youtube/youtube-subs.js";
 import { SubtitleGenerator } from "./subtitles.js";
 
 export class YoutubeSubtitleGenerator implements SubtitleGenerator {

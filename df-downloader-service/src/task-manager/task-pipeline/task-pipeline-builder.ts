@@ -23,20 +23,12 @@ export class TaskPipelineBuilder<
 
   // Overloads - if continueOnFail or continueOnCancel are set, or the taskCreator is capable of returning null, the next task result may be undefined
   next<TASK extends Task<any, any, any>>(
-    pipelineStep: TaskPipelineStep<
+    pipelineStep: TaskPipelineStepNonNullable<
       LAST_TASK_RESULT,
       InferTaskTaskResultTuple<TASK_PIPELINE_STEPS>,
       TASK,
       PIPELINE_CONTEXT
-    > &
-      (
-        | {
-            continueOnFail: true;
-          }
-        | {
-            continueOnCancel: true;
-          }
-      )
+    >
   ): TaskPipelineBuilder<
     InferTaskResult<TASK> | undefined,
     [
