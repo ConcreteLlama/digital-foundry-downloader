@@ -1,10 +1,11 @@
 import { DfContentAvailability, DfContentAvailabilityInfo, DfContentDownloadInfo, DfContentSubtitleInfo, logger, zodParse } from "df-downloader-common";
 import path from "path";
 import { ensureDirectory, pathIsEqual } from "../../utils/file-utils.js";
-import { CURRENT_VERSION } from "../../version.js";
 import { DfContentStatusDbSchema, DfContentStatusEntry } from "../df-db-model.js";
 import { ContentAvailabilityParams, DownloadInfoWithName, MoveDownloadOpts, RemoveDownloadOpts } from "../df-operational-db.js";
 import { FileDb } from "../file-db.js";
+
+const CURRENT_DB_VERSION = "2.3.0";
 
 const defaultContentStatus: DfContentAvailabilityInfo = {
     availability: DfContentAvailability.UNKNOWN,
@@ -20,7 +21,7 @@ export class DfContentAvailabilityDb {
             schema: DfContentStatusDbSchema,
             filename: contentInfoDbFilename,
             initialData: {
-                version: CURRENT_VERSION,
+                version: CURRENT_DB_VERSION,
                 firstRunComplete: false,
                 lastUpdated: new Date(),
                 contentStatuses: {}
@@ -34,18 +35,18 @@ export class DfContentAvailabilityDb {
             },
             patchRoutine: async (data) => {
                 const version = data.version;
-                if (version === CURRENT_VERSION) {
-                    logger.log("info", `DB already at version ${CURRENT_VERSION} - no patches to apply`);
+                if (version === CURRENT_DB_VERSION) {
+                    logger.log("info", `DB already at version ${CURRENT_DB_VERSION} - no patches to apply`);
                     data = zodParse(DfContentStatusDbSchema, data);
                     return {
                         data,
                         patched: false,
                     };
                 }
-                while (data.version !== CURRENT_VERSION) {
+                while (data.version !== CURRENT_DB_VERSION) {
                     data.version = "2.3.0";
                 }
-                logger.log("info", `DB patched to version ${CURRENT_VERSION}`);
+                logger.log("info", `DB patched to version ${CURRENT_DB_VERSION}`);
                 return {
                     data,
                     patched: true,

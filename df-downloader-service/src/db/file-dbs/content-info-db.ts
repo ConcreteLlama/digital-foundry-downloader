@@ -3,9 +3,10 @@ import { existsSync } from "fs";
 import fs from "fs/promises";
 import path from "path";
 import { ensureDirectory, moveFile } from "../../utils/file-utils.js";
-import { CURRENT_VERSION } from "../../version.js";
 import { DfContentInfoDbSchema, DfContentStatusDbSchema, DfContentStatusEntry, DfUserDbSchema } from "../df-db-model.js";
 import { FileDb } from "../file-db.js";
+
+const CURRENT_DB_VERSION = "2.3.0";
 
 export class DfContentInfoDb {
     private data: DfContentInfoDbSchema;
@@ -24,7 +25,7 @@ export class DfContentInfoDb {
             filename: contentInfoDbFilename,
             initialData: {
                 contentInfo: {},
-                version: CURRENT_VERSION,
+                version: CURRENT_DB_VERSION,
                 lastUpdated: new Date(),
             },
             backupDestination: async (data) => {
@@ -36,8 +37,8 @@ export class DfContentInfoDb {
             },
             patchRoutine: async (data) => {
                 const version = data.version;
-                if (version === CURRENT_VERSION) {
-                    logger.log("info", `DB already at version ${CURRENT_VERSION} - no patches to apply`);
+                if (version === CURRENT_DB_VERSION) {
+                    logger.log("info", `DB already at version ${CURRENT_DB_VERSION} - no patches to apply`);
                     data = zodParse(DfContentInfoDbSchema, data);
                     return {
                         data,
@@ -62,7 +63,7 @@ export class DfContentInfoDb {
                         : [];
                     delete data.ignored;
                 }
-                while (data.version !== CURRENT_VERSION) {
+                while (data.version !== CURRENT_DB_VERSION) {
                     if (data.version === "1.0.0") {
                         logger.log("info", `Patching DB version to 2.0.0`);
                         //this is pre-transform so don't need to worry about map
@@ -125,7 +126,7 @@ export class DfContentInfoDb {
                         const userInfo = data.user;
                         const userTier = userInfo.tier || 'NONE';
                         const contentStatuses: DfContentStatusDbSchema = {
-                            version: CURRENT_VERSION,
+                            version: CURRENT_DB_VERSION,
                             lastUpdated: new Date(),
                             firstRunComplete: data.firstRunComplete,
                             contentStatuses: Object.entries(data.contentInfo).reduce((acc: Record<string, DfContentStatusEntry>, [key, value]: [string, any]) => {
@@ -168,7 +169,7 @@ export class DfContentInfoDb {
                         const contentStatusDbFilename = path.join(dbDir, "content-status-db.json");
                         await fs.writeFile(contentStatusDbFilename, JSON.stringify(contentStatuses, null, 2));
                         const userDbInfo: DfUserDbSchema = {
-                            version: CURRENT_VERSION,
+                            version: CURRENT_DB_VERSION,
                             lastUpdated: new Date(),
                             dfUser: userInfo,
                         }
@@ -193,7 +194,7 @@ export class DfContentInfoDb {
                         throw new Error(`Unrecognized DB version ${data.version}`);
                     }
                 }
-                logger.log("info", `DB patched to version ${CURRENT_VERSION}`);
+                logger.log("info", `DB patched to version ${CURRENT_DB_VERSION}`);
                 return {
                     data,
                     patched: true,
