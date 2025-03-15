@@ -10,7 +10,7 @@ export type PipelineResultStatus = z.infer<typeof PipelineResultStatus>;
 export const DfStepName = z.enum(["Download", "Fetch Subtitles", "Fetch Chapters", "Inject Metadata", "Move File"]);
 export type DfStepName = z.infer<typeof DfStepName>;
 
-export const DfPipelineType = z.enum(["download", "subtitles"]);
+export const DfPipelineType = z.enum(["download", "subtitles", "update_download_meta"]);
 export type DfPipelineType = z.infer<typeof DfPipelineType>;
 
 const StepDetails = z.object({

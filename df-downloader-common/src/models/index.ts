@@ -22,3 +22,4 @@ export * from "./move-files.js";
 export * from "./subtitles.js";
 export * from "./changelog.js";
 export * from "./media-info/index.js";
+export * from './df-content-update-download-meta.js';

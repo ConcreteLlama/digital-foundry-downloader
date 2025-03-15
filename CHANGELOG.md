@@ -6,6 +6,9 @@
 
 ### Features
 - Chapter info is now extracted from YouTube and injected into the downloaded content
+- Ability to refresh downloaded content's metadata in the UI
+  - e.g., if you've downloaded something and the metadata has changed, you can now re-fetch and re-inject it
+  - This includes title, description etc. and chapter info
 
 ## 2.3.0 (2025-03-11)
 

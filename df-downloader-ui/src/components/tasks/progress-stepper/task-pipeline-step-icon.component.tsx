@@ -3,6 +3,7 @@ import DownloadIcon from "@mui/icons-material/Download";
 import MoveIcon from "@mui/icons-material/DriveFileMove";
 import SubtitlesIcon from "@mui/icons-material/Subtitles";
 import ChaptersIcon from "@mui/icons-material/MenuBook";
+import RefreshIcon from "@mui/icons-material/Refresh";
 import { StepIconProps, Tooltip } from "@mui/material";
 import { styled } from "@mui/system";
 import { TaskState } from "df-downloader-common";
@@ -34,8 +35,14 @@ const getIconComponent = (stepName: string) => {
       return ChaptersIcon;
     case "Inject Metadata":
       return MetadataIcon;
+    case "Fetch chapter info":
+      return ChaptersIcon;
+    case "Inject metadata":
+      return MetadataIcon;
     case "Move File":
       return MoveIcon;
+    case "Refresh content info":
+      return RefreshIcon;
     default:
       return MoveIcon;
   }

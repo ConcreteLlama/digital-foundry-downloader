@@ -14,7 +14,9 @@ import {
   MoveFilesRequest,
   PreviewMoveRequest,
   PreviewMoveResponse,
-  secondsToHHMMSS
+  secondsToHHMMSS,
+  DfContentUpdateDownloadMetaRequest,
+  DfContentUpdateDownloadMetaResponse
 } from "df-downloader-common";
 import { testTemplate } from "df-downloader-common/utils/filename-template-utils.js";
 import express, { Request, Response } from "express";
@@ -53,6 +55,31 @@ export const makeContentApiRouter = (contentManager: DigitalFoundryContentManage
       return sendResponse(res, response);
     });
   });
+
+  router.post("/downloads/update-metadata", async (req: Request, res: Response) => {
+    await zodParseHttp(
+      DfContentUpdateDownloadMetaRequest, req, res, async (body) => {
+        const contentEntry = await contentManager.db.getContentEntry(body.contentName);
+        if (!contentEntry) {
+          return res.status(404).send({
+            message: "Content not found",
+          });
+        }
+        const pipeline = contentManager.taskManager.updateDownloadMetadata(
+          contentEntry.contentInfo,
+          body.filename,
+        );
+        const response: DfContentUpdateDownloadMetaResponse = {
+          contentName: body.contentName,
+          filename: body.filename,
+          pipelineId: pipeline.id,
+        };
+        return sendResponse(res, response);
+      });
+  });
+
+  // TODO: Add one to extract meta from existing file
+  // TODO: Add one to fetch meta for content + return
 
   router.get("/query", async (req: Request, res: Response) => {
     const query = req.query;

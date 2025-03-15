@@ -1,9 +1,12 @@
 import DeleteIcon from "@mui/icons-material/Delete";
+import RefreshIcon from "@mui/icons-material/Refresh";
 import SubtitlesIcon from "@mui/icons-material/Subtitles";
 import { Box, IconButton, Tooltip } from "@mui/material";
-import { DfContentEntry } from "df-downloader-common";
+import { DfContentEntry, DfContentUpdateDownloadMetaRequest } from "df-downloader-common";
 import { DfContentDownloadInfo } from "df-downloader-common/models/df-content-download-info";
 import { useState } from "react";
+import { API_URL } from "../../../config.ts";
+import { fetchJson, postJson } from "../../../utils/fetch.ts";
 import { DeleteDownloadDialog } from "./delete-download-dialog.component.tsx";
 import { FetchSubtitlesDialog } from "./fetch-subtitles-dialog.component.tsx";
 
@@ -30,6 +33,16 @@ export const DownloadedItemActions = ({ contentEntry, download }: DownloadedItem
   const closeDeleteDialog = () => {
     setDeleteDialogOpen(false);
   };
+
+  const refreshDownloadMetadata = async() => {
+    const requestBody: DfContentUpdateDownloadMetaRequest = {
+      contentName: contentEntry.name,
+      filename: download.downloadLocation,
+    }
+    postJson(`${API_URL}/content/downloads/update-metadata`, requestBody).catch((error) => {
+      console.error("Failed to refresh metadata", error);
+    });
+  }
   return (
     <Box
       sx={{
@@ -46,6 +59,11 @@ export const DownloadedItemActions = ({ contentEntry, download }: DownloadedItem
       <Tooltip title="Delete" onClick={openDeleteDialog}>
         <IconButton>
           <DeleteIcon />
+        </IconButton>
+      </Tooltip>
+      <Tooltip title="Refresh Metadata" onClick={refreshDownloadMetadata}>
+        <IconButton>
+          <RefreshIcon />
         </IconButton>
       </Tooltip>
       <DeleteDownloadDialog

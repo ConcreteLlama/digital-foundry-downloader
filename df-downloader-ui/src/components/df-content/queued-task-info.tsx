@@ -47,7 +47,7 @@ export const PipelineInfoSummaryDetail = ({ pipelineId }: TaskComponentProps) =>
         }}
       >
         <TaskTypeIcon />
-        <Typography component="div">{mediaType}</Typography>
+        <Typography component="div">{mediaType || taskDetails.type}</Typography>
         {startTime && (
           <Typography variant="body2" color="text.secondary">
             Started at {new Date(startTime).toLocaleString()}

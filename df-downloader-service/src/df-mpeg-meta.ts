@@ -4,7 +4,7 @@ import { SubtitleInfo } from "./media-utils/subtitles/subtitles.js";
 import { MediaMeta, injectMediaMetadata } from "./utils/media-metadata.js";
 import { Chapter } from "./utils/chatpers.js";
 
-export const makeMediaMeta = (contentInfo?: DfContentInfo, subtitles?: SubtitleInfo | null, chapters?: Chapter[] | null): MediaMeta => ({
+export const makeMediaMeta = (contentInfo?: DfContentInfo | null, subtitles?: SubtitleInfo | null, chapters?: Chapter[] | null): MediaMeta => ({
   title: contentInfo?.title,
   publishedDate: contentInfo?.publishedDate,
   description: contentInfo?.description,

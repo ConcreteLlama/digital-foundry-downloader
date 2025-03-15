@@ -9,15 +9,16 @@ If you just want to get up and running, check out the [Standalone (no docker)](#
 
 # Features
 
-- Downloads new Digital Foundry videos when available
-- Tags downloaded media with title, synopsis, date and tags (as genre tags)
+- Has a web UI to see available content, manage downloads, configure etc.
+- Can be configured to download new Digital Foundry videos when available with a media format priority list (e.g. 4K > 1080p > Video)
+- Injects metadata into downloaded media (title, tags (as genre tags), description, published date and chapter info)
 - Has a download queue to limit the number of simultaneous downloads
 - Can force start downloads outside of the limit, reorder downloads and pause/resume them
 - If a download fails, it will attempt to continue from the point it failed (e.g. if 50% through will continue from 50%)
+- File paths are configurable with templates to allow you to specify where the content is downloaded to based on metadata from the content (e.g. can put in YYYY/MM directories, or put all content tagged with "df direct" into a DF Direct dir)
 - Can send pushbullet notifications when various events occur
-- Stores download history in a very simple "DB" using lowdb (so basically it just writes to a JSON file) so it doesn't keep redownloading the same content on restart.
+- Stores content info and related download info to a file so it doesn't have to re-scan on restart
 - Ability to automatically generate subtitles for videos - either extracted from YouTube or generated with Deepgram or Google STT (Google STT implementation is quite slow due to using streaming recognize).
-- Has a web UI to see available content, manage downloads, configure etc.
 
 # DF Session ID
 
@@ -33,26 +34,25 @@ it'll log you back in.
 # Limitations
 
 - Can't login using Patreon credentials - you have to go to the DF website in your browser and get the sessionid cookie - however this does seem to last indefinitely unless you log in from somewhere else.
-- WebUI is incomplete
-- Can't currently control active downloads in download queue
+- There is no way to multi select videos to download or trigger a download for all previous videos, and there never will be.
 
 # Notes on behaviour
 
 On first run, this will scan the entire DF archive and build up a DB of all available content. On future runs, it will check every archive page at the beginning to see if it's missing anything. The first run can take quite a while - it does fetch multiple pages simultaenously but the last thing I want is for this tool to hammer the DF site unnecessarily. Maybe I've been a little over-cautious in this regard.
 
-Either way, currently the size of the DB after first run is upward of 3.5MB.
+Either way, currently the size of the "DB" after first run is upward of 3.5MB.
 
 If you want to limit the impact of this, set the max archive depth
 
-It will also scan your destination dir for existing downloaded content. This behaviour can be disabled with SCAN_EXISTING_FILES=false
+It will also scan your destination dir for existing downloaded content. This behaviour can be disabled in the UI.
 
-## Structure
+## Code Structure
 
 This is split into 3 packages:
 
 ### df-downloader-common
 
-Includes all models shared between the UI and the backend service
+Includes all models shared between the UI and the backend service, along with various utility functions.
 
 ### df-downloader-ui
 
@@ -128,7 +128,7 @@ docker run -d \
   concretellama/digital-foundry-downloader:latest
 ```
 
-I've also supplied a bash script to build and deploy the container to a supplied registry. I have this setup to go to a private registry on my local network.
+I've also supplied a bash script to build and deploy the container to a supplied registry. I used to have this setup to go to a private registry on my local network but now just use dockerhub.
 
 Usage:
 
@@ -136,7 +136,7 @@ Usage:
 ./update_container.sh "concretellama/digital-foundry-downloader" "127.0.0.1:5000"
 ```
 
-If like me you run this in a container on a server and you're using an insecure local registry, don't forget to add your local registry to the list of insecure registries in your docker daemon config json (/etc/docker/daemon.json).
+If you run this in a container on a server and you're using an insecure local registry, don't forget to add your local registry to the list of insecure registries in your docker daemon config json (/etc/docker/daemon.json).
 
 ```
 {

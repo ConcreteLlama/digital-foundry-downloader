@@ -58,11 +58,13 @@ import { DownloadTask, DownloadTaskManager, isDownloadTask } from "./tasks/downl
 import { RemoveEmptyDirsTask, isRemoveEmptyDirsTask } from "./tasks/remove-empty-dirs-task.js";
 import { ScanForExistingContentTask, isScanForExistingContentTask } from "./tasks/scan-for-content-task.js";
 import { SubtitlesTaskManager } from "./tasks/subtitles-task.js";
+import { createUpdateDownloadMetadataTaskPipeline, UpdateDownloadMetadataTaskPipeline, UpdateDownloadMetadataTaskPipelineExecution } from "./task-pipelines/update-download-metadata-task-pipeline.js";
 
 type DfTaskManagerOpts = {
   autoClearCompletedPipelines?: boolean;
 };
 
+type PipelineExecutionTypes = SubtitlesTaskPipelineExecution | DownloadTaskPipelineExecution | UpdateDownloadMetadataTaskPipelineExecution;
 /**
  * This class is responsible for managing the task pipelines for downloading and generating subtitles (and any
  * other task pipelines that may be added in the future).
@@ -70,10 +72,11 @@ type DfTaskManagerOpts = {
 export class DfTaskManager {
   readonly subtitleTaskPipeline: SubtitlesTaskPipeline;
   readonly downloadTaskPipeline: DownloadTaskPipeline;
+  readonly updateDownloadMetadataTaskPipeline: UpdateDownloadMetadataTaskPipeline;
 
   readonly maintenanceOperationsTaskManager: TaskManager;
 
-  readonly pipelineExecutions = new Map<string, SubtitlesTaskPipelineExecution | DownloadTaskPipelineExecution>();
+  readonly pipelineExecutions = new Map<string, PipelineExecutionTypes>();
   readonly tasks = new Map<string, ManagedTask<any, any>>();
 
   autoClearCompletedPipelines: boolean;
@@ -93,6 +96,12 @@ export class DfTaskManager {
     const fileTaskManager = new TaskManager({
       concurrentTasks: 5,
     });
+    const dfFetchTaskManager = new TaskManager({
+      concurrentTasks: 1,
+    });
+    const youtubeFetchTaskManager = new TaskManager({
+      concurrentTasks: 1,
+    });
     const subtitlesTaskManager = new SubtitlesTaskManager({
       concurrentTasks: 5,
     });
@@ -105,12 +114,17 @@ export class DfTaskManager {
       subtitlesTaskManager: subtitlesTaskManager,
       fileTaskManager: fileTaskManager,
     });
+    this.updateDownloadMetadataTaskPipeline = createUpdateDownloadMetadataTaskPipeline({
+      fileTaskManager,
+      dfFetchTaskManager,
+      youtubeFetchTaskManager,
+    });
     this.maintenanceOperationsTaskManager = new TaskManager({
       concurrentTasks: 1,
     });
   }
 
-  private addTaskPipelineExecution(pipelineExecution: SubtitlesTaskPipelineExecution | DownloadTaskPipelineExecution) {
+  private addTaskPipelineExecution(pipelineExecution: PipelineExecutionTypes) {
     this.pipelineExecutions.set(pipelineExecution.id, pipelineExecution);
     pipelineExecution.once("completed", () => {
       if (this.autoClearCompletedPipelines) {
@@ -167,6 +181,15 @@ export class DfTaskManager {
     });
     this.addTaskPipelineExecution(subtitleExecution);
     return subtitleExecution;
+  }
+
+  updateDownloadMetadata(dfContentInfo: DfContentInfo, fileLocation: string) {
+    const updateDownloadMetadataExecution = this.updateDownloadMetadataTaskPipeline.start({
+      dfContentInfo,
+      fileLocation,
+    });
+    this.addTaskPipelineExecution(updateDownloadMetadataExecution);
+    return updateDownloadMetadataExecution;
   }
 
   batchMoveFiles(toMove: ContentMoveFileInfo[], overwrite: boolean, removeRecordIfMissing: boolean) {
@@ -346,7 +369,7 @@ export class DfTaskManager {
 
   private getPipelineExecsForContent(
     contentName: string
-  ): (SubtitlesTaskPipelineExecution | DownloadTaskPipelineExecution)[] {
+  ): (PipelineExecutionTypes)[] {
     return this.getTaskPipelineExecutionArray().filter(
       (pipeline) => pipeline.context.dfContentInfo.name === contentName
     );
@@ -354,7 +377,7 @@ export class DfTaskManager {
 }
 
 export const makeTaskPipelineInfo = (
-  taskPipelineExecution: SubtitlesTaskPipelineExecution | DownloadTaskPipelineExecution
+  taskPipelineExecution: PipelineExecutionTypes
 ): TaskPipelineInfo => {
   const { pipelineType, id, startTime, isCompleted } = taskPipelineExecution;
   const currentStep = taskPipelineExecution.getCurrentStep();
@@ -374,7 +397,7 @@ export const makeTaskPipelineInfo = (
       positionInfoMap.set(taskId, positionInfo);
     });
   }
-
+  const mediaInfo = 'mediaInfo' in taskPipelineExecution.context ? taskPipelineExecution.context.mediaInfo : null;
   return {
     id,
     type: "pipeline",
@@ -384,7 +407,7 @@ export const makeTaskPipelineInfo = (
       type: pipelineType,
       queuedTime: startTime,
       dfContent: taskPipelineExecution.context.dfContentInfo,
-      mediaFormat: taskPipelineExecution.context.mediaInfo.formatString,
+      mediaFormat: mediaInfo?.formatString || "",
       stepOrder: steps.map(({ step }) => step.id),
       steps: steps.reduce((acc, { step, managedTask }) => {
         acc[step.id] = {
