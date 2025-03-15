@@ -6,7 +6,7 @@ import { DfContentEntry, DfContentUpdateDownloadMetaRequest } from "df-downloade
 import { DfContentDownloadInfo } from "df-downloader-common/models/df-content-download-info";
 import { useState } from "react";
 import { API_URL } from "../../../config.ts";
-import { fetchJson, postJson } from "../../../utils/fetch.ts";
+import { postJson } from "../../../utils/fetch.ts";
 import { DeleteDownloadDialog } from "./delete-download-dialog.component.tsx";
 import { FetchSubtitlesDialog } from "./fetch-subtitles-dialog.component.tsx";
 
