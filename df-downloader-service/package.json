@@ -23,7 +23,8 @@
     "remove": "rimraf .yalc && rimraf yalc.lock && rimraf dist && rimraf public; rimraf node_modules",
     "remove:all": "npm run remove:config && npm run remove:data && npm run remove",
     "test-new-stuff": "node dist/test-new-stuff.js",
-    "check-build": "tsc --noEmit"
+    "check-build": "tsc --noEmit",
+    "postinstall": "node scripts/strip-ffprobe-binaries.cjs"
   },
   "author": "",
   "license": "ISC",

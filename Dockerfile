@@ -23,9 +23,7 @@ RUN cd df-downloader-ui && yalc add df-downloader-common && npm ci && npm run bu
 
 COPY df-downloader-service ./df-downloader-service
 
-RUN cd df-downloader-service && yalc add df-downloader-common && npm ci
-RUN cd df-downloader-service && npm run build
-RUN cd df-downloader-service && npm run get-ui
+RUN cd df-downloader-service && yalc add df-downloader-common && npm ci && npm run build && npm run get-ui && npm prune --omit=dev
 
 RUN mkdir -p /config
 RUN mkdir -p /working_dir
