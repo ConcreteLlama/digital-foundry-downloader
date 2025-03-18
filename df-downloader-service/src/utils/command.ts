@@ -1,7 +1,7 @@
 import { spawn } from "child_process";
 import { logger } from "df-downloader-common";
 
-export const runCommand = async (command: string, args: string[], inputs?: string[]) => {
+export const runCommand = async (command: string, args: string[], input?: string) => {
   let output = "";
   let lastErr: any;
   const process = spawn(command, args);
@@ -21,13 +21,11 @@ export const runCommand = async (command: string, args: string[], inputs?: strin
       output += chunk;
     });
     process.stderr.on("data", (chunk) => (lastErr = chunk));
-    inputs?.forEach((input, index) => {
-      process.stdin.write(input, "utf8", (err) => {
-        if (err) {
-          logger.log("error", `Error writing to pipe ${index}:`, err);
-          rej(err);
-        }
-      });
+    input && process.stdin.write(input, "utf8", (err) => {
+      if (err) {
+        logger.log("error", `Error writing to stdin:`, err);
+        rej(err);
+      }
     });
     process.stdin.end();
   });

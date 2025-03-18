@@ -20,10 +20,10 @@ if (!ffprobePathImport) {
 }
 const ffprobePath = ffprobePathImport.path;
 
-type PipeEntry = {
-  pipeIndex: number;
-  pipeContent: string;
-}
+// type PipeEntry = {
+//   pipeIndex: number;
+//   pipeContent: string;
+// }
 
 export const injectMediaMetadata = async (mediaFilePath: string, meta: MediaFileMeta) => {
   const config = configService.config;
@@ -31,40 +31,47 @@ export const injectMediaMetadata = async (mediaFilePath: string, meta: MediaFile
   logger.log("debug", `Metadata: ${JSON.stringify(meta)}`);
 
   let workingFilename: string = '';
+  let chapterFilePath: string | null = null;
 
-  let currentPipeIndex = 0;
-  const pipeEntries: PipeEntry[] = [];
+  // let currentPipeIndex = 0;
+  // const pipeEntries: PipeEntry[] = [];
 
   try {
     const { title, publishedDate, description, tags, chapters, subtitles } = meta;
 
     const ffmpegArgs: string[] = [];
-    const addPipeEntry = (content: string) => {
-      const pipeIndex = currentPipeIndex++;
-      ffmpegArgs.push('-i', `pipe:${pipeIndex}`);
-      pipeEntries.push({
-        pipeIndex,
-        pipeContent: content,
-      });
-      return pipeIndex;
-    }
+    // const addPipeEntry = (content: string) => {
+    //   const pipeIndex = currentPipeIndex++;
+    //   ffmpegArgs.push('-i', `pipe:${pipeIndex}`);
+    //   pipeEntries.push({
+    //     pipeIndex,
+    //     pipeContent: content,
+    //   });
+    //   return pipeIndex;
+    // }
 
     workingFilename = `${config.contentManagement.workDir}/${_.uniqueId("ffmpeg_")}.mp4`;
     while (await fileExists(workingFilename)) {
       workingFilename = `${config.contentManagement.workDir}/${_.uniqueId("ffmpeg_")}.mp4`;
     }
-    const chapterContent = makeChapterContent(chapters);
-    ffmpegArgs.push("-i", mediaFilePath);
-    if (subtitles) {
-      const srtText = generateSrt(subtitles.lines);
-      addPipeEntry(srtText);
+    const chapterFileContent = makeChapterContent(chapters);
+    chapterFilePath = chapterFileContent ? `${config.contentManagement.workDir}/${_.uniqueId("chapters_")}.txt` : null;
+    while (chapterFilePath && (await fileExists(chapterFilePath))) {
+      chapterFilePath = `${config.contentManagement.workDir}/${_.uniqueId("chapters_")}.txt`;
     }
-    if (chapterContent) {
-      addPipeEntry(chapterContent);
+    ffmpegArgs.push("-i", mediaFilePath);
+    const subtitlesText = subtitles ? generateSrt(subtitles.lines) : undefined;
+    if (subtitlesText) {
+      ffmpegArgs.push("-i", "pipe:");
+    }
+    if (chapterFilePath && chapterFileContent) {
+      await fs.promises
+        .writeFile(chapterFilePath, chapterFileContent, { encoding: "utf-8" })
+      ffmpegArgs.push("-i", chapterFilePath);
       ffmpegArgs.push("-map_metadata", "0");
     }
     ffmpegArgs.push("-codec", "copy");
-    if (subtitles) {
+    if (subtitlesText) {
       ffmpegArgs.push("-c:s", "mov_text");
     } else {
       ffmpegArgs.push("-c:s", "copy");
@@ -91,7 +98,7 @@ export const injectMediaMetadata = async (mediaFilePath: string, meta: MediaFile
 
     logger.log("debug", `Metadata args for ${mediaFilePath}: ${ffmpegArgs}`);
 
-    await runCommand(ffmpegPath, ffmpegArgs, pipeEntries.map((p) => p.pipeContent)).then(async () => {
+    await runCommand(ffmpegPath, ffmpegArgs, subtitlesText).then(async () => {
       logger.log("debug", `Moving ${workingFilename} to ${mediaFilePath} after setting metadata`);
       await moveFile(workingFilename, mediaFilePath, {
         clobber: true,
@@ -102,6 +109,11 @@ export const injectMediaMetadata = async (mediaFilePath: string, meta: MediaFile
     if (workingFilename && fs.existsSync(workingFilename)) {
       fs.promises.rm(workingFilename).then(() => {
         logger.log("debug", `Deleted temporary file ${workingFilename}`);
+      });
+    }
+    if (chapterFilePath && fs.existsSync(chapterFilePath)) {
+      fs.promises.rm(chapterFilePath).then(() => {
+        logger.log("debug", `Deleted temporary chapter file ${chapterFilePath}`);
       });
     }
   }
