@@ -9,6 +9,7 @@ import {
   DownloadTaskInfo,
   DownloadTaskStatus,
   LanguageCode,
+  MediaFileMeta,
   MediaInfo,
   MoveFilesTaskInfo,
   MoveFilesTaskResult,
@@ -39,6 +40,7 @@ import { TaskManager } from "./task-manager/task-manager.js";
 import {
   isPipelineExecutionFailedResult,
   isPipelineExecutionSuccessResult,
+  PipelineStepInfo,
 } from "./task-manager/task-pipeline/task-pipeline.types.js";
 import { GenericManagedTask, ManagedTask } from "./task-manager/task/task-manager-task.js";
 import { Task } from "./task-manager/task/task.js";
@@ -169,7 +171,7 @@ export class DfTaskManager {
     dfContentInfo: DfContentInfo,
     mediaInfo: MediaInfo,
     fileLocation: string,
-    language: LanguageCode,
+    language: LanguageCode | string,
     subtitleGenerators: SubtitleGenerator | SubtitleGenerator[]
   ) {
     const subtitleExecution = this.subtitleTaskPipeline.start({
@@ -183,10 +185,11 @@ export class DfTaskManager {
     return subtitleExecution;
   }
 
-  updateDownloadMetadata(dfContentInfo: DfContentInfo, fileLocation: string) {
+  updateDownloadMetadata(dfContentInfo: DfContentInfo, fileLocation: string, mediaFileMeta?: MediaFileMeta) {
     const updateDownloadMetadataExecution = this.updateDownloadMetadataTaskPipeline.start({
       dfContentInfo,
       fileLocation,
+      mediaFileMeta,
     });
     this.addTaskPipelineExecution(updateDownloadMetadataExecution);
     return updateDownloadMetadataExecution;
@@ -398,6 +401,7 @@ export const makeTaskPipelineInfo = (
     });
   }
   const mediaInfo = 'mediaInfo' in taskPipelineExecution.context ? taskPipelineExecution.context.mediaInfo : null;
+  let taskFound = false;
   return {
     id,
     type: "pipeline",
@@ -431,8 +435,6 @@ export const makeTaskPipelineInfo = (
     }, {} as Record<string, BasicTaskInfo | DownloadTaskInfo>),
   };
 };
-
-//TODO: All of these task infos are getting quite over the top, I should refactor this
 
 const makeTaskInfo = (
   managedTask: ManagedTask<any, any>,

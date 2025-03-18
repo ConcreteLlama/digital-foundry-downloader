@@ -1,5 +1,5 @@
 import { DfContentInfo, LanguageCode, MediaInfo, makeErrorMessage } from "df-downloader-common";
-import { makeMediaMeta } from "../df-mpeg-meta.js";
+import { makeMediaFileMeta } from "../df-mpeg-meta.js";
 import { SubtitleGenerator } from "../media-utils/subtitles/subtitles.js";
 import { TaskManager } from "../task-manager/task-manager.js";
 import { TaskPipelineExecution, makeTaskPipeline } from "../task-manager/task-pipeline.js";
@@ -18,7 +18,7 @@ export const createSubtitlesTaskPipeline = (opts: SubtitlesTaskPipelineCreatorOp
       dfContentInfo: DfContentInfo;
       mediaInfo: MediaInfo;
       fileLocation: string;
-      language: LanguageCode;
+      language: LanguageCode | string;
       subtitleGenerators: SubtitleGenerator | SubtitleGenerator[];
     },
     "subtitles"
@@ -40,7 +40,7 @@ export const createSubtitlesTaskPipeline = (opts: SubtitlesTaskPipelineCreatorOp
       stepName: "Inject Metadata",
       taskCreator: ({ context, previousTaskResult }) => {
         const { fileLocation } = context;
-        return InjectMetadataTask(fileLocation, makeMediaMeta(undefined, previousTaskResult));
+        return InjectMetadataTask(fileLocation, makeMediaFileMeta(undefined, previousTaskResult));
       },
       taskManager: fileTaskManager,
     })

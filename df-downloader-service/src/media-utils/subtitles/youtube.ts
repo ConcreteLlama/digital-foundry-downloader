@@ -1,12 +1,12 @@
 import { DfContentInfo, LanguageCode, MediaInfoUtils, logger } from "df-downloader-common";
 import { SubtitlesService } from "df-downloader-common/config/subtitles-config.js";
 import { fetchAndParseSubs, youtubeSubsToSrt } from "../../utils/youtube/youtube-subs.js";
-import { SubtitleGenerator } from "./subtitles.js";
+import { GeneratedSubtitleInfo, SubtitleGenerator } from "./subtitles.js";
 
 export class YoutubeSubtitleGenerator implements SubtitleGenerator {
   readonly serviceType: SubtitlesService = "youtube";
   constructor() {}
-  async getSubs(dfContentInfo: DfContentInfo, filename: string, language: LanguageCode) {
+  async getSubs(dfContentInfo: DfContentInfo, filename: string, language: LanguageCode): Promise<GeneratedSubtitleInfo> {
     logger.log("info", `Fetching ${language} from Youtube for ${filename}`);
     if (!dfContentInfo.youtubeVideoId) {
       throw new Error("No youtube video id");
@@ -40,8 +40,8 @@ export class YoutubeSubtitleGenerator implements SubtitleGenerator {
           .filter((sub) => sub.start >= 0);
       }
     }
-    const srt = youtubeSubsToSrt(subs);
-    return { srt, language, service: this.serviceType };
+    const lines = youtubeSubsToSrt(subs);
+    return { lines, language, service: this.serviceType };
   }
   destroy(): void {
     // Nothing to do

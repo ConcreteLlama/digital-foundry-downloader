@@ -1,31 +1,33 @@
 import {
   ContentMoveFileInfo,
   DeleteDownloadRequest,
+  DfContentAvailability,
   DfContentEntrySearchBody,
   DfContentEntrySearchUtils,
   DfContentEntryUtils,
   DfContentInfoRefreshMetaRequest,
   DfContentInfoRefreshMetaResponse,
   DfContentQueryResponse,
-  DfContentAvailability,
+  DfContentUpdateDownloadMetaRequest,
+  DfContentUpdateDownloadMetaResponse,
   DfTagsResponse,
   DummyContentInfos,
+  GetMediaFileMetaRequest,
   isMoveFilesWithListRequest,
   MoveFilesRequest,
   PreviewMoveRequest,
   PreviewMoveResponse,
-  secondsToHHMMSS,
-  DfContentUpdateDownloadMetaRequest,
-  DfContentUpdateDownloadMetaResponse
+  secondsToHHMMSS
 } from "df-downloader-common";
 import { testTemplate } from "df-downloader-common/utils/filename-template-utils.js";
 import express, { Request, Response } from "express";
+import { configService } from "../../config/config.js";
 import { DigitalFoundryContentManager } from "../../df-content-manager.js";
 import { sanitizeContentName } from "../../utils/df-utils.js";
+import { extractMediaMeta } from "../../utils/media-metadata.js";
 import { queryParamToInteger, queryParamToString, queryParamToStringArray } from "../../utils/query-utils.js";
-import { sendErrorAsResponse, sendResponse, zodParseHttp } from "../utils/utils.js";
 import { ServiceContentUtils } from "../../utils/service-content-utils.js";
-import { configService } from "../../config/config.js";
+import { sendErrorAsResponse, sendResponse, zodParseHttp } from "../utils/utils.js";
 
 export const makeContentApiRouter = (contentManager: DigitalFoundryContentManager) => {
   const router = express.Router();
@@ -68,6 +70,7 @@ export const makeContentApiRouter = (contentManager: DigitalFoundryContentManage
         const pipeline = contentManager.taskManager.updateDownloadMetadata(
           contentEntry.contentInfo,
           body.filename,
+          body.meta
         );
         const response: DfContentUpdateDownloadMetaResponse = {
           contentName: body.contentName,
@@ -78,8 +81,20 @@ export const makeContentApiRouter = (contentManager: DigitalFoundryContentManage
       });
   });
 
-  // TODO: Add one to extract meta from existing file
-  // TODO: Add one to fetch meta for content + return
+  router.get("/downloads/get-metadata/", async (req: Request, res: Response) => zodParseHttp(GetMediaFileMetaRequest, req, res, async (data) => {
+    const { contentName, mediaFilename, includeChapters, includeSubs } = data;
+    const contentEntry = await contentManager.db.getContentEntry(contentName);
+    if (!contentEntry) {
+      return res.status(404).send({
+        message: "Content not found",
+      });
+    }
+    const meta = await extractMediaMeta(mediaFilename, {
+      includeChapters,
+      includeSubs
+    });
+    return sendResponse(res, meta);
+  }, 'query'));
 
   router.get("/query", async (req: Request, res: Response) => {
     const query = req.query;
@@ -191,7 +206,7 @@ export const makeContentApiRouter = (contentManager: DigitalFoundryContentManage
       taskId: task.task.id,
     });
   });
-  
+
   router.post("/remove-empty-dirs", async (req: Request, res: Response) => {
     const task = contentManager.taskManager.removeEmptyDirs(configService.config.contentManagement.destinationDir);
     return sendResponse(res, {

@@ -1,14 +1,13 @@
-import { DfContentInfo } from "df-downloader-common";
+import { DfContentInfo, MediaFileMeta } from "df-downloader-common";
 
-import { SubtitleInfo } from "./media-utils/subtitles/subtitles.js";
-import { MediaMeta, injectMediaMetadata } from "./utils/media-metadata.js";
+import { GeneratedSubtitleInfo } from "./media-utils/subtitles/subtitles.js";
+import { injectMediaMetadata } from "./utils/media-metadata.js";
 import { Chapter } from "./utils/chatpers.js";
 
-export const makeMediaMeta = (contentInfo?: DfContentInfo | null, subtitles?: SubtitleInfo | null, chapters?: Chapter[] | null): MediaMeta => ({
+export const makeMediaFileMeta = (contentInfo?: DfContentInfo | null, subtitles?: GeneratedSubtitleInfo | null, chapters?: Chapter[] | null): MediaFileMeta => ({
   title: contentInfo?.title,
   publishedDate: contentInfo?.publishedDate,
   description: contentInfo?.description,
-  synopsis: contentInfo?.description,
   tags: contentInfo?.tags,
   subtitles,
   chapters,
@@ -16,9 +15,9 @@ export const makeMediaMeta = (contentInfo?: DfContentInfo | null, subtitles?: Su
 
 type InjectDfMetaParams = {
       contentInfo?: DfContentInfo;
-      subtitleInfo?: SubtitleInfo;
+      subtitleInfo?: GeneratedSubtitleInfo;
       chapters?: Chapter[];
 }
       
 export const injectDfMeta = (mediaFilePath: string, { contentInfo, subtitleInfo, chapters }: InjectDfMetaParams) =>
-  injectMediaMetadata(mediaFilePath, makeMediaMeta(contentInfo, subtitleInfo, chapters));
+  injectMediaMetadata(mediaFilePath, makeMediaFileMeta(contentInfo, subtitleInfo, chapters));

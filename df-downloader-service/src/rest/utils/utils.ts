@@ -53,13 +53,26 @@ export const sendResponse = (res: Response, data: any, opts: Partial<ResponseOpt
   return sendResponseWithData(res, makeSuccessResponse(data), ensureResponseOptions(opts, 200));
 };
 
+export const handleRequest = (req: Request, res: Response, handler: () => Promise<any>) => {
+  return handler()
+    .then((data) => {
+      if (res.headersSent) {
+        logger.log("warn", "Response already sent");
+        return;
+      }
+      return sendResponse(res, data);
+    })
+    .catch((e) => sendErrorAsResponse(res, e));
+}
+
 export const zodParseHttp = async <T extends z.ZodType<any, any, any>, R = void | Promise<void>>(
   schema: T,
   req: Request,
   res: Response,
-  handler: (data: z.infer<T>) => R
+  handler: (data: z.infer<T>) => R,
+  dataSource: "body" | "params" | "query" = "body",
 ) => {
-  const result = schema.safeParse(req.body);
+  const result = schema.safeParse(req[dataSource]);
   if (!result.success) {
     const zodError = fromZodError(result.error);
     logger.log("error", "Error parsing response from", req.baseUrl, zodError.toString());

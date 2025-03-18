@@ -7,6 +7,9 @@ versions:
         - "Ability to refresh downloaded content's metadata in the UI":
           - "e.g., if you've downloaded something and the metadata has changed, you can now re-fetch and re-inject it"
           - "This includes title, description etc. and chapter info"
+        - "Ability to edit content metadata in the UI"
+      enhancements:
+        - Skipped steps in pipelines now show as skipped in the UI (grey, tooltip text indicating skipped)
 
   - version: "2.3.0"
     date: "2025-03-11"

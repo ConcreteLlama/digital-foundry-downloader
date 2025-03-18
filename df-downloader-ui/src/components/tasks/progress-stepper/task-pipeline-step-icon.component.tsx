@@ -52,9 +52,10 @@ export type TaskPipelineStepIconProps = {
   stepName: string;
   stepStatusMessage?: string;
   taskState?: TaskState;
+  isSkipped?: boolean;
 } & StepIconProps;
 
-export const TaskPipelineStepIcon = ({ stepName, stepStatusMessage, active, taskState }: TaskPipelineStepIconProps) => {
+export const TaskPipelineStepIcon = ({ stepName, stepStatusMessage, active, taskState, isSkipped }: TaskPipelineStepIconProps) => {
   const IconComponent = getIconComponent(stepName);
   const iconColor =
     taskState === "failed"
@@ -65,8 +66,9 @@ export const TaskPipelineStepIcon = ({ stepName, stepStatusMessage, active, task
       ? "text.secondary"
       : active
       ? "primary"
-      : "disabled";
-  const tooltipTitle = `${stepName}${stepStatusMessage ? ` - ${stepStatusMessage}` : ""}`;
+      : isSkipped ? "text.disabled"
+      : "text.primary";
+  const tooltipTitle = `${stepName}${stepStatusMessage ? ` - ${stepStatusMessage}` : isSkipped ? ' (skipped)' : ''}`;
   const tooltipIcon = <Tooltip title={tooltipTitle}>{<IconComponent sx={{ color: iconColor }} />}</Tooltip>;
   return active ? <ActiveIcon>{tooltipIcon}</ActiveIcon> : tooltipIcon;
 };

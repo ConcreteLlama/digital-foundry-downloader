@@ -159,8 +159,8 @@ export class DfContentAvailabilityDb {
         if (!download) {
             throw new Error(`Download ${downloadLocation} not found for content ${contentName}`);
         }
-        download.subtitles = download.subtitles || [];
-        download.subtitles.push(subsInfo);
+        // Update this if I ever add option to add more subs
+        download.subtitles = [subsInfo];
         this.updateDb();
         return this.data.contentStatuses[contentName];
     }

@@ -5,6 +5,7 @@ import { generateSrt, secondsToSrtTimestamp } from "../../media-utils/subtitles/
 import { getBodyOfChild } from "../dom-utils.js";
 import { fetchInitialPlayerResponse } from "./youtube-utils.js";
 import { YtInitialPlayerResponse } from "./types.js";
+import { SrtLine } from "df-downloader-common";
 
 export const getYtSubs = async(videoInfo: YtInitialPlayerResponse, language: string) => {
   const track = videoInfo.captions?.playerCaptionsTracklistRenderer?.captionTracks?.find(
@@ -67,12 +68,10 @@ export const fetchAndParseSubs = async (videoId: string, language: string) => {
   };
 };
 
-export const youtubeSubsToSrt = (subs: YoutubeSubtitleLine[]): string => {
-  return generateSrt(
-    subs.map((sub) => ({
+export const youtubeSubsToSrt = (subs: YoutubeSubtitleLine[]): SrtLine[] => {
+  return subs.map((sub) => ({
       start: secondsToSrtTimestamp(sub.start),
       end: secondsToSrtTimestamp(sub.start + sub.dur),
       transcript: sub.text,
     }))
-  );
 };

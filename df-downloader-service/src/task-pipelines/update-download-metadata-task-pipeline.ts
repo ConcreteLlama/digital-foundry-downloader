@@ -1,5 +1,5 @@
-import { DfContentInfo } from "df-downloader-common";
-import { makeMediaMeta } from "../df-mpeg-meta.js";
+import { DfContentInfo, MediaFileMeta } from "df-downloader-common";
+import { makeMediaFileMeta } from "../df-mpeg-meta.js";
 import { TaskManager } from "../task-manager/task-manager.js";
 import { TaskPipelineExecution, makeTaskPipeline } from "../task-manager/task-pipeline.js";
 import { FetchChaptersTask } from "../tasks/fetch-chapters-task.js";
@@ -19,15 +19,14 @@ export const createUpdateDownloadMetadataTaskPipeline = (opts: UpdateDownloadMet
     {
       dfContentInfo: DfContentInfo;
       fileLocation: string;
-      updatedContentInfo?: DfContentInfo;
-      updatedChapters?: Chapter[];
+      mediaFileMeta?: MediaFileMeta;
     },
     "update_download_meta"
   >("update_download_meta")
     .next({
       stepName: "Refresh content info",
       taskCreator: ({ context }) => {
-        if (context.updatedContentInfo) {
+        if (context.mediaFileMeta) {
           return null;
         }
         return RefreshContentInfoTask(context.dfContentInfo.name);
@@ -38,7 +37,7 @@ export const createUpdateDownloadMetadataTaskPipeline = (opts: UpdateDownloadMet
     .next({
       stepName: "Fetch chapter info",
       taskCreator: ({ context }) => {
-        if (context.updatedChapters) {
+        if (context.mediaFileMeta) {
           return null;
         }  
         return FetchChaptersTask(context.dfContentInfo);
@@ -49,11 +48,14 @@ export const createUpdateDownloadMetadataTaskPipeline = (opts: UpdateDownloadMet
     .next({
       stepName: "Inject metadata",
       taskCreator: ({ context, allResults }) => {
-        const { fileLocation, updatedChapters, updatedContentInfo } = context;
+        const { fileLocation, mediaFileMeta } = context;
         const [ contentInfoResult, chapterInfoResult ] = allResults;
-        const contentInfo = updatedContentInfo || (contentInfoResult?.status === "success" ? contentInfoResult.result : null);
-        const chapters = updatedChapters || (chapterInfoResult?.status === "success" ? chapterInfoResult.result : null);
-        const meta = makeMediaMeta(contentInfo, null, chapters);
+        let meta: MediaFileMeta | null = mediaFileMeta || null;
+        if (!meta) {
+          const contentInfo = contentInfoResult?.status === "success" ? contentInfoResult.result : null;
+          const chapters = chapterInfoResult?.status === "success" ? chapterInfoResult.result : null;
+          meta = makeMediaFileMeta(contentInfo, null, chapters);
+        }
         return InjectMetadataTask(fileLocation, meta);
       },
       taskManager: fileTaskManager,

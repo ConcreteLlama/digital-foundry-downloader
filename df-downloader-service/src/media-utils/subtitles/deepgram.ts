@@ -1,11 +1,12 @@
 import deepgram from "@deepgram/sdk";
-const Deepgram = deepgram.Deepgram;
-import { DfContentInfo, logger, LanguageCode } from "df-downloader-common";
-import { Utterance } from "@deepgram/sdk/dist/types/utterance.js";
 import { PrerecordedTranscriptionResponse } from "@deepgram/sdk/dist/types/prerecordedTranscriptionResponse.js";
-import { SubtitleGenerator, SubtitleInfo } from "./subtitles.js";
+import { Utterance } from "@deepgram/sdk/dist/types/utterance.js";
+import { DfContentInfo, LanguageCode, logger, SrtLine } from "df-downloader-common";
 import { SubtitlesService } from "df-downloader-common/config/subtitles-config.js";
 import { fileToAudioStream } from "../audio.js";
+import { secondsToSrtTimestamp } from "./srt-utils.js";
+import { GeneratedSubtitleInfo, SubtitleGenerator } from "./subtitles.js";
+const Deepgram = deepgram.Deepgram;
 
 const languageCodeToDeepgramCode = (language: LanguageCode) => {
   switch (language) {
@@ -22,10 +23,12 @@ type Utt = {
   end: number;
 };
 
-const generateSrtLine = (idx: number, utt: Utt) => {
-  const start = new Date(utt.start * 1000).toISOString().substring(11, 23).replace(".", ",");
-  const end = new Date(utt.end * 1000).toISOString().substring(11, 23).replace(".", ",");
-  return `${idx}\n${start} --> ${end}\n${utt.transcript}\n`;
+const generateSrtLine = (utt: Utt): SrtLine => {
+  return {
+    start: secondsToSrtTimestamp(utt.start),
+    end: secondsToSrtTimestamp(utt.end),
+    transcript: utt.transcript,
+  }
 };
 
 const splutterance = (utterance: Utterance, maxWordsPerUtt: number): Utt[] => {
@@ -48,15 +51,14 @@ const splutterance = (utterance: Utterance, maxWordsPerUtt: number): Utt[] => {
 const generateSrt = (transcript: PrerecordedTranscriptionResponse, maxWordsPerUtt: number) => {
   const utterances = transcript.results?.utterances;
   if (!utterances) {
-    return "";
+    return [];
   }
-  let srtLines: string[] = [];
-  let idx = 1;
+  let srtLines: SrtLine[] = [];
   for (const utterance of utterances) {
     const split = splutterance(utterance, maxWordsPerUtt);
-    split.forEach((utt) => srtLines.push(generateSrtLine(idx++, utt)));
+    split.forEach((utt) => srtLines.push(generateSrtLine(utt)));
   }
-  return srtLines.join("\n");
+  return srtLines;
 };
 
 export class DeepgramSubtitleGenerator implements SubtitleGenerator {
@@ -65,7 +67,7 @@ export class DeepgramSubtitleGenerator implements SubtitleGenerator {
   constructor(deepgramApiKey: string) {
     this.deepgram = new Deepgram(deepgramApiKey);
   }
-  async getSubs(_dfContentInfo: DfContentInfo, filename: string, languageCode: LanguageCode): Promise<SubtitleInfo> {
+  async getSubs(_dfContentInfo: DfContentInfo, filename: string, languageCode: LanguageCode): Promise<GeneratedSubtitleInfo> {
     const language = languageCodeToDeepgramCode(languageCode);
     logger.log("info", `Generating ${language} subs using deepgram for ${filename}`);
     const wavAudioStream = fileToAudioStream(filename);
@@ -85,8 +87,8 @@ export class DeepgramSubtitleGenerator implements SubtitleGenerator {
         }
       );
       return {
-        srt: generateSrt(transcript, 20),
-        language,
+        lines: generateSrt(transcript, 20),
+        language: "en",
         service: this.serviceType,
       };
     } catch (e) {

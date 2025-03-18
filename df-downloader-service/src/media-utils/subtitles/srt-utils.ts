@@ -1,9 +1,4 @@
-export type SrtTimestamp = {
-  hours: number;
-  minutes: number;
-  seconds: number;
-  milliseconds: number;
-};
+import { SrtLine, SrtTimestamp } from "df-downloader-common";
 
 export const isSrtTimestamp = (timestamp: any): timestamp is SrtTimestamp => {
   if (!timestamp) {
@@ -53,11 +48,6 @@ export const srtTimestampToMilliseconds = (timestamp: SrtTimestamp): number => {
 /**
  * Represents a single line in an SRT file (without the index; that's handled by the array index)
  */
-export type SrtLine = {
-  start: SrtTimestamp;
-  end: SrtTimestamp;
-  transcript: string;
-};
 
 const createSrtTimestampString = (timestamp: SrtTimestamp): string => {
   const hours = timestamp.hours.toString().padStart(2, "0");
@@ -67,6 +57,17 @@ const createSrtTimestampString = (timestamp: SrtTimestamp): string => {
   return `${hours}:${minutes}:${seconds},${milliseconds}`;
 };
 
+const parseStrTimestampString = (timestamp: string): SrtTimestamp => {
+  const [time, milliseconds] = timestamp.split(",");
+  const [hours, minutes, seconds] = time.split(":").map((t) => parseInt(t, 10));
+  return {
+    hours,
+    minutes,
+    seconds,
+    milliseconds: parseInt(milliseconds, 10),
+  };
+}
+
 export const generateSrt = (lines: SrtLine[]): string => {
   return lines
     .sort((a, b) => {
@@ -75,9 +76,8 @@ export const generateSrt = (lines: SrtLine[]): string => {
       return aStart - bStart;
     })
     .map((line, idx) => {
-      return `${idx + 1}\n${createSrtTimestampString(line.start)} --> ${createSrtTimestampString(line.end)}\n${
-        line.transcript
-      }\n`;
+      return `${idx + 1}\n${createSrtTimestampString(line.start)} --> ${createSrtTimestampString(line.end)}\n${line.transcript
+        }\n`;
     })
     .join("\n");
 };
@@ -87,4 +87,39 @@ export const languageToSubsLanguage = (language: string): string => {
     return "eng";
   }
   return language;
+};
+
+export const parseSrt: (srt: string) => SrtLine[] = (srt) => {
+  let curTimestampIdx: number | null = null;
+  let curTimestampStart: SrtTimestamp | null = null;
+  let curTimestampEnd: SrtTimestamp | null = null;
+  let curTranscript: string[] = [];
+  return srt.split("\n").reduce<SrtLine[]>((lines, line, idx) => {
+    const trimmed = line.trim();
+    if (line === "") {
+      if (curTimestampStart && curTimestampEnd && curTranscript.length > 0) {
+        lines.push({
+          start: curTimestampStart,
+          end: curTimestampEnd,
+          transcript: curTranscript.join("\n"),
+        });
+        curTimestampStart = null;
+        curTimestampEnd = null;
+        curTranscript = [];
+        curTimestampIdx = null;
+      }
+      return lines;
+    } else if (curTimestampIdx === null) {
+      curTimestampIdx = parseInt(trimmed, 10);
+      return lines;
+    } else if (!curTimestampStart) {
+      const [start, end] = trimmed.split(" --> ");
+      curTimestampStart = parseStrTimestampString(start);
+      curTimestampEnd = parseStrTimestampString(end);
+      return lines;
+    } else {
+      curTranscript.push(trimmed);
+    }
+    return lines;
+  }, []);
 };

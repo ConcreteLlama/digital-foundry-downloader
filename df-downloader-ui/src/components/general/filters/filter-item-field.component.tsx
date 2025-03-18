@@ -1,12 +1,9 @@
 import { Button, Divider, Grid, Stack, Typography } from "@mui/material";
 import { red } from "@mui/material/colors";
 import { DfContentAvailability, StringFilter, TagFilter } from "df-downloader-common";
-import { Fragment, useEffect } from "react";
-import { AutocompleteElement, CheckboxElement, MultiSelectElement } from "react-hook-form-mui";
-import { useSelector } from "react-redux";
-import { queryDfTags } from "../../../store/df-tags/df-tags.action";
-import { selectDfTagNames } from "../../../store/df-tags/df-tags.selector";
-import { store } from "../../../store/store";
+import { Fragment } from "react";
+import { CheckboxElement, MultiSelectElement } from "react-hook-form-mui";
+import { DfTagField } from "../../form-fields/df-tag-field.component.tsx";
 import { ZodSelectField } from "../../zod-fields/zod-select-field.component";
 import { ZodTextField } from "../../zod-fields/zod-text-field.component";
 import { ContentFilterMode } from "./filter-list.component";
@@ -72,16 +69,12 @@ type TagFilterFieldProps = {
   fieldName: string;
 };
 const TagFilterField = ({ fieldName }: TagFilterFieldProps) => {
-  useEffect(() => {
-    store.dispatch(queryDfTags.start());
-  }, []);
-  const availableTags = useSelector(selectDfTagNames);
   return (
     <Stack sx={{ gap: 2 }}>
       <Typography>Tags</Typography>
       <Grid container spacing={2}>
         <Grid item xs={12} md={10}>
-          <AutocompleteElement name={`${fieldName}.tags`} label="Tag Names" options={availableTags} multiple={true} />
+          <DfTagField name={`${fieldName}.tags`} label="Tag Names" />
         </Grid>
         <Grid item xs={4} md={2}>
           <ZodSelectField name={`${fieldName}.mode`} label="Mode" zodEnum={TagFilter.shape.mode._def.innerType} />

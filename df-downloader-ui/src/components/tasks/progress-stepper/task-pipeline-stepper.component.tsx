@@ -28,7 +28,7 @@ export const TaskPipelineStepper = ({ pipelineId }: TaskPipelineStepperProps) =>
       }}
     >
       {stepOrder.map((stepId, index) => (
-        <TaskPipelineStep pipelineId={pipelineId} stepId={stepId} key={`${pipelineId}-step-${index}`} />
+        <TaskPipelineStep pipelineId={pipelineId} stepId={stepId} key={`${pipelineId}-step-${index}`} index={index} activeStepIndex={activeStepIndex} />
       ))}
       <Step last={true}>
         <StepLabel

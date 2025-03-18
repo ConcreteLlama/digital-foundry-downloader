@@ -1,5 +1,5 @@
 import { DfContentInfo, LanguageCode, asyncGetFirstMatch, logger } from "df-downloader-common";
-import { SubtitleGenerator, SubtitleInfo } from "../media-utils/subtitles/subtitles.js";
+import { SubtitleGenerator, GeneratedSubtitleInfo } from "../media-utils/subtitles/subtitles.js";
 import { TaskManager, TaskManagerOpts } from "../task-manager/task-manager.js";
 import { TaskControllerTaskBuilder, TaskControls } from "../task-manager/task/task-controller-task.js";
 
@@ -7,7 +7,7 @@ const getSubs = async (
   subtitleGenerator: SubtitleGenerator | SubtitleGenerator[],
   contentInfo: DfContentInfo,
   filePath: string,
-  language: LanguageCode
+  language: LanguageCode | string
 ) => {
   const generators = Array.isArray(subtitleGenerator) ? subtitleGenerator : [subtitleGenerator];
   const result = await asyncGetFirstMatch(generators, async (generator) => {
@@ -31,11 +31,11 @@ type SubtitlesTaskContext = {
   subtitleGenerators: SubtitleGenerator | SubtitleGenerator[];
   dfContentInfo: DfContentInfo;
   filePath: string;
-  language: LanguageCode;
+  language: LanguageCode | string;
   currentSubtitleGenerator?: SubtitleGenerator;
 };
 
-const subtitlesTaskControls: TaskControls<SubtitleInfo, SubtitlesTaskContext> = {
+const subtitlesTaskControls: TaskControls<GeneratedSubtitleInfo, SubtitlesTaskContext> = {
   start: async (context: SubtitlesTaskContext) => {
     const { subtitleGenerators, dfContentInfo, filePath, language } = context;
     const generators = Array.isArray(subtitleGenerators) ? subtitleGenerators : [subtitleGenerators];

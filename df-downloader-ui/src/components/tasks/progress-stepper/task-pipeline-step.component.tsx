@@ -13,15 +13,18 @@ const isCompleted = (taskState?: string) =>
 export type TaskPipelineStepProps = {
   pipelineId: string;
   stepId: string;
+  index: number;
+  activeStepIndex: number;
 } & StepProps;
-export const TaskPipelineStep = ({ pipelineId, stepId, ...props }: TaskPipelineStepProps) => {
+export const TaskPipelineStep = ({ pipelineId, stepId, index, activeStepIndex, ...props }: TaskPipelineStepProps) => {
   const pipelineDetails = useSelector(selectPipelineDetails(pipelineId));
   const stepName = pipelineDetails?.steps[stepId]?.name || "UNKNOWN";
   const taskState = useSelector(selectTaskState(pipelineId, stepId));
   const taskMessage = useSelector(selectTaskStatusField(pipelineId, stepId, "message"));
   const isCompletedStep = isCompleted(taskState);
+  const isSkipped = index < activeStepIndex;
   return (
-    <Step {...props} active={taskState && taskState !== "idle" && !isCompletedStep} completed={isCompletedStep}>
+    <Step {...props} active={taskState && taskState !== "idle" && !isCompletedStep} completed={isCompletedStep} index={index}>
       <StepLabel
         StepIconComponent={(props) => (
           <TaskPipelineStepIcon
@@ -30,6 +33,7 @@ export const TaskPipelineStep = ({ pipelineId, stepId, ...props }: TaskPipelineS
             stepStatusMessage={taskMessage}
             taskState={taskState}
             error={taskState === "failed"}
+            isSkipped={isSkipped}
           />
         )}
       />

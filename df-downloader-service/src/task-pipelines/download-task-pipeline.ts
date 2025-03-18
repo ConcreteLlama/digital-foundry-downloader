@@ -1,6 +1,6 @@
 import { DfContentInfo, MediaInfo, makeErrorMessage } from "df-downloader-common";
 import { configService } from "../config/config.js";
-import { makeMediaMeta } from "../df-mpeg-meta.js";
+import { makeMediaFileMeta } from "../df-mpeg-meta.js";
 import { DownloadUrlOpt } from "../download/download-url.js";
 import { serviceLocator } from "../services/service-locator.js";
 import { TaskManager } from "../task-manager/task-manager.js";
@@ -12,7 +12,7 @@ import { SubtitlesTaskBuilder, SubtitlesTaskManager } from "../tasks/subtitles-t
 import { makeFilePathWithTemplate } from "../utils/template-utils.js";
 import { pathIsEqual } from "../utils/file-utils.js";
 import { FetchChaptersTask } from "../tasks/fetch-chapters-task.js";
-import { SubtitleInfo } from "../media-utils/subtitles/subtitles.js";
+import { GeneratedSubtitleInfo } from "../media-utils/subtitles/subtitles.js";
 import { Chapter } from "../utils/chatpers.js";
 
 type DownloadTaskPipelineOpts = {
@@ -113,7 +113,7 @@ export const createDownloadTaskPipeline = (opts: DownloadTaskPipelineOpts) => {
         const chapters = chaptersTaskResult?.status === "success" ? chaptersTaskResult.result : null;
         const metaForInjection = metaConfig.injectMetadata ? dfContentInfo : undefined;
         if (metaForInjection || subtitles || chapters) {
-          return InjectMetadataTask(downloadLocation, makeMediaMeta(metaForInjection, subtitles, chapters));
+          return InjectMetadataTask(downloadLocation, makeMediaFileMeta(metaForInjection, subtitles, chapters));
         }
         return null;
       },

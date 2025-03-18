@@ -1,13 +1,13 @@
-import { spawn } from "child_process";
-import { logger } from "df-downloader-common";
+import { logger, MediaFileMeta, SrtLine, SubtitleInfo } from "df-downloader-common";
 import ffmpegPathImport from "ffmpeg-static";
+import ffprobePathImport from "ffprobe-static";
+import fs from "fs";
 import _ from "lodash";
 import { configService } from "../config/config.js";
-import { languageToSubsLanguage } from "../media-utils/subtitles/srt-utils.js";
-import { SubtitleInfo } from "../media-utils/subtitles/subtitles.js";
-import { fileExists, moveFile, setDateOnFile } from "./file-utils.js";
+import { generateSrt, languageToSubsLanguage, parseSrt } from "../media-utils/subtitles/srt-utils.js";
 import { Chapter, makeChapterContent } from "./chatpers.js";
-import fs from "fs";
+import { runCommand } from "./command.js";
+import { fileExists, moveFile, setDateOnFile } from "./file-utils.js";
 import { mediaSanitise } from "./string-utils.js";
 
 if (!ffmpegPathImport) {
@@ -15,22 +15,17 @@ if (!ffmpegPathImport) {
 }
 const ffmpegPath = ffmpegPathImport;
 
-export type MediaMeta = {
-  title?: string;
-  publishedDate?: Date;
-  description?: string;
-  synopsis?: string;
-  tags?: string[];
-  subtitles?: SubtitleInfo | null;
-  chapters?: Chapter[] | null;
-};
+if (!ffprobePathImport) {
+  throw new Error("FFprobe path not found");
+}
+const ffprobePath = ffprobePathImport.path;
 
 type PipeEntry = {
   pipeIndex: number;
   pipeContent: string;
 }
 
-export const injectMediaMetadata = async (mediaFilePath: string, meta: MediaMeta) => {
+export const injectMediaMetadata = async (mediaFilePath: string, meta: MediaFileMeta) => {
   const config = configService.config;
   logger.log("info", `Setting metadata for ${mediaFilePath}`);
   logger.log("debug", `Metadata: ${JSON.stringify(meta)}`);
@@ -41,8 +36,7 @@ export const injectMediaMetadata = async (mediaFilePath: string, meta: MediaMeta
   const pipeEntries: PipeEntry[] = [];
 
   try {
-    const { title, publishedDate, description, synopsis, tags, chapters } = meta;
-    const subtitles = meta.subtitles; 
+    const { title, publishedDate, description, tags, chapters, subtitles } = meta;
 
     const ffmpegArgs: string[] = [];
     const addPipeEntry = (content: string) => {
@@ -62,7 +56,8 @@ export const injectMediaMetadata = async (mediaFilePath: string, meta: MediaMeta
     const chapterContent = makeChapterContent(chapters);
     ffmpegArgs.push("-i", mediaFilePath);
     if (subtitles) {
-      addPipeEntry(subtitles.srt);
+      const srtText = generateSrt(subtitles.lines);
+      addPipeEntry(srtText);
     }
     if (chapterContent) {
       addPipeEntry(chapterContent);
@@ -96,32 +91,7 @@ export const injectMediaMetadata = async (mediaFilePath: string, meta: MediaMeta
 
     logger.log("debug", `Metadata args for ${mediaFilePath}: ${ffmpegArgs}`);
 
-    const process = spawn(ffmpegPath, ffmpegArgs);
-    await new Promise<void>((res, rej) => {
-      let lastErr: any;
-      process.once("close", (rc) => {
-        if (rc !== 0) {
-          logger.log("error", `Error setting metadata:`, lastErr.toString());
-          return rej(lastErr.toString());
-        }
-        logger.log("debug", `Metadata set for ${mediaFilePath}`);
-        res();
-      });
-      process.once("error", (err) => {
-        logger.log("error", `Error setting metadata:`, err);
-        rej(err);
-      });
-      process.stderr.on("data", (chunk) => (lastErr = chunk));
-      for (const { pipeIndex, pipeContent } of pipeEntries) {
-        process.stdin.write(pipeContent, "utf8", (err) => {
-          if (err) {
-            logger.log("error", `Error writing to pipe ${pipeIndex}:`, err);
-            rej(err);
-          }
-        });
-      }
-      process.stdin.end();
-    }).then(async () => {
+    await runCommand(ffmpegPath, ffmpegArgs, pipeEntries.map((p) => p.pipeContent)).then(async () => {
       logger.log("debug", `Moving ${workingFilename} to ${mediaFilePath} after setting metadata`);
       await moveFile(workingFilename, mediaFilePath, {
         clobber: true,
@@ -135,4 +105,93 @@ export const injectMediaMetadata = async (mediaFilePath: string, meta: MediaMeta
       });
     }
   }
+
 };
+
+type MediaFileMetaNoSubs = Omit<MediaFileMeta, 'subtitles'> & {
+  subsLang?: string;
+};
+export const extractBaseMetadata = async (mediaFilePath: string, includeChapters: boolean = true): Promise<MediaFileMetaNoSubs> => {
+  const ffprobeArgs = [
+    "-i",
+    mediaFilePath,
+    "-v",
+    "quiet",
+    "-print_format",
+    "json",
+    "-show_format",
+  ]
+  if (includeChapters) {
+    ffprobeArgs.push("-show_chapters");
+  }
+  ffprobeArgs.push("-show_streams");
+  logger.log("info", `Extracting metadata for ${mediaFilePath}`);
+  logger.log("info", `Metadata args: ${ffprobeArgs}`);
+  const metadataStr = await runCommand(ffprobePath, ffprobeArgs);
+  console.log('Got meta: ', metadataStr);
+  const parsed = JSON.parse(metadataStr);
+  const meta: MediaFileMetaNoSubs = {};
+  if (parsed.format) {
+    const parsedTags = parsed.format.tags;
+    if (parsedTags) {
+      meta.title = parsedTags.title;
+      meta.description = parsedTags.description;
+      meta.tags = parsedTags.genre?.split(",").map((tag: string) => tag.trim());
+    }
+  }
+  if (parsed.chapters) {
+    meta.chapters = parsed.chapters.map((chapter: any): Chapter => ({
+      title: chapter.tags.title,
+      start: chapter.start,
+      end: chapter.end,
+    }));
+  }
+  const subtitleStream = parsed.streams?.find((stream: any) => stream.codec_type === "subtitle");
+  if (subtitleStream) {
+    meta.subsLang = subtitleStream.tags.language;
+  }
+  return meta;
+};
+
+export const extractMediaSubtitles = async (mediaFilePath: string): Promise<SrtLine[]> => {
+  const ffmpegArgs = [
+    "-i",
+    mediaFilePath,
+    "-map",
+    "0:s:0",
+    "-f",
+    "srt",
+    "-"
+  ];
+  logger.log("info", `Extracting subtitles for ${mediaFilePath}`);
+  logger.log("info", `Subtitles args: ${ffmpegArgs}`);
+  const subtitlesStr = await runCommand(ffmpegPath, ffmpegArgs);
+  return parseSrt(subtitlesStr);
+}
+
+export type ExtractMediaMetaOpts = {
+  includeSubs: boolean;
+  includeChapters: boolean;
+}
+export const extractMediaMeta = async(mediaFilePath: string, opts: ExtractMediaMetaOpts): Promise<MediaFileMeta> => {
+  const { includeSubs, includeChapters } = opts;
+  const baseMeta = await extractBaseMetadata(mediaFilePath, includeChapters);
+  let subtitles: SubtitleInfo | undefined;
+  if (includeSubs) {
+    const srtLines = await extractMediaSubtitles(mediaFilePath).catch((e) => {
+      logger.log("warn", `Failed to extract subtitles for ${mediaFilePath}: ${e}`);
+      return undefined;
+    });
+    if (srtLines) {
+      subtitles = {
+        language: baseMeta.subsLang || "en",
+        lines: srtLines,
+      };
+    }
+  }
+  delete baseMeta.subsLang;
+  return {
+    ...baseMeta,
+    subtitles,
+  };
+}

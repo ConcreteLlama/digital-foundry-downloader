@@ -1,9 +1,9 @@
 import { SpeechClient } from "@google-cloud/speech";
 import GoogleAuth from "google-auth-library";
-import { SubtitleGenerator, SubtitleInfo } from "./subtitles.js";
-import { DfContentInfo, LanguageCode, logger } from "df-downloader-common";
+import { SubtitleGenerator, GeneratedSubtitleInfo } from "./subtitles.js";
+import { DfContentInfo, LanguageCode, logger, SrtLine } from "df-downloader-common";
 import { fileToAudioStream } from "../audio.js";
-import { SrtLine, generateSrt, secondsToSrtTimestamp } from "./srt-utils.js";
+import { generateSrt, secondsToSrtTimestamp } from "./srt-utils.js";
 import { SubtitlesService } from "df-downloader-common/config/subtitles-config.js";
 
 export class GoogleSttSubtitlesGenerator implements SubtitleGenerator {
@@ -20,7 +20,7 @@ export class GoogleSttSubtitlesGenerator implements SubtitleGenerator {
     this.client.close();
   }
 
-  async getSubs(_dfContentInfo: DfContentInfo, filename: string, language: LanguageCode): Promise<SubtitleInfo> {
+  async getSubs(_dfContentInfo: DfContentInfo, filename: string, language: LanguageCode): Promise<GeneratedSubtitleInfo> {
     return new Promise((resolve, reject) => {
       logger.log("info", `Generating ${language} subs using Google STT for ${filename}`);
       const audioStream = fileToAudioStream(filename, {
@@ -62,7 +62,7 @@ export class GoogleSttSubtitlesGenerator implements SubtitleGenerator {
         logger.log("info", `Finished STT for ${filename}`);
         const srtLines = wordsToSrtLines(subWords, 10, 5);
         const toReturn = {
-          srt: generateSrt(srtLines),
+          lines: srtLines,
           language,
           service: this.serviceType,
         };

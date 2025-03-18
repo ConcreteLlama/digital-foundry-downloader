@@ -1,5 +1,5 @@
 import { SubtitlesConfig, SubtitlesService } from "df-downloader-common/config/subtitles-config";
-import { LanguageCode } from "df-downloader-common";
+import { LanguageCode, SubtitleInfo } from "df-downloader-common";
 import { DeepgramSubtitleGenerator } from "./deepgram.js";
 import { serviceLocator } from "../../services/service-locator.js";
 import { DfContentInfo, logger } from "df-downloader-common";
@@ -7,15 +7,13 @@ import { configService } from "../../config/config.js";
 import { YoutubeSubtitleGenerator } from "./youtube.js";
 import { GoogleSttSubtitlesGenerator } from "./google-stt.js";
 
-export type SubtitleInfo = {
-  srt: string;
-  language: string;
+export type GeneratedSubtitleInfo = SubtitleInfo & {
   service: SubtitlesService;
 };
 
 export interface SubtitleGenerator {
   serviceType: SubtitlesService;
-  getSubs(dfContentInfo: DfContentInfo, filename: string, language: LanguageCode): Promise<SubtitleInfo>;
+  getSubs(dfContentInfo: DfContentInfo, filename: string, language: LanguageCode | string): Promise<GeneratedSubtitleInfo>;
   destroy(): void;
 }
 
