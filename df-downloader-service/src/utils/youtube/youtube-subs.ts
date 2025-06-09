@@ -29,8 +29,12 @@ export const getYtSubs = async(videoInfo: YtInitialPlayerResponse, language: str
     }
     return false;
   });
+  const subsText = await captionsResponse.text();
+  if (!subsText.trim().length) {
+    throw new Error(`Response from ${trackUrl} was empty`)
+  }
   return {
-    subsText: await captionsResponse.text(),
+    subsText,
     durationMs,
   };
 }
