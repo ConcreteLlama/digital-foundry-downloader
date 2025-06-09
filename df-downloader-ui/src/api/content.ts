@@ -2,13 +2,7 @@ import { DfContentUpdateDownloadMetaRequest, DfContentUpdateDownloadMetaResponse
 import { API_URL } from "../config.ts"
 import { fetchJson, postJson } from "../utils/fetch.ts"
 
-export const getMediaFileMeta = async (contentName: string, mediaFilename: string) => {
-    const params: GetMediaFileMetaRequest = {
-        contentName,
-        mediaFilename,
-        includeSubs: true,
-        includeChapters: true,
-    };
+export const getMediaFileMeta = async (params: GetMediaFileMetaRequest) => {
     const result = await fetchJson(`${API_URL}/content/downloads/get-metadata?${new URLSearchParams(params as any)}`, {
         method: "GET",
     });

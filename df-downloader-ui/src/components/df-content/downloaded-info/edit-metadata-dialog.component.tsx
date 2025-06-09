@@ -18,7 +18,10 @@ type EditMetadataDialogProps = {
 export const EditMetadataDialog = (props: EditMetadataDialogProps) => {
     const { open, onClose, contentEntry, download } = props;
     const { data: mediaFileMeta, loading, error, refetch } = useQuery({
-        fetch: () => getMediaFileMeta(contentEntry.name, download.downloadLocation),
+        fetch: () => getMediaFileMeta({
+            contentName: contentEntry.name, 
+            mediaFilename: download.downloadLocation,
+        }),
         triggerOnMount: false,
     });
     useEffect(() => {

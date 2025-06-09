@@ -1,6 +1,6 @@
-import { Chapter } from "./chapter.js";
-import { SrtLine, SubtitleInfo } from "./subtitles.js";
 import * as z from "zod";
+import { Chapter } from "./chapter.js";
+import { SubtitleInfo } from "./subtitles.js";
 
 export const MediaFileMeta = z.object({
     title: z.string().optional(),
@@ -15,7 +15,7 @@ export type MediaFileMeta = z.infer<typeof MediaFileMeta>;
 export const GetMediaFileMetaRequest = z.object({
     contentName: z.string(),
     mediaFilename: z.string(),
-    includeSubs: z.coerce.boolean().optional().default(false),
-    includeChapters: z.coerce.boolean().optional().default(false),
+    includeSubs: z.coerce.boolean().default(false).optional(),
+    includeChapters: z.coerce.boolean().default(false).optional(),
 });
 export type GetMediaFileMetaRequest = z.infer<typeof GetMediaFileMetaRequest>;
