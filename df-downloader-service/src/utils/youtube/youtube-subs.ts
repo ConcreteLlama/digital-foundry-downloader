@@ -5,7 +5,7 @@ import { generateSrt, secondsToSrtTimestamp } from "../../media-utils/subtitles/
 import { getBodyOfChild } from "../dom-utils.js";
 import { fetchInitialPlayerResponse } from "./youtube-utils.js";
 import { YtInitialPlayerResponse } from "./types.js";
-import { SrtLine } from "df-downloader-common";
+import { logger, SrtLine } from "df-downloader-common";
 
 export const getYtSubs = async(videoInfo: YtInitialPlayerResponse, language: string) => {
   const track = videoInfo.captions?.playerCaptionsTracklistRenderer?.captionTracks?.find(
@@ -33,6 +33,7 @@ export const getYtSubs = async(videoInfo: YtInitialPlayerResponse, language: str
   if (!subsText.trim().length) {
     throw new Error(`Response from ${trackUrl} was empty`)
   }
+  logger.log('debug', `Fetched subs from  track URL: ${trackUrl}`);
   return {
     subsText,
     durationMs,

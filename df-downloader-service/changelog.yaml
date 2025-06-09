@@ -10,6 +10,9 @@ versions:
         - "Ability to edit content metadata in the UI"
       enhancements:
         - Skipped steps in pipelines now show as skipped in the UI (grey, tooltip text indicating skipped)
+      bugfixes:
+        - Throw error on empty response from YouTube track URL
+        - Auto select a subtitles service in fetch subtitles dialog
 
   - version: "2.3.0"
     date: "2025-03-11"

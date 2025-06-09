@@ -82,7 +82,7 @@ export const makeContentApiRouter = (contentManager: DigitalFoundryContentManage
   });
 
   router.get("/downloads/get-metadata/", async (req: Request, res: Response) => zodParseHttp(GetMediaFileMetaRequest, req, res, async (data) => {
-    const { contentName, mediaFilename, includeChapters, includeSubs } = data;
+    const { contentName, mediaFilename, includeChapters = false, includeSubs = false } = data;
     const contentEntry = await contentManager.db.getContentEntry(contentName);
     if (!contentEntry) {
       return res.status(404).send({

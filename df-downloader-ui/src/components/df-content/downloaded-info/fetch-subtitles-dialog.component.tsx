@@ -52,6 +52,12 @@ export const FetchSubtitlesDialog = (props: FetchSubtitlesDialogProps) => {
 
   const [sendingRequest, setSendingRequest] = useState(false);
 
+    useEffect(() => {
+    if (subtitlesConfig && !selectedService) {
+      setSelectedService(subtitlesConfig.servicePriorities[0])
+    }
+  }, [subtitlesConfig])
+
   const fetchSubs = () => {
     setSendingRequest(true);
     const fetchSubtitlesRequest: GenerateSubtitlesRequest = {

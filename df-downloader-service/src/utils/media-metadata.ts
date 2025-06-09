@@ -28,7 +28,7 @@ const ffprobePath = ffprobePathImport.path;
 export const injectMediaMetadata = async (mediaFilePath: string, meta: MediaFileMeta) => {
   const config = configService.config;
   logger.log("info", `Setting metadata for ${mediaFilePath}`);
-  logger.log("debug", `Metadata: ${JSON.stringify(meta)}`);
+  logger.log("silly", `Metadata: ${JSON.stringify(meta)}`);
 
   let workingFilename: string = '';
   let chapterFilePath: string | null = null;
