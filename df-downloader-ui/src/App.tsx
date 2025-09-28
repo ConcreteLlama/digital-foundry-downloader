@@ -25,6 +25,7 @@ import { theme } from "./themes/theme";
 import { setIntervalImmediate } from "./utils/timer.ts";
 import registerTaskSnackbarTriggers from "./components/tasks/task-snackbar-triggers.tsx";
 import { BranchCheckDialog } from "./components/general/branch-check.component.tsx";
+import { ManualDownloadFloatingButton } from "./components/df-content/manual-download-fab.component.tsx";
 import { dfDownloaderBranch } from "df-downloader-common";
 
 function App() {
@@ -123,6 +124,7 @@ const MainApp = () => {
           </Route>
         </Routes>
       </Stack>
+      <ManualDownloadFloatingButton />
     </Box>
   );
 };

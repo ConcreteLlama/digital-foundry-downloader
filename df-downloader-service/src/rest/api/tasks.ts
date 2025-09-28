@@ -1,4 +1,4 @@
-import { AddTaskRequest, ControlRequest, DownloadContentResponse, TasksResponse } from "df-downloader-common";
+import { AddTaskRequest, ControlRequest, DownloadContentResponse, ManualDownloadRequest, TasksResponse } from "df-downloader-common";
 import express, { Request, Response } from "express";
 import { DigitalFoundryContentManager } from "../../df-content-manager.js";
 import { makeTaskPipelineInfo } from "../../df-task-manager.js";
@@ -48,6 +48,24 @@ export const makeDownloadsApiRouter = (contentManager: DigitalFoundryContentMana
         const queuedContentInfo = await contentManager.downloadContent(data.name, {
           mediaFormat: data.mediaFormat,
         });
+        const response: DownloadContentResponse = {
+          name: queuedContentInfo.contentName,
+          mediaInfo: queuedContentInfo.mediaInfo,
+          pipelineInfo: makeTaskPipelineInfo(queuedContentInfo.pipelineExec).pipelineDetails,
+        };
+        sendResponse(res, response);
+      } catch (e) {
+        sendErrorAsResponse(res, e, {
+          code: 500,
+        });
+      }
+    });
+  });
+
+  router.post("/manual", async (req: Request, res: Response) => {
+    await zodParseHttp(ManualDownloadRequest, req, res, async (data) => {
+      try {
+        const queuedContentInfo = await contentManager.downloadManualContent(data);
         const response: DownloadContentResponse = {
           name: queuedContentInfo.contentName,
           mediaInfo: queuedContentInfo.mediaInfo,

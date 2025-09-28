@@ -14,7 +14,9 @@ import {
   getMediaFormatIndex,
   logger,
   filterEmpty,
-  getBestMediaInfoMatch
+  getBestMediaInfoMatch,
+  ManualDownloadRequest,
+  MediaInfo
 } from "df-downloader-common";
 import { configService } from "./config/config.js";
 import { ContentInfoWithAvailability, DfDownloaderOperationalDb, DownloadInfoWithName } from "./db/df-operational-db.js";
@@ -557,5 +559,101 @@ export class DigitalFoundryContentManager {
     const allContentEntries = await this.db.getAllContentEntries();
     return getFileMoveList(allContentEntries, template);
   }
-            
+
+  async downloadManualContent(manualRequest: ManualDownloadRequest) {
+    const mediaFormatsConfig = configService.config.mediaFormats;
+
+    // Generate content name based on title (without timestamp for consistency)
+    const sanitizedTitle = manualRequest.title.replace(/[^a-zA-Z0-9]/g, '-').toLowerCase();
+    const contentName = `${sanitizedTitle}-manual-download`;
+
+    // Create MediaInfo for this download
+    const newMediaInfo: MediaInfo = {
+      type: "VIDEO",
+      formatString: manualRequest.mediaFormat || "Manual",
+      encoding: "Unknown",
+      size: undefined, // Will be determined during download
+      videoProperties: null,
+      audioProperties: null,
+      mediaFilename: undefined // Will be determined during download
+    };
+
+    // Check if content with this name already exists
+    const existingContentEntry = await this.db.getContentEntry(contentName);
+
+    let dfContentInfo: DfContentInfo;
+
+    if (existingContentEntry) {
+      // Content exists - append new media info if format doesn't already exist
+      const existingContentInfo = existingContentEntry.contentInfo;
+      const existingFormat = existingContentInfo.mediaInfo.find((info: MediaInfo) => info.formatString === newMediaInfo.formatString);
+      if (existingFormat) {
+        throw new Error(`Media format "${newMediaInfo.formatString}" already exists for content "${manualRequest.title}"`);
+      }
+
+      // Add new media info to existing content
+      dfContentInfo = {
+        ...existingContentInfo,
+        mediaInfo: [...existingContentInfo.mediaInfo, newMediaInfo]
+      };
+
+      // Update the existing content in database
+      await this.db.setContentInfo(dfContentInfo);
+    } else {
+      // Create new content entry
+      dfContentInfo = {
+        name: contentName,
+        dataVersion: CURRENT_DATA_VERSION,
+        title: manualRequest.title,
+        description: manualRequest.description,
+        publishedDate: manualRequest.publishedDate ? new Date(manualRequest.publishedDate) : new Date(),
+        tags: manualRequest.tags,
+        youtubeVideoId: manualRequest.youtubeUrl ? manualRequest.youtubeUrl.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/)([^&\n?#]+)/)?.[1] : undefined,
+        thumbnailUrl: undefined,
+        mediaInfo: [newMediaInfo],
+        source: "manual"
+      };
+
+      // Store the new content info in the database
+      await this.db.setContentInfo(dfContentInfo);
+    }
+
+    const selectedMediaInfo = manualRequest.mediaFormat
+      ? dfContentInfo.mediaInfo.find(info => info.formatString === manualRequest.mediaFormat)
+      : getBestMediaInfoMatch(mediaFormatsConfig.priorities, dfContentInfo.mediaInfo, { mustMatch: true });
+
+    if (!selectedMediaInfo) {
+      throw new Error(`Could not get valid media info for manual download: ${dfContentInfo.name}`);
+    }
+
+    const pipelineExec = this.taskManager
+      .downloadContent(dfContentInfo, selectedMediaInfo, manualRequest.url)
+      .on("completed", (pipelineResult) => {
+        if (pipelineResult.status === "success") {
+          const finalPipelineResult = pipelineResult.pipelineResult;
+          const { size, downloadLocation, mediaInfo, subtitles } = finalPipelineResult;
+          this.db.contentDownloaded(dfContentInfo.name, {
+            mediaInfo,
+            downloadDate: new Date(),
+            downloadLocation: downloadLocation,
+            size: size ? `${size / 1024 / 1024} MB` : undefined,
+            subtitles: subtitles ? [subtitles] : undefined,
+          });
+          logger.log("info", `Manual download completed for ${dfContentInfo.name}`);
+        } else {
+          let errorMsg = "Pipeline was cancelled or failed";
+          if (pipelineResult.status === "failed") {
+            errorMsg = (pipelineResult as any).error || "Pipeline failed with unknown error";
+          }
+          logger.log("error", `Manual download failed for ${dfContentInfo.name}: ${errorMsg}`);
+        }
+      });
+
+    return {
+      contentName: dfContentInfo.name,
+      mediaInfo: selectedMediaInfo,
+      pipelineExec,
+    };
+  }
+
 }

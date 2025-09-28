@@ -28,7 +28,7 @@ export class DownloadUrl {
       this.resolvedUrl = await this.url();
     }
     if (!this.resolvedUrl) {
-      throw new Error("Failed to resolve URL");
+      throw new Error(`Failed to resolve URL for ${this.url}`);
     }
     return this.resolvedUrl;
   }

@@ -15,6 +15,17 @@ export const AddTaskRequest = z.object({
 });
 export type AddTaskRequest = z.infer<typeof AddTaskRequest>;
 
+export const ManualDownloadRequest = z.object({
+  url: z.string(),
+  title: z.string(),
+  description: z.string().optional(),
+  publishedDate: z.string().optional(),
+  tags: z.array(z.string()).optional(),
+  mediaFormat: z.string().optional(),
+  youtubeUrl: z.string().optional(),
+});
+export type ManualDownloadRequest = z.infer<typeof ManualDownloadRequest>;
+
 export const DownloadContentResponse = z.object({
   name: z.string(),
   mediaInfo: MediaInfo,

@@ -27,7 +27,9 @@ import {
   isChangePriorityAction,
   isControlPipelineRequest,
   isShiftAction,
-  makeErrorMessage
+  makeErrorMessage,
+  MediaInfoUtils,
+  sanitizeFilename
 } from "df-downloader-common";
 import { configService } from "./config/config.js";
 import { DigitalFoundryContentManager } from "./df-content-manager.js";
@@ -135,13 +137,38 @@ export class DfTaskManager {
     });
   }
 
-  downloadContent(dfContentInfo: DfContentInfo, mediaInfo: MediaInfo) {
-    const { url, destination: downloadLocation, headers } = makeDfDownloadParams(dfContentInfo, mediaInfo);
+  downloadContent(dfContentInfo: DfContentInfo, mediaInfo: MediaInfo, directUrl?: string) {
+    let url: () => Promise<string>;
+    let destination: string;
+    let headers: Record<string, string>;
+
+    if (directUrl) {
+      // For manual downloads, use the provided URL directly
+      const filename = mediaInfo.mediaFilename || sanitizeFilename(`${dfContentInfo.name}_${mediaInfo.formatString}.${MediaInfoUtils.getExtension(mediaInfo)}`);
+      url = async () => directUrl;
+      destination = `${configService.config.contentManagement.workDir}/${filename}`;
+      headers = {
+        "User-Agent": "DigitalFounload",
+      };
+    } else {
+      // For DF downloads, use the existing logic
+      const downloadParams = makeDfDownloadParams(dfContentInfo, mediaInfo);
+      url = async () => {
+        const resolvedUrl = await downloadParams.url();
+        if (!resolvedUrl) {
+          throw new Error(`Failed to resolve URL for ${dfContentInfo.name} with format ${mediaInfo.formatString}`);
+        }
+        return resolvedUrl;
+      };
+      destination = downloadParams.destination;
+      headers = downloadParams.headers;
+    }
+
     const downloadExecution = this.downloadTaskPipeline.start({
       dfContentInfo,
       mediaInfo,
       url,
-      downloadLocation,
+      downloadLocation: destination,
       headers,
     });
     serviceLocator.notifier.downloadQueued(dfContentInfo);

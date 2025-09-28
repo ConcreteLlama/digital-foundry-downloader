@@ -6,7 +6,7 @@ import { ensureDirectory, moveFile } from "../../utils/file-utils.js";
 import { DfContentInfoDbSchema, DfContentStatusDbSchema, DfContentStatusEntry, DfUserDbSchema } from "../df-db-model.js";
 import { FileDb } from "../file-db.js";
 
-const CURRENT_DB_VERSION = "2.3.0";
+const CURRENT_DB_VERSION = "2.5.0";
 
 export class DfContentInfoDb {
     private data: DfContentInfoDbSchema;
@@ -190,11 +190,22 @@ export class DfContentInfoDb {
                         }, {});
                         data.contentInfo = contentInfoRecords;
                         data.version = "2.3.0";
+                    } else if (data.version === "2.3.0") {
+                        logger.log("info", `Patching DB version to 2.5.0`);
+                        // Add source field to all content info records
+                        Object.values(data.contentInfo).forEach((contentInfo: any) => {
+                            if (!contentInfo.source) {
+                                contentInfo.source = "digitalfoundry";
+                            }
+                        });
+                        data.version = "2.5.0";
                     } else {
                         throw new Error(`Unrecognized DB version ${data.version}`);
                     }
                 }
                 logger.log("info", `DB patched to version ${CURRENT_DB_VERSION}`);
+                // Validate the final data structure
+                data = zodParse(DfContentInfoDbSchema, data);
                 return {
                     data,
                     patched: true,

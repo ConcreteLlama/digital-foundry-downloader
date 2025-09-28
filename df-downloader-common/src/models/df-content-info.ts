@@ -4,6 +4,9 @@ import { makeVideoProps } from "./media-info/video-properties.js";
 
 export const CURRENT_DATA_VERSION = "2.0.2";
 
+export const DfContentSource = z.enum(["digitalfoundry", "manual"]);
+export type DfContentSource = z.infer<typeof DfContentSource>;
+
 export const DfContentInfo = z
   .object({
     dataVersion: z.string(),
@@ -15,6 +18,7 @@ export const DfContentInfo = z
     youtubeVideoId: z.string().optional(),
     mediaInfo: z.array(MediaInfo),
     tags: z.array(z.string()).optional(),
+    source: DfContentSource,
   })
   .strict();
 
@@ -29,7 +33,8 @@ export const DfContentInfoUtils = {
     thumbnailUrl: string,
     youtubeVideoId: string | undefined,
     publishedDate?: Date,
-    tags?: string[]
+    tags?: string[],
+    source?: DfContentSource
   ): DfContentInfo => ({
     name,
     dataVersion: CURRENT_DATA_VERSION,
@@ -40,6 +45,7 @@ export const DfContentInfoUtils = {
     youtubeVideoId,
     tags: tags || [],
     publishedDate: publishedDate || DfContentInfoUtils.extractDateFromName(name) || new Date(),
+    source: source || "digitalfoundry",
   }),
   extractDateFromName(name: string) {
     const dateStr = name.substring(0, "0000-00-00".length);
@@ -108,6 +114,7 @@ export const DummyContentInfos: DfContentInfo[] = [{
     "crt",
     "john"
   ],
+  source: "digitalfoundry",
 }, {
   name: "df-direct-weekly-599",
   dataVersion: CURRENT_DATA_VERSION,
@@ -147,6 +154,7 @@ export const DummyContentInfos: DfContentInfo[] = [{
     "DF Direct",
   ],
   publishedDate: new Date("2032-10-09T17:12:01Z"),
+  source: "digitalfoundry",
 }, {
   name: "alexs-favorite-stutters-of-2025-year-in-review",
   dataVersion: CURRENT_DATA_VERSION,
@@ -196,6 +204,7 @@ export const DummyContentInfos: DfContentInfo[] = [{
   thumbnailUrl: "",
   youtubeVideoId: "",
   publishedDate: new Date("2025-12-31T23:59:59Z"),
+  source: "digitalfoundry",
 }];
 
 export const randomDummyContentInfo = (not?: string) => {
