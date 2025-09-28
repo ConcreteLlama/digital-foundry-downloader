@@ -62,7 +62,7 @@ export const startListeningTasks = (startListening: AppStartListening) => {
   });
   startListening({
     actionCreator: importHtmlContent.success,
-    effect: (action, api) => {
+    effect: (_action, api) => {
       // Refresh the entire content list since we may have imported multiple items
       api.dispatch(queryDfContent.start());
     },

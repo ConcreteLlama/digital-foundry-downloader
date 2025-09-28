@@ -188,7 +188,7 @@ function extractDownloadLinks($: cheerio.CheerioAPI, $postCard: cheerio.Cheerio<
       logger.log("debug", `Processing link with text: "${$(element).text()}" in paragraph HTML: "${paragraphHtml}"`);
 
       // Get the link's HTML to find its position in the paragraph
-      const linkHtml = $(element).get(0)?.outerHTML || '';
+      const linkHtml = $(element).prop('outerHTML') || '';
       const linkIndex = paragraphHtml.indexOf(linkHtml);
 
       if (linkIndex > 0) {
@@ -202,8 +202,12 @@ function extractDownloadLinks($: cheerio.CheerioAPI, $postCard: cheerio.Cheerio<
 
         // Look for format at the very end of the text before this link
         const formatPatterns = [
-          /([^:\n\r]*(?:HEVC|H\.264|MP3|h\.264)[^:\n\r]*?):\s*$/i,  // Specific formats with colon
-          /([^:\n\r]+?):\s*$/,                                        // Any text ending with colon
+          // Match only the format word itself with optional quality, followed by colon
+          /((?:HEVC|H\.264|MP3|h\.264)(?:\s+\d+[KkPp])?)\s*:\s*$/i,
+          // Match format patterns at the end of sentences/lines
+          /(?:^|[\.\n\r])\s*((?:HEVC|H\.264|MP3|h\.264)(?:\s+\d+[KkPp])?)\s*:\s*$/i,
+          // Fallback: any single word followed by colon at the end
+          /(?:^|[\s\.\n\r])([A-Za-z0-9\.]+)\s*:\s*$/,
         ];
 
         for (const pattern of formatPatterns) {

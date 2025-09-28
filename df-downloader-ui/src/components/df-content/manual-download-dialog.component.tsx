@@ -21,7 +21,6 @@ import { useSelector } from "react-redux";
 import { startManualDownload } from "../../store/df-tasks/tasks.action";
 import { store } from "../../store/store";
 import { selectConfigSectionField } from "../../store/config/config.selector";
-import { ManualDownloadRequest } from "df-downloader-common";
 
 export type ManualDownloadDialogProps = {
   open: boolean;
@@ -84,10 +83,10 @@ export const ManualDownloadDialog = ({ open, onClose }: ManualDownloadDialogProp
   };
 
   const addTag = () => {
-    if (newTag.trim() && !downloadData.tags.includes(newTag.trim())) {
+    if (newTag.trim() && !downloadData.tags?.includes(newTag.trim())) {
       setDownloadData(prev => ({
         ...prev,
-        tags: [...prev.tags, newTag.trim()]
+        tags: [...(prev.tags || []), newTag.trim()]
       }));
       setNewTag("");
     }
@@ -96,7 +95,7 @@ export const ManualDownloadDialog = ({ open, onClose }: ManualDownloadDialogProp
   const removeTag = (tagToRemove: string) => {
     setDownloadData(prev => ({
       ...prev,
-      tags: prev.tags.filter(tag => tag !== tagToRemove)
+      tags: prev.tags?.filter(tag => tag !== tagToRemove) || []
     }));
   };
 
@@ -175,7 +174,7 @@ export const ManualDownloadDialog = ({ open, onClose }: ManualDownloadDialogProp
               Tags
             </Typography>
             <Box sx={{ display: "flex", gap: 1, mb: 1, flexWrap: "wrap" }}>
-              {downloadData.tags.map((tag) => (
+              {downloadData.tags?.map((tag) => (
                 <Chip
                   key={tag}
                   label={tag}
