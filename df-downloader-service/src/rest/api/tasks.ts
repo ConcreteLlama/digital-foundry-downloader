@@ -1,9 +1,10 @@
-import { AddTaskRequest, ControlRequest, DownloadContentResponse, HtmlImportRequest, ManualDownloadRequest, TasksResponse, DfContentAvailability } from "df-downloader-common";
+import { AddTaskRequest, ControlRequest, DownloadContentResponse, HtmlImportRequest, ManualDownloadRequest, TasksResponse, DfContentAvailability, getBestMediaInfoMatch } from "df-downloader-common";
 import express, { Request, Response } from "express";
 import { DigitalFoundryContentManager } from "../../df-content-manager.js";
 import { makeTaskPipelineInfo } from "../../df-task-manager.js";
 import { sendErrorAsResponse, sendResponse, zodParseHttp } from "../utils/utils.js";
 import { parsePatreonHtml } from "../../utils/patreon-html-parser.js";
+import { configService } from "../../config/config.js";
 
 export const makeDownloadsApiRouter = (contentManager: DigitalFoundryContentManager) => {
   const router = express.Router();
@@ -103,29 +104,40 @@ export const makeDownloadsApiRouter = (contentManager: DigitalFoundryContentMana
         }));
         await contentManager.db.setContentInfosWithAvailability(contentWithAvailability, "NONE");
 
-        // If auto-download is enabled, trigger downloads for each content
+        // If auto-download is enabled, trigger downloads for each content using preferred media format
         const downloadResponses: any[] = [];
         if (data.triggerAutoDownload) {
+          const mediaFormatsConfig = configService.config.mediaFormats;
+
           for (const contentInfo of parseResult.contentInfos) {
-            for (const mediaInfo of contentInfo.mediaInfo) {
-              try {
+            try {
+              // Use the same logic as the content manager to select the best media format
+              const selectedMediaInfo = getBestMediaInfoMatch(
+                mediaFormatsConfig.priorities,
+                contentInfo.mediaInfo,
+                { mustMatch: true }
+              );
+
+              if (selectedMediaInfo) {
                 // Extract URL from duration field (temporary storage)
-                const directUrl = mediaInfo.duration as string;
+                const directUrl = selectedMediaInfo.duration as string;
 
                 const downloadExecution = contentManager.taskManager.downloadContent(
                   contentInfo,
-                  mediaInfo,
+                  selectedMediaInfo,
                   directUrl
                 );
 
                 downloadResponses.push({
                   name: contentInfo.name,
-                  mediaInfo: mediaInfo,
+                  mediaInfo: selectedMediaInfo,
                   pipelineInfo: makeTaskPipelineInfo(downloadExecution).pipelineDetails,
                 });
-              } catch (error) {
-                console.error(`Failed to start download for ${contentInfo.name}:`, error);
+              } else {
+                console.warn(`No matching media format found for ${contentInfo.name} with available formats: ${contentInfo.mediaInfo.map(m => m.formatString).join(', ')}`);
               }
+            } catch (error) {
+              console.error(`Failed to start download for ${contentInfo.name}:`, error);
             }
           }
         }

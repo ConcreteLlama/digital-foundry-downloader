@@ -98,3 +98,29 @@ type MediaInfoMatchProps = {
       getMediaFormatIndex(mediaTypeList, mediaInfo), {
       mustMatch,
     });
+
+/**
+ * Create MediaInfo from a format string and URL, commonly used for manual/external imports
+ * This handles format strings like "h.264 1080p", "HEVC 4K", "MP3", etc.
+ */
+export const createMediaInfoFromFormatString = (formatString: string, url: string): MediaInfo => {
+  // Create RawMediaInfo to feed into the inference system
+  const rawMediaInfo: RawMediaInfo = {
+    format: formatString,
+    videoProperties: null,
+    audioProperties: null,
+    duration: null,
+    size: null,
+    videoId: null,
+    mediaFilename: null
+  };
+
+  // Use the proper media info inference
+  const inferredMediaInfo = inferMediaInfo(rawMediaInfo);
+
+  // Store the URL in the duration field temporarily for API extraction
+  return {
+    ...inferredMediaInfo,
+    duration: url // Store URL here for API extraction
+  };
+};

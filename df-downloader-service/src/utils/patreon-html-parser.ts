@@ -1,5 +1,5 @@
 import * as cheerio from 'cheerio';
-import { DfContentInfo, DfContentInfoUtils, MediaInfo, MediaInfoUtils, logger } from 'df-downloader-common';
+import { DfContentInfo, DfContentInfoUtils, MediaInfo, MediaInfoUtils, logger, createMediaInfoFromFormatString } from 'df-downloader-common';
 
 export interface ParsedPatreonPost {
   title: string;
@@ -71,8 +71,65 @@ function parsePostCard($: cheerio.CheerioAPI, $postCard: cheerio.Cheerio<any>): 
     return null;
   }
 
-  // Extract published date
-  const publishedDateText = $postCard.find('[data-tag="post-published-at"] span').first().text().trim();
+  // Extract published date - try multiple selectors and approaches
+  let publishedDateText = '';
+
+  // Try various selectors for date information
+  const dateSelectors = [
+    '[data-tag="post-published-at"] time',
+    '[data-tag="post-published-at"] span',
+    '[data-tag="post-published-at"]',
+    'time[datetime]',
+    'time',
+    '[datetime]',
+    '.publish-date',
+    '.post-date',
+    '[data-testid="post-published-at"]',
+    '.post-metadata time'
+  ];
+
+  for (const selector of dateSelectors) {
+    const dateElement = $postCard.find(selector).first();
+    if (dateElement.length > 0) {
+      // Try datetime attribute first
+      publishedDateText = dateElement.attr('datetime') || dateElement.text().trim();
+      if (publishedDateText) {
+        logger.log("debug", `Found date "${publishedDateText}" using selector "${selector}"`);
+        break;
+      }
+    }
+  }
+
+  // If no specific date element found, look for date patterns in the overall text
+  if (!publishedDateText) {
+    const allText = $postCard.text();
+    logger.log("debug", `Looking for date patterns in text: "${allText.substring(0, 200)}..."`);
+
+    const datePatterns = [
+      /published[:\s]+([^\.]+)/i,
+      /posted[:\s]+([^\.]+)/i,
+      /(\d+\s+(?:hours?|days?|weeks?|months?)\s+ago)/i, // "4 days ago" - moved higher priority
+      /(\w+\s+\d{1,2},?\s+\d{4})/i,     // "September 12, 2024"
+      /(\d{1,2}\s+\w+\s+\d{4})/i,       // "12 September 2024"
+      /(\w+\s+\d{1,2})/i,               // "September 12"
+      /(\d{1,2}\s+\w+)/i                // "12 September"
+    ];
+
+    for (const pattern of datePatterns) {
+      const match = allText.match(pattern);
+      if (match) {
+        publishedDateText = match[1].trim();
+        logger.log("debug", `Found date "${publishedDateText}" using pattern matching in text`);
+        break;
+      }
+    }
+  }
+
+  // If still no date found, check if we can extract from outside the post card (like page-level date info)
+  if (!publishedDateText) {
+    logger.log("debug", "No date found in post card, will use current date");
+  }
+
   const publishedDate = parsePublishedDate(publishedDateText);
 
   // Extract description (content before download links)
@@ -107,57 +164,93 @@ function extractDownloadLinks($: cheerio.CheerioAPI, $postCard: cheerio.Cheerio<
   $postCard.find('a[href]').each((index, element) => {
     const href = $(element).attr('href');
     const linkText = $(element).text().toLowerCase();
-    const previousText = $(element).prev().text() || $(element).parent().text();
 
     if (!href) return;
 
-    // Check if this looks like a download link
+    // Check if this looks like a download link - be more specific to avoid false positives
     const isDownloadLink =
-      href.includes('.mp4') ||
-      href.includes('.mp3') ||
-      href.includes('.mkv') ||
-      href.includes('.avi') ||
-      linkText.includes('download') ||
-      $(element).attr('target') === '_blank';
+      // Must have media file extension
+      (href.includes('.mp4') || href.includes('.mp3') || href.includes('.mkv') || href.includes('.avi')) &&
+      // Must have download indicators
+      (linkText.includes('download') || $(element).attr('target') === '_blank') &&
+      // Must NOT be a Patreon internal link
+      !href.includes('patreon.com') &&
+      // Must be an external CDN or direct file link
+      (href.startsWith('http://') || href.startsWith('https://'));
 
     if (isDownloadLink) {
-      // Try to determine format from surrounding text
       let format = 'Unknown';
 
-      // Look for format indicators like "h.264:", "HEVC:", etc.
-      const formatPatterns = [
-        { pattern: /h\.?264/i, format: 'h264' },
-        { pattern: /hevc/i, format: 'HEVC' },
-        { pattern: /mp3/i, format: 'MP3' },
-        { pattern: /audio/i, format: 'MP3' },
-        { pattern: /4k/i, format: 'HEVC' },
-        { pattern: /1080p/i, format: 'h264' }
-      ];
+      // Look at the HTML structure to find the format text immediately before this specific link
+      const $parentParagraph = $(element).closest('p');
+      const paragraphHtml = $parentParagraph.html() || '';
 
-      // Check surrounding text for format indicators
-      const contextText = `${previousText} ${linkText}`.toLowerCase();
-      for (const { pattern, format: formatName } of formatPatterns) {
-        if (pattern.test(contextText)) {
-          format = formatName;
-          break;
+      logger.log("debug", `Processing link with text: "${$(element).text()}" in paragraph HTML: "${paragraphHtml}"`);
+
+      // Get the link's HTML to find its position in the paragraph
+      const linkHtml = $(element).get(0)?.outerHTML || '';
+      const linkIndex = paragraphHtml.indexOf(linkHtml);
+
+      if (linkIndex > 0) {
+        // Get everything before this specific link in the HTML
+        const beforeLinkHtml = paragraphHtml.substring(0, linkIndex);
+
+        // Convert HTML back to text for the part before this link
+        const beforeLinkText = $('<div>').html(beforeLinkHtml).text().trim();
+
+        logger.log("debug", `Text before this specific link: "${beforeLinkText}"`);
+
+        // Look for format at the very end of the text before this link
+        const formatPatterns = [
+          /([^:\n\r]*(?:HEVC|H\.264|MP3|h\.264)[^:\n\r]*?):\s*$/i,  // Specific formats with colon
+          /([^:\n\r]+?):\s*$/,                                        // Any text ending with colon
+        ];
+
+        for (const pattern of formatPatterns) {
+          const formatMatch = beforeLinkText.match(pattern);
+          if (formatMatch) {
+            format = formatMatch[1].trim();
+            logger.log("debug", `Extracted format "${format}" using pattern from HTML parsing`);
+            break;
+          }
+        }
+
+        // If still no match, try a broader search for format indicators
+        if (format === 'Unknown') {
+          // Look for format words at the end of the text
+          const endWords = beforeLinkText.split(/\s+/).slice(-3).join(' ').toLowerCase();
+          if (endWords.includes('hevc')) {
+            format = 'HEVC';
+            logger.log("debug", `Found HEVC in end words: "${endWords}"`);
+          } else if (endWords.includes('h.264') || endWords.includes('h264')) {
+            format = 'H.264';
+            logger.log("debug", `Found H.264 in end words: "${endWords}"`);
+          } else if (endWords.includes('mp3')) {
+            format = 'MP3';
+            logger.log("debug", `Found MP3 in end words: "${endWords}"`);
+          }
         }
       }
 
-      // If still unknown, try to infer from URL
-      if (format === 'Unknown') {
-        if (href.includes('hevc') || href.includes('4k')) {
+      // If we still don't have a format, try URL-based detection
+      if (format === 'Unknown' || !format) {
+        if (href.includes('/hevc/') || href.toLowerCase().includes('hevc')) {
           format = 'HEVC';
         } else if (href.includes('.mp3')) {
           format = 'MP3';
         } else if (href.includes('.mp4')) {
-          format = 'h264';
+          format = 'h.264';
         }
+        logger.log("debug", `URL-based format detection: "${format}" for URL "${href}"`);
       }
 
+      logger.log("debug", `Found download link: format="${format}", url="${href}"`);
       downloadLinks.push({
         url: href,
         format
       });
+    } else {
+      logger.log("debug", `Skipping non-download link: "${href}" (text: "${linkText}")`);
     }
   });
 
@@ -178,14 +271,24 @@ function extractDescription($: cheerio.CheerioAPI, $postCard: cheerio.Cheerio<an
   for (const selector of contentSelectors) {
     const paragraphs = $postCard.find(selector);
     if (paragraphs.length > 0) {
-      // Get all paragraph text, stopping at download links
+      // Get all paragraph text, but filter out download-related content
       let description = '';
       paragraphs.each((index, element) => {
-        const text = $(element).text().trim();
-        // Stop if we hit download links
-        if (text.toLowerCase().includes('download') && text.includes('http')) {
-          return false; // break
+        const $para = $(element);
+        let text = $para.text().trim();
+
+        // Skip paragraphs that contain download links
+        if ($para.find('a[href]').length > 0) {
+          return; // skip this paragraph entirely
         }
+
+        // Clean up common download-related text patterns
+        text = text.replace(/h\.?264\s*\d+p?\s*:?\s*$/gi, '');
+        text = text.replace(/MP3\s*:?\s*$/gi, '');
+        text = text.replace(/Right\s*Click\s*and\s*"?Save\s*As"?/gi, '');
+        text = text.replace(/Download\s*-?\s*/gi, '');
+        text = text.trim();
+
         if (text) {
           description += (description ? '\n\n' : '') + text;
         }
@@ -231,21 +334,90 @@ function extractThumbnail($: cheerio.CheerioAPI, $postCard: cheerio.Cheerio<any>
 }
 
 /**
- * Parse published date from text like "September 12"
+ * Parse published date from various text formats
  */
 function parsePublishedDate(dateText: string): Date {
   if (!dateText) return new Date();
 
-  // Try to parse dates like "September 12"
-  const currentYear = new Date().getFullYear();
-  const dateStr = `${dateText} ${currentYear}`;
+  // Clean up the date text
+  dateText = dateText.trim();
+  logger.log("debug", `Parsing date text: "${dateText}"`);
 
-  const parsed = new Date(dateStr);
-  if (!isNaN(parsed.getTime())) {
-    return parsed;
+  // Handle relative dates first (most common pattern for "X days ago")
+  const relativeMatch = dateText.match(/(\d+)\s*(hour|day|week|month)s?\s+ago/i);
+  if (relativeMatch) {
+    const amount = parseInt(relativeMatch[1]);
+    const unit = relativeMatch[2].toLowerCase();
+    const date = new Date();
+
+    logger.log("debug", `Found relative date: ${amount} ${unit}s ago`);
+
+    switch (unit) {
+      case 'hour':
+        date.setHours(date.getHours() - amount);
+        break;
+      case 'day':
+        date.setDate(date.getDate() - amount);
+        break;
+      case 'week':
+        date.setDate(date.getDate() - (amount * 7));
+        break;
+      case 'month':
+        date.setMonth(date.getMonth() - amount);
+        break;
+    }
+
+    logger.log("debug", `Parsed relative date to: ${date.toISOString()}`);
+    return date;
+  }
+
+  // Handle today/yesterday
+  if (dateText.toLowerCase().includes('today')) {
+    return new Date();
+  } else if (dateText.toLowerCase().includes('yesterday')) {
+    const yesterday = new Date();
+    yesterday.setDate(yesterday.getDate() - 1);
+    return yesterday;
+  }
+
+  // Try different absolute date formats
+  const patterns = [
+    // ISO formats first (most reliable)
+    /(\d{4}-\d{2}-\d{2})/,             // "2024-09-12"
+    // Full date formats
+    /(\w+ \d{1,2}, \d{4})/i,           // "September 12, 2024"
+    /(\d{1,2} \w+ \d{4})/i,            // "12 September 2024"
+    /(\w+ \d{1,2})/i,                  // "September 12" (current year)
+    /(\d{1,2} \w+)/i,                  // "12 September" (current year)
+  ];
+
+  for (const pattern of patterns) {
+    const match = dateText.match(pattern);
+    if (match) {
+      const matchedText = match[1];
+      logger.log("debug", `Found date pattern match: "${matchedText}"`);
+
+      // Try to parse as a regular date
+      let parseText = matchedText;
+
+      // If no year, add current year (check for any 4-digit year, not just specific ones)
+      if (!/\d{4}/.test(parseText)) {
+        parseText = `${parseText} ${new Date().getFullYear()}`;
+        logger.log("debug", `Added current year: "${parseText}"`);
+      }
+
+      const parsed = new Date(parseText);
+      if (!isNaN(parsed.getTime())) {
+        logger.log("debug", `Successfully parsed date: ${parsed.toISOString()}`);
+        return parsed;
+      } else {
+        logger.log("debug", `Failed to parse date: "${parseText}"`);
+      }
+    }
   }
 
   // Fallback to current date
+  logger.log("debug", "No valid date found, using current date");
   return new Date();
 }
 
@@ -257,18 +429,10 @@ function createContentInfoFromPost(post: ParsedPatreonPost): DfContentInfo {
   const sanitizedTitle = post.title.replace(/[^a-zA-Z0-9]/g, '-').toLowerCase();
   const contentName = `${sanitizedTitle}-manual-download`;
 
-  // Create MediaInfo objects for each download link
-  const mediaInfo: MediaInfo[] = post.downloadLinks.map((link, index) => ({
-    type: determineMediaType(link.format),
-    formatString: link.format,
-    encoding: link.format as any, // Type assertion for now
-    size: undefined,
-    videoProperties: link.format !== 'MP3' ? null : null,
-    audioProperties: null,
-    mediaFilename: undefined,
-    // Store the URL temporarily in duration field - we'll extract it later
-    duration: link.url
-  }));
+  // Create MediaInfo objects using the utility function
+  const mediaInfo: MediaInfo[] = post.downloadLinks.map((link) =>
+    createMediaInfoFromFormatString(link.format, link.url)
+  );
 
   return DfContentInfoUtils.create(
     contentName,
@@ -283,20 +447,3 @@ function createContentInfoFromPost(post: ParsedPatreonPost): DfContentInfo {
   );
 }
 
-/**
- * Determine media type from format string
- */
-function determineMediaType(format: string): 'VIDEO' | 'AUDIO' | 'ARCHIVE' | 'UNKNOWN' {
-  const lowerFormat = format.toLowerCase();
-
-  if (lowerFormat.includes('mp3') || lowerFormat.includes('audio')) {
-    return 'AUDIO';
-  }
-
-  if (lowerFormat.includes('h264') || lowerFormat.includes('hevc') ||
-      lowerFormat.includes('mp4') || lowerFormat.includes('mkv')) {
-    return 'VIDEO';
-  }
-
-  return 'UNKNOWN';
-}
