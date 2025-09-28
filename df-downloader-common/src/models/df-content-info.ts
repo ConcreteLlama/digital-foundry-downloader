@@ -4,7 +4,7 @@ import { makeVideoProps } from "./media-info/video-properties.js";
 
 export const CURRENT_DATA_VERSION = "2.0.2";
 
-export const DfContentSource = z.enum(["digitalfoundry", "manual"]);
+export const DfContentSource = z.enum(["digitalfoundry", "manual", "patreon"]);
 export type DfContentSource = z.infer<typeof DfContentSource>;
 
 export const DfContentInfo = z

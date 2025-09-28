@@ -1,32 +1,56 @@
-import { Fab, Tooltip } from "@mui/material";
+import { Fab, Tooltip, SpeedDial, SpeedDialAction } from "@mui/material";
 import AddIcon from "@mui/icons-material/Add";
+import DownloadIcon from "@mui/icons-material/Download";
+import HtmlIcon from "@mui/icons-material/Html";
 import { useState } from "react";
 import { ManualDownloadDialog } from "./manual-download-dialog.component";
+import { HtmlImportDialog } from "./html-import-dialog.component";
 
 export const ManualDownloadFloatingButton = () => {
-  const [dialogOpen, setDialogOpen] = useState(false);
+  const [manualDialogOpen, setManualDialogOpen] = useState(false);
+  const [htmlDialogOpen, setHtmlDialogOpen] = useState(false);
+  const [speedDialOpen, setSpeedDialOpen] = useState(false);
 
   return (
     <>
       <ManualDownloadDialog
-        open={dialogOpen}
-        onClose={() => setDialogOpen(false)}
+        open={manualDialogOpen}
+        onClose={() => setManualDialogOpen(false)}
       />
-      <Tooltip title="Manual Download" placement="left">
-        <Fab
-          color="primary"
-          aria-label="manual download"
-          onClick={() => setDialogOpen(true)}
-          sx={{
-            position: "fixed",
-            bottom: 80,
-            right: 24,
-            zIndex: 1000,
+      <HtmlImportDialog
+        open={htmlDialogOpen}
+        onClose={() => setHtmlDialogOpen(false)}
+      />
+      <SpeedDial
+        ariaLabel="Content import options"
+        sx={{
+          position: "fixed",
+          bottom: 80,
+          right: 24,
+          zIndex: 1000,
+        }}
+        icon={<AddIcon />}
+        open={speedDialOpen}
+        onOpen={() => setSpeedDialOpen(true)}
+        onClose={() => setSpeedDialOpen(false)}
+      >
+        <SpeedDialAction
+          icon={<DownloadIcon />}
+          tooltipTitle="Manual Download"
+          onClick={() => {
+            setSpeedDialOpen(false);
+            setManualDialogOpen(true);
           }}
-        >
-          <AddIcon />
-        </Fab>
-      </Tooltip>
+        />
+        <SpeedDialAction
+          icon={<HtmlIcon />}
+          tooltipTitle="Import from HTML"
+          onClick={() => {
+            setSpeedDialOpen(false);
+            setHtmlDialogOpen(true);
+          }}
+        />
+      </SpeedDial>
     </>
   );
 };

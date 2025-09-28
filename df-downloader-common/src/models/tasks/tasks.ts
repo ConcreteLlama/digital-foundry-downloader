@@ -26,6 +26,12 @@ export const ManualDownloadRequest = z.object({
 });
 export type ManualDownloadRequest = z.infer<typeof ManualDownloadRequest>;
 
+export const HtmlImportRequest = z.object({
+  htmlContent: z.string(),
+  triggerAutoDownload: z.boolean().default(false),
+});
+export type HtmlImportRequest = z.infer<typeof HtmlImportRequest>;
+
 export const DownloadContentResponse = z.object({
   name: z.string(),
   mediaInfo: MediaInfo,

@@ -1,8 +1,9 @@
-import { AddTaskRequest, ControlRequest, DownloadContentResponse, ManualDownloadRequest, TasksResponse } from "df-downloader-common";
+import { AddTaskRequest, ControlRequest, DownloadContentResponse, HtmlImportRequest, ManualDownloadRequest, TasksResponse, DfContentAvailability } from "df-downloader-common";
 import express, { Request, Response } from "express";
 import { DigitalFoundryContentManager } from "../../df-content-manager.js";
 import { makeTaskPipelineInfo } from "../../df-task-manager.js";
 import { sendErrorAsResponse, sendResponse, zodParseHttp } from "../utils/utils.js";
+import { parsePatreonHtml } from "../../utils/patreon-html-parser.js";
 
 export const makeDownloadsApiRouter = (contentManager: DigitalFoundryContentManager) => {
   const router = express.Router();
@@ -72,6 +73,71 @@ export const makeDownloadsApiRouter = (contentManager: DigitalFoundryContentMana
           pipelineInfo: makeTaskPipelineInfo(queuedContentInfo.pipelineExec).pipelineDetails,
         };
         sendResponse(res, response);
+      } catch (e) {
+        sendErrorAsResponse(res, e, {
+          code: 500,
+        });
+      }
+    });
+  });
+
+  router.post("/import-html", async (req: Request, res: Response) => {
+    await zodParseHttp(HtmlImportRequest, req, res, async (data) => {
+      try {
+        const parseResult = parsePatreonHtml(data.htmlContent);
+
+        if (parseResult.contentInfos.length === 0) {
+          return sendResponse(res, {
+            success: false,
+            message: "No content with download links found in HTML",
+            postsFound: parseResult.postsFound,
+            postsWithDownloads: parseResult.postsWithDownloads,
+            contentInfos: []
+          });
+        }
+
+        // Store the content info in the database
+        const contentWithAvailability = parseResult.contentInfos.map(contentInfo => ({
+          contentInfo,
+          availability: DfContentAvailability.AVAILABLE
+        }));
+        await contentManager.db.setContentInfosWithAvailability(contentWithAvailability, "NONE");
+
+        // If auto-download is enabled, trigger downloads for each content
+        const downloadResponses: any[] = [];
+        if (data.triggerAutoDownload) {
+          for (const contentInfo of parseResult.contentInfos) {
+            for (const mediaInfo of contentInfo.mediaInfo) {
+              try {
+                // Extract URL from duration field (temporary storage)
+                const directUrl = mediaInfo.duration as string;
+
+                const downloadExecution = contentManager.taskManager.downloadContent(
+                  contentInfo,
+                  mediaInfo,
+                  directUrl
+                );
+
+                downloadResponses.push({
+                  name: contentInfo.name,
+                  mediaInfo: mediaInfo,
+                  pipelineInfo: makeTaskPipelineInfo(downloadExecution).pipelineDetails,
+                });
+              } catch (error) {
+                console.error(`Failed to start download for ${contentInfo.name}:`, error);
+              }
+            }
+          }
+        }
+
+        sendResponse(res, {
+          success: true,
+          message: `Successfully imported ${parseResult.contentInfos.length} content entries`,
+          postsFound: parseResult.postsFound,
+          postsWithDownloads: parseResult.postsWithDownloads,
+          contentInfos: parseResult.contentInfos,
+          downloads: downloadResponses
+        });
       } catch (e) {
         sendErrorAsResponse(res, e, {
           code: 500,
