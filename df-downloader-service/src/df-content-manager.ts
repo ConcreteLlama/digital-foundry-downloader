@@ -66,7 +66,8 @@ export class DigitalFoundryContentManager {
     });
   }
 
-  async start() {
+  // DISABLED: We can reintroduce this when there's a new site but for now most of this is useless.
+  async start_reinstate_when_new_site() {
     ensureDirectory(configService.config.contentManagement.destinationDir);
     ensureDirectory(configService.config.contentManagement.workDir);
     const contentManagementConfig = configService.config.contentManagement;
@@ -106,6 +107,38 @@ export class DigitalFoundryContentManager {
     };
     checkForNewContent();
     setInterval(checkForNewContent, contentDetectionConfig.contentCheckInterval);
+  }
+
+  // This is just a copy of the old start function with some now broken functionality removed
+  async start() {
+    ensureDirectory(configService.config.contentManagement.destinationDir);
+    ensureDirectory(configService.config.contentManagement.workDir);
+    const contentManagementConfig = configService.config.contentManagement;
+    const contentDetectionConfig = configService.config.contentDetection;
+    //TODO: Queue all downloads in "ATTEMPTING_DOWNLOAD" state
+    await this.dfUserManager.start();
+    if (await this.db.isFirstRunComplete()) {
+      await this.scanWholeArchive();
+    } else {
+      logger.log("info", "First run not complete, scanning whole archive");
+      await this.scanWholeArchive();
+      await this.db.setFirstRunComplete(true);
+    }
+    if (contentManagementConfig.scanForExistingFiles) {
+      const scanTask = this.taskManager.scanForExistingContent(this);
+      await scanTask.awaitResult();
+    }
+    logger.log(
+      "info",
+     "Not checking DF content - DigitalFoundry site is down for the time being and when it's reinstated, will likely change"
+    );
+    configService.on("configUpdated:digitalFoundry", ({ oldValue, newValue }) => {
+      const oldSessionId = oldValue.sessionId;
+      const newSessionId = newValue.sessionId;
+      if (newSessionId !== oldSessionId) {
+        this.dfUserManager.checkDfUserInfo();
+      }
+    });
   }
 
   async scanWholeArchive(...ignoreList: string[]) {

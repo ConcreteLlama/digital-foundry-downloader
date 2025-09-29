@@ -8,14 +8,15 @@ import { Loading } from "../general/loading.component.tsx";
 import { DfSettingsForm } from "./df-settings.component";
 
 export const DfSessionCheckDialog = () => {
-  const dfUser = useSelector(selectDfUserInfo);
+  // const dfUser = useSelector(selectDfUserInfo);
   const userInfoLoading = useSelector(selectIsLoading("dfUserInfo"));
   const fullScreen = useMediaQuery(theme.breakpoints.down("md"));
-  const [ignoreDfSessionCheck, setIgnoreDfSessionCheck] = useState(
+  const [_ignoreDfSessionCheck, setIgnoreDfSessionCheck] = useState(
     window.sessionStorage.getItem("ignoreDfSessionCheck") === "true"
   );
-  const userExists = Boolean(dfUser);
-  const open = !userExists && !ignoreDfSessionCheck;
+  // const _userExists = Boolean(dfUser);
+  // Disabled: DF site is down, no need to check connection
+  const open = false; // !userExists && !ignoreDfSessionCheck;
   const onClose = () => {
     window.sessionStorage.setItem("ignoreDfSessionCheck", "true");
     setIgnoreDfSessionCheck(true);
