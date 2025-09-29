@@ -1,7 +1,7 @@
 import { Box, Button, Dialog, DialogActions, DialogContent, DialogTitle, useMediaQuery } from "@mui/material";
 import { useState } from "react";
 import { useSelector } from "react-redux";
-import { selectDfUserInfo } from "../../store/df-user/df-user.selector";
+// import { selectDfUserInfo } from "../../store/df-user/df-user.selector";
 import { selectIsLoading } from "../../store/general.selector.ts";
 import { theme } from "../../themes/theme";
 import { Loading } from "../general/loading.component.tsx";

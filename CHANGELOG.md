@@ -2,6 +2,23 @@
 
 
 
+## 2.5.0 (2025-09-29)
+
+Digital Foundry has transitioned to independence and their original website is being decommissioned. This version adapts the tool to work primarily with Patreon imports while the new DF site is under development. Many DF site-dependent features have been temporarily disabled but preserved for future reactivation.
+
+### Features
+- HTML Import System
+  - Added HTML import functionality for extracting content from Patreon pages. Also has the ability to manually add downloads but it's frankly a bit rubbish
+### Maintenance
+- Disabled automatic DF site scanning to prevent hitting the decommissioned site
+- Disabled 'Not logged in to digitalfoundry.net' dialog while preserving component for future use
+- Preserved DF site integration code for reactivation when new site launches
+### Known Issues
+- Format detection relies on consistent HTML patterns from Patreon - changes to Patreon's layout may require updates
+- Some legacy DF site features remain disabled until new site architecture is available
+- Video properties inference is limited to common resolution and framerate patterns
+- Some paths still attempt to scan digitalfoundry.net but these are pretty benign
+
 ## 2.4.0 (2025-03-13)
 
 ### Features

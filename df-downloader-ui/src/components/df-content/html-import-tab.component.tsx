@@ -6,6 +6,8 @@ import {
   Switch,
   Alert,
   CircularProgress,
+  Link,
+  Paper,
 } from "@mui/material";
 import { useEffect, useImperativeHandle, forwardRef } from "react";
 import { useDispatch } from "react-redux";
@@ -118,9 +120,34 @@ export const HtmlImportTab = forwardRef<HtmlImportTabRef, HtmlImportTabProps>(({
 
   return (
     <Box sx={{ display: "flex", flexDirection: "column", gap: 2, mt: 1 }}>
-      <Typography variant="body2" color="textSecondary">
-        Paste HTML content from Patreon pages to automatically extract and import content with download links.
-      </Typography>
+      <Paper sx={{ p: 2, backgroundColor: 'background.default', border: '1px solid', borderColor: 'primary.main', borderRadius: 1 }}>
+        <Typography variant="subtitle2" gutterBottom>
+          How to import from Patreon:
+        </Typography>
+        <Typography variant="body2" sx={{ mb: 1 }}>
+          1. Visit the{' '}
+          <Link
+            href="https://www.patreon.com/digitalfoundry/posts"
+            target="_blank"
+            rel="noopener noreferrer"
+            sx={{ color: 'inherit', fontWeight: 'bold' }}
+          >
+            Digital Foundry Patreon page
+          </Link>
+        </Typography>
+        <Typography variant="body2" sx={{ mb: 1 }}>
+          2. Open Developer Tools (press F12 or Ctrl+Shift+I)
+        </Typography>
+        <Typography variant="body2" sx={{ mb: 1 }}>
+          3. In the Elements/Inspector tab, right-click on the top-level <code>&lt;html&gt;</code> element
+        </Typography>
+        <Typography variant="body2" sx={{ mb: 1 }}>
+          4. Select "Copy" → "Copy Element" (Chrome) or "Copy Outer HTML" (Firefox/Edge)
+        </Typography>
+        <Typography variant="body2">
+          5. Paste the HTML in the text area below to automatically extract download links
+        </Typography>
+      </Paper>
 
       <TextField
         fullWidth

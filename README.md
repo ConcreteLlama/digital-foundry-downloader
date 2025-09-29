@@ -1,5 +1,8 @@
 # DF Downloader
 
+> **⚠️ IMPORTANT UPDATE (September 2025)**
+> Digital Foundry has transitioned to independence and their original website is being decommissioned. As of version 2.5.0, this tool now primarily works with **Patreon imports** rather than direct website integration. The HTML import feature allows you to extract download links from Patreon posts. Many website-dependent features have been temporarily disabled but preserved for when the new DF site launches. The tool will no longer automatically be able to scan for new downloads, but can still be useful if you like some of the features such as metadata injection, renaming etc. Much of the metadata that used to exist is no longer available within the Patreon posts so it's hardly "full featured" but it should suffice as a stop-gap solution until the new site is available.
+
 DF Downloader is a nodejs/react application designed to download the latest Digital Foundry videos when they are available. This will only work in any useful manner if you are a Patreon subscriber. If you are not a subscriber,
 this tool will still be able to get info about available content but it will not be able to download anything.
 
@@ -153,3 +156,9 @@ In the case of Unraid, that file will not persist on restart.
 ### PUBLIC_ADDRESS
 
 This tells the backend service what the public address is for CORS purposes - this should match the address you use to access the web UI in your browser.
+
+## Support/Donations
+
+This is just a fun personal project I built for myself and decided to share with fellow DF fans. If you want to donate, instead of sending me coffee money why not take those dollars and [subscribe to the Digital Foundry Patreon](https://www.patreon.com/digitalfoundry) (or use it to upgrade to a higher tier)?
+
+They're the ones doing all the heavy lifting with incredible tech analysis, and frankly, they deserve your support way more than I do! Plus, without their amazing content, this tool would be pretty pointless anyway!
