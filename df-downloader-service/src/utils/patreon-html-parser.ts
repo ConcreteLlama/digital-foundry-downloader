@@ -65,11 +65,14 @@ export function parsePatreonHtml(htmlContent: string): HtmlImportResult {
  */
 function parsePostCard($: cheerio.CheerioAPI, $postCard: cheerio.Cheerio<any>): ParsedPatreonPost | null {
   // Extract title
-  const title = $postCard.find('[data-tag="post-title"] a').text().trim();
+  let title = $postCard.find('[data-tag="post-title"] a').text().trim();
   if (!title) {
     logger.log("debug", "No title found in post card");
     return null;
   }
+
+  // Clean up DF Direct Weekly titles by removing trailing "Is Now Available"
+  title = title.replace(/\s+is\s+now\s+available\s*$/i, '').trim();
 
   // Extract published date - try multiple selectors and approaches
   let publishedDateText = '';
