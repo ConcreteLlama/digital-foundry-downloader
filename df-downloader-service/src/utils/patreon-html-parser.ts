@@ -195,43 +195,26 @@ function extractDownloadLinks($: cheerio.CheerioAPI, $postCard: cheerio.Cheerio<
         // Get everything before this specific link in the HTML
         const beforeLinkHtml = paragraphHtml.substring(0, linkIndex);
 
-        // Convert HTML back to text for the part before this link
-        const beforeLinkText = $('<div>').html(beforeLinkHtml).text().trim();
+        // Convert HTML back to text for the part before this link, preserving line breaks
+        const beforeLinkText = $('<div>')
+          .html(beforeLinkHtml.replace(/<br\s*\/?>/gi, '\n'))
+          .text()
+          .trim();
 
         logger.log("debug", `Text before this specific link: "${beforeLinkText}"`);
 
-        // Look for format at the very end of the text before this link
-        const formatPatterns = [
-          // Match only the format word itself with optional quality, followed by colon
-          /((?:HEVC|H\.264|MP3|h\.264)(?:\s+\d+[KkPp])?)\s*:\s*$/i,
-          // Match format patterns at the end of sentences/lines
-          /(?:^|[\.\n\r])\s*((?:HEVC|H\.264|MP3|h\.264)(?:\s+\d+[KkPp])?)\s*:\s*$/i,
-          // Fallback: any single word followed by colon at the end
-          /(?:^|[\s\.\n\r])([A-Za-z0-9\.]+)\s*:\s*$/,
-        ];
-
-        for (const pattern of formatPatterns) {
-          const formatMatch = beforeLinkText.match(pattern);
-          if (formatMatch) {
-            format = formatMatch[1].trim();
-            logger.log("debug", `Extracted format "${format}" using pattern from HTML parsing`);
-            break;
-          }
-        }
-
-        // If still no match, try a broader search for format indicators
-        if (format === 'Unknown') {
-          // Look for format words at the end of the text
-          const endWords = beforeLinkText.split(/\s+/).slice(-3).join(' ').toLowerCase();
-          if (endWords.includes('hevc')) {
-            format = 'HEVC';
-            logger.log("debug", `Found HEVC in end words: "${endWords}"`);
-          } else if (endWords.includes('h.264') || endWords.includes('h264')) {
-            format = 'H.264';
-            logger.log("debug", `Found H.264 in end words: "${endWords}"`);
-          } else if (endWords.includes('mp3')) {
-            format = 'MP3';
-            logger.log("debug", `Found MP3 in end words: "${endWords}"`);
+        // Extract format using the consistent pattern: "FORMAT: [link]"
+        // Look for text after the last line break (or start) up to the colon
+        const formatMatch = beforeLinkText.match(/(?:^|\n)\s*([^:\n\r]+?)\s*:\s*$/i);
+        if (formatMatch) {
+          format = formatMatch[1].trim();
+          logger.log("debug", `Extracted format "${format}" from consistent pattern`);
+        } else {
+          // Fallback: look for format at the very end
+          const endMatch = beforeLinkText.match(/([^:\n\r]+?)\s*:\s*$/);
+          if (endMatch) {
+            format = endMatch[1].trim();
+            logger.log("debug", `Extracted format "${format}" from end pattern`);
           }
         }
       }
