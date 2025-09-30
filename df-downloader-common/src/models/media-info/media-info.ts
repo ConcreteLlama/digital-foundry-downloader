@@ -19,6 +19,7 @@ export const MediaInfo = z.object({
   audioProperties: AudioProperties.nullable(),
   videoId: z.string().optional(),
   mediaFilename: z.string().optional(),
+  downloadUrl: z.string().optional(),
 });
 export type MediaInfo = z.infer<typeof MediaInfo>;
 

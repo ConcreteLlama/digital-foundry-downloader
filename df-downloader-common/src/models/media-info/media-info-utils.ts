@@ -191,9 +191,9 @@ export const createMediaInfoFromFormatString = (formatString: string, url: strin
   // Use the proper media info inference
   const inferredMediaInfo = inferMediaInfo(rawMediaInfo);
 
-  // Store the URL in the duration field temporarily for API extraction
+  // Store the URL in the downloadUrl field
   return {
     ...inferredMediaInfo,
-    duration: url // Store URL here for API extraction
+    downloadUrl: url
   };
 };

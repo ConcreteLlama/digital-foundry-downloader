@@ -142,10 +142,11 @@ export class DfTaskManager {
     let destination: string;
     let headers: Record<string, string>;
 
-    if (directUrl) {
+    const actualDirectUrl = directUrl || mediaInfo.downloadUrl;
+    if (actualDirectUrl) {
       // For manual downloads, use the provided URL directly
       const filename = mediaInfo.mediaFilename || sanitizeFilename(`${dfContentInfo.name}_${mediaInfo.formatString}.${MediaInfoUtils.getExtension(mediaInfo)}`);
-      url = async () => directUrl;
+      url = async () => actualDirectUrl;
       destination = `${configService.config.contentManagement.workDir}/${filename}`;
       headers = {
         "User-Agent": "DigitalFounload",

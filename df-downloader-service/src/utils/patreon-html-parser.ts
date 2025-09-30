@@ -417,7 +417,7 @@ function parsePublishedDate(dateText: string): Date {
 function createContentInfoFromPost(post: ParsedPatreonPost): DfContentInfo {
   // Generate consistent content name
   const sanitizedTitle = post.title.replace(/[^a-zA-Z0-9]/g, '-').toLowerCase();
-  const contentName = `${sanitizedTitle}-manual-download`;
+  const contentName = sanitizedTitle;
 
   // Create MediaInfo objects using the utility function
   const mediaInfo: MediaInfo[] = post.downloadLinks.map((link) =>

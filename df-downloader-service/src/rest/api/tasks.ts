@@ -97,58 +97,19 @@ export const makeDownloadsApiRouter = (contentManager: DigitalFoundryContentMana
           });
         }
 
-        // Store the content info in the database
-        const contentWithAvailability = parseResult.contentInfos.map(contentInfo => ({
-          contentInfo,
-          availability: DfContentAvailability.AVAILABLE
-        }));
-        await contentManager.db.setContentInfosWithAvailability(contentWithAvailability, "NONE");
-
-        // If auto-download is enabled, trigger downloads for each content using preferred media format
-        const downloadResponses: any[] = [];
-        if (data.triggerAutoDownload) {
-          const mediaFormatsConfig = configService.config.mediaFormats;
-
-          for (const contentInfo of parseResult.contentInfos) {
-            try {
-              // Use the same logic as the content manager to select the best media format
-              const selectedMediaInfo = getBestMediaInfoMatch(
-                mediaFormatsConfig.priorities,
-                contentInfo.mediaInfo,
-                { mustMatch: true }
-              );
-
-              if (selectedMediaInfo) {
-                // Extract URL from duration field (temporary storage)
-                const directUrl = selectedMediaInfo.duration as string;
-
-                const downloadExecution = contentManager.taskManager.downloadContent(
-                  contentInfo,
-                  selectedMediaInfo,
-                  directUrl
-                );
-
-                downloadResponses.push({
-                  name: contentInfo.name,
-                  mediaInfo: selectedMediaInfo,
-                  pipelineInfo: makeTaskPipelineInfo(downloadExecution).pipelineDetails,
-                });
-              } else {
-                console.warn(`No matching media format found for ${contentInfo.name} with available formats: ${contentInfo.mediaInfo.map(m => m.formatString).join(', ')}`);
-              }
-            } catch (error) {
-              console.error(`Failed to start download for ${contentInfo.name}:`, error);
-            }
-          }
-        }
+        // Use the content manager's checkForNewContents flow which properly handles downloads with completion handlers
+        await contentManager.checkForNewContents({
+          triggerDownloads: data.triggerAutoDownload,
+          providedContentInfos: parseResult.contentInfos,
+          downloadDelay: 0 // Start downloads immediately for manual imports
+        });
 
         sendResponse(res, {
           success: true,
           message: `Successfully imported ${parseResult.contentInfos.length} content entries`,
           postsFound: parseResult.postsFound,
           postsWithDownloads: parseResult.postsWithDownloads,
-          contentInfos: parseResult.contentInfos,
-          downloads: downloadResponses
+          contentInfos: parseResult.contentInfos
         });
       } catch (e) {
         sendErrorAsResponse(res, e, {

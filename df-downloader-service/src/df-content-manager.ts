@@ -352,7 +352,12 @@ export class DigitalFoundryContentManager {
     );
   }
 
-  async checkForNewContents() {
+  async checkForNewContents(opts?: {
+    triggerDownloads?: boolean;
+    providedContentInfos?: DfContentInfo[];
+    downloadDelay?: number;
+  }) {
+    const { triggerDownloads, providedContentInfos, downloadDelay } = opts || {};
     const noMediaInfoContents = [...this.noMediaContentInfos.values()];
     logger.log(
       "info",
@@ -366,8 +371,42 @@ export class DigitalFoundryContentManager {
     const autoDownloadConfig = configService.config.automaticDownloads;
     const mediaFormatsConfig = configService.config.mediaFormats;
     const userTier = this.dfUserManager.getCurrentTier() || "NONE";
-    const newContentRefs = [...(await this.getNewContentList()), ...noMediaInfoContents.map((v) => v.contentRef)];
-    const newContentFetchResults = (await this.getContentInfos(newContentRefs));
+
+    let newContentFetchResults: { contentInfo: DfContentInfo; availability: DfContentAvailability }[];
+    let newContentRefs: DfContentInfoReference[];
+    let contentToDownload: DfContentInfo[] = [];
+
+    if (providedContentInfos) {
+      // Use provided content infos, handle both new and existing content
+      const existingContentEntries = await this.db.getAllContentEntries();
+      const existingContentMap = new Map(existingContentEntries.map(c => [c.name, c]));
+
+      // Always update all provided content in DB
+      newContentFetchResults = providedContentInfos.map(contentInfo => ({
+        contentInfo,
+        availability: DfContentAvailability.AVAILABLE
+      }));
+
+      // Determine which content should trigger downloads
+      for (const contentInfo of providedContentInfos) {
+        const existingEntry = existingContentMap.get(contentInfo.name);
+        if (!existingEntry) {
+          // New content - should download
+          contentToDownload.push(contentInfo);
+        } else if (!existingEntry.downloads || existingEntry.downloads.length === 0) {
+          // Existing content with no downloads - should download
+          contentToDownload.push(contentInfo);
+        }
+        // Existing content with downloads - skip (will be updated but not re-downloaded)
+      }
+
+      newContentRefs = [];
+    } else {
+      // Fetch from DF site as usual
+      newContentRefs = [...(await this.getNewContentList()), ...noMediaInfoContents.map((v) => v.contentRef)];
+      newContentFetchResults = (await this.getContentInfos(newContentRefs));
+      contentToDownload = newContentFetchResults.map(r => r.contentInfo);
+    }
     const newNoMediaContentInfoMap = new Map<string, { attempts: number; contentRef: DfContentInfoReference }>();
     newContentFetchResults.forEach(({contentInfo}, idx) => {
       if (!contentInfo) {
@@ -378,7 +417,7 @@ export class DigitalFoundryContentManager {
         contentInfo.mediaInfo,
         { mustMatch: true }
       );
-      if (!matchingMediaInfo && this.dfUserManager.getCurrentTier()) {
+      if (!matchingMediaInfo && this.dfUserManager.getCurrentTier() && !providedContentInfos) {
         logger.log("info", `No suitable media info found for ${contentInfo.name}, adding to no media list`);
         const attempts = this.noMediaContentInfos.get(contentInfo.name)?.attempts || 0;
         if (attempts >= 60 * 24) {
@@ -392,25 +431,28 @@ export class DigitalFoundryContentManager {
       }
     });
     this.noMediaContentInfos = newNoMediaContentInfoMap;
-    if (autoDownloadConfig.enabled) {
-      const contentInfos = newContentFetchResults.map((result) => result.contentInfo);
+
+    // Always update content info in DB
+    await this.db.setContentInfosWithAvailability(newContentFetchResults, userTier);
+
+    // Only trigger downloads for content that should be downloaded
+    const shouldTriggerDownloads = triggerDownloads !== undefined ? triggerDownloads : autoDownloadConfig.enabled;
+    if (shouldTriggerDownloads && contentToDownload.length > 0) {
       const { include, exclude } = autoDownloadConfig.exclusionFilters?.length
-        ? filterContentInfos(autoDownloadConfig.exclusionFilters, contentInfos, true)
-        : { include: contentInfos, exclude: [] };
+        ? filterContentInfos(autoDownloadConfig.exclusionFilters, contentToDownload, true)
+        : { include: contentToDownload, exclude: [] };
       exclude.length &&
         logger.log(
           "info",
           `Ignoring ${exclude.map((contentInfo) => contentInfo.name).join(", ")} due to exclusion filters`
         );
-      await this.db.setContentInfosWithAvailability(newContentFetchResults, userTier);
+      const delayToUse = downloadDelay !== undefined ? downloadDelay : autoDownloadConfig.downloadDelay;
       for (const content of include) {
         serviceLocator.notifier.newContentDetected(content.title);
-        this.downloadContentIn(content, autoDownloadConfig.downloadDelay, {
+        this.downloadContentIn(content, delayToUse, {
           skipIfDownloadingOrDownloaded: true,
         });
       }
-    } else {
-      await this.db.setContentInfosWithAvailability(newContentFetchResults, userTier);
     }
   }
 
@@ -490,7 +532,7 @@ export class DigitalFoundryContentManager {
       );
       return null;
     });
-    const dfContentInfo = updateResult?.contentInfo || contentInfoArg;
+    const dfContentInfo = updateResult?.contentInfo || contentInfoArg || (await this.db.getContentEntry(contentName))?.contentInfo;
     if (!dfContentInfo) {
       throw new Error(`Unable to find content info for ${contentName}`);
     }
