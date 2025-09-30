@@ -170,12 +170,32 @@ const extractVideoPropertiesFromFormat = (formatString: string): string | null =
 };
 
 /**
+ * Extract filename from URL, handling query parameters
+ */
+const extractFilenameFromUrl = (url: string): string | null => {
+  try {
+    const urlObj = new URL(url);
+    const pathname = urlObj.pathname;
+    const filename = pathname.substring(pathname.lastIndexOf('/') + 1);
+    // Decode URL encoding (e.g., %20 -> space)
+    return filename ? decodeURIComponent(filename) : null;
+  } catch {
+    // If URL parsing fails, try simple extraction
+    const match = url.match(/\/([^/?]+)(?:\?|$)/);
+    return match ? decodeURIComponent(match[1]) : null;
+  }
+};
+
+/**
  * Create MediaInfo from a format string and URL, commonly used for manual/external imports
  * This handles format strings like "h.264 1080p", "HEVC 4K", "MP3", etc.
  */
 export const createMediaInfoFromFormatString = (formatString: string, url: string): MediaInfo => {
   // Extract video properties from the format string if possible
   const videoPropertiesString = extractVideoPropertiesFromFormat(formatString);
+
+  // Extract filename from URL
+  const mediaFilename = extractFilenameFromUrl(url);
 
   // Create RawMediaInfo to feed into the inference system
   const rawMediaInfo: RawMediaInfo = {
@@ -185,7 +205,7 @@ export const createMediaInfoFromFormatString = (formatString: string, url: strin
     duration: null,
     size: null,
     videoId: null,
-    mediaFilename: null
+    mediaFilename
   };
 
   // Use the proper media info inference

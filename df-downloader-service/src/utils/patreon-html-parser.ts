@@ -7,6 +7,7 @@ export interface ParsedPatreonPost {
   publishedDate: Date;
   tags: string[];
   thumbnailUrl?: string;
+  youtubeVideoId?: string;
   downloadLinks: Array<{
     url: string;
     format: string;
@@ -141,8 +142,11 @@ function parsePostCard($: cheerio.CheerioAPI, $postCard: cheerio.Cheerio<any>): 
   // Extract tags
   const tags = extractTags($, $postCard);
 
-  // Extract thumbnail
-  const thumbnailUrl = extractThumbnail($, $postCard);
+  // Extract YouTube video ID first (needed for thumbnail)
+  const youtubeVideoId = extractYoutubeVideoId($, $postCard);
+
+  // Extract thumbnail (uses YouTube thumbnail if video ID exists)
+  const thumbnailUrl = extractThumbnail($, $postCard, youtubeVideoId);
 
   // Extract download links (most important)
   const downloadLinks = extractDownloadLinks($, $postCard);
@@ -153,6 +157,7 @@ function parsePostCard($: cheerio.CheerioAPI, $postCard: cheerio.Cheerio<any>): 
     publishedDate,
     tags,
     thumbnailUrl,
+    youtubeVideoId,
     downloadLinks
   };
 }
@@ -291,6 +296,28 @@ function extractDescription($: cheerio.CheerioAPI, $postCard: cheerio.Cheerio<an
 }
 
 /**
+ * Extract YouTube video ID from iframe
+ */
+function extractYoutubeVideoId($: cheerio.CheerioAPI, $postCard: cheerio.Cheerio<any>): string | undefined {
+  // Look for YouTube iframe - supports both youtube.com and youtube-nocookie.com
+  const $iframe = $postCard.find('iframe[src*="youtube.com/embed"], iframe[src*="youtube-nocookie.com/embed"]');
+
+  if ($iframe.length > 0) {
+    const src = $iframe.attr('src');
+    if (src) {
+      // Extract video ID from URL like: https://www.youtube-nocookie.com/embed/ZADoJKL2sGc?autoplay=1&enablejsapi=1&rel=0
+      const match = src.match(/\/embed\/([^?&]+)/);
+      if (match && match[1]) {
+        logger.log("debug", `Found YouTube video ID: ${match[1]}`);
+        return match[1];
+      }
+    }
+  }
+
+  return undefined;
+}
+
+/**
  * Extract tags from post
  */
 function extractTags($: cheerio.CheerioAPI, $postCard: cheerio.Cheerio<any>): string[] {
@@ -308,9 +335,16 @@ function extractTags($: cheerio.CheerioAPI, $postCard: cheerio.Cheerio<any>): st
 
 /**
  * Extract thumbnail URL from post
+ * If a YouTube video ID is provided, uses YouTube's maxresdefault thumbnail
  */
-function extractThumbnail($: cheerio.CheerioAPI, $postCard: cheerio.Cheerio<any>): string | undefined {
-  // Look for images in the post
+function extractThumbnail($: cheerio.CheerioAPI, $postCard: cheerio.Cheerio<any>, youtubeVideoId?: string): string | undefined {
+  // If we have a YouTube video ID, use YouTube's thumbnail
+  if (youtubeVideoId) {
+    // Use maxresdefault for highest quality, fallback to hqdefault if needed
+    return `https://i.ytimg.com/vi/${youtubeVideoId}/maxresdefault.jpg`;
+  }
+
+  // Otherwise, look for images in the post
   const images = $postCard.find('img[src]');
 
   for (let i = 0; i < images.length; i++) {
@@ -430,7 +464,7 @@ function createContentInfoFromPost(post: ParsedPatreonPost): DfContentInfo {
     post.description,
     mediaInfo,
     post.thumbnailUrl || '',
-    undefined, // youtubeVideoId
+    post.youtubeVideoId,
     post.publishedDate,
     post.tags,
     'patreon'
