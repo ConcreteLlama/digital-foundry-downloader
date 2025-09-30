@@ -136,16 +136,31 @@ export const HtmlImportTab = forwardRef<HtmlImportTabRef, HtmlImportTabProps>(({
           </Link>
         </Typography>
         <Typography variant="body2" sx={{ mb: 1 }}>
-          2. Open Developer Tools (press F12 or Ctrl+Shift+I)
+          2. (Optional) To extract YouTube video IDs, open the Console tab and run:
+        </Typography>
+        <Box component="pre" sx={{
+          mb: 1,
+          p: 1,
+          backgroundColor: 'action.hover',
+          borderRadius: 1,
+          fontSize: '0.75rem',
+          overflow: 'auto'
+        }}>
+          {`document.querySelectorAll('[data-tag="media-container"] button[title="Start playback"]').forEach((button, index) => {
+  setTimeout(() => button.click(), index * 500);
+});`}
+        </Box>
+        <Typography variant="body2" sx={{ mb: 1 }}>
+          3. Open Developer Tools (press F12 or Ctrl+Shift+I)
         </Typography>
         <Typography variant="body2" sx={{ mb: 1 }}>
-          3. In the Elements/Inspector tab, right-click on the top-level <code>&lt;html&gt;</code> element
+          4. In the Elements/Inspector tab, right-click on the top-level <code>&lt;html&gt;</code> element
         </Typography>
         <Typography variant="body2" sx={{ mb: 1 }}>
-          4. Select "Copy" → "Copy Element" (Chrome) or "Copy Outer HTML" (Firefox/Edge)
+          5. Select "Copy" → "Copy Element" (Chrome) or "Copy Outer HTML" (Firefox/Edge)
         </Typography>
         <Typography variant="body2">
-          5. Paste the HTML in the text area below to automatically extract download links
+          6. Paste the HTML in the text area below to automatically extract download links
         </Typography>
       </Paper>
 
