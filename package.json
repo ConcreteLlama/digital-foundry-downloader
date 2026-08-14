@@ -29,5 +29,8 @@
   "license": "ISC",
   "devDependencies": {
     "husky": "^8.0.0"
+  },
+  "dependencies": {
+    "date-fns": "^3.6.0"
   }
 }

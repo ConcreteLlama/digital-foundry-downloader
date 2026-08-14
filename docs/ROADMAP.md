@@ -89,6 +89,14 @@ of the migration, not scope creep:
   instead of per-package `yalc add` + `npm ci` + `rimraf node_modules` stages. Verified
   with a real `docker build` + `docker run` in this session.
 - The `date-fns`/`@mui/x-date-pickers` peer-dependency conflict noted earlier in this
-  doc's history resolved itself once the *full* three-package dependency graph was
-  installed as one workspace tree (npm nested a separate `date-fns` copy per package
-  that needed one) - no `legacy-peer-deps` workaround needed after all.
+  doc's history turned out to be *worse* than a one-time install issue: a from-scratch
+  `npm install` would sometimes hoist a peer-satisfying `date-fns@3.6.0` to the repo
+  root, but a second, completely redundant `npm install` on the same tree would prune
+  it as "extraneous" (nothing formally depends on it, only an optional peer implies it),
+  silently breaking `@mui/x-date-pickers` again. Neither strict resolution nor a scoped
+  `overrides` entry survived a second install. Fixed by adding `date-fns@^3.6.0` as a
+  genuine, explicit `dependencies` entry on the *root* `package.json` - since it's a real
+  direct dependency now, npm always considers the hoisted copy required. Verified stable
+  across three consecutive `npm install` runs. If this regresses again, check root
+  `package.json`'s `dependencies` first before assuming a fresh install will fix it -
+  a *second* install is exactly when this silently broke before.
