@@ -35,13 +35,13 @@ Remaining before the auto-poll loop can safely come back on: a real end-to-end d
 test, and a not-yet-designed safeguard against mass auto-downloads the first time
 `checkForNewContents()` ever runs against the new site for a given install — not an
 idle-time thing, every install needs this on upgrade regardless of how recently it last
-ran (see the same doc). Don't start
-Phase 2 (optional yalc → npm workspaces migration — a Next.js rewrite was considered
-and rejected, see `docs/ROADMAP.md`) without explicit sign-off.
+ran (see the same doc). Phase 2 (yalc → npm workspaces migration — a Next.js rewrite
+was considered and rejected, see `docs/ROADMAP.md`) is done (2026-08-14).
 
 ## Repo layout
 
-Three-package monorepo, linked via **yalc** (not npm workspaces):
+Three-package monorepo, linked via **npm workspaces** (root `package.json`'s
+`workspaces` field; yalc was removed 2026-08-14):
 - `df-downloader-common/` — shared zod schemas/types/utils, source of truth for the
   domain model.
 - `df-downloader-service/` — Express backend (scraping, downloads, task queue, REST
@@ -52,21 +52,31 @@ Full detail in `docs/ARCHITECTURE.md`.
 
 ## Build / dev commands
 
-From repo root (`package.json` orchestrates the sub-packages):
+From repo root (`package.json` orchestrates the sub-packages, a single `npm install`
+installs and hoists deps for all three into the root `node_modules`):
 ```
-npm run install-all-deps   # first-time setup, installs deps in all 3 packages
-npm run build              # full build: common -> ui -> service (bundles UI into service's public/)
+npm install                # first-time setup, installs deps for all 3 workspaces
+npm run build               # full build: common -> ui -> service (bundles UI into service's public/)
 npm run dev:service        # nodemon-driven service dev server (needs df-downloader-service/dev.env, copy from dev.env.sample)
 npm run dev:ui              # vite dev server for the UI
+npm run check-build        # tsc --noEmit across all 3 workspaces
 ```
-Within `df-downloader-common` or `df-downloader-service`, `npm run check-build` runs
-`tsc --noEmit`. **`node_modules` are not pre-installed in this checkout** — run
-`npm run install-all-deps` (or `npm i` per-package) before trying to build/typecheck.
+`node_modules` are not pre-installed in this checkout — run `npm install` at the repo
+root before trying to build/typecheck (there is no more per-package install step).
 
-If you edit `df-downloader-common`, you must rebuild it and re-run
-`npm run add-common` in whichever consumer package you're testing (`full-build` scripts
-do this automatically) — yalc doesn't hot-reload across packages the way a normal
-monorepo workspace would.
+`df-downloader-common` is a real workspace symlink now (`node_modules/df-downloader-common`
+points straight at the package dir) — editing it and re-running its `npm run build`
+(or `npm run watch`) is immediately visible to consumers, no publish/link step needed.
+Its `package.json` `exports` field maps both extensioned (`df-downloader-common/config/x.js`,
+used by the service's ESM-style imports) and extensionless (`df-downloader-common/config/x`,
+used by the UI) deep subpath imports to `dist/*` — if you add a new subpath-imported file,
+no extra wiring is needed, the wildcard pattern already covers it. The service's
+`tsconfig.json` uses `"moduleResolution": "bundler"` (matching the UI) specifically so
+`tsc` honors that exports map; if you add a new deep import into a *third-party*
+node_modules package, check the target package's own `package.json` `exports` field
+first — reaching into paths it doesn't explicitly export will fail to resolve under
+bundler-mode resolution even if the file physically exists on disk (this bit us once
+with `@deepgram/sdk`, see `deepgram.ts`).
 
 ## Conventions worth knowing
 

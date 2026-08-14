@@ -16,11 +16,9 @@
     "start": "node dist/index.js",
     "get-ui": "rimraf public && shx cp -r ../df-downloader-ui/dist public",
     "build-get-ui": "cd ../df-downloader-ui && npm run build && cd ../df-downloader-service && npm run get-ui",
-    "add-common": "yalc add df-downloader-common",
-    "full-build": "npm i && npm run add-common && npm run build",
     "remove:config": "rimraf config/users.yaml && rimraf config/config.yaml",
     "remove:data": "rimraf db/db.json",
-    "remove": "rimraf .yalc && rimraf yalc.lock && rimraf dist && rimraf public; rimraf node_modules",
+    "remove": "rimraf dist && rimraf public && rimraf node_modules",
     "remove:all": "npm run remove:config && npm run remove:data && npm run remove",
     "test-new-stuff": "node dist/test-new-stuff.js",
     "check-build": "tsc --noEmit",
@@ -38,7 +36,7 @@
     "cookie-parser": "^1.4.6",
     "cors": "^2.8.5",
     "css-select": "4.2.1",
-    "df-downloader-common": "file:.yalc/df-downloader-common",
+    "df-downloader-common": "*",
     "domhandler": "^4.3.0",
     "express": "^4.18.1",
     "ffmpeg-static": "5.0.0",
@@ -70,7 +68,6 @@
     "nodemon": "^3.1.0",
     "rimraf": "^5.0.0",
     "shx": "^0.3.4",
-    "typescript": "^5.3.2",
-    "yalc": "^1.0.0-pre.53"
+    "typescript": "^5.3.2"
   }
 }

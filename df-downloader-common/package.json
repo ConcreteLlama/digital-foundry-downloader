@@ -3,16 +3,28 @@
   "version": "2.5.0",
   "description": "",
   "private": true,
-  "main": "index.js",
-  "types": "index.d.ts",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
   "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./*.js": {
+      "types": "./dist/*.d.ts",
+      "default": "./dist/*.js"
+    },
+    "./*": {
+      "types": "./dist/*.d.ts",
+      "default": "./dist/*.js"
+    }
+  },
   "scripts": {
-    "watch": "node scripts/make-version-src.js && tsc-watch --onSuccess \"npm run build\"",
-    "preyalcpublish": "node ../scripts/make-version-src.js && tsc",
-    "yalc": "yalc",
-    "build": "mkdirp dist && shx cp package.json dist && cd dist && yalc publish --private --push",
+    "watch": "node scripts/make-version-src.js && tsc-watch",
+    "build": "node scripts/make-version-src.js && tsc",
     "start": "node dist/test.js",
-    "remove": "yalc remove df-downloader-common; rimraf dist && rimraf node_modules",
+    "remove": "rimraf dist && rimraf node_modules",
     "check-build": "tsc --noEmit"
   },
   "author": "",
@@ -28,11 +40,8 @@
   "devDependencies": {
     "@types/mustache": "^4.2.5",
     "@types/semver": "^7.5.8",
-    "mkdirp": "^3.0.1",
     "rimraf": "^6.0.1",
-    "shx": "^0.3.4",
     "tsc-watch": "^6.2.1",
-    "typescript": "^5.3.2",
-    "yalc": "^1.0.0-pre.53"
+    "typescript": "^5.3.2"
   }
 }

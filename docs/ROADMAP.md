@@ -1,8 +1,7 @@
 # Roadmap
 
 Set by the project owner, 2026-08-11. This is the intended order of work — don't jump
-ahead to a later phase without checking in first, especially Phase 2 which is explicitly
-optional/not committed to.
+ahead to a later phase without checking in first.
 
 ## Phase 0 — Understand & document (this pass)
 
@@ -54,7 +53,7 @@ Get the tool working against the relaunched `digitalfoundry.net` again. Status a
   to the one-time startup scan above) is still not wired up — blocked on the
   "resuming after upgrading" item above first.
 
-## Phase 2 — Replace yalc with npm workspaces (optional, not committed)
+## Phase 2 — Replace yalc with npm workspaces (done)
 
 **Superseded 2026-08-14**: a Next.js rewrite was considered but rejected — this app is
 fundamentally a long-running background process (in-memory FSM task executions, a
@@ -64,12 +63,32 @@ serverless/request-shaped by default; running persistent background state on it 
 fighting the framework (custom server or `instrumentation.ts` bootstrap, HMR restarting
 the loop in dev, docs/tooling that assume statelessness) for no real benefit here.
 
-The actual pain point worth fixing is **yalc** — this session hit its rebuild/re-link
+The actual pain point worth fixing was **yalc** — this session hit its rebuild/re-link
 dance (`npm run build` in `df-downloader-common` → `npm run add-common` in each
-consumer, "package not found in lockfile" errors) repeatedly while iterating. Migrating
-the monorepo to real npm workspaces would fix that directly: consumers get a live
-symlink to `df-downloader-common` with no publish/push step, while keeping the same
-three-package structure, the same Express backend as a normal long-running Node
-process, and the same FSM/task-manager core untouched. Much smaller blast radius than a
-framework rewrite, and still optional/secondary to Phase 1 — don't start scoping this
-until Phase 1 is done and stable.
+consumer, "package not found in lockfile" errors) repeatedly while iterating.
+
+**Done 2026-08-14**: migrated the monorepo to real npm workspaces (root `package.json`
+`workspaces` field). `df-downloader-common` is now a live symlink for both consumers,
+no publish/push step. Same three-package structure, same Express backend as a normal
+long-running Node process, same FSM/task-manager core — untouched. Notable side effects
+of the migration, not scope creep:
+- `df-downloader-common`'s deep subpath imports (`df-downloader-common/config/x`) needed
+  an explicit `exports` map once its package root stopped being yalc's flattened `dist/`
+  copy; `df-downloader-service`'s `tsconfig.json` moved to `"moduleResolution": "bundler"`
+  (matching the UI) so `tsc` respects that map.
+- That resolution-mode change also made TS start enforcing other packages' own
+  `exports` fields for deep imports - `deepgram.ts`'s deep import into
+  `@deepgram/sdk/dist/types/*` (not part of that package's public exports) had to be
+  replaced with types derived structurally from the SDK's public `Deepgram` class.
+- `df-downloader-service/scripts/strip-ffprobe-binaries.cjs` hardcoded
+  `df-downloader-service/node_modules/ffprobe-static` - under workspace hoisting that
+  package lands in the root `node_modules` instead, so the script now resolves it via
+  `require.resolve()`.
+- The `Dockerfile` was rewritten around a single root `npm ci` (installing all three
+  workspaces at once, with a Docker-layer-cache-friendly package.json-only copy first)
+  instead of per-package `yalc add` + `npm ci` + `rimraf node_modules` stages. Verified
+  with a real `docker build` + `docker run` in this session.
+- The `date-fns`/`@mui/x-date-pickers` peer-dependency conflict noted earlier in this
+  doc's history resolved itself once the *full* three-package dependency graph was
+  installed as one workspace tree (npm nested a separate `date-fns` copy per package
+  that needed one) - no `legacy-peer-deps` workaround needed after all.

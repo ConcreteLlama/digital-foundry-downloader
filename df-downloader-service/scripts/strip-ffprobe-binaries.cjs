@@ -1,10 +1,12 @@
 const fs = require('fs');
 const path = require('path');
 
-const dir = path.resolve(__dirname);
-const projectRoot = path.resolve(dir, '..');
-
-const ffprobeBinDir = path.join(projectRoot, 'node_modules', 'ffprobe-static', 'bin');
+// Resolve via Node's module resolution rather than a hardcoded
+// node_modules/ffprobe-static path - under npm workspaces, ffprobe-static
+// is hoisted to the repo root's node_modules rather than living locally
+// inside df-downloader-service/node_modules.
+const ffprobePackageJson = require.resolve('ffprobe-static/package.json');
+const ffprobeBinDir = path.join(path.dirname(ffprobePackageJson), 'bin');
 const os = require('os');
 const platform = os.platform();
 const arch = os.arch();

@@ -1,8 +1,8 @@
 # Architecture
 
-DF Downloader is an npm-workspaces-style monorepo (not actual npm workspaces — each
-package has its own `node_modules` and is linked via **yalc**, not `file:` or workspace
-protocol) with three packages:
+DF Downloader is an **npm workspaces** monorepo (yalc was used before 2026-08-14; see
+git history if you need the old linking model) with three packages, declared in the
+root `package.json`'s `workspaces` field:
 
 ```
 df-downloader-common/   shared zod schemas, types, and framework-agnostic utils
@@ -10,15 +10,27 @@ df-downloader-service/  Node/Express backend — scraping, downloading, task que
 df-downloader-ui/       React admin SPA — content browser, download manager, settings
 ```
 
-Root `package.json` scripts orchestrate all three (`npm run build`, `npm run dev:service`,
-`npm run dev:ui`, etc). See root `README.md` for setup instructions.
+A single `npm install` at the repo root installs and hoists dependencies for all three
+into one root `node_modules`. Root `package.json` scripts orchestrate builds/dev servers
+across all three (`npm run build`, `npm run dev:service`, `npm run dev:ui`, etc). See
+root `README.md` for setup instructions.
 
-`df-downloader-common` is consumed by both other packages via **yalc** (a local-package
-linker — `.yalc/df-downloader-common` + `yalc.lock` in each consumer), not a normal npm
-dependency. After changing `common`, you must rebuild it and re-run `npm run add-common`
-(or `yalc push` from `common`) in the consuming package, or changes won't be picked up.
-This trips people up constantly — if a change to a shared type doesn't seem to take
-effect, this is the first thing to check.
+`df-downloader-common` is consumed by both other packages as a normal npm dependency
+(`"df-downloader-common": "*"`) resolved to a real symlink
+(`node_modules/df-downloader-common -> ../df-downloader-common`) by npm's workspace
+linking — no publish/link step, no `.yalc` copies to go stale. After changing `common`,
+just rebuild it (`npm run build -w df-downloader-common`, or run its `npm run watch` in
+the background) — consumers pick up the new `dist/` output immediately since they're
+resolving through the symlink to the same directory. `df-downloader-common`'s
+`package.json` declares an `exports` map (`"./*"` and `"./*.js"` wildcards pointing into
+`dist/`) so consumers can still `import` its internal `config/`, `models/`, `utils/`
+files by subpath the same way they could when yalc's published copy made `dist/` the
+effective package root. `df-downloader-service`'s `tsconfig.json` uses
+`"moduleResolution": "bundler"` (matching the UI) so `tsc` actually honors that exports
+map — be aware this also means any *new* deep import into a third-party `node_modules`
+package must be something that package's own `exports` field actually allows, even if
+the target file exists on disk (bit us once with `@deepgram/sdk`, see
+`df-downloader-service/src/media-utils/subtitles/deepgram.ts`).
 
 ## df-downloader-common
 
@@ -142,8 +154,8 @@ This is the code that the relaunch work is expected to replace/re-enable — see
 ## df-downloader-ui
 
 React 18 + TypeScript + Vite + MUI 5 + Redux Toolkit (listener-middleware pattern, no
-RTK Query, no sagas) + react-hook-form. Consumes `df-downloader-common` via yalc, same
-as the service.
+RTK Query, no sagas) + react-hook-form. Consumes `df-downloader-common` via the npm
+workspace link, same as the service.
 
 - `App.tsx` — branches between `AppNotReadyPage` (backend unreachable) → `AuthPage` (no
   local app login) → `MainApp` (main router: content browser, downloads, settings, tools,

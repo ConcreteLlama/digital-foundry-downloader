@@ -5,14 +5,11 @@
   "type": "module",
   "scripts": {
     "dev": "vite --force",
-    "add-common": "yalc add df-downloader-common",
     "build": "tsc && vite build",
-    "full-build": "npm i && npm run add-common && npm run build",
     "tsc": "tsc",
     "watch": "tsc -w",
     "lint": "eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0",
     "preview": "vite preview",
-    "reinstall-deps": "npx rimraf node_modules && npm i && npm run add-common && npm i",
     "check-build": "tsc --noEmit"
   },
   "dependencies": {
@@ -31,7 +28,7 @@
     "@testing-library/user-event": "^13.5.0",
     "@types/lodash": "^4.17.0",
     "date-fns": "^4.4.0",
-    "df-downloader-common": "file:.yalc/df-downloader-common",
+    "df-downloader-common": "*",
     "lodash": "^4.17.21",
     "mui-image": "^1.0.7",
     "notistack": "^3.0.2",
@@ -59,7 +56,6 @@
     "eslint-plugin-react-refresh": "^0.4.5",
     "typescript": "^5.3.2",
     "vite": "^6.2.0",
-    "vite-plugin-node-polyfills": "^0.23.0",
-    "yalc": "^1.0.0-pre.53"
+    "vite-plugin-node-polyfills": "^0.23.0"
   }
 }

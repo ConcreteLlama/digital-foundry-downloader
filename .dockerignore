@@ -1,15 +1,14 @@
+.git
+node_modules
 df-downloader-common/node_modules
 df-downloader-common/dist
 
 df-downloader-ui/node_modules
 df-downloader-ui/dist
-df-downloader-ui/.yalc
-df-downloader-ui/yalc.lock
 
 df-downloader-service/node_modules
-df-downloader-service/.yalc
-df-downloader-service/yalc.lock
 df-downloader-service/dist
+df-downloader-service/public
 df-downloader-service/config
 df-downloader-service/db
 df-downloader-service/*.env

@@ -1,12 +1,18 @@
 import deepgram from "@deepgram/sdk";
-import { PrerecordedTranscriptionResponse } from "@deepgram/sdk/dist/types/prerecordedTranscriptionResponse.js";
-import { Utterance } from "@deepgram/sdk/dist/types/utterance.js";
 import { DfContentInfo, LanguageCode, logger, SrtLine } from "df-downloader-common";
 import { SubtitlesService } from "df-downloader-common/config/subtitles-config.js";
 import { fileToAudioStream } from "../audio.js";
 import { secondsToSrtTimestamp } from "./srt-utils.js";
 import { GeneratedSubtitleInfo, SubtitleGenerator } from "./subtitles.js";
 const Deepgram = deepgram.Deepgram;
+
+// @deepgram/sdk only publicly exports its "." entrypoint (the Deepgram class
+// itself, see its package.json "exports") - these response/utterance shapes
+// aren't part of that public surface, so derive them structurally from the
+// actual method's return type instead of reaching into its internal dist/
+// files (which "exports" no longer permits resolving into).
+type PrerecordedTranscriptionResponse = Awaited<ReturnType<InstanceType<typeof Deepgram>["transcription"]["preRecorded"]>>;
+type Utterance = NonNullable<NonNullable<PrerecordedTranscriptionResponse["results"]>["utterances"]>[number];
 
 const languageCodeToDeepgramCode = (language: LanguageCode) => {
   switch (language) {

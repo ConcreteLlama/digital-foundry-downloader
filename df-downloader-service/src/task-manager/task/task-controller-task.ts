@@ -299,7 +299,7 @@ export class TaskControllerTask<RESULT, CONTROLS_CONTEXT, STATUS_DETAIL = undefi
 
   getStatus(): STATUS_DETAIL {
     const controlsAny = this.controls as any;
-    return controlsAny.getStatus ? controlsAny.getStatus(this.controlsContext) : undefined;
+    return (controlsAny.getStatus ? controlsAny.getStatus(this.controlsContext) : undefined) as STATUS_DETAIL;
   }
 
   async cleanup() {
