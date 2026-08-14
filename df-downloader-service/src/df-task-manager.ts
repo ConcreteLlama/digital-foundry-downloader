@@ -402,7 +402,7 @@ export class DfTaskManager {
     contentName: string
   ): (PipelineExecutionTypes)[] {
     return this.getTaskPipelineExecutionArray().filter(
-      (pipeline) => pipeline.context.dfContentInfo.name === contentName
+      (pipeline) => pipeline.context.dfContentInfo.key === contentName
     );
   }
 }

@@ -26,7 +26,7 @@ const clearMissingFiles = async (context: ClearMissingFilesContext) => {
     const allContentEntries = await db.getAllContentEntries();
     const allDownloadEntries = allContentEntries.reduce((acc: BasicDownloadInfo[], contentEntry) => {
         acc.push(...contentEntry.downloads.map(download => ({
-            contentName: contentEntry.name,
+            contentName: contentEntry.key,
             downloadLocation: download.downloadLocation,
         })));
         return acc;

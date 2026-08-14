@@ -22,14 +22,14 @@ export const DeleteDownloadDialog = (props: DeleteDownloadDialogProps) => {
   const deleteDownload = (contentEntry: DfContentEntry, download: DfContentDownloadInfo) => {
     setDeleting(true);
     const deleteDownloadRequest: DeleteDownloadRequest = {
-      contentName: contentEntry.name,
+      contentName: contentEntry.key,
       downloadLocation: download.downloadLocation,
     };
     postJson(`${API_URL}/content/delete-download`, deleteDownloadRequest)
       .then(() => {
         setDeleting(false);
         onClose();
-        dispatch(fetchSingleDfContentEntry.start(contentEntry.name));
+        dispatch(fetchSingleDfContentEntry.start(contentEntry.key));
       })
       .catch((error) => {
         console.error("Error deleting download", error);

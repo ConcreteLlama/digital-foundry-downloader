@@ -16,6 +16,7 @@ export const makeDownloadsApiRouter = (contentManager: DigitalFoundryContentMana
     const queuedContent: TasksResponse = {
       taskPipelines: taskPipelines,
       tasks: tasks,
+      scheduledDownloads: contentManager.getScheduledDownloads(),
     };
     return sendResponse(res, queuedContent);
   });
@@ -47,11 +48,11 @@ export const makeDownloadsApiRouter = (contentManager: DigitalFoundryContentMana
   router.post("/task", async (req: Request, res: Response) => {
     await zodParseHttp(AddTaskRequest, req, res, async (data) => {
       try {
-        const queuedContentInfo = await contentManager.downloadContent(data.name, {
+        const queuedContentInfo = await contentManager.downloadContent(data.key, {
           mediaFormat: data.mediaFormat,
         });
         const response: DownloadContentResponse = {
-          name: queuedContentInfo.contentName,
+          key: queuedContentInfo.contentKey,
           mediaInfo: queuedContentInfo.mediaInfo,
           pipelineInfo: makeTaskPipelineInfo(queuedContentInfo.pipelineExec).pipelineDetails,
         };
@@ -69,7 +70,7 @@ export const makeDownloadsApiRouter = (contentManager: DigitalFoundryContentMana
       try {
         const queuedContentInfo = await contentManager.downloadManualContent(data);
         const response: DownloadContentResponse = {
-          name: queuedContentInfo.contentName,
+          key: queuedContentInfo.contentKey,
           mediaInfo: queuedContentInfo.mediaInfo,
           pipelineInfo: makeTaskPipelineInfo(queuedContentInfo.pipelineExec).pipelineDetails,
         };

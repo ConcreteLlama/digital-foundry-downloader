@@ -19,7 +19,7 @@ export const EditMetadataDialog = (props: EditMetadataDialogProps) => {
     const { open, onClose, contentEntry, download } = props;
     const { data: mediaFileMeta, loading, error, refetch } = useQuery({
         fetch: () => getMediaFileMeta({
-            contentName: contentEntry.name, 
+            contentName: contentEntry.key,
             mediaFilename: download.downloadLocation,
         }),
         triggerOnMount: false,
@@ -33,7 +33,7 @@ export const EditMetadataDialog = (props: EditMetadataDialogProps) => {
         if (_.isEqual(metadata.subtitles, mediaFileMeta?.subtitles)) {
             delete metadata.subtitles;
         }
-        updateMediaFileMeta(contentEntry.name, download.downloadLocation, metadata);
+        updateMediaFileMeta(contentEntry.key, download.downloadLocation, metadata);
         onClose();
     }
     const buttonRef = useRef<HTMLButtonElement>(null);

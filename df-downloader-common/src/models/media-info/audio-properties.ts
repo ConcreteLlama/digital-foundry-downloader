@@ -16,7 +16,7 @@ export const getAudioProperties = (audioProperties?: string | null): AudioProper
     if (!trimmedAndLower || trimmedAndLower === "-" || trimmedAndLower === "none") {
         return null;
     }
-    const [_result, encoding, channels, bitrate, sampleRate] = /([A-Z0-9]+) ([0-9.]+), ([0-9]+)kbp?s, ([0-9]+)Hz/.exec(audioProperties) || [];
+    const [_result, encoding, channels, bitrate, sampleRate] = /([A-Z0-9]+) ([0-9.]+),\s*([0-9]+)kbp?s(?:,\s*([0-9]+)Hz)?/.exec(audioProperties) || [];
     return {
         encoding: encoding || null,
         channels: channels || null,

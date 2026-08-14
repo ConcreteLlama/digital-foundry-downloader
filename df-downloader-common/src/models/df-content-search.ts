@@ -44,7 +44,7 @@ export const DfContentEntrySearchUtils = {
       if (sortBy === "date") {
         return aActual.contentInfo.publishedDate.getTime() - bActual.contentInfo.publishedDate.getTime();
       } else if (sortBy === "name") {
-        return aActual.name.localeCompare(bActual.name);
+        return aActual.contentInfo.name.localeCompare(bActual.contentInfo.name);
       }
       return 0;
     });

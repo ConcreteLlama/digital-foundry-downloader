@@ -51,13 +51,13 @@ export const startListeningTasks = (startListening: AppStartListening) => {
   startListening({
     actionCreator: startDownload.success,
     effect: (action, api) => {
-      api.dispatch(fetchSingleDfContentEntry.start(action.payload.name));
+      api.dispatch(fetchSingleDfContentEntry.start(action.payload.key));
     },
   });
   startListening({
     actionCreator: startManualDownload.success,
     effect: (action, api) => {
-      api.dispatch(fetchSingleDfContentEntry.start(action.payload.name));
+      api.dispatch(fetchSingleDfContentEntry.start(action.payload.key));
     },
   });
   startListening({

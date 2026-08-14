@@ -61,7 +61,7 @@ type DfContentInfoRightPanelProps = {
   dfContentEntry: DfContentEntry;
 };
 const DfContentInfoRightPanel = ({ dfContentEntry }: DfContentInfoRightPanelProps) => {
-  const pipelineIds = useSelector(selectActivePipelineIdsForContent(dfContentEntry.contentInfo.name));
+  const pipelineIds = useSelector(selectActivePipelineIdsForContent(dfContentEntry.key));
   const pipelineDetails = useSelector(selectDetailsForPipelineIds(pipelineIds));
 
   return (

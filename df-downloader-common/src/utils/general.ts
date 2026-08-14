@@ -131,3 +131,10 @@ export const diffSets = (a: Set<any>, b: Set<any>) => {
 export const arrayIsEqual = (a: any[], b: any[]) => {
   return a.length === b.length && a.every((item, index) => item === b[index]);
 }
+
+/** Random integer in [min, max] inclusive - order-independent (swaps if min > max). */
+export const randomIntInRange = (min: number, max: number): number => {
+  const lo = Math.min(min, max);
+  const hi = Math.max(min, max);
+  return Math.floor(Math.random() * (hi - lo + 1)) + lo;
+};

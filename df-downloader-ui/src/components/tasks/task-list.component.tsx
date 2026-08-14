@@ -10,6 +10,7 @@ import {
   selectPostProcessingPipelineIds,
 } from "../../store/df-tasks/tasks.selector.ts";
 import { theme } from "../../themes/theme.ts";
+import { ScheduledDownloadsList } from "./scheduled-downloads-list.component.tsx";
 import { DraggableTaskInfo, DraggableTaskInfoData, TaskInfo } from "./task-info.component.tsx";
 
 export const TaskList = () => {
@@ -30,6 +31,7 @@ export const TaskList = () => {
         width: "100%",
       }}
     >
+      <ScheduledDownloadsList />
       <DraggableTaskInfoSet pipelineIds={[...downloadingTasks]} name="Downloads" noTasksMessage="No Download tasks" />
       <TaskInfoSet pipelineIds={postProcessingTasks} name="Post Processing" />
       <TaskInfoSet

@@ -43,7 +43,7 @@ export const StartDownloadDialog = ({ contentInfo, mediaFormat, open, onClose }:
           onClick={() => {
             store.dispatch(
               startDownload.start({
-                name: contentInfo.name,
+                key: contentInfo.key,
                 mediaFormat,
               })
             );
@@ -66,7 +66,7 @@ export type StartDownloadButtonProps = {
 
 export const StartDownloadingButton = ({ contentEntry, mediaFormat, label, disabled }: StartDownloadButtonProps) => {
   const [dialogOpen, setDialogOpen] = useState(false);
-  const activePipeline = useSelector(selectActivePipelineIdsForMediaFormat(contentEntry.name, mediaFormat || ""));
+  const activePipeline = useSelector(selectActivePipelineIdsForMediaFormat(contentEntry.key, mediaFormat || ""));
   const downloadContentInfo = DfContentEntryUtils.getDownloadForFormat(contentEntry, mediaFormat || "");
   const mediaFormats = useSelector(selectConfigSectionField("mediaFormats", "priorities"));
   const availability = contentEntry.statusInfo.availability;

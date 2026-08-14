@@ -217,3 +217,80 @@ export const createMediaInfoFromFormatString = (formatString: string, url: strin
     downloadUrl: url
   };
 };
+
+const NEW_SITE_RESOLUTION_LABELS: Record<string, string> = {
+  "8k": "7680x4320",
+  "4k": "3840x2160",
+  "1440p": "2560x1440",
+  "1080p": "1920x1080",
+  "720p": "1280x720",
+};
+
+/**
+ * digitalfoundry.net (post-relaunch) resolution labels are either a known
+ * abbreviation ("4K", "1080p") or an explicit "WIDTHxHEIGHT" (e.g. "3840x1600"
+ * for ultrawide captures).
+ */
+const parseNewSiteResolution = (label: string): string | null => {
+  const trimmed = label.trim();
+  const explicit = trimmed.match(/^(\d+)x(\d+)$/i);
+  if (explicit) {
+    return `${explicit[1]}x${explicit[2]}`;
+  }
+  return NEW_SITE_RESOLUTION_LABELS[trimmed.toLowerCase()] || null;
+};
+
+/**
+ * Create MediaInfo from digitalfoundry.net's post-relaunch `/videos` listing
+ * (and its backing `/api/1.0/listing` JSON endpoint), where each download link
+ * carries a format label like "4K (H.264)", "MP3", or "3840x1600 (HEVC)" and a
+ * separate metadata string like "2.82 GB / 60fps / 35.31mbps" or
+ * "185.31 MB / 2.0ch / 256kbps / 48000Hz". `downloadPath` is the relative
+ * `videos/download/<id>` href from the page.
+ */
+export const createMediaInfoFromNewSiteListing = (formatLabel: string, metaText: string, downloadPath: string): MediaInfo => {
+  const trimmedLabel = formatLabel.trim();
+  const parenMatch = trimmedLabel.match(/^(.+?)\s*\(([^)]+)\)\s*$/);
+  const resolutionLabel = parenMatch ? parenMatch[1] : trimmedLabel;
+  const resolution = parseNewSiteResolution(resolutionLabel);
+
+  const metaParts = metaText.split("/").map((part) => part.trim()).filter(Boolean);
+  const [sizeStr, ...rest] = metaParts;
+
+  let videoPropertiesString: string | null = null;
+  let audioPropertiesString: string | null = null;
+
+  if (resolution) {
+    const fpsMatch = rest[0]?.match(/([\d.]+)fps/i);
+    const bitrateMatch = rest.find((part) => /mbps/i.test(part))?.match(/([\d.]+)mbps/i);
+    const parts = [resolution];
+    if (fpsMatch) parts.push(`${fpsMatch[1]}fps`);
+    if (bitrateMatch) parts.push(`${bitrateMatch[1]}mbps`);
+    videoPropertiesString = parts.join(", ");
+  } else {
+    const channelsMatch = rest[0]?.match(/([\d.]+)ch/i);
+    const bitrateMatch = rest.find((part) => /kbps?/i.test(part))?.match(/([\d.]+)kbp?s/i);
+    const sampleRateMatch = rest.find((part) => /hz/i.test(part))?.match(/([\d.]+)hz/i);
+    const encodingLabel = /mp3/i.test(trimmedLabel) ? "MP3" : trimmedLabel.toUpperCase();
+    const parts = [`${encodingLabel} ${channelsMatch ? channelsMatch[1] : "0"}`];
+    if (bitrateMatch) parts.push(`${bitrateMatch[1]}kbps`);
+    if (sampleRateMatch) parts.push(`${sampleRateMatch[1]}Hz`);
+    audioPropertiesString = parts.join(", ");
+  }
+
+  const rawMediaInfo: RawMediaInfo = {
+    format: trimmedLabel,
+    videoProperties: videoPropertiesString,
+    audioProperties: audioPropertiesString,
+    duration: null,
+    size: sizeStr || null,
+    videoId: null,
+    mediaFilename: null,
+  };
+
+  const mediaInfo = inferMediaInfo(rawMediaInfo);
+  return {
+    ...mediaInfo,
+    downloadUrl: `https://www.digitalfoundry.net/${downloadPath.replace(/^\//, "")}`,
+  };
+};

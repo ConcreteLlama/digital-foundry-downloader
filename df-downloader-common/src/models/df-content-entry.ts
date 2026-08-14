@@ -5,7 +5,8 @@ import { DfContentAvailabilityInfo } from "./df-content-status.js";
 import { MediaInfo } from "./media-info/media-info.js";
 
 export const DfContentEntry = z.object({
-  name: z.string(),
+  /** Mirrors the DB record's key (see DfContentInfo.key) - not the pretty contentInfo.name. */
+  key: z.string(),
   contentInfo: DfContentInfo,
   statusInfo: DfContentAvailabilityInfo,
   downloads: DfContentDownloadInfo.array(),
@@ -14,12 +15,12 @@ export type DfContentEntry = z.infer<typeof DfContentEntry>;
 
 export type DfContentEntryCreate = Omit<DfContentEntry, "downloads">;
 export type DfContentEntryUpdate = Partial<DfContentEntryCreate> & {
-  name: string;
+  key: string;
 };
 
 export const DfContentEntryUtils = {
-  create: (name: string, contentInfo: DfContentInfo, statusInfo: DfContentAvailabilityInfo): DfContentEntry => ({
-    name,
+  create: (key: string, contentInfo: DfContentInfo, statusInfo: DfContentAvailabilityInfo): DfContentEntry => ({
+    key,
     contentInfo,
     statusInfo,
     downloads: [],

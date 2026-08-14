@@ -2,7 +2,7 @@ import { z } from "zod";
 import { MediaInfo, MediaInfoUtils } from "./media-info/media-info.js";
 import { makeVideoProps } from "./media-info/video-properties.js";
 
-export const CURRENT_DATA_VERSION = "2.0.2";
+export const CURRENT_DATA_VERSION = "2.1.0";
 
 export const DfContentSource = z.enum(["digitalfoundry", "manual", "patreon"]);
 export type DfContentSource = z.infer<typeof DfContentSource>;
@@ -11,6 +11,27 @@ export const DfContentInfo = z
   .object({
     dataVersion: z.string(),
     publishedDate: z.coerce.date(),
+    /**
+     * Stable, internal identifier - the actual DB/dedup identity. Never shown
+     * to the user, never used to build filenames. Namespaced by scheme so the
+     * source is unambiguous at a glance: "yt-<youtube-video-id>" (preferred,
+     * when the content links to a YouTube video), "dl-<download-id>"
+     * (fallback, derived from the lowest of the content's own
+     * videos/download/<id> links when there's no YouTube link), or a
+     * preserved pre-relaunch DF slug for entries migrated from the old site.
+     * See docs/DF_SITE_MIGRATION.md.
+     */
+    key: z.string(),
+    /**
+     * Other candidate identifiers spotted while parsing this entry, besides
+     * whichever one became `key` - e.g. "mediaId-<id>" from a thumbnail URL,
+     * or "dl-<id>" entries not chosen as the primary key. Collected
+     * opportunistically as cheap insurance against the site's schema
+     * changing (e.g. dropping YouTube links) - intentionally NOT used for
+     * lookups/dedup anywhere today.
+     */
+    possibleAltKeys: z.array(z.string()).optional(),
+    /** Lowercase, hyphenated, filename-safe slug derived from `title` (see slugifyTitle) - cosmetic only, not an identifier. */
     name: z.string(),
     title: z.string(),
     description: z.string().optional(),
@@ -26,6 +47,7 @@ export type DfContentInfo = z.infer<typeof DfContentInfo>;
 
 export const DfContentInfoUtils = {
   create: (
+    key: string,
     name: string,
     title: string,
     description: string | undefined,
@@ -34,8 +56,10 @@ export const DfContentInfoUtils = {
     youtubeVideoId: string | undefined,
     publishedDate?: Date,
     tags?: string[],
-    source?: DfContentSource
+    source?: DfContentSource,
+    possibleAltKeys?: string[]
   ): DfContentInfo => ({
+    key,
     name,
     dataVersion: CURRENT_DATA_VERSION,
     title,
@@ -46,6 +70,7 @@ export const DfContentInfoUtils = {
     tags: tags || [],
     publishedDate: publishedDate || DfContentInfoUtils.extractDateFromName(name) || new Date(),
     source: source || "digitalfoundry",
+    possibleAltKeys: possibleAltKeys || [],
   }),
   extractDateFromName(name: string) {
     const dateStr = name.substring(0, "0000-00-00".length);
@@ -73,6 +98,7 @@ export const DfContentInfoUtils = {
 };
 
 export const DummyContentInfos: DfContentInfo[] = [{
+  key: "dummy-johns-japanese-crt-adventure",
   name: "johns-japanese-crt-adventure",
   dataVersion: CURRENT_DATA_VERSION,
   title: "John's Japanese CRT Adventure",
@@ -116,6 +142,7 @@ export const DummyContentInfos: DfContentInfo[] = [{
   ],
   source: "digitalfoundry",
 }, {
+  key: "dummy-df-direct-weekly-599",
   name: "df-direct-weekly-599",
   dataVersion: CURRENT_DATA_VERSION,
   title: "DF Direct Weekly 599",
@@ -156,6 +183,7 @@ export const DummyContentInfos: DfContentInfo[] = [{
   publishedDate: new Date("2032-10-09T17:12:01Z"),
   source: "digitalfoundry",
 }, {
+  key: "dummy-alexs-favorite-stutters-of-2025-year-in-review",
   name: "alexs-favorite-stutters-of-2025-year-in-review",
   dataVersion: CURRENT_DATA_VERSION,
   title: "Alex's Favorite Stutters of 2025 - Year in Review",

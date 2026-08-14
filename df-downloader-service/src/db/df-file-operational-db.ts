@@ -50,7 +50,7 @@ export class DfFileOperationalDb extends DfDownloaderOperationalDb {
     }
     private makeContentEntry(contentInfo: DfContentInfo, contentStatusEntry: DfContentStatusEntry): DfContentEntry {
         return {
-            name: contentInfo.name,
+            key: contentInfo.key,
             contentInfo: contentInfo,
             statusInfo: contentStatusEntry.availability,
             downloads: contentStatusEntry.downloads,
@@ -62,41 +62,41 @@ export class DfFileOperationalDb extends DfDownloaderOperationalDb {
     public async setContentStatuses(contentStatuses: Record<string, DfContentAvailabilityInfo>) {
         this.contentStatusDb.setStatuses(contentStatuses);
     }
-    private getContentInfosAndStatuses(contentNames: string[]): { contentInfos: (DfContentInfo | null)[], contentStatuses: Record<string, DfContentStatusEntry> } {
-        const contentInfos = this.contentInfoDb.getContentInfoList(contentNames);
-        const foundContentNames = contentInfos.reduce((acc: string[], contentInfo) => {
-            contentInfo?.name && acc.push(contentInfo.name);
+    private getContentInfosAndStatuses(contentKeys: string[]): { contentInfos: (DfContentInfo | null)[], contentStatuses: Record<string, DfContentStatusEntry> } {
+        const contentInfos = this.contentInfoDb.getContentInfoList(contentKeys);
+        const foundContentKeys = contentInfos.reduce((acc: string[], contentInfo) => {
+            contentInfo?.key && acc.push(contentInfo.key);
             return acc;
         }, []);
-        const contentStatuses = this.contentStatusDb.getContentStatusEntries(foundContentNames, true);
+        const contentStatuses = this.contentStatusDb.getContentStatusEntries(foundContentKeys, true);
         return {
             contentInfos,
             contentStatuses,
         }
     }
-    async getContentEntryList(contentNames: string[]) {
-        const { contentInfos, contentStatuses } = this.getContentInfosAndStatuses(contentNames);
+    async getContentEntryList(contentKeys: string[]) {
+        const { contentInfos, contentStatuses } = this.getContentInfosAndStatuses(contentKeys);
         return contentInfos.map((contentInfo) => {
-            const contentStatusEntry = contentStatuses[contentInfo?.name || ""];
+            const contentStatusEntry = contentStatuses[contentInfo?.key || ""];
             return contentInfo ? this.makeContentEntry(contentInfo, contentStatusEntry) : undefined;
         });
     }
-    async getContentEntryMap(contentNames: string[]) {
-        const { contentInfos, contentStatuses } = this.getContentInfosAndStatuses(contentNames);
+    async getContentEntryMap(contentKeys: string[]) {
+        const { contentInfos, contentStatuses } = this.getContentInfosAndStatuses(contentKeys);
         return contentInfos.reduce((acc, contentInfo) => {
             if (!contentInfo) {
                 return acc;
             }
-            const contentStatusEntry = contentStatuses[contentInfo.name];
-            acc.set(contentInfo.name, this.makeContentEntry(contentInfo, contentStatusEntry));
+            const contentStatusEntry = contentStatuses[contentInfo.key];
+            acc.set(contentInfo.key, this.makeContentEntry(contentInfo, contentStatusEntry));
             return acc;
         }, new Map<string, DfContentEntry>());
     }
     async getAllContentEntries() {
         const allContentInfos = this.contentInfoDb.getAllContentInfos();
-        const allContentStatuses = this.contentStatusDb.getContentStatusEntries(allContentInfos.map((c) => c.name), true);
+        const allContentStatuses = this.contentStatusDb.getContentStatusEntries(allContentInfos.map((c) => c.key), true);
         return allContentInfos.map((contentInfo) => {
-            const contentStatusEntry = allContentStatuses[contentInfo.name];
+            const contentStatusEntry = allContentStatuses[contentInfo.key];
             return this.makeContentEntry(contentInfo, contentStatusEntry);
         });
     }
@@ -138,6 +138,12 @@ export class DfFileOperationalDb extends DfDownloaderOperationalDb {
     }
     async setFirstRunComplete(isComplete: boolean) {
         return this.contentStatusDb.setFirstRunComplete(isComplete);
+    }
+    async isNewSiteFirstScanComplete() {
+        return this.contentStatusDb.isNewSiteFirstScanComplete();
+    }
+    async setNewSiteFirstScanComplete(isComplete: boolean) {
+        return this.contentStatusDb.setNewSiteFirstScanComplete(isComplete);
     }
 
     async doQuery(params: DfContentInfoQueryParams) {

@@ -14,12 +14,12 @@ export type DfContentAvailabilitySummaryProps = {
 };
 
 export const DfContentAvailabilitySummary = ({ content }: DfContentAvailabilitySummaryProps) => {
-  const pipelineIds = useSelector(selectActivePipelineIdsForContent(content.name));
+  const pipelineIds = useSelector(selectActivePipelineIdsForContent(content.key));
   const downloadExists = Boolean(pipelineIds);
   const [prevDownloadExists, setPrevDownloadExists] = useState(downloadExists);
   if (downloadExists !== prevDownloadExists) {
     setPrevDownloadExists(downloadExists);
-    store.dispatch(fetchSingleDfContentEntry.start(content.name));
+    store.dispatch(fetchSingleDfContentEntry.start(content.key));
   }
   if (pipelineIds.length > 0) {
     return (

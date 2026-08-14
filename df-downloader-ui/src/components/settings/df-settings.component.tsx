@@ -26,7 +26,7 @@ export const DfSettingsForm = () => {
     >
       <DfSessionIdField />
       <List>
-        <ListSubheader>Acquiring your sessionid cookie</ListSubheader>
+        <ListSubheader>Acquiring your autologin cookie</ListSubheader>
         <ListItem>
           <ListItemText>
             1. Go to <Link href="https://www.digitalfoundry.net">digitalfoundry.net</Link>
@@ -45,7 +45,7 @@ export const DfSettingsForm = () => {
           </ListItemText>
         </ListItem>
         <ListItem>
-          <ListItemText>5. Copy the value of the "sessionid" cookie - NOT the "session_id" cookie</ListItemText>
+          <ListItemText>5. Copy the value of the "autologin" cookie</ListItemText>
         </ListItem>
       </List>
     </DfSettingsSectionForm>
@@ -61,10 +61,10 @@ const DfSessionIdField = () => {
     <Box sx={{ display: "flex", justifyContent: "space-between", gap: 2 }}>
       <ZodTextField
         name="sessionId"
-        label="Session ID"
+        label="Autologin Cookie"
         isPassword={true}
         zodString={DfConfig.shape.sessionId._def.innerType}
-        helperText="To acquire your DF Session ID, you'll need to extract the sessionid cookie from your browser (NOT the session_id cookie)"
+        helperText="Paste the value of the 'autologin' cookie from your browser after signing in to digitalfoundry.net"
         onChange={() => setTestResult(null)}
       />
       <Button

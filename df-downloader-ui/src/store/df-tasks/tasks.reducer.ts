@@ -12,6 +12,7 @@ const INITIAL_STATE: TasksState = {
   taskPipelines: {},
   taskIds: [],
   tasks: {},
+  scheduledDownloads: [],
   error: null,
 };
 let firstFetch = true;
@@ -67,6 +68,7 @@ export const taskPipelinesReducer = createReducer(INITIAL_STATE, (builder) => {
           delete state.tasks[taskId];
         }
       }
+      state.scheduledDownloads = payload.scheduledDownloads;
       firstFetch = false;
     },
   });

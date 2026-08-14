@@ -1,22 +1,26 @@
 import { Box, Button, Dialog, DialogActions, DialogContent, DialogTitle, useMediaQuery } from "@mui/material";
 import { useState } from "react";
 import { useSelector } from "react-redux";
-// import { selectDfUserInfo } from "../../store/df-user/df-user.selector";
+import { selectDfUserInfo } from "../../store/df-user/df-user.selector";
 import { selectIsLoading } from "../../store/general.selector.ts";
 import { theme } from "../../themes/theme";
 import { Loading } from "../general/loading.component.tsx";
 import { DfSettingsForm } from "./df-settings.component";
 
 export const DfSessionCheckDialog = () => {
-  // const dfUser = useSelector(selectDfUserInfo);
+  const dfUser = useSelector(selectDfUserInfo);
   const userInfoLoading = useSelector(selectIsLoading("dfUserInfo"));
   const fullScreen = useMediaQuery(theme.breakpoints.down("md"));
-  const [_ignoreDfSessionCheck, setIgnoreDfSessionCheck] = useState(
+  const [ignoreDfSessionCheck, setIgnoreDfSessionCheck] = useState(
     window.sessionStorage.getItem("ignoreDfSessionCheck") === "true"
   );
-  // const _userExists = Boolean(dfUser);
-  // Disabled: DF site is down, no need to check connection
-  const open = false; // !userExists && !ignoreDfSessionCheck;
+  const userExists = Boolean(dfUser);
+  // Re-enabled 2026-08-14 for the new autologin-cookie flow - the tool should
+  // never silently scan the new site's archive unauthenticated (it's
+  // partially browsable logged-out, but that's not useful data), so this
+  // blocks the main UI until a valid autologin cookie is confirmed, or the
+  // user explicitly says they're just browsing.
+  const open = !userExists && !ignoreDfSessionCheck;
   const onClose = () => {
     window.sessionStorage.setItem("ignoreDfSessionCheck", "true");
     setIgnoreDfSessionCheck(true);

@@ -6,7 +6,9 @@ import { ensureDirectory, moveFile } from "../../utils/file-utils.js";
 import { DfContentInfoDbSchema, DfContentStatusDbSchema, DfContentStatusEntry, DfUserDbSchema } from "../df-db-model.js";
 import { FileDb } from "../file-db.js";
 
-const CURRENT_DB_VERSION = "2.5.0";
+const CURRENT_DB_VERSION = "2.6.0";
+/** Must match DfContentAvailabilityDb's own CURRENT_DB_VERSION - see the 2.5.0->2.6.0 patch step below. */
+const CONTENT_STATUS_DB_VERSION_AFTER_KEY_MIGRATION = "2.5.0";
 
 export class DfContentInfoDb {
     private data: DfContentInfoDbSchema;
@@ -129,6 +131,9 @@ export class DfContentInfoDb {
                             version: CURRENT_DB_VERSION,
                             lastUpdated: new Date(),
                             firstRunComplete: data.firstRunComplete,
+                            // This ancient migration predates the new site entirely, so
+                            // nothing has completed a new-site scan yet.
+                            newSiteFirstScanComplete: false,
                             contentStatuses: Object.entries(data.contentInfo).reduce((acc: Record<string, DfContentStatusEntry>, [key, value]: [string, any]) => {
                                 value.contentInfo.mediaInfo = (value.contentInfo.mediaInfo || []).map((mediaInfo: any) => {
                                     return inferMediaInfo({
@@ -199,6 +204,72 @@ export class DfContentInfoDb {
                             }
                         });
                         data.version = "2.5.0";
+                    } else if (data.version === "2.5.0") {
+                        logger.log("info", `Patching DB version to 2.6.0`);
+                        // The relaunched digitalfoundry.net has no per-video DF-hosted
+                        // page anymore, so `name` (the old DF URL slug) can no longer
+                        // double as both identity and filename basis - every entry now
+                        // needs an explicit, namespaced `key` (see DfContentInfo.key in
+                        // df-downloader-common). Prefer the youtubeVideoId already
+                        // cached by the old scraper (most entries have one - it
+                        // extracted embedded YouTube iframes); otherwise fall back to
+                        // preserving the old slug as a "legacy-" key so nothing is
+                        // silently discarded. `name` itself is left untouched here for
+                        // filename backward-compatibility. See the "Backward
+                        // compatibility" section of docs/DF_SITE_MIGRATION.md.
+                        //
+                        // dataVersion is deliberately NOT bumped by this step - these
+                        // records' actual content (media formats, download URLs) is
+                        // still whatever the old, now-decommissioned site last reported
+                        // and is almost certainly stale/dead. Leaving dataVersion alone
+                        // means the existing dataVersion-mismatch-triggers-refresh logic
+                        // in DigitalFoundryContentManager.patchMetas() will pick these
+                        // entries up for a real metadata refresh against the new site
+                        // once that's wired back into the startup flow - no separate
+                        // "backfill" step needed here, and no network calls belong in a
+                        // DB patch routine.
+                        const keyMap = new Map<string, string>();
+                        const newContentInfo: Record<string, any> = {};
+                        Object.entries(data.contentInfo).forEach(([oldKey, contentInfo]: [string, any]) => {
+                            const youtubeVideoId = contentInfo.youtubeVideoId;
+                            const legacyKey = `legacy-${oldKey}`;
+                            const key = youtubeVideoId ? `yt-${youtubeVideoId}` : legacyKey;
+                            contentInfo.key = key;
+                            contentInfo.possibleAltKeys = youtubeVideoId ? [legacyKey] : [];
+                            newContentInfo[key] = contentInfo;
+                            keyMap.set(oldKey, key);
+                        });
+                        data.contentInfo = newContentInfo;
+
+                        // Coordinated rekey of content-status-db.json, which is keyed
+                        // by the exact same strings - same reasoning as the
+                        // content-status/user DB split in the 2.2.0->2.3.0 step above:
+                        // do it here, directly, rather than trying to pass state between
+                        // independently-loaded DB classes (which wouldn't survive a
+                        // crash between the two, leaving the files permanently out of
+                        // sync with no way to recover the old->new mapping).
+                        const contentStatusDbFilename = path.join(dbDir, "content-status-db.json");
+                        if (existsSync(contentStatusDbFilename)) {
+                            const contentStatusRaw = JSON.parse(await fs.readFile(contentStatusDbFilename, "utf-8"));
+                            const newContentStatuses: Record<string, any> = {};
+                            Object.entries(contentStatusRaw.contentStatuses || {}).forEach(([oldKey, status]) => {
+                                const newKey = keyMap.get(oldKey) || oldKey;
+                                newContentStatuses[newKey] = status;
+                            });
+                            contentStatusRaw.contentStatuses = newContentStatuses;
+                            contentStatusRaw.version = CONTENT_STATUS_DB_VERSION_AFTER_KEY_MIGRATION;
+                            // This rewrite jumps straight to content-status-db's target
+                            // version, skipping its own patch chain - so newer fields that
+                            // chain would otherwise backfill (added after this constant was
+                            // last bumped) need to be stamped here too. False is correct:
+                            // this is a migration of an existing (old-site) DB, so nothing
+                            // has completed a new-site scan yet either way.
+                            contentStatusRaw.newSiteFirstScanComplete = false;
+                            contentStatusRaw.lastUpdated = new Date();
+                            logger.log("info", `Rekeying content-status-db.json to match (${Object.keys(newContentStatuses).length} entries)`);
+                            await fs.writeFile(contentStatusDbFilename, JSON.stringify(contentStatusRaw, null, 2));
+                        }
+                        data.version = "2.6.0";
                     } else {
                         throw new Error(`Unrecognized DB version ${data.version}`);
                     }
@@ -228,7 +299,7 @@ export class DfContentInfoDb {
         if (contentInfos.length === 0) {
             return;
         }
-        contentInfos.forEach((contentInfo) => this.data.contentInfo[contentInfo.name] = contentInfo);
+        contentInfos.forEach((contentInfo) => this.data.contentInfo[contentInfo.key] = contentInfo);
         this.updateDb();
     }
     getAllContentInfos(): DfContentInfo[] {

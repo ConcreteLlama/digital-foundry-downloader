@@ -69,6 +69,9 @@ export abstract class DfDownloaderOperationalDb {
   abstract isFirstRunComplete(): Promise<boolean>;
   abstract setFirstRunComplete(isComplete: boolean): Promise<void>;
 
+  abstract isNewSiteFirstScanComplete(): Promise<boolean>;
+  abstract setNewSiteFirstScanComplete(isComplete: boolean): Promise<void>;
+
   abstract getAllTags(): Promise<DfTagInfo[]>;
 
   abstract getContentEntry(contentName: string): Promise<DfContentEntry | undefined>;

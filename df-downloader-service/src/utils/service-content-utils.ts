@@ -26,7 +26,7 @@ export const ServiceContentUtils = {
     addSubs: (entry: DfContentEntry, downloadLocation: string, subs: DfContentSubtitleInfo): DfContentEntry => {
         const download = ServiceContentUtils.getDownloadByLocation(entry, downloadLocation);
         if (!download) {
-            throw new Error(`Download ${downloadLocation} not found for content ${entry.name}`);
+            throw new Error(`Download ${downloadLocation} not found for content ${entry.key}`);
         }
         download.subtitles = download.subtitles ?? [];
         download.subtitles.push(subs);
@@ -35,7 +35,7 @@ export const ServiceContentUtils = {
     setSubs: (entry: DfContentEntry, downloadLocation: string, subs: DfContentSubtitleInfo[]): DfContentEntry => {
         const download = ServiceContentUtils.getDownloadByLocation(entry, downloadLocation);
         if (!download) {
-            throw new Error(`Download ${downloadLocation} not found for content ${entry.name}`);
+            throw new Error(`Download ${downloadLocation} not found for content ${entry.key}`);
         }
         download.subtitles = subs;
         return entry;
@@ -43,7 +43,7 @@ export const ServiceContentUtils = {
     moveDownload: (entry: DfContentEntry, oldDownloadLocation: string, newDownloadLocation: string): DfContentEntry => {
         const download = ServiceContentUtils.getDownloadByLocation(entry, oldDownloadLocation);
         if (!download) {
-            throw new Error(`Download ${oldDownloadLocation} not found for content ${entry.name}`);
+            throw new Error(`Download ${oldDownloadLocation} not found for content ${entry.key}`);
         }
         download.downloadLocation = newDownloadLocation;
         return entry;

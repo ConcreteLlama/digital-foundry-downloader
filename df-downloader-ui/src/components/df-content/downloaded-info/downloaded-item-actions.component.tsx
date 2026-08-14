@@ -26,7 +26,7 @@ export const DownloadedItemActions = ({ contentEntry, download }: DownloadedItem
   const [editMetadataDialogOpen, setEditMetadataDialogOpen] = useState(false);
   const currentActiveTaskPipelines = useSelector(selectQueryPipelineIds({
     filter: {
-      contentName: contentEntry.name,
+      contentName: contentEntry.key,
       state: 'incomplete',
     }
   }))
@@ -55,7 +55,7 @@ export const DownloadedItemActions = ({ contentEntry, download }: DownloadedItem
 
   const refreshDownloadMetadata = async () => {
     const requestBody: DfContentUpdateDownloadMetaRequest = {
-      contentName: contentEntry.name,
+      contentName: contentEntry.key,
       filename: download.downloadLocation,
     }
     postJson(`${API_URL}/content/downloads/update-metadata`, requestBody).catch((error) => {

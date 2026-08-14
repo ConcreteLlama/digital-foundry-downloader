@@ -25,21 +25,21 @@ export const dfContentReducer = createReducer(INITIAL_STATE, (builder) => {
       state.currentQuery = payload.params;
       state.totalItems = payload.totalResults;
       for (const content of payload.content) {
-        state.content[content.name] = content;
+        state.content[content.key] = content;
       }
-      state.selectedContent = payload.content.map((c) => c.name);
+      state.selectedContent = payload.content.map((c) => c.key);
     },
   });
   addQueryCases(builder, fetchSingleDfContentEntry, {
     success: (state, payload) => {
-      state.content[payload.name] = payload;
+      state.content[payload.key] = payload;
     },
   });
   addQueryCases(builder, refreshDfContentMeta, {
     success(state, actionPayload) {
       const { contentEntries } = actionPayload;
       for (const contentEntry of contentEntries) {
-        state.content[contentEntry.name] = contentEntry;
+        state.content[contentEntry.key] = contentEntry;
       }
     },
   });

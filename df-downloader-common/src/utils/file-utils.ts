@@ -161,6 +161,18 @@ export const oldSanitizeFileName = (fileName: string) => {
   return fileName.replace(/[^a-zA-Z0-9-_]/g, "_");
 };
 
+/**
+ * Turn a title into a lowercase, hyphenated, filename-safe slug (e.g. for
+ * DfContentInfo.name). This is purely cosmetic/derived - it's never used as a
+ * stable identifier, so title changes are free to change the slug.
+ */
+export const slugifyTitle = (title: string) => {
+  return title
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+};
+
 type Replacement = (string | [RegExp | string, string]);
 export type SanitizeFilenameOptions = {
   additionalReplacemenets?: Replacement[];

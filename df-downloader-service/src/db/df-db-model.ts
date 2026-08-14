@@ -24,6 +24,16 @@ export const DfContentStatusEntry = z.object({
 export type DfContentStatusEntry = z.infer<typeof DfContentStatusEntry>;
 export const DfContentStatusDbSchema = DfDbSchema.extend({
   firstRunComplete: z.boolean(),
+  /**
+   * Whether this installation has ever completed a full archive scan against
+   * the post-relaunch site. Used to suppress auto-download on the very first
+   * checkForNewContents() call for a given install (everything looks "new"
+   * relative to a DB that's never been reconciled against this site before,
+   * even for an install that ran yesterday against the old site) - see the
+   * "Resuming after upgrading to this version" section of
+   * docs/DF_SITE_MIGRATION.md.
+   */
+  newSiteFirstScanComplete: z.boolean(),
   contentStatuses: z.record(z.string(), DfContentStatusEntry),
 });
 export type DfContentStatusDbSchema = z.infer<typeof DfContentStatusDbSchema>;

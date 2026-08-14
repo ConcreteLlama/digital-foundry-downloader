@@ -23,7 +23,7 @@ export const DownloadedInfoTable = ({ contentEntry }: DownloadedInfoListProps) =
           <DownloadedInfoTableRow
             download={download}
             contentEntry={contentEntry}
-            key={`dl-info-table-row-${contentEntry.name}-download-${download.downloadDate.toString()}`}
+            key={`dl-info-table-row-${contentEntry.key}-download-${download.downloadDate.toString()}`}
           />
         ))}
       </TableBody>

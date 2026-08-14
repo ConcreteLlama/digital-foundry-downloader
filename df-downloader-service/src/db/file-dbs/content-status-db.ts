@@ -5,7 +5,7 @@ import { DfContentStatusDbSchema, DfContentStatusEntry } from "../df-db-model.js
 import { ContentAvailabilityParams, DownloadInfoWithName, MoveDownloadOpts, RemoveDownloadOpts } from "../df-operational-db.js";
 import { FileDb } from "../file-db.js";
 
-const CURRENT_DB_VERSION = "2.3.0";
+const CURRENT_DB_VERSION = "2.5.0";
 
 const defaultContentStatus: DfContentAvailabilityInfo = {
     availability: DfContentAvailability.UNKNOWN,
@@ -23,6 +23,7 @@ export class DfContentAvailabilityDb {
             initialData: {
                 version: CURRENT_DB_VERSION,
                 firstRunComplete: false,
+                newSiteFirstScanComplete: false,
                 lastUpdated: new Date(),
                 contentStatuses: {}
             },
@@ -44,7 +45,34 @@ export class DfContentAvailabilityDb {
                     };
                 }
                 while (data.version !== CURRENT_DB_VERSION) {
-                    data.version = "2.3.0";
+                    if (!data.version) {
+                        data.version = "2.3.0";
+                    } else if (data.version === "2.3.0") {
+                        // Normally this file is rekeyed and bumped to 2.4.0 directly by
+                        // DfContentInfoDb's 2.5.0->2.6.0 patch step (it needs the
+                        // old->new key mapping, which only exists there). Reaching this
+                        // branch means that coordinated rewrite didn't happen - e.g. a
+                        // crash between the two DBs migrating - so entries here may
+                        // still be under old-style keys. Bump the version so the app can
+                        // start rather than getting stuck, but flag it loudly since
+                        // affected entries won't line up with content-info-db.json until
+                        // manually reconciled.
+                        logger.log(
+                            "warn",
+                            "content-status-db.json reached version 2.3.0 without being rekeyed alongside content-info-db.json - some entries may be orphaned under old-style keys. See docs/DF_SITE_MIGRATION.md."
+                        );
+                        data.version = "2.4.0";
+                    } else if (data.version === "2.4.0") {
+                        logger.log("info", `Patching DB version to 2.5.0`);
+                        // Existing DBs reaching this point predate the new site entirely
+                        // (or were rekeyed by content-info-db.ts's coordinated rewrite,
+                        // which already stamps this field - see below) - false is correct
+                        // either way, since nothing has completed a new-site scan yet.
+                        data.newSiteFirstScanComplete = false;
+                        data.version = "2.5.0";
+                    } else {
+                        throw new Error(`Unrecognized DB version ${data.version}`);
+                    }
                 }
                 logger.log("info", `DB patched to version ${CURRENT_DB_VERSION}`);
                 return {
@@ -220,5 +248,12 @@ export class DfContentAvailabilityDb {
     }
     isFirstRunComplete() {
         return this.data.firstRunComplete;
+    }
+    setNewSiteFirstScanComplete(isComplete: boolean) {
+        this.data.newSiteFirstScanComplete = isComplete;
+        this.updateDb();
+    }
+    isNewSiteFirstScanComplete() {
+        return this.data.newSiteFirstScanComplete;
     }
 }

@@ -110,7 +110,7 @@ type PipelineQuery = {
 
 const applyFilter = (pipeline: TaskPipelineInfo, filter?: PipelineFilter) => {
   if (!filter) return true;
-  if (filter.contentName && pipeline.pipelineDetails.dfContent.name !== filter.contentName) return false;
+  if (filter.contentName && pipeline.pipelineDetails.dfContent.key !== filter.contentName) return false;
   if (filter.mediaFormat && pipeline.pipelineDetails.mediaFormat !== filter.mediaFormat) return false;
   if (filter.state === "downloading") return pipelineIsDownloading(pipeline);
   if (filter.state === "post-processing") return pipelineIsPostProcessing(pipeline);
@@ -212,7 +212,7 @@ export const selectPipelinesForContent = (
   completionStatus: "complete" | "incomplete" | "all" = "all"
 ) =>
   createSelector(selectPipelinesInCompletionState(completionStatus), (pipelines) => {
-    return Object.values(pipelines).filter((pipeline) => pipeline.pipelineDetails.dfContent.name === contentName);
+    return Object.values(pipelines).filter((pipeline) => pipeline.pipelineDetails.dfContent.key === contentName);
   });
 
 export const selectPipelineIdsForContent = (contentName: string, completionStatus: "complete" | "incomplete" | "all") =>
@@ -314,3 +314,5 @@ export const selectClearMissingFilesTasks = createDeepEqualSelector(
   selectTasksByIs(isClearMissingFilesTaskInfo),
   (tasks) => tasks,
 );
+
+export const selectScheduledDownloads = (state: RootState) => state.tasks.scheduledDownloads;

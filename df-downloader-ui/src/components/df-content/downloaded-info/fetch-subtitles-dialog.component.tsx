@@ -61,7 +61,7 @@ export const FetchSubtitlesDialog = (props: FetchSubtitlesDialogProps) => {
   const fetchSubs = () => {
     setSendingRequest(true);
     const fetchSubtitlesRequest: GenerateSubtitlesRequest = {
-      dfContentName: contentEntry.name,
+      dfContentName: contentEntry.key,
       mediaFilePath: download.downloadLocation,
       subtitlesService: selectedService,
       language: selectedLanguage as any,

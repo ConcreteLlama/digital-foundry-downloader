@@ -452,6 +452,10 @@ function createContentInfoFromPost(post: ParsedPatreonPost): DfContentInfo {
   // Generate consistent content name
   const sanitizedTitle = post.title.replace(/[^a-zA-Z0-9]/g, '-').toLowerCase();
   const contentName = sanitizedTitle;
+  // Prefer the YouTube ID as identity when the post embeds one, same scheme
+  // as the site fetcher; otherwise fall back to the slugified title (as
+  // fragile as before, but Patreon posts have no other stable ID to key on).
+  const key = post.youtubeVideoId ? `yt-${post.youtubeVideoId}` : `patreon-${contentName}`;
 
   // Create MediaInfo objects using the utility function
   const mediaInfo: MediaInfo[] = post.downloadLinks.map((link) =>
@@ -459,6 +463,7 @@ function createContentInfoFromPost(post: ParsedPatreonPost): DfContentInfo {
   );
 
   return DfContentInfoUtils.create(
+    key,
     contentName,
     post.title,
     post.description,

@@ -29,7 +29,7 @@ export const createUpdateDownloadMetadataTaskPipeline = (opts: UpdateDownloadMet
         if (context.mediaFileMeta) {
           return null;
         }
-        return RefreshContentInfoTask(context.dfContentInfo.name);
+        return RefreshContentInfoTask(context.dfContentInfo.key, context.dfContentInfo.title);
       },
       continueOnFail: true,
       taskManager: dfFetchTaskManager,

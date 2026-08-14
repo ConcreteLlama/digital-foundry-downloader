@@ -3,14 +3,28 @@ import { MediaInfo } from "../media-info/media-info.js";
 import { TaskInfo } from "./task-info.js";
 import { TaskPipelineDetails, TaskPipelineInfo } from "./task-pipeline-info.js";
 
+/**
+ * A piece of content queued for a delayed auto-download, still waiting out its
+ * jittered downloadDelayMinMs/downloadDelayMaxMs window - not a task/pipeline
+ * yet (those only get created once the delay elapses and the download
+ * actually starts), so this is the only place this state is visible.
+ */
+export const ScheduledDownloadInfo = z.object({
+  contentKey: z.string(),
+  title: z.string(),
+  scheduledFor: z.coerce.date(),
+});
+export type ScheduledDownloadInfo = z.infer<typeof ScheduledDownloadInfo>;
+
 export const TasksResponse = z.object({
   taskPipelines: TaskPipelineInfo.array(),
   tasks: TaskInfo.array(),
+  scheduledDownloads: ScheduledDownloadInfo.array(),
 });
 export type TasksResponse = z.infer<typeof TasksResponse>;
 
 export const AddTaskRequest = z.object({
-  name: z.string(),
+  key: z.string(),
   mediaFormat: z.string().optional(),
 });
 export type AddTaskRequest = z.infer<typeof AddTaskRequest>;
@@ -33,7 +47,7 @@ export const HtmlImportRequest = z.object({
 export type HtmlImportRequest = z.infer<typeof HtmlImportRequest>;
 
 export const DownloadContentResponse = z.object({
-  name: z.string(),
+  key: z.string(),
   mediaInfo: MediaInfo,
   pipelineInfo: TaskPipelineDetails,
 });
