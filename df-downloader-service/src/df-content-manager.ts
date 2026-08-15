@@ -21,6 +21,7 @@ import {
   ScheduledDownloadInfo,
   slugifyTitle
 } from "df-downloader-common";
+import { getArchiveScanCheckpointOffset, setArchiveScanCheckpointOffset } from "./archive-scan-checkpoint.js";
 import { configService } from "./config/config.js";
 import { ContentInfoWithAvailability, DfDownloaderOperationalDb, DownloadInfoWithName } from "./db/df-operational-db.js";
 import { forEachListingPage, fetchContentInfo } from "./df-fetcher.js";
@@ -167,33 +168,155 @@ export class DigitalFoundryContentManager {
     }
   }
 
+  private normalizeTitleForMatching(title: string): string {
+    return title.trim().toLowerCase().replace(/\s+/g, " ");
+  }
+
+  /**
+   * Maps normalized title -> legacy key, for every entry still under a
+   * legacy-<slug> key (assigned during the key/name migration for entries
+   * with no cached YouTube ID at the time - see docs/DF_SITE_MIGRATION.md).
+   * Used by scanWholeArchive to recognize when a freshly-scraped item (which
+   * now resolves to a real yt-/dl- key) is actually the same content as an
+   * existing legacy entry, rather than creating a duplicate. Built once per
+   * scan, not per item/page.
+   */
+  private async buildLegacyTitleMap(): Promise<Map<string, string>> {
+    const allEntries = await this.db.getAllContentEntries();
+    const map = new Map<string, string>();
+    for (const entry of allEntries) {
+      if (entry.key.startsWith("legacy-")) {
+        map.set(this.normalizeTitleForMatching(entry.contentInfo.title), entry.key);
+      }
+    }
+    return map;
+  }
+
+  /**
+   * Merges freshly-scraped items into their matching existing legacy-keyed
+   * entries (matched by title - see buildLegacyTitleMap): adopts each new
+   * key and metadata (current, has real working download links) but
+   * carries the legacy entry's availability/download history forward onto
+   * the new key, records the old key in possibleAltKeys for traceability,
+   * and removes the old legacy entry so it doesn't linger as a duplicate.
+   * Confirmed live 2026-08-15 that without this, ~100 Patreon-bonus-only
+   * items (no YouTube link on the old site, so no youtubeVideoId to rekey
+   * against during migration) end up duplicated the first time a live scan
+   * finds them again under a real yt-<id> key.
+   *
+   * Batched into 3 DB calls total for the whole list, not per item - each
+   * DB write is a full-file rewrite (see FileDb.updateDb()), so reconciling
+   * even a modestly busy page (20-30 items isn't unusual early in a
+   * migration scan) one item at a time meant 100+ full rewrites of a
+   * multi-MB JSON file per page, adding real seconds of pure write-queue
+   * overhead on top of the (intentional) network pacing - confirmed live
+   * 2026-08-15 as the actual cause of a scan taking far longer than the
+   * request spacing alone would explain.
+   */
+  private async reconcileLegacyEntries(
+    toReconcile: { legacyKey: string; contentInfo: DfContentInfo }[],
+    userTier: string
+  ) {
+    if (toReconcile.length === 0) {
+      return;
+    }
+    const legacyEntries = await this.db.getContentEntryMap(toReconcile.map(({ legacyKey }) => legacyKey));
+    const mergedContentMetas: ContentInfoWithAvailability[] = [];
+    const downloadsToTransfer: DownloadInfoWithName[] = [];
+    const legacyKeysToRemove: string[] = [];
+    for (const { legacyKey, contentInfo } of toReconcile) {
+      const legacyEntry = legacyEntries.get(legacyKey);
+      const mergedContentInfo: DfContentInfo = {
+        ...contentInfo,
+        possibleAltKeys: Array.from(new Set([...(contentInfo.possibleAltKeys || []), legacyKey])),
+      };
+      const availability =
+        mergedContentInfo.mediaInfo.length > 0 ? DfContentAvailability.AVAILABLE : DfContentAvailability.PAYWALLED;
+      mergedContentMetas.push({ contentInfo: mergedContentInfo, availability });
+      if (legacyEntry?.downloads?.length) {
+        downloadsToTransfer.push(
+          ...legacyEntry.downloads.map((downloadInfo) => ({ name: mergedContentInfo.key, downloadInfo }))
+        );
+      }
+      legacyKeysToRemove.push(legacyKey);
+      logger.log(
+        "info",
+        `Reconciled legacy entry ${legacyKey} -> ${mergedContentInfo.key} ("${mergedContentInfo.title}")`
+      );
+    }
+    await this.db.setContentInfosWithAvailability(mergedContentMetas, userTier);
+    if (downloadsToTransfer.length > 0) {
+      await this.db.addDownloads(downloadsToTransfer);
+    }
+    await this.db.removeContentInfos(legacyKeysToRemove, true);
+  }
+
+  // ~3 pages worth at the default page limit - covers any new content that
+  // shifted existing entries forward (the listing is newest-first, so new
+  // uploads since the last checkpoint push everything else to a higher
+  // offset) without needing to track exactly how much shifted.
+  private static readonly ARCHIVE_SCAN_RESUME_SAFETY_MARGIN_ITEMS = 150;
+  private static readonly ARCHIVE_SCAN_PAGE_LIMIT = 50;
+
   async scanWholeArchive(...ignoreList: string[]) {
     const userTier = this.dfUserManager.getCurrentTier() || "NONE";
     try {
       this.metaFetchesInProgress++;
       const contentDetectionConfig = configService.config.contentDetection;
-      logger.log("info", `Scanning whole archive (max ${contentDetectionConfig.maxArchivePage} pages)`);
+      const checkpointOffset = await getArchiveScanCheckpointOffset();
+      const startOffset = Math.max(
+        0,
+        checkpointOffset - DigitalFoundryContentManager.ARCHIVE_SCAN_RESUME_SAFETY_MARGIN_ITEMS
+      );
+      logger.log(
+        "info",
+        `Scanning whole archive (max ${contentDetectionConfig.maxArchivePage} pages)${startOffset > 0 ? ` - resuming from offset ${startOffset} (checkpoint ${checkpointOffset})` : ""}`
+      );
+      const legacyTitleMap = await this.buildLegacyTitleMap();
       // The new site's listing already returns full content info per page (no
       // separate per-video detail fetch needed), so this is just a DB dedupe
       // + bulk write per page rather than a per-item fetch loop.
-      await forEachListingPage(async (contentInfos, pageIdx) => {
-        //We may not have finished completing our first run last time so we should filter the content list
-        let filtered = ignoreList.length ? contentInfos.filter((contentInfo) => !ignoreList.includes(contentInfo.key)) : contentInfos;
-        const existingContentInfos = await this.db.getContentEntryMap(filtered.map((contentInfo) => contentInfo.key));
-        filtered = filtered.filter((contentInfo) => {
-          const existing = existingContentInfos.get(contentInfo.key);
-          return !(existing && existing.contentInfo);
-        });
-        if (filtered.length > 0) {
-          logger.log("info", `Found ${filtered.length} new content entries on page ${pageIdx}`);
-          const contentMetas: ContentInfoWithAvailability[] = filtered.map((contentInfo) => ({
-            contentInfo,
-            availability: contentInfo.mediaInfo.length > 0 ? DfContentAvailability.AVAILABLE : DfContentAvailability.PAYWALLED,
-          }));
-          await this.db.setContentInfosWithAvailability(contentMetas, userTier);
-        }
-        return pageIdx < contentDetectionConfig.maxArchivePage;
-      });
+      await forEachListingPage(
+        async (contentInfos, pageIdx, offset) => {
+          //We may not have finished completing our first run last time so we should filter the content list
+          let filtered = ignoreList.length ? contentInfos.filter((contentInfo) => !ignoreList.includes(contentInfo.key)) : contentInfos;
+          const existingContentInfos = await this.db.getContentEntryMap(filtered.map((contentInfo) => contentInfo.key));
+          const toReconcile: { legacyKey: string; contentInfo: DfContentInfo }[] = [];
+          filtered = filtered.filter((contentInfo) => {
+            const existing = existingContentInfos.get(contentInfo.key);
+            if (existing && existing.contentInfo) {
+              return false;
+            }
+            const normalizedTitle = this.normalizeTitleForMatching(contentInfo.title);
+            const legacyKey = legacyTitleMap.get(normalizedTitle);
+            if (legacyKey) {
+              // Consume the match so a second item with a coincidentally
+              // identical title doesn't also try to claim the same legacy
+              // entry.
+              legacyTitleMap.delete(normalizedTitle);
+              toReconcile.push({ legacyKey, contentInfo });
+              return false;
+            }
+            return true;
+          });
+          await this.reconcileLegacyEntries(toReconcile, userTier);
+          if (filtered.length > 0) {
+            logger.log("info", `Found ${filtered.length} new content entries on page ${pageIdx}`);
+            const contentMetas: ContentInfoWithAvailability[] = filtered.map((contentInfo) => ({
+              contentInfo,
+              availability: contentInfo.mediaInfo.length > 0 ? DfContentAvailability.AVAILABLE : DfContentAvailability.PAYWALLED,
+            }));
+            await this.db.setContentInfosWithAvailability(contentMetas, userTier);
+          }
+          // Checkpoint last, only once this page's content is durably
+          // written - if this ran first and the process died mid-page,
+          // the checkpoint would point past content that was never
+          // actually saved.
+          await setArchiveScanCheckpointOffset(offset + DigitalFoundryContentManager.ARCHIVE_SCAN_PAGE_LIMIT);
+          return pageIdx < contentDetectionConfig.maxArchivePage;
+        },
+        { offset: startOffset, limit: DigitalFoundryContentManager.ARCHIVE_SCAN_PAGE_LIMIT }
+      );
     } finally {
       this.metaFetchesInProgress--;
     }

@@ -78,7 +78,7 @@ export abstract class DfDownloaderOperationalDb {
   abstract setContentInfos(contentInfos: DfContentInfo[]): Promise<void>;
   abstract setContentStatuses(contentStatuses: Record<string, DfContentAvailabilityInfo>): Promise<void>;
   abstract setContentAvailailabilities(contentAvailabilities: ContentAvailabilityParams[], userTier: string): Promise<void>;
-  abstract removeContentInfos(contentNames: string[]): Promise<void>;
+  abstract removeContentInfos(contentNames: string[], includeStatuses?: boolean): Promise<void>;
   abstract setDfUserInfo(user?: DfUserInfo): Promise<void>;
   abstract getDfUserInfo(): Promise<DfUserInfo | undefined>;
   abstract addDownloads(downloadInfos: DownloadInfoWithName[]): Promise<void>;
@@ -93,7 +93,7 @@ export abstract class DfDownloaderOperationalDb {
     const [ contentInfos, availabilityParams ] = contentInfosWithStatuses.reduce(
       (acc, entry) => {
         acc[0].push(entry.contentInfo);
-        acc[1].push({ contentName: entry.contentInfo.name, availability: entry.availability });
+        acc[1].push({ contentName: entry.contentInfo.key, availability: entry.availability });
         return acc;
       },
       [[], []] as [DfContentInfo[], ContentAvailabilityParams[]]
@@ -124,7 +124,7 @@ export abstract class DfDownloaderOperationalDb {
     const { contentInfos, statusInfos } = entries.reduce(
       (acc, entry) => {
         acc.contentInfos.push(entry.contentInfo);
-        acc.statusInfos[entry.contentInfo.name] = entry.statusInfo;
+        acc.statusInfos[entry.contentInfo.key] = entry.statusInfo;
         return acc;
       },
       { contentInfos: [] as DfContentInfo[], statusInfos: {} as Record<string, DfContentAvailabilityInfo> }

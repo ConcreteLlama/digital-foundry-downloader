@@ -94,8 +94,13 @@ export class DfContentAvailabilityDb {
         let currentContentStatus = this.data.contentStatuses[contentName];
         let isNew = false;
         if (!currentContentStatus) {
+            // A fresh copy, not a reference to the shared defaultContentStatus
+            // constant - handing out the same object to multiple entries
+            // meant mutating one entry's availability could silently mutate
+            // every other entry still sharing that reference (confirmed as a
+            // real, if not yet visibly damaging, bug 2026-08-15).
             currentContentStatus = {
-                availability: defaultContentStatus,
+                availability: { availability: defaultContentStatus.availability, availabilityInTiers: {} },
                 downloads: [],
             };
             this.data.contentStatuses[contentName] = currentContentStatus;
@@ -109,8 +114,18 @@ export class DfContentAvailabilityDb {
     private getTransformContentStatusEntries<T>(contentNames: string[], createIfNotExists: boolean, transformer: (contentStatus: DfContentStatusEntry) => T) {
         let added = false;
         if (!createIfNotExists) {
+            // A content-info entry with no matching status entry is a real,
+            // if unusual, state (confirmed against real historical data,
+            // 2026-08-15: a 2655-entry content-info-db paired with a
+            // 2580-entry content-status-db) - default rather than crash,
+            // without persisting the default back to disk (that's what
+            // createIfNotExists=true is for).
             return contentNames.reduce((acc: Record<string, T>, contentName) => {
-                acc[contentName] = transformer(this.data.contentStatuses[contentName]);
+                const contentStatus = this.data.contentStatuses[contentName] || {
+                    availability: { availability: defaultContentStatus.availability, availabilityInTiers: {} },
+                    downloads: [],
+                };
+                acc[contentName] = transformer(contentStatus);
                 return acc;
             }, {});
         }
@@ -234,10 +249,14 @@ export class DfContentAvailabilityDb {
     }
     setContentAvailabilities(records: ContentAvailabilityParams[], userTier: string) {
         for (const { contentName, availability } of records) {
-            const currentStatus = this.data.contentStatuses[contentName]?.availability || defaultContentStatus;
-            currentStatus.availability = availability;
+            // forceGetContentStatus (not a manual fallback to the shared
+            // defaultContentStatus constant) so a brand-new entry actually
+            // gets created and persisted here, rather than silently mutating
+            // a throwaway/shared object and discarding the result.
+            const { contentStatus } = this.forceGetContentStatus(contentName);
+            contentStatus.availability.availability = availability;
             if (availability !== DfContentAvailability.UNKNOWN) {
-                currentStatus.availabilityInTiers[userTier] = availability;
+                contentStatus.availability.availabilityInTiers[userTier] = availability;
             }
         }
         this.updateDb();

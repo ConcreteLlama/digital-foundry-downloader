@@ -237,7 +237,7 @@ function toFetchedContentInfo(contentInfo: DfContentInfo): FetchedContentInfo {
  * df-request-queue.ts), which also transparently backs off on 429/503.
  */
 export async function forEachListingPage(
-  fn: (contentInfos: DfContentInfo[], pageIdx: number) => boolean | Promise<boolean>,
+  fn: (contentInfos: DfContentInfo[], pageIdx: number, offset: number) => boolean | Promise<boolean>,
   opts: ListingQueryOpts = {}
 ) {
   const limit = opts.limit ?? 50;
@@ -256,7 +256,7 @@ export async function forEachListingPage(
     const contentInfos = response.items
       .map((itemHtml) => parseListingItemSafe(itemHtml, `page ${pageIdx}`))
       .filter((info): info is DfContentInfo => info !== null);
-    const cont = await fn(contentInfos, pageIdx);
+    const cont = await fn(contentInfos, pageIdx, offset);
     if (!cont) {
       return;
     }
