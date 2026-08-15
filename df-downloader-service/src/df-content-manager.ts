@@ -104,7 +104,7 @@ export class DigitalFoundryContentManager {
       const newContentList = await this.getNewContentList();
       // Skip new content list when scanning whole archive so the normal auto download process can work
       // (this code will only scan and add to DB, not initiate downloads)
-      await this.scanWholeArchive(...newContentList.map((contentRef) => contentRef.key));
+      await this.scanWholeArchive(...[...newContentList.newContent, ...newContentList.updatedContent].map((contentRef) => contentRef.key));
       await this.patchMetas();
     } else {
       logger.log("info", "First run not complete, scanning whole archive");
@@ -672,20 +672,52 @@ export class DigitalFoundryContentManager {
     return toAddDownload;
   }
 
-  async getNewContentList(): Promise<DfContentInfo[]> {
-    const toReturn: DfContentInfo[] = [];
+  /**
+   * Walks the listing (newest-first) for two things at once, both bounded to
+   * automaticDownloads.maxContentAgeHours - content older than that isn't
+   * auto-downloadable anyway, so there's no point walking further or
+   * re-checking it here:
+   * - newContent: keys never seen before.
+   * - updatedContent: already-known keys whose live-scraped mediaInfo now
+   *   has a format that wasn't stored before - Digital Foundry sometimes
+   *   publishes an MP3-only version of a post before the video follows
+   *   (e.g. up to an hour later), and the old "stop at the first already-known
+   *   item" walk meant that once an entry existed at all (even audio-only),
+   *   nothing ever looked at it again - a user who only auto-downloads video
+   *   would silently never get it. Detected purely by diffing formatString
+   *   sets, so it's zero extra requests - the data's already being fetched.
+   */
+  async getNewContentList(): Promise<{ newContent: DfContentInfo[]; updatedContent: DfContentInfo[] }> {
+    const maxAgeMs = configService.config.automaticDownloads.maxContentAgeHours * 60 * 60 * 1000;
+    const now = Date.now();
+    const newContent: DfContentInfo[] = [];
+    const updatedContent: DfContentInfo[] = [];
     await forEachListingPage(async (contentInfos) => {
       const existingMeta = await this.db.getContentEntryList(contentInfos.map((contentInfo) => contentInfo.key));
-      const newContentInfos = contentInfos.filter(
-        (value, idx) => !existingMeta[idx] && !this.taskManager.hasPipelineForContent(value.key)
-      );
-      if (newContentInfos.length === 0) {
-        return false;
-      }
-      toReturn.push(...newContentInfos);
-      return newContentInfos.length === contentInfos.length;
+      let anyWithinWindow = false;
+      contentInfos.forEach((contentInfo, idx) => {
+        if (now - contentInfo.publishedDate.getTime() > maxAgeMs) {
+          return;
+        }
+        anyWithinWindow = true;
+        const existing = existingMeta[idx];
+        if (!existing) {
+          if (!this.taskManager.hasPipelineForContent(contentInfo.key)) {
+            newContent.push(contentInfo);
+          }
+          return;
+        }
+        const storedFormats = new Set(existing.contentInfo.mediaInfo.map((mediaInfo) => mediaInfo.formatString));
+        if (contentInfo.mediaInfo.some((mediaInfo) => !storedFormats.has(mediaInfo.formatString))) {
+          updatedContent.push(contentInfo);
+        }
+      });
+      // Listing is newest-first, so once a page has nothing within the
+      // window, nothing on later pages will be either - stop there
+      // regardless of whether this page held anything new/updated.
+      return anyWithinWindow;
     });
-    return toReturn;
+    return { newContent, updatedContent };
   }
 
   async checkForNewContents(opts?: {
@@ -737,7 +769,8 @@ export class DigitalFoundryContentManager {
     } else {
       // Fetch from DF site as usual - the listing already returns full content
       // info, so no separate detail-fetch step is needed.
-      const newContentInfos = [...(await this.getNewContentList()), ...noMediaInfoContents.map((v) => v.contentInfo)];
+      const { newContent, updatedContent } = await this.getNewContentList();
+      const newContentInfos = [...newContent, ...updatedContent, ...noMediaInfoContents.map((v) => v.contentInfo)];
       newContentFetchResults = newContentInfos.map((contentInfo) => ({
         contentInfo,
         availability: contentInfo.mediaInfo.length > 0 ? DfContentAvailability.AVAILABLE : DfContentAvailability.PAYWALLED,
@@ -892,9 +925,27 @@ export class DigitalFoundryContentManager {
             );
             return undefined;
           });
-          if (contentEntry && DfContentEntryUtils.hasDownload(contentEntry)) {
-            logger.log("info", `Skipping download for ${contentKey} as it is already downloaded`);
-            return resolve();
+          if (contentEntry) {
+            // Check per-format, not just "has any download at all" - the
+            // format-recheck path (see getNewContentList) re-queues content
+            // whose mediaInfo just gained a format that wasn't there before
+            // (e.g. video following an earlier audio-only release), and a
+            // coarse hasDownload check would wrongly skip that new format
+            // just because a different one was already downloaded.
+            const matchingMediaInfo =
+              typeof content !== "string"
+                ? getBestMediaInfoMatch(configService.config.mediaFormats.priorities, content.mediaInfo, { mustMatch: true })
+                : undefined;
+            const alreadyHasRelevantDownload = matchingMediaInfo
+              ? Boolean(DfContentEntryUtils.getDownloadForFormat(contentEntry, matchingMediaInfo.formatString))
+              : DfContentEntryUtils.hasDownload(contentEntry);
+            if (alreadyHasRelevantDownload) {
+              logger.log(
+                "info",
+                `Skipping download for ${contentKey} as ${matchingMediaInfo ? `the ${matchingMediaInfo.formatString} format is` : "it is"} already downloaded`
+              );
+              return resolve();
+            }
           }
         }
         this.downloadContent(content)
