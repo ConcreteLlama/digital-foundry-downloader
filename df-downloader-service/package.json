@@ -30,7 +30,7 @@
     "@deepgram/sdk": "^1.18.1",
     "@google-cloud/speech": "^6.2.0",
     "async-mutex": "^0.4.1",
-    "bcrypt": "^5.1.1",
+    "bcrypt": "^6.0.0",
     "better-queue": "3.8.10",
     "cheerio": "^1.1.2",
     "cookie-parser": "^1.4.6",
@@ -52,7 +52,7 @@
     "zod-validation-error": "^1.2.0"
   },
   "devDependencies": {
-    "@types/bcrypt": "^5.0.0",
+    "@types/bcrypt": "^6.0.0",
     "@types/better-queue": "3.8.3",
     "@types/cookie-parser": "^1.4.3",
     "@types/cors": "^2.8.13",

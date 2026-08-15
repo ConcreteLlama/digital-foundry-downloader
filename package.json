@@ -32,5 +32,10 @@
   },
   "dependencies": {
     "date-fns": "^3.6.0"
+  },
+  "overrides": {
+    "utimes": {
+      "@mapbox/node-pre-gyp": "^2.0.3"
+    }
   }
 }
