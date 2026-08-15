@@ -142,11 +142,20 @@ export class DfTaskManager {
     let destination: string;
     let headers: Record<string, string>;
 
-    const actualDirectUrl = directUrl || mediaInfo.downloadUrl;
-    if (actualDirectUrl) {
-      // For manual downloads, use the provided URL directly
+    if (directUrl) {
+      // Only for genuinely-external manual downloads (e.g. the Patreon-import
+      // flow, which passes an explicit non-DF URL) - no DF cookie/headers
+      // needed since it's not digitalfoundry.net. Deliberately keyed off the
+      // explicit `directUrl` param alone, not `|| mediaInfo.downloadUrl` -
+      // the new site's listing populates mediaInfo.downloadUrl for every
+      // DF-sourced item as a matter of course (see parseListingItem), so an
+      // `||` fallback here silently routed every normal DF download through
+      // this no-auth branch too, sending no autologin cookie at all and
+      // landing on /login - confirmed live 2026-08-15 as the actual root
+      // cause of every "download does nothing" report this session, not a
+      // cookie/header/blacklist issue as originally suspected.
       const filename = mediaInfo.mediaFilename || sanitizeFilename(`${dfContentInfo.name}_${mediaInfo.formatString}.${MediaInfoUtils.getExtension(mediaInfo)}`);
-      url = async () => actualDirectUrl;
+      url = async () => directUrl;
       destination = `${configService.config.contentManagement.workDir}/${filename}`;
       headers = {
         "User-Agent": "DigitalFounload",

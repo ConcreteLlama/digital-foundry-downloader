@@ -434,10 +434,84 @@ CDN signed-URL pattern - not separately verified, but consistent with the URL sh
 `mediaInfo.downloadUrl` is set to the `videos/download/<id>` URL (not the resolved CDN
 URL) since it's simpler to store and the redirect only costs one extra hop; a normal
 HTTP client following redirects (which `df-downloader-service`'s download engine should
-already do, being a generic HTTP downloader) should handle this transparently. **Not
-yet verified**: an actual download run through the app's real download engine against
-this URL (only a header-only check was done, to avoid pulling real video bytes without
-being asked to).
+already do, being a generic HTTP downloader) should handle this transparently.
+
+**First real end-to-end download attempt (2026-08-15) - failed, unresolved.** Triggering
+a download through the actual app (not a synthetic script) against `yt-LsV1XmJ00UE`'s
+`videos/download/7557` link got a `200` landing on `https://www.digitalfoundry.net/login`
+instead of the documented `302` to a signed CDN URL - i.e. the same behavior the
+reconnaissance above documented for an *invalid/missing* cookie, using the exact same
+`autologin` cookie that had, minutes earlier in the same session, driven a full
+successful archive scan (which requires a valid authenticated subscriber session to get
+real, non-`"login"`-placeholder links in the first place). The response also actively
+told the client to forget the `autologin` cookie (`set-cookie: autologin=deleted; ...`)
+and issued a fresh `CCMSSESSID`. Ruled out (via one careful manual test each, not
+production code changes): the app's download-specific `User-Agent: "DigitalFounload"`
+header (removing it made no difference); needing an established browser-style session
+cookie from a prior page load (loading `/videos` first issued no session cookie at all,
+and the download URL still redirected to login even carrying that request's cookies
+forward).
+
+**Confirmed (2026-08-15): this was the specific `autologin` token getting individually
+blacklisted, not a general anti-scraping trip or an account-wide block.** A follow-up
+check against `/api/1.0/listing` (the endpoint that had run flawlessly all session,
+thousands of requests, real links every time) with the *same* cookie now also returns
+`"login"` placeholders - the session is dead everywhere, not just on the download path -
+confirming the `set-cookie: autologin=deleted` response was literal, not just a
+client-side hint. The project owner confirmed their own browser session (different
+token, on their phone) is still logged in fine, so this is scoped to the one token used
+here, not the account. Working theory: the site treats a saved `autologin` token making
+requests that look unusual for a "remember me" cookie (server-side, scripted, hitting
+`videos/download/<id>` a handful of times in a short window with no prior page-view
+history) as a signal the token may be compromised, and blacklists that specific token
+defensively - a narrower, more benign explanation than a blanket bot-detection block.
+**Redirect mechanism confirmed working (2026-08-15)**: the project owner manually
+clicked the same `videos/download/7557` link in their own logged-in browser and got the
+documented 302 → presigned CDN URL (`https://1628926251.rsc.cdn77.org/videos/Oblivion%20Remaster%20Switch%202%20Tech%20Review.mp4?secure=...`)
+- exactly matching this doc's original recon and the URL shape
+`df-downloader-service`'s download engine already expects.
+
+**Real root cause found and fixed (2026-08-15): `DfTaskManager.downloadContent()` never
+sent the `autologin` cookie at all.** `df-task-manager.ts`'s `downloadContent(dfContentInfo,
+mediaInfo, directUrl?)` computed `actualDirectUrl = directUrl || mediaInfo.downloadUrl` and
+took a "manual download, no DF headers" branch (just `User-Agent: DigitalFounload`, no
+cookie) whenever that was truthy. `directUrl` is meant to be explicit-only, for the
+Patreon-import flow's genuinely-external URLs - but the new site's listing populates
+`mediaInfo.downloadUrl` directly for every DF-sourced item as a matter of course (unlike
+the old site), so the `||` fallback silently routed *every* normal DF download through
+the no-auth branch, not just manual ones. The result: an unauthenticated request to
+`videos/download/<id>`, which the site correctly redirects to `/login` (matching this
+doc's own "without any auth cookie" case above) - a `200` on an HTML login page with no
+`Content-Length` header, which is what the download engine's `makeStreamsFromResponse`
+was actually choking on the whole time. Fixed by keying the branch off `directUrl` alone
+(the explicit param), not the `||` fallback - see the fix's comment in
+`df-task-manager.ts` for detail. **This was the sole cause** - the earlier
+"token got blacklisted" diagnosis was a red herring from testing in parallel with a
+separate diagnostic script that manually included the cookie header (and thus
+legitimately triggered whatever the real blacklist/expiry mechanism is, independent of
+this bug); the app itself was never sending the cookie for real downloads in the first
+place, on any attempt, the whole time. **Verified live 2026-08-15 with a fresh
+`autologin` cookie**: the real download engine now correctly authenticates, gets the
+CDN redirect, and opens multiple range-split connections (`supportsByteRangeHeaders:
+true`, confirmed via response headers) - end-to-end download success confirmed for the
+first time since the relaunch. This unblocks re-enabling the auto-poll loop from a
+correctness standpoint (see the still-open idle-period/mass-auto-download safeguard
+item above, which is a separate concern).
+
+Also updated `makeDfDownloadParams()`'s headers (`df-fetcher.ts`) while investigating
+this to mimic a real browser navigation request (realistic `User-Agent`, `Accept`,
+`Sec-Fetch-*`, etc., deliberately omitting `sec-ch-ua`/Client Hints since a
+slightly-mismatched version pairing can read as more suspicious than omitting them) -
+not confirmed necessary for the fix above (the missing-cookie bug was sufficient on its
+own to explain every failure observed), but a reasonable defensive improvement given the
+old bare `"User-Agent": "DigitalFounload"` was a very obvious non-browser signal, kept
+since it doesn't hurt and there's no evidence against it.
+
+Next steps when picking this back up: (1) try a manual browser download first (confirms
+whether the mechanism still works as documented at all, independent of this app), (2)
+if it does, capture the real request from browser devtools and diff it against what
+`df-downloader-service` sends, (3) if manual browser downloads *also* fail right now,
+this may just need to cool down before retrying anything automated against it.
 
 This reconnaissance only covered `/videos` and its listing/download API. Still not
 checked:
