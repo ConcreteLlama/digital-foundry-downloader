@@ -21,7 +21,7 @@ import {
   ScheduledDownloadInfo,
   slugifyTitle
 } from "df-downloader-common";
-import { getArchiveScanCheckpointOffset, setArchiveScanCheckpointOffset } from "./archive-scan-checkpoint.js";
+import { getArchiveScanCheckpoint, setArchiveScanCheckpoint } from "./archive-scan-checkpoint.js";
 import { configService } from "./config/config.js";
 import { ContentInfoWithAvailability, DfDownloaderOperationalDb, DownloadInfoWithName } from "./db/df-operational-db.js";
 import { forEachListingPage, fetchContentInfo } from "./df-fetcher.js";
@@ -53,6 +53,20 @@ export class DigitalFoundryContentManager {
    * REST API/UI, since users otherwise have no visibility into it at all.
    */
   private scheduledDownloads: Map<string, ScheduledDownloadInfo> = new Map();
+  /**
+   * False from process start until the initial startup scan (see start())
+   * finishes - the tier-change listener fires from within
+   * DfUserManager.start(), before runInitialScan() has even begun, and its
+   * refreshMeta() call would otherwise contend with the scan's own listing
+   * requests for the same single-concurrency dfFetch queue (confirmed live
+   * 2026-08-15: a scan that should take seconds per page took minutes per
+   * page with both running at once). Entries that need refreshing before
+   * the scan completes are collected in pendingStartupMetaRefresh instead
+   * and flushed once it's done - the scan itself will have already cleared
+   * most of them anyway (see scanWholeArchive's `legacy` handling).
+   */
+  private startupScanComplete = false;
+  private pendingStartupMetaRefresh = new Set<string>();
 
   constructor(readonly db: DfDownloaderOperationalDb) {
     this.dfUserManager = new DfUserManager(db);
@@ -141,6 +155,29 @@ export class DigitalFoundryContentManager {
         "Not scanning Digital Foundry - no valid autologin cookie configured (or account isn't a subscriber). Configure it in Settings > Digital Foundry."
       );
     }
+    this.startupScanComplete = true;
+    if (this.pendingStartupMetaRefresh.size > 0) {
+      const pending = Array.from(this.pendingStartupMetaRefresh);
+      this.pendingStartupMetaRefresh.clear();
+      // Re-check against current DB state rather than trusting the snapshot
+      // taken when each item was deferred - the scan that just ran (if any)
+      // may well have already resolved most of these via its own writes
+      // (setContentInfosWithAvailability populates availabilityInTiers too),
+      // and items given up on (unpatchable) shouldn't be re-attempted here
+      // either. Confirmed live 2026-08-15: without this re-check, a DB with
+      // ~2400 recently-legacy entries deferred ~2200 of them here even
+      // though the scan had already resolved all but ~40 of them seconds
+      // earlier - would have cost well over an hour of redundant per-item
+      // searches for zero benefit.
+      const stillPending = await this.filterStillNeedingMetaRefresh(pending);
+      if (stillPending.length > 0) {
+        logger.log(
+          "info",
+          `Initial scan complete - refreshing metadata for ${stillPending.length} of ${pending.length} deferred entries (the rest were already resolved by the scan)`
+        );
+        await this.refreshMeta(...stillPending);
+      }
+    }
     if (contentManagementConfig.scanForExistingFiles) {
       const scanTask = this.taskManager.scanForExistingContent(this);
       await scanTask.awaitResult();
@@ -173,28 +210,37 @@ export class DigitalFoundryContentManager {
   }
 
   /**
-   * Maps normalized title -> legacy key, for every entry still under a
-   * legacy-<slug> key (assigned during the key/name migration for entries
-   * with no cached YouTube ID at the time - see docs/DF_SITE_MIGRATION.md).
-   * Used by scanWholeArchive to recognize when a freshly-scraped item (which
-   * now resolves to a real yt-/dl- key) is actually the same content as an
-   * existing legacy entry, rather than creating a duplicate. Built once per
-   * scan, not per item/page.
+   * Single pass over the whole DB, gathering two things scanWholeArchive
+   * needs up front (avoids reading the whole content-info DB twice):
+   * - legacyTitleMap: normalized title -> legacy key, for every entry still
+   *   under a legacy-<slug> key (assigned during the key/name migration for
+   *   entries with no cached YouTube ID at the time - see
+   *   docs/DF_SITE_MIGRATION.md). Used to recognize when a freshly-scraped
+   *   item (which now resolves to a real yt-/dl- key) is actually the same
+   *   content as an existing legacy entry, rather than creating a duplicate.
+   * - unresolvedLegacyCount: how many entries are still `legacy` and not yet
+   *   `unpatchable` - i.e. still need their data confirmed against the live
+   *   site. Used to decide whether this scan needs to be a full walk from
+   *   offset 0 (see scanWholeArchive).
    */
-  private async buildLegacyTitleMap(): Promise<Map<string, string>> {
+  private async buildScanState(): Promise<{ legacyTitleMap: Map<string, string>; unresolvedLegacyCount: number }> {
     const allEntries = await this.db.getAllContentEntries();
-    const map = new Map<string, string>();
+    const legacyTitleMap = new Map<string, string>();
+    let unresolvedLegacyCount = 0;
     for (const entry of allEntries) {
       if (entry.key.startsWith("legacy-")) {
-        map.set(this.normalizeTitleForMatching(entry.contentInfo.title), entry.key);
+        legacyTitleMap.set(this.normalizeTitleForMatching(entry.contentInfo.title), entry.key);
+      }
+      if (entry.contentInfo?.legacy && !entry.contentInfo?.unpatchable) {
+        unresolvedLegacyCount++;
       }
     }
-    return map;
+    return { legacyTitleMap, unresolvedLegacyCount };
   }
 
   /**
    * Merges freshly-scraped items into their matching existing legacy-keyed
-   * entries (matched by title - see buildLegacyTitleMap): adopts each new
+   * entries (matched by title - see buildScanState): adopts each new
    * key and metadata (current, has real working download links) but
    * carries the legacy entry's availability/download history forward onto
    * the new key, records the old key in possibleAltKeys for traceability,
@@ -260,19 +306,45 @@ export class DigitalFoundryContentManager {
 
   async scanWholeArchive(...ignoreList: string[]) {
     const userTier = this.dfUserManager.getCurrentTier() || "NONE";
+    let finalCheckpointOffset = 0;
+    let hitPageCap = false;
+    let resolvingLegacy = false;
     try {
       this.metaFetchesInProgress++;
       const contentDetectionConfig = configService.config.contentDetection;
-      const checkpointOffset = await getArchiveScanCheckpointOffset();
-      const startOffset = Math.max(
-        0,
-        checkpointOffset - DigitalFoundryContentManager.ARCHIVE_SCAN_RESUME_SAFETY_MARGIN_ITEMS
-      );
+      const checkpoint = await getArchiveScanCheckpoint();
+      const { legacyTitleMap, unresolvedLegacyCount } = await this.buildScanState();
+      let startOffset: number;
+      if (checkpoint.legacyResolutionInProgress) {
+        // An earlier full walk got interrupted (crash/restart) - resume it
+        // exactly where it left off rather than restarting from 0 or falling
+        // back to the normal tail-only resume.
+        resolvingLegacy = true;
+        startOffset = checkpoint.offset;
+        logger.log("info", `Resuming in-progress full archive walk (started to resolve legacy entries) from offset ${startOffset}`);
+      } else if (unresolvedLegacyCount > 0) {
+        // Some entries still don't have data confirmed against the live
+        // site (see DfContentInfo.legacy). The normal tail-only resume would
+        // never revisit the earlier pages those entries live on, so do one
+        // full walk from the start instead - relying on refreshMeta()'s much
+        // slower, much less reliable per-item title-search fallback to
+        // eventually get to all of these was confirmed live 2026-08-15 to be
+        // impractical at real scale (~2400 legacy entries would take in the
+        // order of a day to work through that way, mostly failing). This
+        // full walk is itself resumable (see checkpoint.legacyResolutionInProgress
+        // above) so an interruption just picks back up, not starts over.
+        resolvingLegacy = true;
+        startOffset = 0;
+        logger.log("info", `${unresolvedLegacyCount} entries still need their data confirmed against the live site - doing a full archive walk from the start instead of the usual tail-only resume`);
+        await setArchiveScanCheckpoint({ offset: 0, legacyResolutionInProgress: true });
+      } else {
+        startOffset = Math.max(0, checkpoint.offset - DigitalFoundryContentManager.ARCHIVE_SCAN_RESUME_SAFETY_MARGIN_ITEMS);
+      }
+      finalCheckpointOffset = startOffset;
       logger.log(
         "info",
-        `Scanning whole archive (max ${contentDetectionConfig.maxArchivePage} pages)${startOffset > 0 ? ` - resuming from offset ${startOffset} (checkpoint ${checkpointOffset})` : ""}`
+        `Scanning whole archive (max ${contentDetectionConfig.maxArchivePage} pages)${startOffset > 0 ? ` - resuming from offset ${startOffset}` : ""}`
       );
-      const legacyTitleMap = await this.buildLegacyTitleMap();
       // The new site's listing already returns full content info per page (no
       // separate per-video detail fetch needed), so this is just a DB dedupe
       // + bulk write per page rather than a per-item fetch loop.
@@ -282,9 +354,24 @@ export class DigitalFoundryContentManager {
           let filtered = ignoreList.length ? contentInfos.filter((contentInfo) => !ignoreList.includes(contentInfo.key)) : contentInfos;
           const existingContentInfos = await this.db.getContentEntryMap(filtered.map((contentInfo) => contentInfo.key));
           const toReconcile: { legacyKey: string; contentInfo: DfContentInfo }[] = [];
+          // Entries already at their final key (never needed legacy-key
+          // reconciliation - e.g. an entry that already had a cached
+          // youtubeVideoId at migration time) still need their `legacy`
+          // flag cleared once we've actually confirmed fresh data for them.
+          // The scan already has that fresh data in hand for every item on
+          // this page at zero extra request cost, so use it - relying on
+          // patchMetas()'s much slower, much less reliable per-item
+          // title-search fallback to eventually get to all of these was
+          // confirmed live 2026-08-15 to be impractical at real scale
+          // (~2400 legacy entries would take in the order of a day to work
+          // through that way, mostly failing).
+          const toRefreshLegacy: DfContentInfo[] = [];
           filtered = filtered.filter((contentInfo) => {
             const existing = existingContentInfos.get(contentInfo.key);
             if (existing && existing.contentInfo) {
+              if (existing.contentInfo.legacy) {
+                toRefreshLegacy.push(contentInfo);
+              }
               return false;
             }
             const normalizedTitle = this.normalizeTitleForMatching(contentInfo.title);
@@ -300,9 +387,18 @@ export class DigitalFoundryContentManager {
             return true;
           });
           await this.reconcileLegacyEntries(toReconcile, userTier);
-          if (filtered.length > 0) {
-            logger.log("info", `Found ${filtered.length} new content entries on page ${pageIdx}`);
-            const contentMetas: ContentInfoWithAvailability[] = filtered.map((contentInfo) => ({
+          if (toRefreshLegacy.length > 0) {
+            logger.log(
+              "info",
+              `Refreshed ${toRefreshLegacy.length} legacy entries found again on page ${pageIdx} (${toRefreshLegacy.map((c) => c.key).join(", ")})`
+            );
+          }
+          const toWrite = [...filtered, ...toRefreshLegacy];
+          if (toWrite.length > 0) {
+            if (filtered.length > 0) {
+              logger.log("info", `Found ${filtered.length} new content entries on page ${pageIdx}`);
+            }
+            const contentMetas: ContentInfoWithAvailability[] = toWrite.map((contentInfo) => ({
               contentInfo,
               availability: contentInfo.mediaInfo.length > 0 ? DfContentAvailability.AVAILABLE : DfContentAvailability.PAYWALLED,
             }));
@@ -312,11 +408,39 @@ export class DigitalFoundryContentManager {
           // written - if this ran first and the process died mid-page,
           // the checkpoint would point past content that was never
           // actually saved.
-          await setArchiveScanCheckpointOffset(offset + DigitalFoundryContentManager.ARCHIVE_SCAN_PAGE_LIMIT);
-          return pageIdx < contentDetectionConfig.maxArchivePage;
+          finalCheckpointOffset = offset + DigitalFoundryContentManager.ARCHIVE_SCAN_PAGE_LIMIT;
+          await setArchiveScanCheckpoint({ offset: finalCheckpointOffset, legacyResolutionInProgress: resolvingLegacy });
+          const shouldContinue = pageIdx < contentDetectionConfig.maxArchivePage;
+          if (!shouldContinue) {
+            hitPageCap = true;
+          }
+          return shouldContinue;
         },
         { offset: startOffset, limit: DigitalFoundryContentManager.ARCHIVE_SCAN_PAGE_LIMIT }
       );
+      if (resolvingLegacy && !hitPageCap) {
+        // forEachListingPage ran off the true end of the archive (rather
+        // than being cut off by the maxArchivePage safety cap), so every
+        // legacy entry that still exists on the live site was encountered
+        // and cleared above. Anything still flagged legacy at this point is
+        // confirmed absent - stop auto-retrying it (same rationale as
+        // giveUpOnMetaRefresh: a manual "refresh metadata" retry remains
+        // available per-item).
+        const remainingEntries = await this.db.getAllContentEntries();
+        const stillLegacy = remainingEntries
+          .filter((entry) => entry.contentInfo?.legacy && !entry.contentInfo?.unpatchable)
+          .map((entry) => entry.contentInfo);
+        if (stillLegacy.length > 0) {
+          await this.db.setContentInfos(stillLegacy.map((contentInfo) => ({ ...contentInfo, unpatchable: true })));
+          logger.log(
+            "info",
+            `Full archive walk complete - ${stillLegacy.length} entries weren't found on the live site, marking unpatchable (won't auto-retry; use "refresh metadata" to retry manually)`
+          );
+        } else {
+          logger.log("info", "Full archive walk complete - all previously-legacy entries were confirmed against the live site");
+        }
+        await setArchiveScanCheckpoint({ offset: finalCheckpointOffset, legacyResolutionInProgress: false });
+      }
     } finally {
       this.metaFetchesInProgress--;
     }
@@ -373,7 +497,7 @@ export class DigitalFoundryContentManager {
       .filter(
         (contentEntry) =>
           !contentEntry.contentInfo ||
-          contentEntry.contentInfo.dataVersion !== CURRENT_DATA_VERSION ||
+          (contentEntry.contentInfo.legacy && !contentEntry.contentInfo.unpatchable) ||
           requiringMetaRefresh.has(contentEntry.key)
       )
       .sort((a, b) => b.contentInfo?.publishedDate.getTime() - a.contentInfo?.publishedDate.getTime());
@@ -404,9 +528,11 @@ export class DigitalFoundryContentManager {
           )
         );
         const toUpdate: ContentInfoWithAvailability[] = [];
+        const unresolvable: string[] = [];
         contentInfoResults.forEach((result, idx) => {
           if (result.status === "rejected") {
             logger.log("error", `Failed to fetch meta for ${entryBatch[idx]} ${result.reason}`);
+            unresolvable.push(entryBatch[idx]);
           } else {
             logger.log("info", `Successfully fetched meta for ${result.value.contentInfo.key}`);
             const { contentInfo, availability} = result.value;
@@ -417,11 +543,53 @@ export class DigitalFoundryContentManager {
           }
         });
         await this.db.setContentInfosWithAvailability(toUpdate, userTier);
+        if (unresolvable.length > 0) {
+          await this.giveUpOnMetaRefresh(unresolvable);
+        }
       }
     } finally {
       this.metaFetchesInProgress--;
     }
     return filterEmpty(await this.db.getContentEntryList([...refreshedMetaKeys]));
+  }
+
+  /**
+   * fetchContentInfo's best-effort title-search-then-page-scan sometimes
+   * just can't relocate an item (older/very specific content that's scrolled
+   * past the ~250 most-recent items) - confirmed live 2026-08-15 that
+   * without this, patchMetas() re-flags it and refreshMeta() re-attempts it
+   * on every single future restart, forever, wasting both time and DF
+   * requests on something that will keep failing the same way.
+   *
+   * Sets `unpatchable: true` so it stops being re-flagged - `legacy` stays
+   * true (we still don't have live-confirmed data for it, which may mean a
+   * dead old-site download URL for entries carried over from the
+   * pre-relaunch migration), this only stops the automatic background
+   * retry loop, not the ability to fix it: downloadContent() already does
+   * its own live refetch before using cached mediaInfo for any actual
+   * download, and the "refresh metadata" UI action remains available to
+   * retry a specific item by hand (refreshMeta() itself doesn't check
+   * `unpatchable` - only patchMetas()'s automatic path does).
+   *
+   * Doesn't address patchMetas()'s other, separate requiringMetaRefresh
+   * trigger (missing mediaFilename + unknown availability) - not the path
+   * confirmed to be looping in practice, so left alone for now rather than
+   * guarding against a theoretical case.
+   */
+  private async giveUpOnMetaRefresh(contentNames: string[]) {
+    const entries = await this.db.getContentEntryMap(contentNames);
+    const contentInfos = contentNames
+      .map((name) => entries.get(name)?.contentInfo)
+      .filter((info): info is DfContentInfo => !!info)
+      .map((info) => ({ ...info, unpatchable: true }));
+    if (contentInfos.length === 0) {
+      return;
+    }
+    await this.db.setContentInfos(contentInfos);
+    logger.log(
+      "info",
+      `Giving up on auto-refreshing metadata for ${contentInfos.map((c) => c.key).join(", ")} - couldn't relocate them on the live site. Their data may be stale; use "refresh metadata" to retry manually.`
+    );
   }
 
   async scanForExistingFiles() {
@@ -770,6 +938,27 @@ export class DigitalFoundryContentManager {
     };
   }
 
+  /**
+   * Re-checks a list of content keys against current DB state, dropping any
+   * that no longer need a live refresh: either the current tier's
+   * availability is already known (e.g. a scan wrote it in the meantime), or
+   * the entry is `unpatchable` (already given up on - see
+   * scanWholeArchive/giveUpOnMetaRefresh; no point burning a request to
+   * re-search for something already confirmed absent).
+   */
+  private async filterStillNeedingMetaRefresh(contentNames: string[]): Promise<string[]> {
+    const userTier = this.dfUserManager.getCurrentTier() || "NONE";
+    const entries = await this.db.getContentEntryMap(contentNames);
+    return contentNames.filter((contentName) => {
+      const entry = entries.get(contentName);
+      if (entry?.contentInfo?.unpatchable) {
+        return false;
+      }
+      const existingStatusRecord = entry?.statusInfo?.availabilityInTiers[userTier];
+      return !existingStatusRecord || existingStatusRecord === DfContentAvailability.UNKNOWN;
+    });
+  }
+
   async userTierChanged(newTier?: string) {
     logger.log("info", `User tier changed to ${newTier}`);
     const userInfo = this.dfUserManager.currentDfUserInfo;
@@ -792,7 +981,18 @@ export class DigitalFoundryContentManager {
       }
     }
     await this.db.setContentStatuses(allContentStatuses);
-    await this.refreshMeta(...toRefresh);
+    if (toRefresh.length === 0) {
+      return;
+    }
+    if (this.startupScanComplete) {
+      await this.refreshMeta(...toRefresh);
+    } else {
+      // The initial startup scan is still running (or hasn't started yet) -
+      // don't compete with it for the same rate-limited request queue. See
+      // pendingStartupMetaRefresh's doc comment; start() flushes this once
+      // the scan finishes.
+      toRefresh.forEach((contentName) => this.pendingStartupMetaRefresh.add(contentName));
+    }
   }
 
   async deleteDownload(contentEntry: DfContentEntry, downloadLocation: string) {
@@ -890,7 +1090,9 @@ export class DigitalFoundryContentManager {
         youtubeVideoId,
         thumbnailUrl: undefined,
         mediaInfo: [newMediaInfo],
-        source: "manual"
+        source: "manual",
+        legacy: false,
+        unpatchable: false,
       };
 
       // Store the new content info in the database

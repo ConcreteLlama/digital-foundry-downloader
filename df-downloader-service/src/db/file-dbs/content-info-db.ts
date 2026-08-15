@@ -1,4 +1,4 @@
-import { DfContentInfo, inferMediaInfo, logger, mapFilterEmpty, zodParse } from "df-downloader-common";
+import { CURRENT_DATA_VERSION, DfContentInfo, inferMediaInfo, logger, mapFilterEmpty, zodParse } from "df-downloader-common";
 import { existsSync } from "fs";
 import fs from "fs/promises";
 import path from "path";
@@ -6,7 +6,21 @@ import { ensureDirectory, moveFile } from "../../utils/file-utils.js";
 import { DfContentInfoDbSchema, DfContentStatusDbSchema, DfContentStatusEntry, DfUserDbSchema } from "../df-db-model.js";
 import { FileDb } from "../file-db.js";
 
-const CURRENT_DB_VERSION = "2.6.0";
+const CURRENT_DB_VERSION = "2.7.0";
+/** Numeric (not lexicographic) dotted-version comparison - "2.10.0" must sort after "2.9.0". */
+const compareDataVersions = (a: string, b: string): number => {
+    const partsA = a.split(".").map(Number);
+    const partsB = b.split(".").map(Number);
+    for (let i = 0; i < Math.max(partsA.length, partsB.length); i++) {
+        const diff = (partsA[i] || 0) - (partsB[i] || 0);
+        if (diff !== 0) {
+            return diff;
+        }
+    }
+    return 0;
+};
+/** The dataVersion the key/name-split migration (2.5.0->2.6.0 step below) was released under - anything older than this has never been touched by the post-relaunch fetcher. */
+const FIRST_POST_RELAUNCH_DATA_VERSION = "2.1.0";
 /** Must match DfContentAvailabilityDb's own CURRENT_DB_VERSION - see the 2.5.0->2.6.0 patch step below. */
 const CONTENT_STATUS_DB_VERSION_AFTER_KEY_MIGRATION = "2.5.0";
 
@@ -270,6 +284,46 @@ export class DfContentInfoDb {
                             await fs.writeFile(contentStatusDbFilename, JSON.stringify(contentStatusRaw, null, 2));
                         }
                         data.version = "2.6.0";
+                    } else if (data.version === "2.6.0") {
+                        logger.log("info", `Patching DB version to 2.7.0`);
+                        // Adds DfContentInfo.legacy/.unpatchable (see
+                        // df-downloader-common's df-content-info.ts) - splits what the
+                        // dataVersion-mismatch check used to mean into two honest,
+                        // separate concepts: dataVersion goes back to being purely a
+                        // schema-shape marker, while `legacy` (has this record's data
+                        // ever been confirmed against the live post-relaunch site?) and
+                        // `unpatchable` (did an automatic attempt to do so definitively
+                        // fail?) are the new, explicit signals patchMetas() uses instead.
+                        // Conflating "schema is current" with "data is fresh" via
+                        // dataVersion alone meant a permanently-unfindable item (older
+                        // content the best-effort title search just can't relocate) got
+                        // re-attempted forever, on every single restart - see
+                        // docs/DF_SITE_MIGRATION.md.
+                        //
+                        // A record predates the post-relaunch fetcher (legacy: true) if
+                        // its dataVersion is older than the version that migration step
+                        // shipped under - i.e. it's never actually been touched by
+                        // create() since the relaunch. Records already keyed/reconciled by
+                        // this branch's earlier steps have real, live-confirmed data,
+                        // so they're correctly NOT legacy even though their dataVersion is
+                        // about to jump forward too.
+                        let legacyCount = 0;
+                        Object.values(data.contentInfo).forEach((contentInfo: any) => {
+                            const isLegacy =
+                                !contentInfo.dataVersion ||
+                                compareDataVersions(contentInfo.dataVersion, FIRST_POST_RELAUNCH_DATA_VERSION) < 0;
+                            if (isLegacy) {
+                                legacyCount++;
+                            }
+                            contentInfo.legacy = isLegacy;
+                            contentInfo.unpatchable = false;
+                            contentInfo.dataVersion = CURRENT_DATA_VERSION;
+                        });
+                        logger.log(
+                            "info",
+                            `Marked ${legacyCount} of ${Object.keys(data.contentInfo).length} entries as legacy (data not yet confirmed against the live site)`
+                        );
+                        data.version = "2.7.0";
                     } else {
                         throw new Error(`Unrecognized DB version ${data.version}`);
                     }

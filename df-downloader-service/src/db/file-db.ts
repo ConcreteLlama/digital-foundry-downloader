@@ -4,7 +4,13 @@ import { WorkerQueue } from "../utils/queue-utils.js";
 import z from "zod";
 import fs from "fs";
 
-type FileDbOpts<T = any, Z extends z.ZodType<T> = z.ZodType<T>> = {
+// Z's Input intentionally left as `any` (not constrained to T) - a schema
+// with a .default()'d field naturally has an Input type narrower than its
+// Output (default() makes the field optional on input, present on output),
+// and requiring Input === T here was an overly strict bound that just never
+// surfaced until a nested schema (DfContentInfo.legacy/.unpatchable) used
+// .default() for the first time.
+type FileDbOpts<T = any, Z extends z.ZodType<T, any, any> = z.ZodType<T, any, any>> = {
     schema: Z;
     filename: string;
     patchRoutine: (data: any) => Promise<{
@@ -16,7 +22,7 @@ type FileDbOpts<T = any, Z extends z.ZodType<T> = z.ZodType<T>> = {
 }
 export class FileDb<T> {
     private writeQueue: WorkerQueue;
-    static async create<T = any, Z extends z.ZodType<T> = z.ZodType<T>>(opts: FileDbOpts<T, Z>) {
+    static async create<T = any, Z extends z.ZodType<T, any, any> = z.ZodType<T, any, any>>(opts: FileDbOpts<T, Z>) {
         const { filename, patchRoutine, backupDestination, schema } = opts;
         let data = await fs.promises.readFile(filename, "utf-8").catch(() => null).then((data) => data ? JSON.parse(data) : null);
         data = data || opts.initialData;

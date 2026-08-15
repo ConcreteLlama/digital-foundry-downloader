@@ -2,7 +2,7 @@ import { z } from "zod";
 import { MediaInfo, MediaInfoUtils } from "./media-info/media-info.js";
 import { makeVideoProps } from "./media-info/video-properties.js";
 
-export const CURRENT_DATA_VERSION = "2.1.0";
+export const CURRENT_DATA_VERSION = "2.2.0";
 
 export const DfContentSource = z.enum(["digitalfoundry", "manual", "patreon"]);
 export type DfContentSource = z.infer<typeof DfContentSource>;
@@ -40,6 +40,28 @@ export const DfContentInfo = z
     mediaInfo: z.array(MediaInfo),
     tags: z.array(z.string()).optional(),
     source: DfContentSource,
+    /**
+     * True if this entry's data hasn't been confirmed against the live
+     * post-relaunch site yet - set on entries carried over from the
+     * pre-relaunch DB migration (their data, e.g. download URLs, may be
+     * stale/dead), cleared the moment a live fetch (a scan match or a
+     * refreshMeta) actually confirms fresh data for it. Distinct from
+     * `dataVersion`, which is purely a schema-shape marker - don't conflate
+     * "does this record match the current DfContentInfo shape" with
+     * "has this record's data been verified" (see docs/DF_SITE_MIGRATION.md,
+     * "Resuming after upgrading to this version"-adjacent notes).
+     */
+    legacy: z.boolean().default(false),
+    /**
+     * True if an automatic attempt to confirm this entry's data against the
+     * live site (see `legacy`) definitively failed to relocate it there
+     * (the best-effort title-search-then-page-scan has real limits for
+     * older/very specific content). Stops `patchMetas()` from re-attempting
+     * it on every future restart - `legacy` stays true (we still don't have
+     * confirmed-fresh data), this just means "stop asking automatically".
+     * A manual "refresh metadata" retry is unaffected by this flag.
+     */
+    unpatchable: z.boolean().default(false),
   })
   .strict();
 
@@ -57,7 +79,9 @@ export const DfContentInfoUtils = {
     publishedDate?: Date,
     tags?: string[],
     source?: DfContentSource,
-    possibleAltKeys?: string[]
+    possibleAltKeys?: string[],
+    legacy?: boolean,
+    unpatchable?: boolean
   ): DfContentInfo => ({
     key,
     name,
@@ -71,6 +95,8 @@ export const DfContentInfoUtils = {
     publishedDate: publishedDate || DfContentInfoUtils.extractDateFromName(name) || new Date(),
     source: source || "digitalfoundry",
     possibleAltKeys: possibleAltKeys || [],
+    legacy: legacy || false,
+    unpatchable: unpatchable || false,
   }),
   extractDateFromName(name: string) {
     const dateStr = name.substring(0, "0000-00-00".length);
@@ -141,6 +167,8 @@ export const DummyContentInfos: DfContentInfo[] = [{
     "john"
   ],
   source: "digitalfoundry",
+  legacy: false,
+  unpatchable: false,
 }, {
   key: "dummy-df-direct-weekly-599",
   name: "df-direct-weekly-599",
@@ -182,6 +210,8 @@ export const DummyContentInfos: DfContentInfo[] = [{
   ],
   publishedDate: new Date("2032-10-09T17:12:01Z"),
   source: "digitalfoundry",
+  legacy: false,
+  unpatchable: false,
 }, {
   key: "dummy-alexs-favorite-stutters-of-2025-year-in-review",
   name: "alexs-favorite-stutters-of-2025-year-in-review",
@@ -233,6 +263,8 @@ export const DummyContentInfos: DfContentInfo[] = [{
   youtubeVideoId: "",
   publishedDate: new Date("2025-12-31T23:59:59Z"),
   source: "digitalfoundry",
+  legacy: false,
+  unpatchable: false,
 }];
 
 export const randomDummyContentInfo = (not?: string) => {
