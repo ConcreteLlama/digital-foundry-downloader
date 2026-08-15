@@ -23,7 +23,7 @@ export const AutomaticDownloadsConfig = z.object({
    * just not auto-downloaded. Capped at one week (168h) - deliberately no
    * "unlimited" option, since that would defeat the point of the guard.
    */
-  maxContentAgeHours: z.number().min(0).max(168).default(48),
+  maxContentAgeHours: z.number().min(0).max(168).default(24),
   /** Exclusion filters for automatic downloads - if a content entry matches any of these filters, it will not be downloaded */
   exclusionFilters: z.array(ContentInfoFilter).optional(),
 });

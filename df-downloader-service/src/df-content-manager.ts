@@ -193,6 +193,42 @@ export class DigitalFoundryContentManager {
         await this.runInitialScan();
       }
     });
+    this.startContentPollLoop();
+  }
+
+  /**
+   * Recurring "is there anything new" check (see checkForNewContents) - the
+   * one-time startup scan above only covers the moment the app starts.
+   * Skips entirely while not signed in rather than checking anyway and
+   * relying on checkForNewContents to no-op, mirroring the same
+   * signed-in-gating start() already applies to the initial scan (see its
+   * comment) - DfUserManager's own periodic auth recheck (schedulePeriodicRecheck)
+   * is a separate, already-conservative mechanism for noticing sign-in
+   * changes; this loop doesn't need to duplicate it.
+   *
+   * The interval and auto-download age window are both real config
+   * (contentDetection.contentCheckInterval / automaticDownloads.maxContentAgeHours)
+   * rather than hardcoded, deliberately conservative by default - Digital
+   * Foundry publishes at most a few times a day, and this is a small team's
+   * infrastructure, not a CDN-subsidized one (see docs/DF_SITE_MIGRATION.md).
+   * A prior version of this loop (see the dead start_reinstate_when_new_site())
+   * polled unconditionally regardless of sign-in state, which is what
+   * actually got a real IP banned during testing - see DfUserManager's
+   * schedulePeriodicRecheck doc comment.
+   */
+  private startContentPollLoop() {
+    const { contentCheckInterval } = configService.config.contentDetection;
+    logger.log("info", `Checking for new Digital Foundry content every ${contentCheckInterval}ms while signed in`);
+    setInterval(async () => {
+      if (!this.dfUserManager.isUserSignedIn()) {
+        return;
+      }
+      try {
+        await this.checkForNewContents();
+      } catch (e) {
+        logger.log("error", "Error during scheduled content check", e);
+      }
+    }, contentCheckInterval);
   }
 
   private async runInitialScan() {
