@@ -12,6 +12,7 @@ import {
   slugifyTitle,
 } from "df-downloader-common";
 import { configService } from "./config/config.js";
+import { dfFetch } from "./df-request-queue.js";
 
 /**
  * Scraper for the post-relaunch digitalfoundry.net (new CMS, new auth, new
@@ -71,7 +72,7 @@ async function fetchListingPage(opts: ListingQueryOpts = {}): Promise<ListingApi
   if (category) params.set("category", category);
   if (year) params.set("year", String(year));
   if (title) params.set("title", title);
-  const response = await fetch(`${listingApiUrl}?${params.toString()}`, {
+  const response = await dfFetch(`${listingApiUrl}?${params.toString()}`, {
     headers: {
       ...makeAuthHeaders(autologinOverride),
       accept: "*/*",
@@ -195,6 +196,22 @@ function parseListingItem(itemHtml: string): DfContentInfo | null {
   );
 }
 
+/**
+ * parseListingItem, but never throws - one malformed item (an unexpected
+ * media-size/resolution format, etc.) shouldn't take down an entire page's
+ * worth of otherwise-good items, or a whole archive scan. Confirmed live
+ * 2026-08-15: a single item's size string crashed parseListingItem and
+ * silently killed the entire scan partway through.
+ */
+function parseListingItemSafe(itemHtml: string, pageContext: string): DfContentInfo | null {
+  try {
+    return parseListingItem(itemHtml);
+  } catch (e) {
+    logger.log("error", `Failed to parse listing item (${pageContext}) - skipping it`, e);
+    return null;
+  }
+}
+
 export type FetchedContentInfo = {
   contentInfo: DfContentInfo;
   availability: DfContentAvailability;
@@ -211,18 +228,13 @@ function toFetchedContentInfo(contentInfo: DfContentInfo): FetchedContentInfo {
   };
 }
 
-const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
-
-// Delay between consecutive archive page requests. A full scan can be dozens
-// of pages - hitting them back-to-back with no delay is exactly the kind of
-// thing that gets a small site's server rate-limiting a well-meaning client
-// (confirmed empirically: a burst of ~12 rapid requests during testing
-// triggered a 429 Too Many Requests from Digital Foundry's server).
-const BETWEEN_PAGE_DELAY_MS = 1000;
-
 /**
  * Walk pages of the `/videos` listing, newest first, calling `fn` with the
  * full DfContentInfo for each page. Return `false` from `fn` to stop early.
+ *
+ * No manual delay between pages here - every request (from this loop or any
+ * other caller) is serialized and spaced by the shared dfFetch queue (see
+ * df-request-queue.ts), which also transparently backs off on 429/503.
  */
 export async function forEachListingPage(
   fn: (contentInfos: DfContentInfo[], pageIdx: number) => boolean | Promise<boolean>,
@@ -233,9 +245,6 @@ export async function forEachListingPage(
   let pageIdx = 1;
   let pages = Infinity;
   while (offset / limit < pages) {
-    if (pageIdx > 1) {
-      await sleep(BETWEEN_PAGE_DELAY_MS);
-    }
     let response: ListingApiResponse;
     try {
       response = await fetchListingPage({ ...opts, limit, offset });
@@ -245,7 +254,7 @@ export async function forEachListingPage(
     }
     pages = response.pages;
     const contentInfos = response.items
-      .map(parseListingItem)
+      .map((itemHtml) => parseListingItemSafe(itemHtml, `page ${pageIdx}`))
       .filter((info): info is DfContentInfo => info !== null);
     const cont = await fn(contentInfos, pageIdx);
     if (!cont) {
@@ -270,7 +279,13 @@ const MAX_FALLBACK_SCAN_PAGES = 5;
 async function findContentInfoByKey(key: string, titleHint?: string): Promise<DfContentInfo | undefined> {
   if (titleHint) {
     const response = await fetchListingPage({ limit: 50, title: titleHint });
-    const match = response.items.map(parseListingItem).find((info) => info?.key === key);
+    // A title with zero matches on the live API comes back without an
+    // `items` field at all rather than an empty array - confirmed live
+    // 2026-08-15 (was crashing every such lookup with a "reading 'map' of
+    // undefined" TypeError).
+    const match = (response.items || [])
+      .map((itemHtml) => parseListingItemSafe(itemHtml, `title search "${titleHint}"`))
+      .find((info) => info?.key === key);
     if (match) {
       return match;
     }
@@ -358,7 +373,7 @@ function extractDfUserInfo(html: string): DfUserInfo | undefined {
 export async function getDfUserInfo(sessionIdOverride?: string): Promise<DfUserInfo | undefined> {
   let response: Response;
   try {
-    response = await fetch(`${dfBaseUrl}/videos`, {
+    response = await dfFetch(`${dfBaseUrl}/videos`, {
       headers: {
         ...makeAuthHeaders(sessionIdOverride),
       },

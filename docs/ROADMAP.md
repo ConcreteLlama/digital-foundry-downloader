@@ -52,6 +52,13 @@ Get the tool working against the relaunched `digitalfoundry.net` again. Status a
 - [ ] The recurring auto-poll loop itself (periodic `checkForNewContents()`, as opposed
   to the one-time startup scan above) is still not wired up — blocked on the
   "resuming after upgrading" item above first.
+- [x] **Centralized DF-site request queue + rate-limit backoff** (2026-08-15) — every
+  request to digitalfoundry.net itself (not downloads) now goes through a single
+  concurrency-1 queue with randomized spacing (`digitalFoundry.requestSpacingMinMs/MaxMs`,
+  configurable, defaults 5-15s) and transparent 429/503 backoff-and-retry. Verified live
+  against a real full archive scan - no rate-limit responses hit, and the live run
+  surfaced/fixed two unrelated pre-existing scan-crashing bugs along the way. See
+  `DF_SITE_MIGRATION.md`.
 
 ## Phase 2 — Replace yalc with npm workspaces (done)
 

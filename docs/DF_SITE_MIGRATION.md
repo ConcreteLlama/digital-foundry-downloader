@@ -30,13 +30,12 @@ changing it, which already triggers an immediate recheck via
 `DigitalFoundryContentManager`'s `configUpdated:digitalFoundry` listener. Not signed in
 now means "stop and wait to be told to try again," not "keep hammering the site."
 
-**Status as of this writing**: the ban had not yet cleared. Cloudflare 1006 bans from
-adaptive/WAF rules typically expire on their own after some cool-down (commonly minutes
-to hours, not necessarily permanent), but this wasn't confirmed - the project owner is
-checking independently via their own browser (a single page load), not something
-automated from this codebase. **Do not make any further requests to digitalfoundry.net
-from this IP - including a single "just verifying the fix works" request - without
-explicit sign-off first.**
+**Status as of this writing**: resolved - the project owner confirmed (2026-08-14, via
+their own browser) that the ban has cleared, and gave explicit sign-off to resume live
+requests. The Cloudflare 1006 ban did clear on its own after a cool-down, as expected for
+adaptive/WAF rules. See "Centralized request queue & rate-limit backoff" below for the
+follow-up work this incident directly motivated - a general-purpose safeguard against
+this happening again, independent of the specific timer bug that caused it this time.
 
 **Full timer audit done same day**: every `setInterval`/`setTimeout` in
 `df-downloader-service/src` was checked. Only one other candidate touches the DF site at
@@ -50,6 +49,61 @@ other timer in the codebase (download retry backoff, queue-shutdown polling, a l
 polling loop in the `/df-user/await-login` REST endpoint) either doesn't touch
 digitalfoundry.net at all or only fires in response to an actively-triggered download,
 not as a background loop.
+
+## Centralized request queue & rate-limit backoff (2026-08-14)
+
+The bad-timer bug above was one specific cause of the ban, but not the only risk: before
+this change, every caller (`fetchListingPage`, `getDfUserInfo`) called `fetch()`
+directly, so nothing coordinated requests *across* callers. The leading suspect for the
+"~12 rapid requests triggered a 429" moment noted in `df-fetcher.ts`'s history is
+`DigitalFoundryContentManager.refreshMeta()`: it fans out per-item metadata lookups via
+`dfFetchWorkerQueue` at **concurrency 5**, and each lookup (`fetchContentInfo` →
+`findContentInfoByKey`) can itself issue several listing-page requests (a title search,
+then up to `MAX_FALLBACK_SCAN_PAGES` more on a fallback scan) - so 5 concurrent
+`refreshMeta` lookups could easily produce a burst of many near-simultaneous requests,
+each with only its own *local* pacing and no awareness of the others.
+
+**Fixed**: every direct HTTP request to digitalfoundry.net (both call sites -
+`fetchListingPage` and `getDfUserInfo`) now goes through `dfFetch()` in the new
+`df-request-queue.ts`, which is the single gate for all of them:
+- **Concurrency 1** (via the existing `WorkerQueue` class) with a **randomized minimum
+  spacing between requests** (`digitalFoundry.requestSpacingMinMs`/`MaxMs`, a real config
+  field - defaults to 5-15s, hard-floored at 5s in the schema), enforced globally
+  regardless of which caller or how many logical operations are in flight above it.
+  `refreshMeta`'s 5-concurrent-lookups pattern is unchanged (and doesn't need to be) -
+  it's now harmless, since all the *actual* network calls it produces simply queue up and
+  get spaced out here rather than firing in parallel. The 1s-fixed default from the
+  initial version of this fix was revised to 5-15s (randomized, not fixed - "doesn't look
+  like a metronome") after the project owner reviewed it and judged 1/sec still too
+  aggressive given the earlier ban.
+- **Transparent backoff-and-retry on 429/503**, honoring the `Retry-After` header when
+  the server sends one (falls back to an increasing default otherwise, capped at 5
+  minutes, up to 5 retries before giving up and returning the response as-is). Callers
+  don't need their own retry logic - a rate limit now shows up as a slowdown, not a wall
+  of failures.
+
+This explicitly does **not** cover downloads - after the initial listing scrape, actual
+file downloads hit a signed CDN URL (see the redirect finding below), not DF's own
+origin, so they're a different traffic pattern with a different risk profile
+(`automaticDownloads.maxContentAgeHours` / the randomized download-delay range already
+address *that* side - see `ROADMAP.md`).
+
+**Verified live (2026-08-15)**: exercised against a real full archive scan with the
+project owner's own account (IP ban had cleared, explicit sign-off given). Confirmed via
+logs that requests land consistently in the configured randomized range and no
+429/503 was ever hit. The live scan also surfaced two unrelated pre-existing bugs that
+were fixed in the same pass since they were actively breaking things:
+- `getSizeMultiplier` (df-downloader-common) only recognized `"B"` for the bytes unit;
+  the live site spells out `"bytes"` for very small files, which threw and **silently
+  killed the entire archive scan partway through** (an unhandled rejection inside
+  `forEachListingPage`'s per-page `.map()`). Also hardened `forEachListingPage` so one
+  bad item's parse failure is now logged and skipped rather than aborting the whole scan
+  - a scan that dies partway through means every retry re-walks the same early pages
+  again, which works directly against the "don't over-query" point of this section.
+- `findContentInfoByKey`'s title-search path (`df-fetcher.ts`) crashed with a `reading
+  'map' of undefined` TypeError whenever a title had zero matches - the live API omits
+  the `items` field entirely in that case rather than returning `[]`. Fixed with a
+  defensive fallback.
 
 ## Implementation status (2026-08-14)
 

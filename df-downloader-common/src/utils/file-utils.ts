@@ -14,7 +14,7 @@ export function getSizeMultiplier(sizeFormat?: string) {
     return 1;
   }
   sizeFormat = sizeFormat.toLowerCase().trim();
-  if (sizeFormat === "b" || sizeFormat === "B") {
+  if (sizeFormat === "b" || sizeFormat === "byte" || sizeFormat === "bytes") {
     return 1;
   } else if (sizeFormat === "k" || sizeFormat === "kb") {
     return KB;
