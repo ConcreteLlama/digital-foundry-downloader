@@ -720,12 +720,7 @@ export class DigitalFoundryContentManager {
     return { newContent, updatedContent };
   }
 
-  async checkForNewContents(opts?: {
-    triggerDownloads?: boolean;
-    providedContentInfos?: DfContentInfo[];
-    downloadDelay?: number;
-  }) {
-    const { triggerDownloads, providedContentInfos, downloadDelay } = opts || {};
+  async checkForNewContents() {
     const noMediaInfoContents = [...this.noMediaContentInfos.values()];
     logger.log(
       "info",
@@ -740,43 +735,16 @@ export class DigitalFoundryContentManager {
     const mediaFormatsConfig = configService.config.mediaFormats;
     const userTier = this.dfUserManager.getCurrentTier() || "NONE";
 
-    let newContentFetchResults: { contentInfo: DfContentInfo; availability: DfContentAvailability }[];
-    let contentToDownload: DfContentInfo[] = [];
+    // The listing already returns full content info per item, so no
+    // separate detail-fetch step is needed.
+    const { newContent, updatedContent } = await this.getNewContentList();
+    const newContentInfos = [...newContent, ...updatedContent, ...noMediaInfoContents.map((v) => v.contentInfo)];
+    const newContentFetchResults: { contentInfo: DfContentInfo; availability: DfContentAvailability }[] = newContentInfos.map((contentInfo) => ({
+      contentInfo,
+      availability: contentInfo.mediaInfo.length > 0 ? DfContentAvailability.AVAILABLE : DfContentAvailability.PAYWALLED,
+    }));
+    const contentToDownload: DfContentInfo[] = newContentInfos;
 
-    if (providedContentInfos) {
-      // Use provided content infos, handle both new and existing content
-      const existingContentEntries = await this.db.getAllContentEntries();
-      const existingContentMap = new Map(existingContentEntries.map(c => [c.key, c]));
-
-      // Always update all provided content in DB
-      newContentFetchResults = providedContentInfos.map(contentInfo => ({
-        contentInfo,
-        availability: DfContentAvailability.AVAILABLE
-      }));
-
-      // Determine which content should trigger downloads
-      for (const contentInfo of providedContentInfos) {
-        const existingEntry = existingContentMap.get(contentInfo.key);
-        if (!existingEntry) {
-          // New content - should download
-          contentToDownload.push(contentInfo);
-        } else if (!existingEntry.downloads || existingEntry.downloads.length === 0) {
-          // Existing content with no downloads - should download
-          contentToDownload.push(contentInfo);
-        }
-        // Existing content with downloads - skip (will be updated but not re-downloaded)
-      }
-    } else {
-      // Fetch from DF site as usual - the listing already returns full content
-      // info, so no separate detail-fetch step is needed.
-      const { newContent, updatedContent } = await this.getNewContentList();
-      const newContentInfos = [...newContent, ...updatedContent, ...noMediaInfoContents.map((v) => v.contentInfo)];
-      newContentFetchResults = newContentInfos.map((contentInfo) => ({
-        contentInfo,
-        availability: contentInfo.mediaInfo.length > 0 ? DfContentAvailability.AVAILABLE : DfContentAvailability.PAYWALLED,
-      }));
-      contentToDownload = newContentInfos;
-    }
     const newNoMediaContentInfoMap = new Map<string, { attempts: number; contentInfo: DfContentInfo }>();
     newContentFetchResults.forEach(({ contentInfo }) => {
       if (!contentInfo) {
@@ -787,7 +755,7 @@ export class DigitalFoundryContentManager {
         contentInfo.mediaInfo,
         { mustMatch: true }
       );
-      if (!matchingMediaInfo && this.dfUserManager.getCurrentTier() && !providedContentInfos) {
+      if (!matchingMediaInfo && this.dfUserManager.getCurrentTier()) {
         logger.log("info", `No suitable media info found for ${contentInfo.key}, adding to no media list`);
         const attempts = this.noMediaContentInfos.get(contentInfo.key)?.attempts || 0;
         if (attempts >= 60 * 24) {
@@ -809,13 +777,10 @@ export class DigitalFoundryContentManager {
     // install's automatic scan runs against the post-relaunch site - every
     // piece of content looks "new" relative to a DB that's never been
     // reconciled against the new site before, even for an install that ran
-    // yesterday against the old one. Only relevant to the real automatic-scan
-    // path; providedContentInfos (manual/Patreon-import) is always an
-    // explicit, user-initiated trigger. See "Resuming after upgrading to this
+    // yesterday against the old one. See "Resuming after upgrading to this
     // version" in docs/DF_SITE_MIGRATION.md.
-    const isAutomaticScan = !providedContentInfos;
-    const newSiteFirstScanComplete = isAutomaticScan ? await this.db.isNewSiteFirstScanComplete() : true;
-    if (isAutomaticScan && !newSiteFirstScanComplete) {
+    const newSiteFirstScanComplete = await this.db.isNewSiteFirstScanComplete();
+    if (!newSiteFirstScanComplete) {
       logger.log(
         "info",
         "First automatic scan against the new Digital Foundry site for this install - suppressing auto-downloads for this pass"
@@ -824,8 +789,7 @@ export class DigitalFoundryContentManager {
     }
 
     // Only trigger downloads for content that should be downloaded
-    const shouldTriggerDownloads =
-      newSiteFirstScanComplete && (triggerDownloads !== undefined ? triggerDownloads : autoDownloadConfig.enabled);
+    const shouldTriggerDownloads = newSiteFirstScanComplete && autoDownloadConfig.enabled;
     if (shouldTriggerDownloads && contentToDownload.length > 0) {
       const { include, exclude } = autoDownloadConfig.exclusionFilters?.length
         ? filterContentInfos(autoDownloadConfig.exclusionFilters, contentToDownload, true)
@@ -856,15 +820,10 @@ export class DigitalFoundryContentManager {
           `Not auto-downloading ${tooOld.map((contentInfo) => contentInfo.name).join(", ")} - published more than ${autoDownloadConfig.maxContentAgeHours}h ago`
         );
       for (const content of freshEnough) {
-        // downloadDelay (the opts override) is an explicit "start immediately"
-        // escape hatch for manual/Patreon-import triggers - only randomize
-        // within the configured range for real automatic detections, and pick
-        // a fresh value per item so a batch of simultaneously-detected content
-        // doesn't all start at once either.
-        const delayToUse =
-          downloadDelay !== undefined
-            ? downloadDelay
-            : randomIntInRange(autoDownloadConfig.downloadDelayMinMs, autoDownloadConfig.downloadDelayMaxMs);
+        // Pick a fresh random delay per item so a batch of
+        // simultaneously-detected content doesn't all start downloading at
+        // the same instant.
+        const delayToUse = randomIntInRange(autoDownloadConfig.downloadDelayMinMs, autoDownloadConfig.downloadDelayMaxMs);
         serviceLocator.notifier.newContentDetected(content.title);
         this.downloadContentIn(content, delayToUse, {
           skipIfDownloadingOrDownloaded: true,

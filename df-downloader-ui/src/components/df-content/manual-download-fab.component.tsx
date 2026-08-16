@@ -15,7 +15,6 @@ export const ManualDownloadFloatingButton = () => {
       <ContentImportDialog
         open={dialogOpen}
         onClose={() => setDialogOpen(false)}
-        defaultTab="htmlImport"
       />
 
       <Fab

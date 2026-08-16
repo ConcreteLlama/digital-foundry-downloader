@@ -147,18 +147,19 @@ directory, not just a synthetic test):
   backup created as expected. `dataVersion` is deliberately **not** bumped by this step —
   see "Backfilling stale data" below.
 
-**Not yet done** (see `docs/ROADMAP.md` Phase 1):
-- `DigitalFoundryContentManager.start()`'s auto-poll loop is still not calling the new
-  fetcher (see `CLAUDE.md`) — the new code has only been exercised via one-off scripts,
-  not the full scan-whole-archive / auto-download path, and not through the real app
-  (config/REST API/UI) at all yet. **Do not wire this up without first reading
-  "Resuming after upgrading to this version" below** — there's an unaddressed risk of
-  mass auto-downloads the first time this runs for anyone with `automaticDownloads`
-  enabled.
-- The `videos/download/<id>` redirect was confirmed to work (302 to a signed CDN URL,
-  see below) but no actual download has been run through the app's download engine
-  against it yet - worth confirming the engine follows redirects and handles the
-  resulting URL/filename correctly.
+**Done since (see `docs/ROADMAP.md` Phase 1 for current status)**:
+- `DigitalFoundryContentManager.start()`'s auto-poll loop - **wired up 2026-08-15**, a
+  recurring `setInterval` (`startContentPollLoop()`) calling `checkForNewContents()` on
+  `contentDetection.contentCheckInterval` (default raised from a 60s pre-relaunch
+  holdover to 30 minutes), skipping entirely while signed out. The mass-auto-download
+  risk this note used to flag was already addressed by `newSiteFirstScanComplete` (see
+  below) plus `automaticDownloads.maxContentAgeHours` (default lowered to 24h, still
+  capped at 168h/1 week) - verified live, the loop fires on schedule and skips cleanly
+  while signed out.
+- The `videos/download/<id>` redirect + the app's actual download engine - **verified
+  working end-to-end 2026-08-15**, first real download success since the relaunch (see
+  "Real root cause found and fixed" below for what was actually blocking it - not the
+  redirect mechanism itself, which worked as documented).
 - `DfSessionCheckDialog` **re-enabled** (2026-08-14, restored from the code the
   Sept 2025 stopgap commit had commented out, copy already generic enough not to need
   changes). **`DigitalFoundryContentManager.start()` now hard-gates scanning on
@@ -233,16 +234,16 @@ to the existing `firstRunComplete` flag, in `content-status-db.json`
 since that path bypasses `content-status-db.ts`'s own patch routine.
 
 `DigitalFoundryContentManager.checkForNewContents()` reads the flag at the top of its
-real automatic-scan path (i.e. when called without `providedContentInfos` — the
-Patreon-import path is always an explicit, user-initiated trigger and is exempt from
-this gate). Content info is still written to the DB as normal either way; only
-`triggerDownloads` is forced off for that one pass, on top of (not instead of) the
-existing `maxContentAgeHours` gate. The flag flips to `true` immediately after that
-first pass, so every subsequent check behaves normally — this is a one-time transition
-safeguard, not a recurring caution.
+scan (the Patreon-import stopgap that used to have a separate `providedContentInfos`
+bypass path was removed 2026-08-15 - see below - so this now applies uniformly).
+Content info is still written to the DB as normal either way; only auto-downloading is
+suppressed for that one pass, on top of (not instead of) the existing
+`maxContentAgeHours` gate. The flag flips to `true` immediately after that first pass,
+so every subsequent check behaves normally — this is a one-time transition safeguard,
+not a recurring caution.
 
-Not yet exercised live: the auto-poll loop this guards still isn't wired into
-`start()` (see the "Not yet done" list above), so this has only been verified by
+Exercised live: the auto-poll loop this guards is now wired into `start()` (2026-08-15,
+see the "Done since" list above), so this has been verified by
 typecheck + code review so far, not a real first-scan-after-upgrade run.
 
 ## Auth: replacing the `sessionid` cookie
@@ -476,7 +477,7 @@ sent the `autologin` cookie at all.** `df-task-manager.ts`'s `downloadContent(df
 mediaInfo, directUrl?)` computed `actualDirectUrl = directUrl || mediaInfo.downloadUrl` and
 took a "manual download, no DF headers" branch (just `User-Agent: DigitalFounload`, no
 cookie) whenever that was truthy. `directUrl` is meant to be explicit-only, for the
-Patreon-import flow's genuinely-external URLs - but the new site's listing populates
+manual-download flow's genuinely-external URLs - but the new site's listing populates
 `mediaInfo.downloadUrl` directly for every DF-sourced item as a matter of course (unlike
 the old site), so the `||` fallback silently routed *every* normal DF download through
 the no-auth branch, not just manual ones. The result: an unauthenticated request to
@@ -572,16 +573,11 @@ Done (see "Implementation status" above): confirming the `videos/download/<id>`
 redirect, the new `df-fetcher.ts`, the `sessionId` field's UI copy, the `key`/`name`
 split, and the DB migration. Remaining:
 
-1. Run a real download through the app's download engine against a
-   `videos/download/<id>` URL to confirm redirect-following and filename handling work
-   end-to-end (only a header-only check has been done so far).
-2. Design and implement the "resuming after a long idle period" safeguard (see above)
-   for the auto-download path.
-3. Re-enable `DfSessionCheckDialog` / the `start()` polling loop, currently disabled per
-   [ARCHITECTURE.md](ARCHITECTURE.md#the-patreon-import-stopgap-current-state-added-sept-2025) -
-   hold off until 1 and 2 above are done, so auto-scanning doesn't run against an
-   unverified download path or flood-download a long-idle user's backlog.
-4. Decide the fate of the Patreon-import path once site scraping works again — keep as
-   a fallback, or retire it.
-5. Confirm whether other historical content types (DF Retro articles, older non-video
-   posts) are reachable the same way, or need separate handling.
+Remaining open item from the original recon:
+- Confirm whether other historical content types (DF Retro articles, older non-video
+  posts) are reachable the same way, or need separate handling.
+
+(Everything else this list originally tracked - verifying a real download end-to-end,
+the idle-period auto-download safeguard, re-enabling `DfSessionCheckDialog`/the polling
+loop, and the Patreon-import path's fate - is done; see the "Done since" list above and
+the entries elsewhere in this doc dated 2026-08-15.)

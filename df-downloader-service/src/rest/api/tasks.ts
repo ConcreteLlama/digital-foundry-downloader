@@ -1,9 +1,8 @@
-import { AddTaskRequest, ControlRequest, DownloadContentResponse, HtmlImportRequest, ManualDownloadRequest, TasksResponse, DfContentAvailability, getBestMediaInfoMatch } from "df-downloader-common";
+import { AddTaskRequest, ControlRequest, DownloadContentResponse, ManualDownloadRequest, TasksResponse, DfContentAvailability, getBestMediaInfoMatch } from "df-downloader-common";
 import express, { Request, Response } from "express";
 import { DigitalFoundryContentManager } from "../../df-content-manager.js";
 import { makeTaskPipelineInfo } from "../../df-task-manager.js";
 import { sendErrorAsResponse, sendResponse, zodParseHttp } from "../utils/utils.js";
-import { parsePatreonHtml } from "../../utils/patreon-html-parser.js";
 import { configService } from "../../config/config.js";
 
 export const makeDownloadsApiRouter = (contentManager: DigitalFoundryContentManager) => {
@@ -75,43 +74,6 @@ export const makeDownloadsApiRouter = (contentManager: DigitalFoundryContentMana
           pipelineInfo: makeTaskPipelineInfo(queuedContentInfo.pipelineExec).pipelineDetails,
         };
         sendResponse(res, response);
-      } catch (e) {
-        sendErrorAsResponse(res, e, {
-          code: 500,
-        });
-      }
-    });
-  });
-
-  router.post("/import-html", async (req: Request, res: Response) => {
-    await zodParseHttp(HtmlImportRequest, req, res, async (data) => {
-      try {
-        const parseResult = parsePatreonHtml(data.htmlContent);
-
-        if (parseResult.contentInfos.length === 0) {
-          return sendResponse(res, {
-            success: false,
-            message: "No content with download links found in HTML",
-            postsFound: parseResult.postsFound,
-            postsWithDownloads: parseResult.postsWithDownloads,
-            contentInfos: []
-          });
-        }
-
-        // Use the content manager's checkForNewContents flow which properly handles downloads with completion handlers
-        await contentManager.checkForNewContents({
-          triggerDownloads: data.triggerAutoDownload,
-          providedContentInfos: parseResult.contentInfos,
-          downloadDelay: 0 // Start downloads immediately for manual imports
-        });
-
-        sendResponse(res, {
-          success: true,
-          message: `Successfully imported ${parseResult.contentInfos.length} content entries`,
-          postsFound: parseResult.postsFound,
-          postsWithDownloads: parseResult.postsWithDownloads,
-          contentInfos: parseResult.contentInfos
-        });
       } catch (e) {
         sendErrorAsResponse(res, e, {
           code: 500,

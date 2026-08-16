@@ -83,11 +83,6 @@ uses `htmlparser2` + `css-select` to parse the old site's archive/article pages 
 extract `DfContentInfoReference`/`DfContentInfo`/`MediaInfo`. Auth is a single `cookie:
 sessionid=<value>` header built by `makeAuthHeaders()`.
 
-`src/utils/patreon-html-parser.ts` is a **separate, newer** scraper (uses `cheerio`
-instead of `htmlparser2`) that parses HTML the user manually pastes from the DF Patreon
-posts page — this is the interim "DF site is down" workaround (see below), not part of
-the normal `df-fetcher.ts` flow.
-
 ### Task/pipeline system
 
 A generic FSM-based task framework (`src/fsm/`, `src/task-manager/`) underlies
@@ -127,30 +122,6 @@ resource: `content`, `tasks`, `config`, `auth`, `user`, `df-user-info`, `subtitl
 (`src/rest/auth/jwt.ts`, `src/rest/middleware/authentication.ts`) — this is entirely
 separate from the DF-site session cookie and is unaffected by the DF relaunch.
 
-### The Patreon-import stopgap (current state, added ~Sept 2025)
-
-When the old digitalfoundry.net was decommissioned and the archive scraper stopped
-working, a manual workaround was added rather than trying to keep the scraper alive
-against a moving target:
-- `components/df-content/html-import-tab` (UI) + `POST /api/tasks/import-html` →
-  `parsePatreonHtml()` (`src/utils/patreon-html-parser.ts`) — user manually opens the DF
-  Patreon posts page, copies the outer HTML, pastes it in; the parser extracts
-  post title/date/tags/YouTube ID/download links via `cheerio` + a lot of defensive
-  regex-based text parsing (dates like "3 days ago", formats embedded as
-  `"FORMAT: <a href=...>"`).
-- `components/df-content/manual-download-tab` + `POST /api/tasks/manual` — fully manual
-  single-URL/title/tags entry, no parsing at all.
-- The automatic DF-site polling loop is effectively disabled: `DigitalFoundryContentManager.start()`
-  no longer calls the DF-site check loop (see the `start()` vs
-  `start_reinstate_when_new_site()` methods in `df-content-manager.ts:69-142` — the
-  latter is the pre-relaunch code, kept but unused, explicitly named as "reinstate when
-  there's a new site").
-- `DfSessionCheckDialog` (UI) is hard-disabled (`const open = false`) with a comment
-  noting the DF site is down.
-
-This is the code that the relaunch work is expected to replace/re-enable — see
-[DF_SITE_MIGRATION.md](DF_SITE_MIGRATION.md).
-
 ## df-downloader-ui
 
 React 18 + TypeScript + Vite + MUI 5 + Redux Toolkit (listener-middleware pattern, no
@@ -174,7 +145,7 @@ workspace link, same as the service.
      is the manual `sessionid`-cookie-paste UI that needs to change to whatever the new
      auth mechanism becomes (see migration doc).
 
-## Data flow summary (old/current model)
+## Data flow summary (pre-relaunch model - see DF_SITE_MIGRATION.md for the current one)
 
 ```
 DF site archive pages  →  df-fetcher.ts (htmlparser2/css-select)  →  DfContentInfo[]
@@ -198,5 +169,7 @@ DF site archive pages  →  df-fetcher.ts (htmlparser2/css-select)  →  DfConte
                                                      REST API  →  polled by React UI
 ```
 
-The Patreon-import path replaces only the top box (content discovery) with a manual
-paste; everything below `DigitalFoundryContentManager` is unchanged and reusable.
+`df-fetcher.ts` now scrapes the relaunched site via `/api/1.0/listing` instead of
+`htmlparser2`/`css-select` on the old site's pages - see
+[DF_SITE_MIGRATION.md](DF_SITE_MIGRATION.md) for the current mechanics. Everything below
+`DigitalFoundryContentManager` in this diagram is unchanged.

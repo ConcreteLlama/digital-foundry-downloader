@@ -18,27 +18,28 @@ Digital Foundry left their old host and relaunched independently at
 `digitalfoundry.net` with an entirely different CMS, HTML structure, and auth
 mechanism. This broke the tool's scraper. As a stopgap (~Sept 2025), automated DF-site
 scanning was disabled and a manual "paste HTML from the Patreon posts page" import path
-was added instead (see `docs/ARCHITECTURE.md`'s "Patreon-import stopgap" section). The
-new site relaunched its video archive as of 2026-08-11, making real scraping viable
-again — see `docs/DF_SITE_MIGRATION.md` for the reverse-engineered auth/listing/download
-mechanics.
+was added instead. The new site relaunched its video archive as of 2026-08-11, making
+real scraping viable again — see `docs/DF_SITE_MIGRATION.md` for the reverse-engineered
+auth/listing/download mechanics. **The Patreon-import stopgap was retired and removed
+entirely on 2026-08-15**, now that real scraping and downloads are confirmed working -
+the still-useful "manual single-URL download" path was kept (`components/df-content/manual-download-tab`
++ `POST /api/tasks/manual`), just no longer tab-paired with the HTML-paste importer.
 
-**Phase 1** of `docs/ROADMAP.md` (update the tool for the new site) is essentially
-complete and committed on branch `feature/new-df-site` (off `experimental`): the
-fetcher/content-manager rewrite, `DfContentInfo.key`/`.name` identity split, DB
-migration with a `legacy`/`unpatchable` resolution mechanism for carried-over entries
-(a resumable full archive walk, not per-item searching - see
-`docs/DF_SITE_MIGRATION.md`), the centralized rate-limited request queue, and the
-recurring auto-poll loop (`DigitalFoundryContentManager.start()` now calls
-`checkForNewContents()` on a conservative timer, gated on sign-in status - see
-`contentDetection.contentCheckInterval`) are all done and verified live. **A real
-end-to-end download was confirmed working for the first time since the relaunch
-(2026-08-15)** - the actual blocker was `DfTaskManager.downloadContent()` never sending
-the `autologin` cookie for DF-sourced downloads (fixed - see the doc). Still open: the
-Patreon-import stopgap's fate, `DfSessionCheckDialog`'s re-enablement, and a
-recent-content re-check feature for formats that get added after initial publish (e.g.
-audio releases before video) - see `docs/ROADMAP.md`/task tracking for current status.
-Phase 2 (yalc → npm workspaces migration) is done (2026-08-14).
+**Phase 1** of `docs/ROADMAP.md` (update the tool for the new site) is complete and
+committed on branch `feature/new-df-site` (off `experimental`): the fetcher/content-manager
+rewrite, `DfContentInfo.key`/`.name` identity split, DB migration with a
+`legacy`/`unpatchable` resolution mechanism for carried-over entries (a resumable full
+archive walk, not per-item searching - see `docs/DF_SITE_MIGRATION.md`), the centralized
+rate-limited request queue, and the recurring auto-poll loop
+(`DigitalFoundryContentManager.start()` now calls `checkForNewContents()` on a
+conservative timer, gated on sign-in status - see `contentDetection.contentCheckInterval`)
+are all done and verified live. **A real end-to-end download was confirmed working for
+the first time since the relaunch (2026-08-15)** - the actual blocker was
+`DfTaskManager.downloadContent()` never sending the `autologin` cookie for DF-sourced
+downloads (fixed - see the doc). `DfSessionCheckDialog` has been re-enabled since
+2026-08-14, and a recent-content re-check feature (catches formats that get added after
+initial publish, e.g. audio releases before video) landed 2026-08-15. Phase 2
+(yalc → npm workspaces migration) is done (2026-08-14).
 
 ## Repo layout
 
@@ -105,16 +106,13 @@ with `@deepgram/sdk`, see `deepgram.ts`).
 
 ## Things that are currently known-broken or intentionally disabled
 
-- `DfSessionCheckDialog` (UI) — hard-disabled (`const open = false`) pending the new
-  auth flow being wired all the way through.
 - `DigitalFoundryContentManager.start_reinstate_when_new_site()` — dead code, the
   pre-relaunch version of `start()`, kept intentionally as a reference for what the
   polling loop used to do; not currently called.
 
 Don't assume TypeScript errors you might see referenced in old notes/logs are still
-current — several parser bugs in `patreon-html-parser.ts` (undefined `$`, missing
-cheerio type exports) and a `df-content-manager.ts`/`tasks.ts` type mismatch around
-`setContentInfosWithAvailability` were already fixed in later commits (see git log:
+current — a `df-content-manager.ts`/`tasks.ts` type mismatch around
+`setContentInfosWithAvailability` was already fixed in a later commit (see git log:
 `085c3b8`, `2b75b2f`, `4efbbad`, `739a15d`). Re-run `check-build` yourself rather than
 trusting stale error output.
 

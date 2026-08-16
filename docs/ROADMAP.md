@@ -44,8 +44,11 @@ Get the tool working against the relaunched `digitalfoundry.net` again. Status a
   installation's first automatic scan against the new site, then flips permanently true.
   Not yet exercised live since the auto-poll loop itself still isn't wired into
   `start()` (next item). See `DF_SITE_MIGRATION.md`.
-- [ ] Decide what becomes of the Patreon-import stopgap path once real scraping works
-  again (keep as fallback vs retire).
+- [x] Decide what becomes of the Patreon-import stopgap path once real scraping works
+  again - retired (2026-08-15) now that real scraping and downloads are confirmed
+  working end-to-end: the HTML-paste import UI/endpoint/parser were removed entirely
+  (the still-useful "manual single-URL download" path was kept, just no longer
+  tab-paired with it).
 - [x] `DfSessionCheckDialog` re-enabled, and `start()` now hard-gates the initial
   archive scan on confirmed DF auth (never scans unauthenticated, auto-triggers a scan
   the moment valid auth is configured via the UI). See `DF_SITE_MIGRATION.md`.

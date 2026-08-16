@@ -143,7 +143,7 @@ export class DfTaskManager {
     let headers: Record<string, string>;
 
     if (directUrl) {
-      // Only for genuinely-external manual downloads (e.g. the Patreon-import
+      // Only for genuinely-external manual downloads (the manual-download
       // flow, which passes an explicit non-DF URL) - no DF cookie/headers
       // needed since it's not digitalfoundry.net. Deliberately keyed off the
       // explicit `directUrl` param alone, not `|| mediaInfo.downloadUrl` -
