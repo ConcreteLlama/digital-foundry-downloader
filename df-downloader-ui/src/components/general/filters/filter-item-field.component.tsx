@@ -1,9 +1,8 @@
 import { Button, Divider, Grid, Stack, Typography } from "@mui/material";
 import { red } from "@mui/material/colors";
-import { DfContentAvailability, StringFilter, TagFilter } from "df-downloader-common";
+import { DfContentAvailability, StringFilter } from "df-downloader-common";
 import { Fragment } from "react";
 import { CheckboxElement, MultiSelectElement } from "react-hook-form-mui";
-import { DfTagField } from "../../form-fields/df-tag-field.component.tsx";
 import { ZodSelectField } from "../../zod-fields/zod-select-field.component";
 import { ZodTextField } from "../../zod-fields/zod-text-field.component";
 import { ContentFilterMode } from "./filter-list.component";
@@ -19,8 +18,6 @@ export const FilterItemField = ({ parentFieldName, remove, mode }: FilterItemFie
       <StringFilterField fieldName={`${parentFieldName}.title`} label="Title" />
       <Divider>AND</Divider>
       <StringFilterField fieldName={`${parentFieldName}.description`} label="Description" />
-      <Divider>AND</Divider>
-      <TagFilterField fieldName={`${parentFieldName}.tags`} />
       {mode === "contentEntry" && (
         <Fragment>
           <Divider>AND</Divider>
@@ -59,25 +56,6 @@ const StringFilterField = ({ fieldName, label }: StringFilterFieldProps) => {
         </Grid>
         <Grid item xs={6} md={2}>
           <CheckboxElement name={`${fieldName}.caseSensitive`} label="Case Sensitive" />
-        </Grid>
-      </Grid>
-    </Stack>
-  );
-};
-
-type TagFilterFieldProps = {
-  fieldName: string;
-};
-const TagFilterField = ({ fieldName }: TagFilterFieldProps) => {
-  return (
-    <Stack sx={{ gap: 2 }}>
-      <Typography>Tags</Typography>
-      <Grid container spacing={2}>
-        <Grid item xs={12} md={10}>
-          <DfTagField name={`${fieldName}.tags`} label="Tag Names" />
-        </Grid>
-        <Grid item xs={4} md={2}>
-          <ZodSelectField name={`${fieldName}.mode`} label="Mode" zodEnum={TagFilter.shape.mode._def.innerType} />
         </Grid>
       </Grid>
     </Stack>
