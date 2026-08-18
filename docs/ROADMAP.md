@@ -9,10 +9,12 @@ Read and document the existing monorepo (`ARCHITECTURE.md`), figure out what the
 site's auth and data look like (`DF_SITE_MIGRATION.md`), and get set up to start real
 work. No functional code changes in this phase.
 
-## Phase 1 — Update the tool for the new site
+## Phase 1 — Update the tool for the new site (done)
 
-Get the tool working against the relaunched `digitalfoundry.net` again. Status as of
-2026-08-14 (all on branch `feature/new-df-site`, uncommitted):
+Get the tool working against the relaunched `digitalfoundry.net` again. **Complete as of
+2026-08-15** (all on branch `feature/new-df-site`, live on the `experimental` DockerHub
+tag and the project owner's real Unraid deployment since). Status as of 2026-08-14,
+updated below where later items closed out:
 
 - [x] Replace the `sessionid`-cookie auth flow with the new `autologin`-cookie flow.
 - [x] Rewrite the scraping layer (`df-fetcher.ts` and friends) against the new
@@ -23,11 +25,11 @@ Get the tool working against the relaunched `digitalfoundry.net` again. Status a
   DB: existing entries patched forward in place (rekeyed via cached `youtubeVideoId`
   where available), no forced full re-scan. See `DF_SITE_MIGRATION.md`'s
   "Implementation status" section.
-- [ ] Run a real download through the download engine end-to-end (only header-level
-  redirect checks done so far) — **on hold**: the project owner's IP got banned by DF's
-  Cloudflare protection during the first live test (see the incident writeup at the top
-  of `DF_SITE_MIGRATION.md`); do not make further requests to digitalfoundry.net without
-  explicit sign-off.
+- [x] Run a real download through the download engine end-to-end — **done 2026-08-15**,
+  first real download success since the relaunch. The actual blocker turned out to be
+  `DfTaskManager.downloadContent()` never sending the `autologin` cookie for DF-sourced
+  downloads (not the earlier-suspected IP ban, which had already cleared by then with
+  explicit sign-off to resume - see `DF_SITE_MIGRATION.md`).
 - [x] Fixed the bug that caused the ban: `DfUserManager` rechecked auth unconditionally
   every 10 seconds forever, regardless of success - now only reschedules while signed
   in, at 30 minutes. Full timer audit done, no other unconditional loops hit the DF
@@ -52,9 +54,10 @@ Get the tool working against the relaunched `digitalfoundry.net` again. Status a
 - [x] `DfSessionCheckDialog` re-enabled, and `start()` now hard-gates the initial
   archive scan on confirmed DF auth (never scans unauthenticated, auto-triggers a scan
   the moment valid auth is configured via the UI). See `DF_SITE_MIGRATION.md`.
-- [ ] The recurring auto-poll loop itself (periodic `checkForNewContents()`, as opposed
-  to the one-time startup scan above) is still not wired up — blocked on the
-  "resuming after upgrading" item above first.
+- [x] The recurring auto-poll loop itself (periodic `checkForNewContents()`, as opposed
+  to the one-time startup scan above) — **wired up 2026-08-15**
+  (`DigitalFoundryContentManager.startContentPollLoop()`), gated on sign-in status, on
+  `contentDetection.contentCheckInterval` (default raised to 30 minutes).
 - [x] **Centralized DF-site request queue + rate-limit backoff** (2026-08-15) — every
   request to digitalfoundry.net itself (not downloads) now goes through a single
   concurrency-1 queue with randomized spacing (`digitalFoundry.requestSpacingMinMs/MaxMs`,
@@ -110,3 +113,16 @@ of the migration, not scope creep:
   across three consecutive `npm install` runs. If this regresses again, check root
   `package.json`'s `dependencies` first before assuming a fresh install will fix it -
   a *second* install is exactly when this silently broke before.
+
+## Stabilization pass (2026-08-16 to 2026-08-18)
+
+Not a planned phase — a run of fixes driven by live testing of Phase 1's work against
+the project owner's real Unraid deployment, after pushing to the `experimental` DockerHub
+tag. See `CLAUDE.md`'s "Current state" section for the summary and git history on
+`feature/new-df-site` for individual commits. Highlights: several auth/session-UX bugs
+(stale-state race on existing-install upgrades, a settings-save/background-poll race,
+the "Test Session ID" button silently swallowing errors), request-queue priority and a
+manual-download-only bypass so a deliberate click doesn't wait behind queued scan
+traffic, blocking downloads for content not yet confirmed against the live site
+(`legacy`), and lazily backfilling YouTube description/duration (never present in DF's
+own listing) with a small nav-bar indicator for DF request-queue activity.

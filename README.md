@@ -1,61 +1,60 @@
 # DF Downloader
 
-> **⚠️ IMPORTANT UPDATE (September 2025)**
-> Digital Foundry has transitioned to independence and their original website is being decommissioned. As of version 2.5.0, this tool now primarily works with **Patreon imports** rather than direct website integration. The HTML import feature allows you to extract download links from Patreon posts. Many website-dependent features have been temporarily disabled but preserved for when the new DF site launches. The tool will no longer automatically be able to scan for new downloads, but can still be useful if you like some of the features such as metadata injection, renaming etc. Much of the metadata that used to exist is no longer available within the Patreon posts so it's hardly "full featured" but it should suffice as a stop-gap solution until the new site is available.
-
-DF Downloader is a nodejs/react application designed to download the latest Digital Foundry videos when they are available. This will only work in any useful manner if you are a Patreon subscriber. If you are not a subscriber,
-this tool will still be able to get info about available content but it will not be able to download anything.
+DF Downloader is a nodejs/react application designed to download the latest Digital Foundry videos when they are available. This will only work in any useful manner if you are a Patreon subscriber. If you are not a subscriber, this tool will still be able to get info about available content but it will not be able to download anything.
 
 _NOTE - This is a personal project that I developed for my own use and has been consistently working for me for some time. I thought I'd put it out there as I found it so useful. I don't get much time to actually work on it but try to keep it updated if it breaks or doesn't work quite as expected. Also if you look through the code you may spot some weird, convoluted looking stuff. I sometimes use this to experiment with new ideas (such as playing around with Typescript types)_
 
 If you just want to get up and running, check out the [Standalone (no docker)](#standalone-no-docker-instructions) instructions or go to the [concretellama/digital-foundry-downloader dockerhub page](https://hub.docker.com/repository/docker/concretellama/digital-foundry-downloader) to run in a container.
 
+## Digital Foundry's 2025 relaunch
+
+Digital Foundry left their old host and relaunched independently at `digitalfoundry.net` in 2025, with an entirely different site, CMS, and login mechanism. That broke this tool's scraper for a while (a manual "paste a Patreon post's HTML" import mode existed as a stopgap during that period). The new site's video archive relaunched properly in August 2026, and this tool was updated to match — automated scanning and downloading against the new site work end-to-end again, and the old Patreon-HTML-paste workaround has been retired now that it's no longer needed. If you're upgrading from a version that predates this, you'll need to grab a fresh login cookie (see below) and the app will do one full re-scan to reconcile its local database against the new site - that's automatic, not something you need to trigger.
+
 # Features
 
 - Has a web UI to see available content, manage downloads, configure etc.
-- Can be configured to download new Digital Foundry videos when available with a media format priority list (e.g. 4K > 1080p > Video)
-- Injects metadata into downloaded media (title, tags (as genre tags), description, published date and chapter info)
+- Can be configured to download new Digital Foundry videos automatically when available, with a media format priority list (e.g. 4K > 1080p > Video)
+- Injects metadata into downloaded media (title, tags (as genre tags), description, published date and chapter info) — description and video duration are pulled from the video's YouTube page the first time you open it in the UI or download it, since the DF site itself doesn't expose either
 - Has a download queue to limit the number of simultaneous downloads
 - Can force start downloads outside of the limit, reorder downloads and pause/resume them
 - If a download fails, it will attempt to continue from the point it failed (e.g. if 50% through will continue from 50%)
 - File paths are configurable with templates to allow you to specify where the content is downloaded to based on metadata from the content (e.g. can put in YYYY/MM directories, or put all content tagged with "df direct" into a DF Direct dir)
 - Can send pushbullet notifications when various events occur
 - Stores content info and related download info to a file so it doesn't have to re-scan on restart
-- Ability to automatically generate subtitles for videos - either extracted from YouTube or generated with Deepgram or Google STT (Google STT implementation is quite slow due to using streaming recognize).
+- Ability to automatically generate subtitles for videos - either extracted from YouTube or generated with Deepgram or Google STT (Google STT implementation is quite slow due to using streaming recognize)
+- A small status indicator in the UI's nav bar shows whether the tool is currently waiting on Digital Foundry (queued/rate-limited) or mid-archive-scan — click it for a breakdown
 
-# DF Session ID
+# DF Login Cookie
 
-I haven't implemented Patreon login, so you'll have to use your browser, login to digitalfoundry.net then use your browser's dev tools to grab your sessionid cookie. This used to expire every 2 weeks but now seems to persist indefinitely as long as you don't log in anywhere else.
+I haven't implemented Patreon login directly, so you'll have to use your browser: log in to digitalfoundry.net, then use your browser's dev tools to grab your **`autologin`** cookie. It's a "remember me"-style token that, in testing, doesn't rotate or expire on reuse — logging in again elsewhere doesn't appear to invalidate it the way the old site's session cookie did.
 
-To get this in Chrome, for example: ... > More Tools > Developer Tools > Application > Cookies > https://www.digitalfoundry.net > sessionid
+To get this in Chrome, for example: `⋮` (top right) → More Tools → Developer Tools → Application tab → Storage → Cookies → `https://www.digitalfoundry.net` → copy the value of the **`autologin`** cookie.
 
-Note: It's the sessionid cookie not the session_id one. From what I've seem the sessionid cookie is always lowercase alphanumeric, no special chars.
-
-It seems like if you login on another browser, it'll log the downloader out, but if you log back in on the original browser from which you got the session id cookie,
-it'll log you back in.
+Paste it into Settings → Digital Foundry → Autologin Cookie in the web UI, and hit "Test Session ID" to confirm it's valid before saving. If you don't have one configured (or it's invalid), the app will prompt you for one on startup and won't attempt to scan the site until it has a working cookie.
 
 # Limitations
 
-- Can't login using Patreon credentials - you have to go to the DF website in your browser and get the sessionid cookie - however this does seem to last indefinitely unless you log in from somewhere else.
+- Can't log in using your Patreon credentials directly - you have to get the cookie from your browser as above.
 - There is no way to multi select videos to download or trigger a download for all previous videos, and there never will be.
+- Content whose data hasn't yet been confirmed against the current site (e.g. very old entries carried over from before the 2025/2026 relaunch that the tool hasn't been able to relocate) can't be downloaded until you use "Refresh Metadata" on that item — this is deliberate, since old cached download links are very likely dead.
 
 # Notes on behaviour
 
-On first run, this will scan the entire DF archive and build up a DB of all available content. On future runs, it will check every archive page at the beginning to see if it's missing anything. The first run can take quite a while - it does fetch multiple pages simultaenously but the last thing I want is for this tool to hammer the DF site unnecessarily. Maybe I've been a little over-cautious in this regard.
+On first run, this will scan the entire DF archive and build up a DB of all available content. On future runs, it does a lighter check for new/updated content on a relaxed timer rather than re-walking the whole archive. Requests to digitalfoundry.net are deliberately rate-limited and paced (a handful of seconds apart) — Digital Foundry is a small team, not a large CDN-subsidized operation, and this tool tries hard not to hammer their infrastructure. A one-off action you trigger yourself (like clicking to download something) skips ahead of any queued background work rather than waiting behind it.
 
-Either way, currently the size of the "DB" after first run is upward of 3.5MB.
+Either way, the size of the "DB" after first run is a few MB of JSON.
 
-If you want to limit the impact of this, set the max archive depth
+If you want to limit the impact of a full scan, there are settings to cap how many archive pages get walked and how far back auto-download will reach.
 
 It will also scan your destination dir for existing downloaded content. This behaviour can be disabled in the UI.
 
 ## Code Structure
 
-This is split into 3 packages:
+This is split into 3 packages, linked via npm workspaces:
 
 ### df-downloader-common
 
-Includes all models shared between the UI and the backend service, along with various utility functions.
+Includes all models (zod schemas) shared between the UI and the backend service, along with various utility functions.
 
 ### df-downloader-ui
 
@@ -70,17 +69,19 @@ The service is also able to host the web UI.
 
 ### Prerequisites
 
-- node20
+- Node.js 24 (current LTS)
 
-You'll need nodejs. I've been running this with node20. If you don't have nodejs, I recommend using [nvm](https://github.com/nvm-sh/nvm) to install nodejs but you can just go to the [nodejs website](https://nodejs.org/en/) and download the latest version.
+If you don't have nodejs, I recommend using [nvm](https://github.com/nvm-sh/nvm) to install it, but you can just go to the [nodejs website](https://nodejs.org/en/) and download the latest LTS.
 
 ### Setup
 
 In the root directory of this project run:
 
-`npm run build`
+`npm install`
 
-It'll do everything for you
+then
+
+`npm run build`
 
 ### Configuration
 
@@ -150,6 +151,10 @@ If you run this in a container on a server and you're using an insecure local re
 ```
 
 In the case of Unraid, that file will not persist on restart.
+
+### Upgrading an existing install
+
+If you're updating from an install that predates the 2026-08 relaunch support, pull the latest image and force-update your container (Docker tags are mutable — pulling `:latest` again doesn't automatically refresh an already-running container on its own). You'll be prompted in the UI to paste a fresh `autologin` cookie (see above), and the app will do one automatic full re-scan to reconcile its existing database against the new site — your existing downloads, tags, and settings are preserved.
 
 ## Environment variables
 

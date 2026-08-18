@@ -12,7 +12,7 @@ generating subtitles, etc. Not a general-purpose product — built by and for on
 (the repo owner) who shares it publicly. Keep that in mind for scope: prefer pragmatic
 fixes over enterprise-grade abstraction, and don't add config/features speculatively.
 
-## Current state (as of 2026-08-15) — read this first
+## Current state (as of 2026-08-18) — read this first
 
 Digital Foundry left their old host and relaunched independently at
 `digitalfoundry.net` with an entirely different CMS, HTML structure, and auth
@@ -25,21 +25,50 @@ entirely on 2026-08-15**, now that real scraping and downloads are confirmed wor
 the still-useful "manual single-URL download" path was kept (`components/df-content/manual-download-tab`
 + `POST /api/tasks/manual`), just no longer tab-paired with the HTML-paste importer.
 
-**Phase 1** of `docs/ROADMAP.md` (update the tool for the new site) is complete and
-committed on branch `feature/new-df-site` (off `experimental`): the fetcher/content-manager
-rewrite, `DfContentInfo.key`/`.name` identity split, DB migration with a
-`legacy`/`unpatchable` resolution mechanism for carried-over entries (a resumable full
-archive walk, not per-item searching - see `docs/DF_SITE_MIGRATION.md`), the centralized
-rate-limited request queue, and the recurring auto-poll loop
+**Phase 1** of `docs/ROADMAP.md` (update the tool for the new site) is complete,
+committed, and pushed live to the `experimental` DockerHub tag, running on the project
+owner's real Unraid deployment. The fetcher/content-manager rewrite,
+`DfContentInfo.key`/`.name` identity split, DB migration with a `legacy`/`unpatchable`
+resolution mechanism for carried-over entries (a resumable full archive walk, not
+per-item searching - see `docs/DF_SITE_MIGRATION.md`), the centralized rate-limited
+request queue, and the recurring auto-poll loop
 (`DigitalFoundryContentManager.start()` now calls `checkForNewContents()` on a
 conservative timer, gated on sign-in status - see `contentDetection.contentCheckInterval`)
-are all done and verified live. **A real end-to-end download was confirmed working for
-the first time since the relaunch (2026-08-15)** - the actual blocker was
-`DfTaskManager.downloadContent()` never sending the `autologin` cookie for DF-sourced
-downloads (fixed - see the doc). `DfSessionCheckDialog` has been re-enabled since
-2026-08-14, and a recent-content re-check feature (catches formats that get added after
-initial publish, e.g. audio releases before video) landed 2026-08-15. Phase 2
-(yalc → npm workspaces migration) is done (2026-08-14).
+are all done and verified live. Phase 2 (yalc → npm workspaces migration) is done
+(2026-08-14).
+
+**Stabilization pass (2026-08-16 to 2026-08-18)**, driven by live testing against the
+real Unraid deployment, on top of the Phase 1 work above:
+- **Auth/session UX**: the "Test Session ID" button now surfaces the actual error
+  message instead of just turning red; existing installs upgrading with a stale/invalid
+  cookie already in `config.yaml` now correctly get prompted (the startup auth check is
+  async and slower than the first `/df-user` query, so the UI re-polls briefly and
+  self-corrects); a request-sequencing bug where a background poll could clobber a
+  just-saved valid session with stale data was fixed by making the save flow
+  authoritative and pausing the background poll while it's in flight.
+- **Request queue**: `dfFetch()` gained `priority` (interactive actions jump queued
+  bulk/background work) and `bypassQueue` (a genuine one-off — the manual download
+  button specifically, not auto-download, which can fire several near-simultaneous
+  items) options - see `df-request-queue.ts`. A small nav-bar badge
+  (`QueueStatusIndicator`) now shows queue depth/backoff/scan status, since the queue's
+  own protections mean actions can visibly pause with no explanation otherwise.
+- **Legacy content**: downloading an entry whose data hasn't been confirmed against the
+  live site (`DfContentInfo.legacy`) is now blocked both in the UI (disabled button,
+  explanatory tooltip) and the service (`downloadContent()`), since its cached download
+  link is likely dead - "Refresh Metadata" is the recovery path, and that action now
+  also gets `bypassQueue`-equivalent priority.
+- **YouTube description/duration**: the new site's listing never exposes either field.
+  Both are lazily backfilled from YouTube (`syncYtVideoMeta` in
+  `utils/youtube/sync-yt-video-meta.ts`) - on content-detail dialog open, before
+  checking an auto-download candidate against a description-based exclusion filter, and
+  always at download completion (alongside the pre-existing chapter-fetch, which can't
+  be cached the way description/duration can - chapters are embedded fresh into every
+  file, never persisted). Cached in the DB after first fetch; never eager during scans.
+  `setContentInfos()` now merges this YouTube-sourced data across writes instead of
+  letting a fresh DF-scraped overwrite silently wipe it.
+- Fixed a userTierChanged()/archive-scan contention bug affecting every existing install
+  upgrading (pasting a fresh cookie into an already-running app raced the scan it
+  triggers), and hardened scan/refresh/download paths to hard no-op while signed out.
 
 ## Repo layout
 
@@ -93,9 +122,10 @@ with `@deepgram/sdk`, see `deepgram.ts`).
   don't write a one-off migration script. This is the exact mechanism to use for the
   Phase 1 new-site DB migration (see `docs/DF_SITE_MIGRATION.md`).
 - **Two unrelated "auth" concepts coexist** — don't conflate them: the app's own local
-  account system (JWT/cookie, `rest/auth/`) vs. the Digital Foundry site session
-  (currently the disabled `sessionid`-paste flow, moving to `autologin`-cookie per the
-  migration doc). A bug report or task about "login" — clarify which one.
+  account system (JWT/cookie, `rest/auth/`) vs. the Digital Foundry site session (the
+  `autologin`-cookie flow, `DfSettingsForm` in `components/settings/df-settings.component.tsx`
+  + `DfUserManager`/`df-content-manager.ts`). A bug report or task about "login" —
+  clarify which one.
 - Tasks/downloads run through a generic FSM-based pipeline system
   (`fsm/`, `task-manager/`, `download/`) — reuse it for new async multi-step work
   rather than building bespoke state tracking.

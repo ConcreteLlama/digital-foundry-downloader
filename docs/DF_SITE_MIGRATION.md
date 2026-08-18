@@ -1,5 +1,13 @@
 # Digital Foundry Site Migration Notes
 
+> **Status (2026-08-18): migration complete.** Everything below is a dated
+> investigation/implementation log kept for reference — scraping, auth, DB migration,
+> and downloads have all been working end-to-end against the relaunched site since
+> 2026-08-15, running live on the project owner's real deployment. See `docs/ROADMAP.md`
+> for the current phase status and `CLAUDE.md` for a short summary of the further
+> live-testing fixes made since (request queue priority, legacy-content download
+> guard, YouTube description/duration backfill, etc.) that this doc predates.
+
 Digital Foundry left their old host and relaunched independently at
 `https://www.digitalfoundry.net` (new CMS, new HTML, new auth). The old site's archive
 was taken down without a video archive at first; as of **2026-08-11 it has one again**

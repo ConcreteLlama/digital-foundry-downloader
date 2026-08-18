@@ -40,8 +40,13 @@ which is the main safety net when refactoring the shared model.
 
 - **Models** (`src/models`) — zod schemas + inferred types + `*Utils` helper namespaces.
   Key ones: `DfContentInfo` (a piece of content: title, description, tags, media
-  variants, `source: "digitalfoundry" | "manual" | "patreon"`), `MediaInfo` (one
-  downloadable variant: format, encoding, resolution/framerate/bitrate, size, URL),
+  variants, `legacy`/`unpatchable` flags for entries not yet confirmed against the
+  current site, `source: "digitalfoundry" | "manual" | "patreon"` — `"patreon"` is
+  vestigial, kept only so old entries created during the since-removed Patreon-import
+  stopgap still parse; nothing writes it anymore), `MediaInfo` (one
+  downloadable variant: format, encoding, resolution/framerate/bitrate, size, URL,
+  duration — duration is only ever backfilled from YouTube, never from DF's own
+  listing),
   `DfContentEntry` (the DB-persisted wrapper: content + availability + downloads),
   `DfContentDownloadInfo` (a completed download record), task/pipeline models
   (`TaskInfo`, `TaskPipelineInfo`, discriminated by `taskType`), the app's own local-user
@@ -71,17 +76,30 @@ manager's polling loop.
 
 `DigitalFoundryContentManager` (`src/df-content-manager.ts`) is the top-level
 orchestrator:
-- On startup, scans the DF archive (`scanWholeArchive`) and reconciles against the DB.
-- Periodically calls `checkForNewContents()` to look for new videos and optionally kick
-  off auto-downloads (respecting format priority + exclusion filters from config).
+- On startup (and whenever a config update transitions the account from signed-out to
+  signed-in), scans the DF archive (`scanWholeArchive`) and reconciles against the DB —
+  a resumable, checkpointed full walk when there are `legacy`/unconfirmed entries to
+  resolve, otherwise a cheaper tail-only resume.
+- A recurring poll (`startContentPollLoop`, gated on sign-in) calls
+  `checkForNewContents()` to look for new/updated videos and optionally kick off
+  auto-downloads (respecting format priority + exclusion filters from config — including
+  a description filter, which lazily fetches YouTube metadata for a candidate first
+  since DF's own listing never has a description).
 - Owns a `DfUserManager` (tracks the DF site login/subscriber-tier state) and a
   `DfTaskManager` (owns the actual download/subtitle/maintenance task pipelines).
+- Every scan/refresh/download-triggered fetch is hard-gated on `DfUserManager.isUserSignedIn()`
+  — the tool never scans or refreshes against the site while signed out.
 
-`src/df-fetcher.ts` is the **DF-site scraping layer** — the part that will need a near-total
-rewrite for the relaunched site (see [DF_SITE_MIGRATION.md](DF_SITE_MIGRATION.md)). It
-uses `htmlparser2` + `css-select` to parse the old site's archive/article pages and
-extract `DfContentInfoReference`/`DfContentInfo`/`MediaInfo`. Auth is a single `cookie:
-sessionid=<value>` header built by `makeAuthHeaders()`.
+`src/df-fetcher.ts` is the **DF-site scraping layer**, rewritten for the relaunched site
+(see [DF_SITE_MIGRATION.md](DF_SITE_MIGRATION.md) for the reverse-engineering). It calls
+the site's own `/api/1.0/listing` JSON endpoint (no HTML scraping, no per-video detail
+fetch — the listing response has everything) and extracts `DfContentInfo`/`MediaInfo`
+from each item. Auth is a single `cookie: autologin=<value>` header built by
+`makeAuthHeaders()`. Every request goes through `df-request-queue.ts`'s `dfFetch()` —
+concurrency 1, randomized spacing, transparent 429/503 backoff — rather than calling
+`fetch()` directly, to avoid hammering DF's infrastructure; `dfFetch()` also supports a
+`priority` hint (interactive actions jump queued bulk work) and a `bypassQueue` escape
+hatch (a genuine one-off request, e.g. the manual download button specifically).
 
 ### Task/pipeline system
 
@@ -138,17 +156,22 @@ workspace link, same as the service.
 - Settings pages are almost entirely generic: one zod-schema-driven form component
   (`DfSettingsSectionForm`) reused per config section, so most config additions in
   `df-downloader-common` just need a form field added, not a new page.
-- Two unrelated "auth" concerts live side by side — don't conflate them:
+- Two unrelated "auth" concepts live side by side — don't conflate them:
   1. **App-local accounts** (this tool's own login, JWT/cookie-based) — unaffected by
      the DF relaunch.
   2. **DF-site session** — `DfSettingsForm` (`components/settings/df-settings.component.tsx`)
-     is the manual `sessionid`-cookie-paste UI that needs to change to whatever the new
-     auth mechanism becomes (see migration doc).
+     is the `autologin`-cookie-paste UI (a "Test Session ID" button verifies it before
+     saving); `DfSessionCheckDialog` blocks the main UI with a prompt to configure one
+     until the backend confirms a valid, subscribed session.
+- `QueueStatusIndicator` (`components/general/`) is a small nav-bar badge polling a
+  lightweight status endpoint — shows DF request-queue depth/backoff and scan-in-progress
+  state, since the queue's own protections (see `df-request-queue.ts` above) mean
+  actions can visibly pause with no on-screen explanation otherwise.
 
-## Data flow summary (pre-relaunch model - see DF_SITE_MIGRATION.md for the current one)
+## Data flow summary
 
 ```
-DF site archive pages  →  df-fetcher.ts (htmlparser2/css-select)  →  DfContentInfo[]
+DF site listing API  →  df-fetcher.ts (/api/1.0/listing)  →  DfContentInfo[]
                                                                           │
                                                                           ▼
                                                     DigitalFoundryContentManager
@@ -160,7 +183,9 @@ DF site archive pages  →  df-fetcher.ts (htmlparser2/css-select)  →  DfConte
                                                                           │
                                                                           ▼
                                           download-task-pipeline (download → subtitles →
-                                                chapters → inject metadata → move)
+                                            YouTube meta (chapters/description/duration,
+                                            embedded + backfilled to DB) → inject
+                                            metadata → move)
                                                                           │
                                                                           ▼
                                                         DfFileOperationalDb (JSON files)
@@ -169,7 +194,5 @@ DF site archive pages  →  df-fetcher.ts (htmlparser2/css-select)  →  DfConte
                                                      REST API  →  polled by React UI
 ```
 
-`df-fetcher.ts` now scrapes the relaunched site via `/api/1.0/listing` instead of
-`htmlparser2`/`css-select` on the old site's pages - see
-[DF_SITE_MIGRATION.md](DF_SITE_MIGRATION.md) for the current mechanics. Everything below
-`DigitalFoundryContentManager` in this diagram is unchanged.
+See [DF_SITE_MIGRATION.md](DF_SITE_MIGRATION.md) for the full reverse-engineering of the
+current site's auth/listing/download mechanics.
