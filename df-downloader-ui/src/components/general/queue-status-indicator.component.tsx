@@ -1,5 +1,5 @@
 import CloudSyncIcon from "@mui/icons-material/CloudSync";
-import { Badge, Box, CircularProgress, IconButton, Popover, Tooltip, Typography } from "@mui/material";
+import { Badge, Box, IconButton, Popover, Tooltip, Typography } from "@mui/material";
 import { QueueStatusResponse, parseResponseBody } from "df-downloader-common";
 import { useEffect, useState } from "react";
 import { API_URL } from "../../config";
@@ -57,7 +57,11 @@ export const QueueStatusIndicator = () => {
       <Tooltip title="Digital Foundry request queue">
         <IconButton onClick={(e) => setAnchorEl(e.currentTarget)} color="inherit">
           <Badge badgeContent={badgeCount > 0 ? badgeCount : undefined} color="secondary">
-            {isActive ? <CircularProgress size={20} color="inherit" /> : <CloudSyncIcon fontSize="small" />}
+            {/* A continuous spin here would be running near-constantly
+                during any scan (which can take a while) - distracting for
+                something meant to sit passively in the nav bar. Active
+                state is conveyed by color instead. */}
+            <CloudSyncIcon fontSize="small" color={isActive ? "primary" : "inherit"} />
           </Badge>
         </IconButton>
       </Tooltip>
