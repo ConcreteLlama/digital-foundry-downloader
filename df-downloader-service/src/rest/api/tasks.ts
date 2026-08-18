@@ -49,6 +49,9 @@ export const makeDownloadsApiRouter = (contentManager: DigitalFoundryContentMana
       try {
         const queuedContentInfo = await contentManager.downloadContent(data.key, {
           mediaFormat: data.mediaFormat,
+          // A direct user click, not auto-download - see downloadContent's
+          // `interactive` doc comment.
+          interactive: true,
         });
         const response: DownloadContentResponse = {
           key: queuedContentInfo.contentKey,

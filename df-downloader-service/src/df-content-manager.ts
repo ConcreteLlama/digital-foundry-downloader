@@ -1037,8 +1037,21 @@ export class DigitalFoundryContentManager {
     content: string | DfContentInfo,
     {
       mediaFormat,
+      interactive = false,
     }: {
       mediaFormat?: string;
+      /**
+       * True only for a direct, manual "download this" click (see
+       * rest/api/tasks.ts's /task endpoint) - never for auto-download.
+       * Auto-download can fire several items close together (e.g. a batch
+       * detected in one scan cycle, each after its own jittered delay), so
+       * bypassing the queue for it risks the exact unspaced-burst pattern
+       * the queue exists to prevent; a single manual click is genuinely
+       * one-off. Auto-download still gets INTERACTIVE priority either way -
+       * it should jump ahead of bulk scan/refresh backlog, just not skip
+       * the spacing gate entirely.
+       */
+      interactive?: boolean;
     } = {}
   ) {
     const mediaFormatsConfig = configService.config.mediaFormats;
@@ -1049,18 +1062,13 @@ export class DigitalFoundryContentManager {
       contentKey = content.key;
       contentInfoArg = content;
     }
-    // Interactive priority AND bypassQueue: a download click is a single,
-    // deliberate one-off request - it doesn't need to queue behind (or even
-    // wait out the human-cadence spacing gate that comes with) whatever
-    // bulk scan/refresh work is already pending. Confirmed live 2026-08-18
-    // that priority alone still left this stuck for 5-15s if a scan had
-    // just fired a request; bypassing the queue entirely for this one
-    // lookup is safe precisely because it's a single request, not a burst
-    // (see findContentInfoByKey's fallback scan, which deliberately never
-    // bypasses even when asked).
+    // See the `interactive` doc comment above - priority always applies,
+    // bypassQueue only for a genuine manual one-off click. Confirmed live
+    // 2026-08-18 that priority alone still left a manual download stuck for
+    // 5-15s if a scan had just fired a request.
     const updateResult = await this.getUpdateMediaInfo(contentKey, contentInfoArg?.title, {
       priority: DfFetchPriority.INTERACTIVE,
-      bypassQueue: true,
+      bypassQueue: interactive,
     }).catch((e) => {
       logger.log(
         "error",

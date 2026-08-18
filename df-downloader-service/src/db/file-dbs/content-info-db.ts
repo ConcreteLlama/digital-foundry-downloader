@@ -24,6 +24,29 @@ const FIRST_POST_RELAUNCH_DATA_VERSION = "2.1.0";
 /** Must match DfContentAvailabilityDb's own CURRENT_DB_VERSION - see the 2.5.0->2.6.0 patch step below. */
 const CONTENT_STATUS_DB_VERSION_AFTER_KEY_MIGRATION = "2.5.0";
 
+/**
+ * Every write of a freshly-scraped DfContentInfo (scan, refresh-metadata,
+ * the live link refresh before a download, ...) comes straight from Digital
+ * Foundry's own listing, which never carries description or per-format
+ * duration - those are only ever backfilled from YouTube, lazily, when the
+ * user opens the content detail dialog (see
+ * DigitalFoundryContentManager.getOrFetchYtVideoMeta). Without this merge, a
+ * plain overwrite (the previous behavior) would silently wipe that
+ * YouTube-sourced data back out the next time ANY of those write paths
+ * touched the same entry - confirmed live 2026-08-18: opening an item's
+ * detail dialog (populating its description) and then downloading it
+ * (which re-fetches and overwrites contentInfo right before the download
+ * starts) made the description disappear again immediately.
+ */
+const mergePreservingYtMeta = (existing: DfContentInfo, fresh: DfContentInfo): DfContentInfo => ({
+    ...fresh,
+    description: fresh.description || existing.description,
+    mediaInfo: fresh.mediaInfo.map((mediaInfo) => {
+        const existingMatch = existing.mediaInfo.find((m) => m.formatString === mediaInfo.formatString);
+        return mediaInfo.duration ? mediaInfo : { ...mediaInfo, duration: existingMatch?.duration };
+    }),
+});
+
 export class DfContentInfoDb {
     private data: DfContentInfoDbSchema;
     static async create(dbDir: string) {
@@ -353,7 +376,10 @@ export class DfContentInfoDb {
         if (contentInfos.length === 0) {
             return;
         }
-        contentInfos.forEach((contentInfo) => this.data.contentInfo[contentInfo.key] = contentInfo);
+        contentInfos.forEach((contentInfo) => {
+            const existing = this.data.contentInfo[contentInfo.key];
+            this.data.contentInfo[contentInfo.key] = existing ? mergePreservingYtMeta(existing, contentInfo) : contentInfo;
+        });
         this.updateDb();
     }
     getAllContentInfos(): DfContentInfo[] {

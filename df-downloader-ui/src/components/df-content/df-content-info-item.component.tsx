@@ -1,5 +1,5 @@
-import { Box, Divider, Stack, SxProps, Typography, useMediaQuery } from "@mui/material";
-import { DfContentEntry, DfContentInfoUtils, secondsToHHMMSS } from "df-downloader-common";
+import { Box, Stack, SxProps, Typography, useMediaQuery } from "@mui/material";
+import { DfContentEntry, DfContentInfoUtils } from "df-downloader-common";
 import { Image } from "mui-image";
 import { useSelector } from "react-redux";
 import { useDfContentEntry } from "../../hooks/use-df-content-entry.ts";
@@ -48,9 +48,13 @@ export const DfContentInfoItem = ({ dfContentName, sx }: DfContentInfoItemProps)
         ></Image>
       </Box>
       <Box sx={{ margin: 1, overflow: "hidden" }}>
+        {/* Description is lazy-loaded from YouTube only when the detail
+            dialog opens (see df-content-item-detail.component.tsx) - not
+            available here on the card, and raw YouTube descriptions (links,
+            timestamps, sponsor blurbs) are too dense for this compact a
+            layout even when it has already been fetched for a previously-
+            opened item. */}
         <Typography variant="h5">{dfContentEntry?.contentInfo.title}</Typography>
-        <Divider />
-        <Typography sx={{ marginTop: 2 }}>{dfContentEntry.contentInfo.description}</Typography>
       </Box>
       <DfContentInfoRightPanel dfContentEntry={dfContentEntry} />
     </Box>
@@ -79,7 +83,6 @@ const DfContentInfoRightPanel = ({ dfContentEntry }: DfContentInfoRightPanelProp
         }}
       >
         <Typography>{dfContentEntry.contentInfo.publishedDate.toDateString()}</Typography>
-        <Typography>{secondsToHHMMSS(DfContentInfoUtils.getDurationSeconds(dfContentEntry.contentInfo))}</Typography>
       </Stack>
       <Stack
         sx={{
