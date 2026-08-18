@@ -10,6 +10,7 @@ import { useState } from "react";
 import { useWatch } from "react-hook-form";
 import { DfUserInfo, TestSessionIdRequest, parseResponseBody } from "df-downloader-common";
 import { queryDfContent } from "../../store/df-content/df-content.action";
+import { ensureDfUiError } from "../../utils/error";
 
 export const DfSettingsForm = () => {
   return (
@@ -17,11 +18,34 @@ export const DfSettingsForm = () => {
       sectionName="digitalFoundry"
       title="Digital Foundry"
       onSubmit={() => {
-
-        fetchJson(`${API_URL}/df-user/await-login`, { method: "GET" }).then(() => {
-          store.dispatch(queryDfUserInfo.start());
-          store.dispatch(queryDfContent.start());
-        });
+        // /df-user/await-login blocks (up to its own timeout) until the
+        // service has actually confirmed the newly-saved cookie against
+        // digitalfoundry.net, so its response is the authoritative answer -
+        // dispatch it directly rather than firing a second, separate
+        // queryDfUserInfo request afterwards. That second request used to
+        // race the background self-correcting poll in App.tsx (whichever
+        // resolved last would win, regardless of which was more recent),
+        // which could flicker the "Not Connected" dialog back open even
+        // after a valid session ID was confirmed (confirmed live
+        // 2026-08-18). Dispatching `start` up front also sets `loading`,
+        // which the background poll checks before firing a competing
+        // request of its own.
+        store.dispatch(queryDfUserInfo.start());
+        fetchJson(`${API_URL}/df-user/await-login`, { method: "GET" })
+          .then((data) => {
+            const result = parseResponseBody(data, DfUserInfo.optional());
+            if (result.error) {
+              store.dispatch(queryDfUserInfo.failed(ensureDfUiError(result.error)));
+            } else {
+              store.dispatch(queryDfUserInfo.success(result.data));
+            }
+          })
+          .catch((e) => {
+            store.dispatch(queryDfUserInfo.failed(ensureDfUiError(e)));
+          })
+          .finally(() => {
+            store.dispatch(queryDfContent.start());
+          });
       }}
     >
       <DfSessionIdField />

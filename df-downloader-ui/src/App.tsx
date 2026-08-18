@@ -70,6 +70,27 @@ const MainContainer = () => {
     let polls = 0;
     const maxPolls = 8;
     const interval = setInterval(() => {
+      const dfUserState = store.getState().dfUserInfo;
+      if (dfUserState.loading) {
+        // An authoritative check is already in flight - most notably the
+        // settings form's own await-login check when the user just saved a
+        // new session ID, which can take a while since it goes through the
+        // same rate-limited queue as everything else. Firing a second,
+        // independent request here could resolve out of order relative to
+        // that one and flicker the "Not Connected" dialog back open even
+        // after a valid ID was just confirmed (confirmed live 2026-08-18) -
+        // so just wait for whatever's in flight to finish rather than
+        // competing with it.
+        return;
+      }
+      if (dfUserState.userInfo) {
+        // Already confirmed signed in - nothing left to self-correct.
+        // DfUserManager's own periodic recheck (every 30 minutes) handles
+        // noticing a later organic expiry; this loop only exists to catch
+        // up with the backend's slower one-time startup check.
+        clearInterval(interval);
+        return;
+      }
       polls += 1;
       store.dispatch(queryDfUserInfo.start());
       if (polls >= maxPolls) {
