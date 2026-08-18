@@ -12,7 +12,7 @@ import {
   slugifyTitle,
 } from "df-downloader-common";
 import { configService } from "./config/config.js";
-import { dfFetch } from "./df-request-queue.js";
+import { dfFetch, DfFetchPriority } from "./df-request-queue.js";
 
 /**
  * Scraper for the post-relaunch digitalfoundry.net (new CMS, new auth, new
@@ -58,10 +58,12 @@ type ListingQueryOpts = {
   title?: string;
   /** Bypass configService - mirrors getDfUserInfo's override, useful for testing/the "test connection" flow. */
   autologinOverride?: string;
+  /** See DfFetchPriority - defaults to BACKGROUND (bulk/scan work). */
+  priority?: number;
 };
 
 async function fetchListingPage(opts: ListingQueryOpts = {}): Promise<ListingApiResponse> {
-  const { limit = 50, offset = 0, category, year, title, autologinOverride } = opts;
+  const { limit = 50, offset = 0, category, year, title, autologinOverride, priority } = opts;
   const params = new URLSearchParams({
     auth: "true",
     id: "videos",
@@ -72,13 +74,17 @@ async function fetchListingPage(opts: ListingQueryOpts = {}): Promise<ListingApi
   if (category) params.set("category", category);
   if (year) params.set("year", String(year));
   if (title) params.set("title", title);
-  const response = await dfFetch(`${listingApiUrl}?${params.toString()}`, {
-    headers: {
-      ...makeAuthHeaders(autologinOverride),
-      accept: "*/*",
-      "x-requested-with": "XMLHttpRequest",
+  const response = await dfFetch(
+    `${listingApiUrl}?${params.toString()}`,
+    {
+      headers: {
+        ...makeAuthHeaders(autologinOverride),
+        accept: "*/*",
+        "x-requested-with": "XMLHttpRequest",
+      },
     },
-  });
+    { priority }
+  );
   if (!response.ok) {
     throw new Error(`Failed to fetch listing page (offset ${offset}): ${response.statusText}`);
   }
@@ -276,9 +282,9 @@ const MAX_FALLBACK_SCAN_PAGES = 5;
  * pages of the unfiltered listing. This is inherently approximate for older
  * content that doesn't turn up in either - see docs/DF_SITE_MIGRATION.md.
  */
-async function findContentInfoByKey(key: string, titleHint?: string): Promise<DfContentInfo | undefined> {
+async function findContentInfoByKey(key: string, titleHint?: string, priority?: number): Promise<DfContentInfo | undefined> {
   if (titleHint) {
-    const response = await fetchListingPage({ limit: 50, title: titleHint });
+    const response = await fetchListingPage({ limit: 50, title: titleHint, priority });
     // A title with zero matches on the live API comes back without an
     // `items` field at all rather than an empty array - confirmed live
     // 2026-08-15 (was crashing every such lookup with a "reading 'map' of
@@ -292,17 +298,20 @@ async function findContentInfoByKey(key: string, titleHint?: string): Promise<Df
   }
   let found: DfContentInfo | undefined;
   let scannedPages = 0;
-  await forEachListingPage((contentInfos) => {
-    scannedPages++;
-    found = contentInfos.find((info) => info.key === key);
-    return !found && scannedPages < MAX_FALLBACK_SCAN_PAGES;
-  });
+  await forEachListingPage(
+    (contentInfos) => {
+      scannedPages++;
+      found = contentInfos.find((info) => info.key === key);
+      return !found && scannedPages < MAX_FALLBACK_SCAN_PAGES;
+    },
+    { priority }
+  );
   return found;
 }
 
-export async function fetchContentInfo(key: string, titleHint?: string): Promise<FetchedContentInfo> {
+export async function fetchContentInfo(key: string, titleHint?: string, priority?: number): Promise<FetchedContentInfo> {
   logger.log("debug", "Getting info for media", key);
-  const found = await findContentInfoByKey(key, titleHint);
+  const found = await findContentInfoByKey(key, titleHint, priority);
   if (!found) {
     throw new Error(`Could not locate content info for ${key}${titleHint ? ` ("${titleHint}")` : ""}`);
   }
@@ -385,14 +394,18 @@ function extractDfUserInfo(html: string): DfUserInfo | undefined {
  * install. Confirmed empirically: the site returns 403 Forbidden (not just a
  * logged-out 200) for a syntactically-present-but-invalid cookie value.
  */
-export async function getDfUserInfo(sessionIdOverride?: string): Promise<DfUserInfo | undefined> {
+export async function getDfUserInfo(sessionIdOverride?: string, priority?: number): Promise<DfUserInfo | undefined> {
   let response: Response;
   try {
-    response = await dfFetch(`${dfBaseUrl}/videos`, {
-      headers: {
-        ...makeAuthHeaders(sessionIdOverride),
+    response = await dfFetch(
+      `${dfBaseUrl}/videos`,
+      {
+        headers: {
+          ...makeAuthHeaders(sessionIdOverride),
+        },
       },
-    });
+      { priority }
+    );
   } catch (e) {
     logger.log("warn", "Failed to reach digitalfoundry.net while checking auth status - treating as not signed in", e);
     return undefined;

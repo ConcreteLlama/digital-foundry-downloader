@@ -36,6 +36,22 @@ const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 const dfSiteRequestQueue = new WorkerQueue({ namePrefix: "df-site-request", concurrent: 1 });
 
+/**
+ * Bulk/background work (archive scans, batch metadata refreshes) uses the
+ * default priority (0) and queues normally. A single on-demand lookup
+ * directly blocking a user action (e.g. refreshing an item's media info
+ * right before downloading it, or checking a just-pasted session ID) should
+ * jump ahead of that backlog rather than wait its turn behind however many
+ * scan pages are still queued - confirmed live 2026-08-18 that this made the
+ * "Available" download button appear to do nothing for minutes during a
+ * scan. Doesn't bypass the spacing/backoff protections above, just where in
+ * the line a request starts.
+ */
+export const DfFetchPriority = {
+  BACKGROUND: 0,
+  INTERACTIVE: 10,
+} as const;
+
 let lastRequestStartedAt = 0;
 
 const waitForSpacing = async () => {
@@ -72,7 +88,11 @@ const parseRetryAfterMs = (response: Response): number | undefined => {
  * 429/503 (honoring Retry-After) before returning - callers only ever see a
  * final response, never a throttling one, unless every retry is exhausted.
  */
-export const dfFetch = (input: string, init?: RequestInit): Promise<Response> => {
+export const dfFetch = (
+  input: string,
+  init?: RequestInit,
+  opts: { priority?: number } = {}
+): Promise<Response> => {
   return dfSiteRequestQueue.addWork(async () => {
     let attempt = 0;
     while (true) {
@@ -97,5 +117,5 @@ export const dfFetch = (input: string, init?: RequestInit): Promise<Response> =>
       );
       await sleep(backoffMs);
     }
-  });
+  }, { priority: opts.priority });
 };

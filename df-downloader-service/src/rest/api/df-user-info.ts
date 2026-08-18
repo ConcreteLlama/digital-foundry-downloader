@@ -2,6 +2,7 @@ import express, { Request, Response } from "express";
 import { DigitalFoundryContentManager } from "../../df-content-manager.js";
 import { sendError, sendResponse, zodParseHttp } from "../utils/utils.js";
 import { getDfUserInfo } from "../../df-fetcher.js";
+import { DfFetchPriority } from "../../df-request-queue.js";
 import { TestSessionIdRequest } from "df-downloader-common";
 import { queryParamToInteger } from "../../utils/query-utils.js";
 
@@ -12,7 +13,8 @@ export const makeDfUserInfoRouter = (contentManager: DigitalFoundryContentManage
   });
   router.post("/test-session-id", async (req: Request, res: Response) => {
     zodParseHttp(TestSessionIdRequest, req, res, async (testSessionIdRequest) => {
-      const dfUser = await getDfUserInfo(testSessionIdRequest.sessionId);
+      // Interactive priority - the user is directly waiting on this button.
+      const dfUser = await getDfUserInfo(testSessionIdRequest.sessionId, DfFetchPriority.INTERACTIVE);
       return dfUser ? sendResponse(res, dfUser) : sendError(res, "Invalid session ID", 200);
     });
   });

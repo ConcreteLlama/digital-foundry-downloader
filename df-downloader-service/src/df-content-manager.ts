@@ -25,6 +25,7 @@ import { getArchiveScanCheckpoint, setArchiveScanCheckpoint } from "./archive-sc
 import { configService } from "./config/config.js";
 import { ContentInfoWithAvailability, DfDownloaderOperationalDb, DownloadInfoWithName } from "./db/df-operational-db.js";
 import { forEachListingPage, fetchContentInfo } from "./df-fetcher.js";
+import { DfFetchPriority } from "./df-request-queue.js";
 import { DfTaskManager } from "./df-task-manager.js";
 import { DfUserManager } from "./df-user-manager.js";
 import { serviceLocator } from "./services/service-locator.js";
@@ -179,7 +180,11 @@ export class DigitalFoundryContentManager {
         return;
       }
       const wasSignedIn = this.dfUserManager.isUserSignedIn();
-      await this.dfUserManager.checkDfUserInfo();
+      // Interactive priority - the user is actively waiting on this (the
+      // settings form's await-login poll blocks on it), so it shouldn't
+      // queue behind whatever background scan/refresh work is already
+      // pending.
+      await this.dfUserManager.checkDfUserInfo(DfFetchPriority.INTERACTIVE);
       if (!wasSignedIn && this.dfUserManager.isUserSignedIn()) {
         logger.log("info", "Digital Foundry authentication configured - starting archive scan");
         await this.runInitialScan();
@@ -225,7 +230,7 @@ export class DigitalFoundryContentManager {
         "info",
         `Scan complete - refreshing metadata for ${stillPending.length} of ${pending.length} deferred entries (the rest were already resolved by the scan)`
       );
-      await this.refreshMeta(...stillPending);
+      await this.refreshMeta(stillPending);
     }
   }
 
@@ -587,10 +592,10 @@ export class DigitalFoundryContentManager {
       logger.log("info", "No content entries require meta patching");
       return;
     }
-    await this.refreshMeta(...requiringUpdate.map((contentEntry) => contentEntry.key));
+    await this.refreshMeta(requiringUpdate.map((contentEntry) => contentEntry.key));
   }
 
-  async refreshMeta(...contentNames: string[]) {
+  async refreshMeta(contentNames: string[], opts: { priority?: number } = {}) {
     // Same reasoning as scanWholeArchive's guard - refreshMeta is reachable
     // from several places (patchMetas, userTierChanged, flushPendingMetaRefresh)
     // that don't all independently check sign-in state, so enforce it here
@@ -601,10 +606,13 @@ export class DigitalFoundryContentManager {
     }
     const refreshedMetaKeys = new Set<string>();
     const userTier = this.dfUserManager.getCurrentTier() || "NONE";
+    // Copy - about to splice() this locally, and some callers pass an array
+    // they still hold a reference to.
+    const remaining = [...contentNames];
     try {
       this.metaFetchesInProgress++;
-      while (contentNames.length > 0) {
-        const entryBatch = contentNames.splice(0, 10);
+      while (remaining.length > 0) {
+        const entryBatch = remaining.splice(0, 10);
         const contentInfoResults = await Promise.allSettled(
           entryBatch.map((contentName) =>
             dfFetchWorkerQueue.addWork(async () => {
@@ -613,7 +621,7 @@ export class DigitalFoundryContentManager {
               // already have on record for this entry.
               const existingEntry = await this.db.getContentEntry(contentName).catch(() => undefined);
               logger.log("info", `${contentName} has out of date meta; fetching info and patching`);
-              return fetchContentInfo(contentName, existingEntry?.contentInfo?.title);
+              return fetchContentInfo(contentName, existingEntry?.contentInfo?.title, opts.priority);
             })
           )
         );
@@ -894,14 +902,14 @@ export class DigitalFoundryContentManager {
     }
   }
 
-  async getUpdateMediaInfo(contentKey: string, titleHint?: string) {
+  async getUpdateMediaInfo(contentKey: string, titleHint?: string, priority?: number) {
     logger.log("info", `Getting updated media info for ${contentKey}`);
     let resolvedTitleHint = titleHint;
     if (!resolvedTitleHint) {
       const existingEntry = await this.db.getContentEntry(contentKey).catch(() => undefined);
       resolvedTitleHint = existingEntry?.contentInfo?.title;
     }
-    const fetchResult = await fetchContentInfo(contentKey, resolvedTitleHint);
+    const fetchResult = await fetchContentInfo(contentKey, resolvedTitleHint, priority);
     if (!fetchResult) {
       throw new Error(`Failed to get media info for ${contentKey}`);
     }
@@ -992,7 +1000,13 @@ export class DigitalFoundryContentManager {
       contentKey = content.key;
       contentInfoArg = content;
     }
-    const updateResult = await this.getUpdateMediaInfo(contentKey, contentInfoArg?.title).catch((e) => {
+    // INTERACTIVE priority: a download attempt (whether from the UI's
+    // "Available" button or an auto-download) is more urgent than whatever
+    // bulk scan/refresh work might already be queued - it shouldn't have to
+    // wait behind an entire archive walk's worth of requests just to
+    // refresh one item's link (confirmed live 2026-08-18: this made the
+    // download button appear to hang for minutes during a scan).
+    const updateResult = await this.getUpdateMediaInfo(contentKey, contentInfoArg?.title, DfFetchPriority.INTERACTIVE).catch((e) => {
       logger.log(
         "error",
         `Failed to get updated media info for ${contentKey}${contentInfoArg ? " - using existing cached version" : ""
@@ -1015,6 +1029,18 @@ export class DigitalFoundryContentManager {
     if (updateResult?.availability === DfContentAvailability.PAYWALLED) {
       logger.log("info", `Not downloading ${dfContentInfo.key} as data is paywalled; adding to ignore list`);
       throw new Error(`Content ${dfContentInfo.key} is paywalled`);
+    }
+    if (dfContentInfo.legacy) {
+      // getUpdateMediaInfo() is best-effort (falls back to cached data on
+      // failure, just above) - if it couldn't relocate this item live, the
+      // mediaInfo we're about to use is unconfirmed and may still point at
+      // the old, now-dead CDN. This is defense in depth for the UI's own
+      // check (StartDownloadingButton) - auto-download and the manual API
+      // endpoint don't go through that button, so guard here too rather
+      // than attempting a download that's likely to just fail.
+      throw new Error(
+        `Content ${dfContentInfo.key} hasn't been confirmed against the current Digital Foundry site yet (legacy) - its download link may not work. Use "refresh metadata" to try to relocate it first.`
+      );
     }
 
     const pipelineExec = this.taskManager
@@ -1109,7 +1135,7 @@ export class DigitalFoundryContentManager {
       return;
     }
     if (this.startupScanComplete && this.metaFetchesInProgress === 0) {
-      await this.refreshMeta(...toRefresh);
+      await this.refreshMeta(toRefresh);
     } else {
       // Either the startup sequence hasn't finished yet, or a scan (initial
       // or re-triggered by configUpdated:digitalFoundry) is currently using

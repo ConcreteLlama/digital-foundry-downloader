@@ -23,6 +23,7 @@ import { testTemplate } from "df-downloader-common/utils/filename-template-utils
 import express, { Request, Response } from "express";
 import { configService } from "../../config/config.js";
 import { DigitalFoundryContentManager } from "../../df-content-manager.js";
+import { DfFetchPriority } from "../../df-request-queue.js";
 import { sanitizeContentName } from "../../utils/df-utils.js";
 import { extractMediaMeta } from "../../utils/media-metadata.js";
 import { queryParamToInteger, queryParamToString, queryParamToStringArray } from "../../utils/query-utils.js";
@@ -50,7 +51,12 @@ export const makeContentApiRouter = (contentManager: DigitalFoundryContentManage
   router.post("/entry/refresh-metadata", async (req: Request, res: Response) => {
     await zodParseHttp(DfContentInfoRefreshMetaRequest, req, res, async (body) => {
       const contentNames = body.contentName.map((name) => sanitizeContentName(name));
-      const result = await contentManager.refreshMeta(...contentNames);
+      // Interactive priority - this is the user's explicit "refresh
+      // metadata" action, which is also the recovery path pointed to when a
+      // legacy entry's download is blocked (see StartDownloadingButton /
+      // df-content-manager.ts's downloadContent legacy guard), so it
+      // shouldn't queue behind background scan/refresh work either.
+      const result = await contentManager.refreshMeta(contentNames, { priority: DfFetchPriority.INTERACTIVE });
       const response: DfContentInfoRefreshMetaResponse = {
         contentEntries: result,
       };

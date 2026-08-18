@@ -21,9 +21,9 @@ export class WorkerQueue {
     this.isRetry = opts.maxRetries && opts.maxRetries > 0 ? true : false;
     allWorkerQueues.add(this);
     this.name = `${opts.namePrefix}-${this.queueId}`;
-    this.queue = new Queue(async (fn: () => Promise<void>, cb) => {
+    this.queue = new Queue(async (task: { run: () => Promise<void> }, cb) => {
       try {
-        await fn();
+        await task.run();
       } catch (e) {
         logger.log("error", e);
         if (this.isRetry) {
@@ -32,26 +32,39 @@ export class WorkerQueue {
         }
       }
       cb();
-    }, opts);
+    }, {
+      ...opts,
+      // Higher priority runs first; equal priority (the default for every
+      // existing caller) falls back to insertion order, so this is a no-op
+      // for anyone that doesn't pass one. Lets addWork() callers (see
+      // dfFetch's interactive-priority use) jump ahead of bulk/background
+      // work already queued up, instead of "not their turn yet" causing
+      // e.g. a single on-demand lookup to wait behind an entire archive
+      // scan's worth of queued requests (confirmed live 2026-08-18).
+      priority: opts.priority || ((task: { priority?: number }, cb: (err: null, priority: number) => void) => cb(null, task.priority ?? 0)),
+    });
   }
 
-  async addWork<T>(fn: () => Promise<T> | T) {
+  async addWork<T>(fn: () => Promise<T> | T, opts: { priority?: number } = {}) {
     if (this._closing) {
       throw new Error("Queue is closing");
     }
     this._queuedJobs++;
     return new Promise<T>((resolve, reject) => {
-      this.queue.push(async () => {
-        this._queuedJobs--;
-        this._activeJobs++;
-        try {
-          const result = await fn();
-          resolve(result);
-          this._activeJobs--;
-        } catch (e) {
-          reject(e);
-          this._activeJobs--;
-        }
+      this.queue.push({
+        priority: opts.priority ?? 0,
+        run: async () => {
+          this._queuedJobs--;
+          this._activeJobs++;
+          try {
+            const result = await fn();
+            resolve(result);
+            this._activeJobs--;
+          } catch (e) {
+            reject(e);
+            this._activeJobs--;
+          }
+        },
       });
     });
   }

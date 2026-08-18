@@ -90,6 +90,18 @@ export const StartDownloadingButton = ({ contentEntry, mediaFormat, label, disab
     VariantIcon = DownloadIcon;
     tooltip = "Content has unknown availibility and cannot be downloaded.";
     buttonDisabled = true;
+  } else if (contentEntry.contentInfo.legacy) {
+    // Legacy entries carry unconfirmed data from before the site relaunch -
+    // their download link may point at the old, now-dead CDN. Blocks any new
+    // download attempt (including re-downloading a format already on disk -
+    // that would hit the same possibly-dead link), but never touches an
+    // existing download record, which stays visible as history regardless.
+    // The service enforces this too (df-content-manager.ts's downloadContent) -
+    // this is just the UI-side reflection of the same rule.
+    VariantIcon = DownloadIcon;
+    tooltip = "This entry's data hasn't been confirmed against the current Digital Foundry site yet, so its download link may no longer work. Try \"Refresh Metadata\" to relocate it.";
+    buttonDisabled = true;
+    buttonText = "Not Yet Confirmed";
   } else if (downloadContentInfo) {
     VariantIcon = DownloadedIcon;
     tooltip = "Download again";

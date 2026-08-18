@@ -20,8 +20,8 @@ export class DfUserManager {
     this.userTierChangeListeners.push(userTierChangeListener);
   }
 
-  async checkDfUserInfo() {
-    const userInfo = await getDfUserInfo();
+  async checkDfUserInfo(priority?: number) {
+    const userInfo = await getDfUserInfo(undefined, priority);
     if (!_.isEqual(this.currentDfUserInfo, userInfo)) {
       this.currentDfUserInfo = userInfo;
       this.userTierChangeListeners.forEach((listener) => listener(userInfo?.tier));
