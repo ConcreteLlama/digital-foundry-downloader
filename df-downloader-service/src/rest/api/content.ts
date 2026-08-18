@@ -17,13 +17,14 @@ import {
   MoveFilesRequest,
   PreviewMoveRequest,
   PreviewMoveResponse,
+  QueueStatusResponse,
   secondsToHHMMSS
 } from "df-downloader-common";
 import { testTemplate } from "df-downloader-common/utils/filename-template-utils.js";
 import express, { Request, Response } from "express";
 import { configService } from "../../config/config.js";
 import { DigitalFoundryContentManager } from "../../df-content-manager.js";
-import { DfFetchPriority } from "../../df-request-queue.js";
+import { DfFetchPriority, getDfRequestQueueStatus } from "../../df-request-queue.js";
 import { sanitizeContentName } from "../../utils/df-utils.js";
 import { extractMediaMeta } from "../../utils/media-metadata.js";
 import { queryParamToInteger, queryParamToString, queryParamToStringArray } from "../../utils/query-utils.js";
@@ -119,6 +120,14 @@ export const makeContentApiRouter = (contentManager: DigitalFoundryContentManage
     });
     return sendResponse(res, meta);
   }, 'query'));
+
+  router.get("/queue-status", async (req: Request, res: Response) => {
+    const response: QueueStatusResponse = {
+      dfQueue: getDfRequestQueueStatus(),
+      scanInProgress: contentManager.scanInProgress,
+    };
+    return sendResponse(res, response);
+  });
 
   router.get("/query", async (req: Request, res: Response) => {
     const query = req.query;

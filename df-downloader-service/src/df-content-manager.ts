@@ -19,7 +19,6 @@ import {
   MediaInfo,
   randomIntInRange,
   ScheduledDownloadInfo,
-  secondsToHHMMSS,
   slugifyTitle
 } from "df-downloader-common";
 import { getArchiveScanCheckpoint, setArchiveScanCheckpoint } from "./archive-scan-checkpoint.js";
@@ -35,7 +34,7 @@ import { sanitizeContentName } from "./utils/df-utils.js";
 import { deleteFile, ensureDirectory, fileExists, pathIsEqual } from "./utils/file-utils.js";
 import { dfFetchWorkerQueue } from "./utils/queue-utils.js";
 import { getFileMoveList } from "./utils/template-utils.js";
-import { fetchYtVideoMeta } from "./utils/youtube/chapters.js";
+import { syncYtVideoMeta } from "./utils/youtube/sync-yt-video-meta.js";
 
 export class DigitalFoundryContentManager {
   private dfUserManager: DfUserManager;
@@ -863,9 +862,30 @@ export class DigitalFoundryContentManager {
     // Only trigger downloads for content that should be downloaded
     const shouldTriggerDownloads = newSiteFirstScanComplete && autoDownloadConfig.enabled;
     if (shouldTriggerDownloads && contentToDownload.length > 0) {
+      // Description is never in Digital Foundry's own listing data (see
+      // getOrFetchYtVideoMeta's doc comment) - a description-based
+      // exclusion filter would otherwise never match anything for content
+      // that hasn't happened to have its detail dialog opened first. Only
+      // bother fetching when a configured filter actually checks
+      // description - this runs far less often than a scan (once per
+      // detected new/updated item, not per page), so the extra YouTube
+      // traffic stays bounded, but there's no reason to pay it for users
+      // who don't use description filters at all.
+      const needsDescriptionForFiltering = autoDownloadConfig.exclusionFilters?.some((filter) => filter.description);
+      const filterCandidates = needsDescriptionForFiltering
+        ? await Promise.all(
+            contentToDownload.map(async (contentInfo) => {
+              const enriched = await this.getOrFetchYtVideoMeta(contentInfo.key).catch((e) => {
+                logger.log("error", `Failed to fetch YouTube metadata for ${contentInfo.key} while checking exclusion filters`, e);
+                return undefined;
+              });
+              return enriched?.contentInfo || contentInfo;
+            })
+          )
+        : contentToDownload;
       const { include, exclude } = autoDownloadConfig.exclusionFilters?.length
-        ? filterContentInfos(autoDownloadConfig.exclusionFilters, contentToDownload, true)
-        : { include: contentToDownload, exclude: [] };
+        ? filterContentInfos(autoDownloadConfig.exclusionFilters, filterCandidates, true)
+        : { include: filterCandidates, exclude: [] };
       exclude.length &&
         logger.log(
           "info",
@@ -922,49 +942,16 @@ export class DigitalFoundryContentManager {
 
   /**
    * Lazily backfills description/duration from YouTube for a single entry -
-   * intended to be called when the user opens the content detail dialog,
-   * not during scans/refreshes. The new site's own listing never exposes
-   * either field (see docs/DF_SITE_MIGRATION.md), and eagerly fetching them
-   * for every scanned item would mean one extra YouTube request per item on
-   * every scan - unnecessary traffic for data most items will never have
-   * looked at. Fetched at most once per entry: skips the request entirely
-   * once both fields are already cached in the DB.
+   * intended to be called when the user opens the content detail dialog, or
+   * before checking an auto-download candidate against description-based
+   * exclusion filters - not during scans/refreshes in general. See
+   * syncYtVideoMeta's doc comment for the full reasoning (shared with the
+   * download-completion chapter-fetch step, which always fetches
+   * regardless of caching).
    */
   async getOrFetchYtVideoMeta(contentKey: string): Promise<DfContentEntry | undefined> {
-    const entry = await this.db.getContentEntry(contentKey);
-    if (!entry) {
-      return undefined;
-    }
-    const { contentInfo } = entry;
-    const videoId = contentInfo.youtubeVideoId;
-    if (!videoId) {
-      return entry;
-    }
-    const hasDescription = Boolean(contentInfo.description?.trim());
-    const existingDuration = contentInfo.mediaInfo.find((mediaInfo) => mediaInfo.duration)?.duration;
-    if (hasDescription && existingDuration) {
-      return entry;
-    }
-    logger.log("info", `Fetching YouTube metadata (description/duration) for ${contentKey}`);
-    const ytMeta = await fetchYtVideoMeta(videoId).catch((e) => {
-      logger.log("error", `Failed to fetch YouTube metadata for ${contentKey}`, e);
-      return null;
-    });
-    const durationString = existingDuration || (ytMeta?.durationSeconds != null ? secondsToHHMMSS(ytMeta.durationSeconds) : undefined);
-    const updatedContentInfo: DfContentInfo = {
-      ...contentInfo,
-      description: hasDescription ? contentInfo.description : ytMeta?.description || contentInfo.description,
-      // Duration is a property of the video, not any particular
-      // format/container, so the same value applies uniformly - only fills
-      // in entries that don't already have one (e.g. a format added after
-      // an earlier fetch already resolved this).
-      mediaInfo: contentInfo.mediaInfo.map((mediaInfo) => ({
-        ...mediaInfo,
-        duration: mediaInfo.duration || durationString,
-      })),
-    };
-    await this.db.setContentInfo(updatedContentInfo);
-    return { ...entry, contentInfo: updatedContentInfo };
+    const result = await syncYtVideoMeta(this.db, contentKey);
+    return result?.entry;
   }
 
   async downloadContentIn(

@@ -18,6 +18,7 @@ import { Outlet } from "react-router-dom";
 import { AuthUserInfo } from "../../components/auth/auth-user-info.component";
 import { DfUserInfo } from "../../components/df-user-info/df-user-info.component";
 import { CumulativeDownloadInfo } from "../../components/tasks/cumulative-download-info.component";
+import { QueueStatusIndicator } from "../../components/general/queue-status-indicator.component";
 import { selectConfigSectionField } from "../../store/config/config.selector.ts";
 import { theme } from "../../themes/theme";
 import { SettingsNav } from "../settings/settings-nav.component";
@@ -49,6 +50,7 @@ export const Nav = () => {
             </Typography>
           )}
           <CumulativeDownloadInfo />
+          <QueueStatusIndicator />
           <DfUserInfo mode={useSmallLayout ? "minimal" : "full"} />
           <AuthUserInfo mode={useSmallLayout ? "minimal" : "full"} />
         </Toolbar>

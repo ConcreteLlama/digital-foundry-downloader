@@ -53,8 +53,14 @@ export const createUpdateDownloadMetadataTaskPipeline = (opts: UpdateDownloadMet
         let meta: MediaFileMeta | null = mediaFileMeta || null;
         if (!meta) {
           const contentInfo = contentInfoResult?.status === "success" ? contentInfoResult.result : null;
-          const chapters = chapterInfoResult?.status === "success" ? chapterInfoResult.result : null;
-          meta = makeMediaFileMeta(contentInfo, null, chapters);
+          const ytMeta = chapterInfoResult?.status === "success" ? chapterInfoResult.result : null;
+          // See download-task-pipeline.ts's Inject Metadata step - fold in a
+          // freshly-resolved YouTube description if the refreshed
+          // contentInfo didn't already have one.
+          const mergedContentInfo = contentInfo
+            ? { ...contentInfo, description: contentInfo.description || ytMeta?.description }
+            : null;
+          meta = makeMediaFileMeta(mergedContentInfo, null, ytMeta?.chapters ?? null);
         }
         return InjectMetadataTask(fileLocation, meta);
       },

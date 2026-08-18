@@ -53,6 +53,8 @@ export const DfFetchPriority = {
 } as const;
 
 let lastRequestStartedAt = 0;
+/** Epoch ms until which a 429/503 backoff is in progress, or 0 if none - surfaced via getDfRequestQueueStatus for the UI's queue indicator. */
+let backingOffUntil = 0;
 
 const waitForSpacing = async () => {
   const { requestSpacingMinMs, requestSpacingMaxMs } = configService.config.digitalFoundry;
@@ -102,9 +104,18 @@ const runWithBackoff = async (input: string, init?: RequestInit): Promise<Respon
       "warn",
       `digitalfoundry.net responded ${response.status} for ${input} - backing off ${backoffMs}ms before retry ${attempt}/${MAX_RETRIES_PER_REQUEST}${retryAfterMs !== undefined ? " (honoring Retry-After)" : ""}`
     );
+    backingOffUntil = Date.now() + backoffMs;
     await sleep(backoffMs);
+    backingOffUntil = 0;
   }
 };
+
+/** Snapshot of the DF-site request queue for the UI's queue-status indicator. */
+export const getDfRequestQueueStatus = () => ({
+  queued: dfSiteRequestQueue.queuedJobs,
+  active: dfSiteRequestQueue.activeJobs,
+  backingOffUntil: backingOffUntil || null,
+});
 
 /**
  * Drop-in replacement for `fetch()` for any request to digitalfoundry.net.

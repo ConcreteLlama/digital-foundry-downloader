@@ -89,6 +89,14 @@ export class WorkerQueue {
     return (this.queue as any).length;
   }
 
+  get queuedJobs() {
+    return this._queuedJobs;
+  }
+
+  get activeJobs() {
+    return this._activeJobs;
+  }
+
   async close(timeout: number = 60000, mode: 'wait_for_current_job' | 'wait_for_all_jobs' = 'wait_for_current_job') {
     logger.log("info", `Closing queue ${this.name} with timeout ${timeout} - mode: ${mode}`);
     if (mode === 'wait_for_current_job') {

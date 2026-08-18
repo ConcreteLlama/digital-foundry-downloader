@@ -106,12 +106,20 @@ export const createDownloadTaskPipeline = (opts: DownloadTaskPipelineOpts) => {
       stepName: "Inject Metadata",
       taskCreator: ({ context, allResults }) => {
         const { dfContentInfo, downloadLocation } = context;
-        const [_downloadTaskResult, subtitlesTaskResult, chaptersTaskResult] = allResults;
+        const [_downloadTaskResult, subtitlesTaskResult, ytMetaTaskResult] = allResults;
         const config = configService.config;
         const metaConfig = config.metadata;
         const subtitles = subtitlesTaskResult?.status === "success" ? subtitlesTaskResult.result : null;
-        const chapters = chaptersTaskResult?.status === "success" ? chaptersTaskResult.result : null;
-        const metaForInjection = metaConfig.injectMetadata ? dfContentInfo : undefined;
+        const ytMeta = ytMetaTaskResult?.status === "success" ? ytMetaTaskResult.result : null;
+        const chapters = ytMeta?.chapters ?? null;
+        // dfContentInfo here is the context captured when the pipeline
+        // started, which may predate the Fetch Chapters step backfilling a
+        // previously-missing description from YouTube - fold that in so a
+        // freshly-resolved description still gets embedded in this file,
+        // not just saved to the DB for next time.
+        const metaForInjection = metaConfig.injectMetadata
+          ? { ...dfContentInfo, description: dfContentInfo.description || ytMeta?.description }
+          : undefined;
         if (metaForInjection || subtitles || chapters) {
           return InjectMetadataTask(downloadLocation, makeMediaFileMeta(metaForInjection, subtitles, chapters));
         }
