@@ -67,6 +67,19 @@ export class DigitalFoundryContentManager {
    */
   private startupScanComplete = false;
   private pendingStartupMetaRefresh = new Set<string>();
+  /**
+   * Re-entrancy lock for scanWholeArchive() specifically (metaFetchesInProgress
+   * covers both scanWholeArchive and refreshMeta and is used to decide whether
+   * userTierChanged() should defer, not to prevent two archive walks from
+   * starting at once). Needed because scanWholeArchive can now be triggered
+   * from more than one place that isn't naturally serialized against itself:
+   * the startup sequence, configUpdated:digitalFoundry re-firing on a rapid
+   * series of cookie pastes, and the recurring poll loop's checkForNewContents
+   * path all funnel through runInitialScan/scanWholeArchive independently.
+   * Without this, two overlapping walks would both read/advance the same
+   * on-disk checkpoint file, corrupting the resume offset.
+   */
+  private archiveScanInProgress = false;
 
   constructor(readonly db: DfDownloaderOperationalDb) {
     this.dfUserManager = new DfUserManager(db);
@@ -156,28 +169,7 @@ export class DigitalFoundryContentManager {
       );
     }
     this.startupScanComplete = true;
-    if (this.pendingStartupMetaRefresh.size > 0) {
-      const pending = Array.from(this.pendingStartupMetaRefresh);
-      this.pendingStartupMetaRefresh.clear();
-      // Re-check against current DB state rather than trusting the snapshot
-      // taken when each item was deferred - the scan that just ran (if any)
-      // may well have already resolved most of these via its own writes
-      // (setContentInfosWithAvailability populates availabilityInTiers too),
-      // and items given up on (unpatchable) shouldn't be re-attempted here
-      // either. Confirmed live 2026-08-15: without this re-check, a DB with
-      // ~2400 recently-legacy entries deferred ~2200 of them here even
-      // though the scan had already resolved all but ~40 of them seconds
-      // earlier - would have cost well over an hour of redundant per-item
-      // searches for zero benefit.
-      const stillPending = await this.filterStillNeedingMetaRefresh(pending);
-      if (stillPending.length > 0) {
-        logger.log(
-          "info",
-          `Initial scan complete - refreshing metadata for ${stillPending.length} of ${pending.length} deferred entries (the rest were already resolved by the scan)`
-        );
-        await this.refreshMeta(...stillPending);
-      }
-    }
+    await this.flushPendingMetaRefresh();
     if (contentManagementConfig.scanForExistingFiles) {
       const scanTask = this.taskManager.scanForExistingContent(this);
       await scanTask.awaitResult();
@@ -191,9 +183,50 @@ export class DigitalFoundryContentManager {
       if (!wasSignedIn && this.dfUserManager.isUserSignedIn()) {
         logger.log("info", "Digital Foundry authentication configured - starting archive scan");
         await this.runInitialScan();
+        // Same reasoning as the startup flush below - checkDfUserInfo() (just
+        // above) fires userTierChanged() as an un-awaited side effect, which
+        // races this scan for the same rate-limited queue every time
+        // (confirmed live 2026-08-18: existing installs upgrading to this
+        // version need to paste a fresh cookie after the app's already
+        // running, hitting exactly this path, not just the one-time startup
+        // window startupScanComplete was written for).
+        await this.flushPendingMetaRefresh();
       }
     });
     this.startContentPollLoop();
+  }
+
+  /**
+   * Re-checks and refreshes whatever userTierChanged() deferred into
+   * pendingStartupMetaRefresh while a scan was in flight (see its callers -
+   * both the initial startup sequence and the configUpdated:digitalFoundry
+   * "just signed in" path funnel through here, since both can race
+   * userTierChanged() against a scan for the same request queue).
+   */
+  private async flushPendingMetaRefresh() {
+    if (this.pendingStartupMetaRefresh.size === 0) {
+      return;
+    }
+    const pending = Array.from(this.pendingStartupMetaRefresh);
+    this.pendingStartupMetaRefresh.clear();
+    // Re-check against current DB state rather than trusting the snapshot
+    // taken when each item was deferred - the scan that just ran (if any)
+    // may well have already resolved most of these via its own writes
+    // (setContentInfosWithAvailability populates availabilityInTiers too),
+    // and items given up on (unpatchable) shouldn't be re-attempted here
+    // either. Confirmed live 2026-08-15: without this re-check, a DB with
+    // ~2400 recently-legacy entries deferred ~2200 of them here even
+    // though the scan had already resolved all but ~40 of them seconds
+    // earlier - would have cost well over an hour of redundant per-item
+    // searches for zero benefit.
+    const stillPending = await this.filterStillNeedingMetaRefresh(pending);
+    if (stillPending.length > 0) {
+      logger.log(
+        "info",
+        `Scan complete - refreshing metadata for ${stillPending.length} of ${pending.length} deferred entries (the rest were already resolved by the scan)`
+      );
+      await this.refreshMeta(...stillPending);
+    }
   }
 
   /**
@@ -341,6 +374,18 @@ export class DigitalFoundryContentManager {
   private static readonly ARCHIVE_SCAN_PAGE_LIMIT = 50;
 
   async scanWholeArchive(...ignoreList: string[]) {
+    // Never hit the network while signed out - a caller racing sign-out
+    // (config update, tier-change listener, poll loop) should just no-op
+    // here rather than firing a walk's worth of guaranteed-to-fail requests.
+    if (!this.dfUserManager.isUserSignedIn()) {
+      logger.log("info", "Skipping archive scan - not signed in to Digital Foundry");
+      return;
+    }
+    if (this.archiveScanInProgress) {
+      logger.log("info", "Archive scan already in progress, skipping duplicate request");
+      return;
+    }
+    this.archiveScanInProgress = true;
     const userTier = this.dfUserManager.getCurrentTier() || "NONE";
     let finalCheckpointOffset = 0;
     let hitPageCap = false;
@@ -479,6 +524,7 @@ export class DigitalFoundryContentManager {
       }
     } finally {
       this.metaFetchesInProgress--;
+      this.archiveScanInProgress = false;
     }
     logger.log("info", `Finished scanning whole archive`);
   }
@@ -545,6 +591,14 @@ export class DigitalFoundryContentManager {
   }
 
   async refreshMeta(...contentNames: string[]) {
+    // Same reasoning as scanWholeArchive's guard - refreshMeta is reachable
+    // from several places (patchMetas, userTierChanged, flushPendingMetaRefresh)
+    // that don't all independently check sign-in state, so enforce it here
+    // rather than relying on every caller to remember to.
+    if (!this.dfUserManager.isUserSignedIn()) {
+      logger.log("info", `Skipping metadata refresh for ${contentNames.length} entries - not signed in to Digital Foundry`);
+      return [];
+    }
     const refreshedMetaKeys = new Set<string>();
     const userTier = this.dfUserManager.getCurrentTier() || "NONE";
     try {
@@ -721,6 +775,14 @@ export class DigitalFoundryContentManager {
   }
 
   async checkForNewContents() {
+    // Same reasoning as scanWholeArchive/refreshMeta's guards - currently
+    // only reached via startContentPollLoop, which already checks this, but
+    // enforcing it here too means a future call site can't reintroduce the
+    // same "forgot to gate on sign-in" bug that userTierChanged had.
+    if (!this.dfUserManager.isUserSignedIn()) {
+      logger.log("info", "Skipping new-content check - not signed in to Digital Foundry");
+      return;
+    }
     const noMediaInfoContents = [...this.noMediaContentInfos.values()];
     logger.log(
       "info",
@@ -1013,11 +1075,27 @@ export class DigitalFoundryContentManager {
     } else {
       serviceLocator.notifier.userNotSignedIn();
     }
-    const newTierStr = newTier || 'NONE';
+    if (!newTier) {
+      // Signed out (token missing/invalid). Deliberately don't touch stored
+      // per-tier availability here at all - the previous version wiped every
+      // entry without a cached "NONE" record to UNKNOWN and queued it for
+      // refresh, which meant a brief logout/relogin (e.g. pasting a fresh
+      // cookie) manufactured a fresh multi-thousand-item refresh backlog on
+      // sign-out, then immediately tried to burn through it on sign-in via
+      // flushPendingMetaRefresh - on top of racing the archive walk that
+      // sign-in also triggers. Leaving existing availability alone means a
+      // quick reauth just picks back up with whatever was last known, and a
+      // long-term logout (e.g. a week) is fine too - it'll just look stale
+      // until the next real tier change or scan refreshes it, rather than
+      // firing any requests while we can't authenticate anyway (refreshMeta/
+      // scanWholeArchive both hard no-op while signed out regardless, this
+      // just avoids the pointless bookkeeping on the way there).
+      return;
+    }
     const allContentStatuses = await this.db.getAllContentStatusInfos();
     const toRefresh: string[] = [];
     for (const [contentName, contentStatus] of Object.entries(allContentStatuses)) {
-      const existingStatusRecord = contentStatus.availabilityInTiers[newTierStr];
+      const existingStatusRecord = contentStatus.availabilityInTiers[newTier];
       if (existingStatusRecord && existingStatusRecord !== DfContentAvailability.UNKNOWN) {
         logger.log("info", `Existing content availability for ${contentName} - setting to ${existingStatusRecord}`);
         contentStatus.availability = existingStatusRecord;
@@ -1030,13 +1108,19 @@ export class DigitalFoundryContentManager {
     if (toRefresh.length === 0) {
       return;
     }
-    if (this.startupScanComplete) {
+    if (this.startupScanComplete && this.metaFetchesInProgress === 0) {
       await this.refreshMeta(...toRefresh);
     } else {
-      // The initial startup scan is still running (or hasn't started yet) -
-      // don't compete with it for the same rate-limited request queue. See
-      // pendingStartupMetaRefresh's doc comment; start() flushes this once
-      // the scan finishes.
+      // Either the startup sequence hasn't finished yet, or a scan (initial
+      // or re-triggered by configUpdated:digitalFoundry) is currently using
+      // the same rate-limited request queue - don't compete with it. See
+      // flushPendingMetaRefresh's callers; both the startup sequence and the
+      // configUpdated:digitalFoundry "just signed in" path flush this once
+      // their scan finishes. Confirmed live 2026-08-18: checkDfUserInfo()
+      // fires this listener as an un-awaited side effect, so it can race a
+      // scan triggered by the very same auth-status check, not just at
+      // startup - startupScanComplete alone only guarded the one-time
+      // startup window.
       toRefresh.forEach((contentName) => this.pendingStartupMetaRefresh.add(contentName));
     }
   }
