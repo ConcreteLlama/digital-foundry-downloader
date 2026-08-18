@@ -51,6 +51,33 @@ const MainContainer = () => {
     store.dispatch(queryDfUserInfo.start());
   }, [serviceError]);
   const authUser = useSelector(selectAuthUser);
+  // The service starts serving HTTP before its startup Digital Foundry auth
+  // re-check finishes - that check hits digitalfoundry.net through a
+  // rate-limited queue, so it can take several seconds. During that window
+  // GET /df-user returns the last-persisted user info, which for an existing
+  // install is a stale "signed in" value, so the very first query can cache a
+  // signed-in state that's actually invalid and the "Not Connected" dialog
+  // would then never open (confirmed 2026-08-18 as the reason a bad cookie in
+  // an existing install's config silently produced no prompt). Re-poll a few
+  // times over the first ~40s once the user is into the app so the UI
+  // self-corrects to the real auth state once the backend's check completes -
+  // harmless for a genuinely signed-in user (the polls just re-confirm the
+  // same info).
+  useEffect(() => {
+    if (!authUser) {
+      return;
+    }
+    let polls = 0;
+    const maxPolls = 8;
+    const interval = setInterval(() => {
+      polls += 1;
+      store.dispatch(queryDfUserInfo.start());
+      if (polls >= maxPolls) {
+        clearInterval(interval);
+      }
+    }, 5000);
+    return () => clearInterval(interval);
+  }, [authUser]);
   return loading || (serviceError && !serviceError.details) ? (
     <AppNotReadyPage />
   ) : authUser ? (

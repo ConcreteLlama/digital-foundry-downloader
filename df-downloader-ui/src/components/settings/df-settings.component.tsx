@@ -1,7 +1,7 @@
 import { DfSettingsSectionForm } from "./df-settings-section-form.component";
 import { ZodTextField } from "../zod-fields/zod-text-field.component";
 import { DfConfig } from "df-downloader-common/config/df-config";
-import { Box, Button, Link, List, ListItem, ListItemText, ListSubheader } from "@mui/material";
+import { Alert, Box, Button, Link, List, ListItem, ListItemText, ListSubheader } from "@mui/material";
 import { fetchJson } from "../../utils/fetch";
 import { API_URL } from "../../config";
 import { store } from "../../store/store";
@@ -52,49 +52,80 @@ export const DfSettingsForm = () => {
   );
 };
 
+type TestState =
+  | { status: "idle" }
+  | { status: "testing" }
+  | { status: "success"; username: string }
+  | { status: "error"; message: string };
+
 const DfSessionIdField = () => {
-  const [testResult, setTestResult] = useState<string | false | null>(null);
+  const [testState, setTestState] = useState<TestState>({ status: "idle" });
   const sessionIdValue = useWatch({
     name: `sessionId`,
   });
+  const buttonLabel =
+    testState.status === "testing"
+      ? "Testing…"
+      : testState.status === "success"
+        ? testState.username
+        : testState.status === "error"
+          ? "Test Failed - Retry"
+          : "Test Session ID";
   return (
-    <Box sx={{ display: "flex", justifyContent: "space-between", gap: 2 }}>
-      <ZodTextField
-        name="sessionId"
-        label="Autologin Cookie"
-        isPassword={true}
-        zodString={DfConfig.shape.sessionId._def.innerType}
-        helperText="Paste the value of the 'autologin' cookie from your browser after signing in to digitalfoundry.net"
-        onChange={() => setTestResult(null)}
-      />
-      <Button
-        sx={{ bgcolor: testResult === false ? "error.main" : "default", width: 200 }}
-        disabled={!sessionIdValue || Boolean(testResult)}
-        variant="contained"
-        onClick={() => testSessionId(sessionIdValue, setTestResult)}
-      >
-        {testResult === null ? "Test Session ID" : testResult ? `${testResult}` : "Test Session ID Failed"}
-      </Button>
+    <Box sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
+      <Box sx={{ display: "flex", justifyContent: "space-between", gap: 2 }}>
+        <ZodTextField
+          name="sessionId"
+          label="Autologin Cookie"
+          isPassword={true}
+          zodString={DfConfig.shape.sessionId._def.innerType}
+          helperText="Paste the value of the 'autologin' cookie from your browser after signing in to digitalfoundry.net"
+          onChange={() => setTestState({ status: "idle" })}
+        />
+        <Button
+          sx={{ bgcolor: testState.status === "error" ? "error.main" : "default", width: 200 }}
+          // Allow re-testing after a failure (so the user can retry once they
+          // paste a corrected cookie); only block while a test is in flight or
+          // after a confirmed success.
+          disabled={!sessionIdValue || testState.status === "testing" || testState.status === "success"}
+          variant="contained"
+          onClick={() => testSessionId(sessionIdValue, setTestState)}
+        >
+          {buttonLabel}
+        </Button>
+      </Box>
+      {testState.status === "error" && <Alert severity="error">{testState.message}</Alert>}
+      {testState.status === "success" && (
+        <Alert severity="success">Signed in as {testState.username}</Alert>
+      )}
     </Box>
   );
 };
 
-const testSessionId = async (sessionId: string, setResult: (result: string | null | false) => void) => {
-  setResult(null);
-  const requestBody: TestSessionIdRequest = {
-    sessionId,
-  };
-  const data = await fetchJson(`${API_URL}/df-user/test-session-id`, {
-    method: "POST",
-    body: JSON.stringify(requestBody),
-    headers: {
-      "Content-Type": "application/json",
-    },
-  });
-  const result = parseResponseBody(data, DfUserInfo);
-  if (result.data) {
-    setResult(result.data.username);
-  } else {
-    setResult(false);
+const testSessionId = async (sessionId: string, setState: (state: TestState) => void) => {
+  setState({ status: "testing" });
+  try {
+    const requestBody: TestSessionIdRequest = {
+      sessionId,
+    };
+    const data = await fetchJson(`${API_URL}/df-user/test-session-id`, {
+      method: "POST",
+      body: JSON.stringify(requestBody),
+      headers: {
+        "Content-Type": "application/json",
+      },
+    });
+    // The endpoint reports an invalid cookie as {success:false, error} with an
+    // HTTP 200, so fetchJson doesn't throw for it - surface the actual error
+    // message rather than silently swallowing it (previously this just flipped
+    // the button red with no explanation).
+    const result = parseResponseBody(data, DfUserInfo);
+    if (result.data) {
+      setState({ status: "success", username: result.data.username });
+    } else {
+      setState({ status: "error", message: result.error?.message || "Invalid session ID" });
+    }
+  } catch (e: any) {
+    setState({ status: "error", message: e?.message || "Failed to test session ID" });
   }
 };
