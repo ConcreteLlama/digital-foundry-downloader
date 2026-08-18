@@ -20,7 +20,7 @@ type ChangeEntry = string | Record<string, ChangeEntry[]>;
 const ChangeEntry: z.ZodType<ChangeEntry> = z.lazy(() =>
     z.union([
         z.string(),
-        z.record(z.array(ChangeEntry)),
+        z.record(z.string(), z.array(ChangeEntry)),
     ])
 );
 
@@ -28,7 +28,11 @@ const ChangelogVersionEntry = z.object({
     version: ZSemVer,
     date: z.string(),
     notes: z.string().optional(),
-    changes: z.record(ChangeEntriesType, z.array(ChangeEntry)).optional(),
+    // partialRecord, not record - a version entry only ever has a subset of
+    // categories present (e.g. just "features"), never all of them; zod v4's
+    // z.record() with an enum key schema requires every key present, which
+    // would reject every real entry in changelog.yaml.
+    changes: z.partialRecord(ChangeEntriesType, z.array(ChangeEntry)).optional(),
     known_issues: ChangeEntry.array().optional(),
 });
 

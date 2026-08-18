@@ -54,7 +54,12 @@ export function addFetchListener<
   responseSchema: T,
   makeFetchProps: (payload: START_PAYLOAD) => [RequestInfo, RequestInit?],
   opts: FetchListenerOpts<T, SUCCESS_PAYLOAD> = {
-    generateSuccessPayload: (data) => data,
+    // Only safe when SUCCESS_PAYLOAD is exactly z.infer<T> (the default
+    // case when the caller doesn't supply a custom mapper) - the
+    // implementation signature's `extends` bound allows narrower subtypes
+    // too, which zod v4's stricter generic inference now correctly flags;
+    // narrower callers are expected to supply their own generateSuccessPayload.
+    generateSuccessPayload: (data) => data as SUCCESS_PAYLOAD,
   }
 ) {
   startListening({
@@ -72,7 +77,11 @@ export function addFetchListener<
           console.error("Raw payload: ", jsonResponse);
           listenerApi.dispatch(queryActions.failed(ensureDfUiError<ERROR_PAYLOAD_DETAILS>(result.error)));
         } else {
-          const successPayload = opts.generateSuccessPayload(result.data);
+          // result.data is guaranteed present here (parseResponseBody only
+          // omits it alongside a populated `error`, and we're in the
+          // `!result.error` branch) - the two fields aren't a discriminated
+          // union though, so TS can't narrow that on its own.
+          const successPayload = opts.generateSuccessPayload(result.data!);
           listenerApi.dispatch(queryActions.success(successPayload));
         }
       } catch (e: any) {

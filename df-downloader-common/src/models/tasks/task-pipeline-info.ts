@@ -27,7 +27,7 @@ export const TaskPipelineDetails = z.object({
     mediaFormat: z.string(),
     destinationPath: z.string().optional(),
     stepOrder: z.string().array(),
-    steps: z.record(StepDetails),
+    steps: z.record(z.string(), StepDetails),
 });
 export type TaskPipelineDetails = z.infer<typeof TaskPipelineDetails>;
 
@@ -45,7 +45,7 @@ export const TaskPipelineInfo = z.object({
     pipelineType: DfPipelineType,
     pipelineDetails: TaskPipelineDetails,
     pipelineStatus: TaskPipelineStatus,
-    stepTasks: z.record(TaskInfo),
+    stepTasks: z.record(z.string(), TaskInfo),
 });
 export type TaskPipelineInfo = z.infer<typeof TaskPipelineInfo>;
 export const isTaskPipelineInfo = (task: TaskPipelineInfo | TaskInfo): task is TaskPipelineInfo => {

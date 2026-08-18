@@ -37,12 +37,19 @@ export const SubtitlesConfig = z
     /** The configuration for each subtitles service */
     services: SubtitlesServicesConfig.optional(),
   })
-  .refine(
-    (args) => args.servicePriorities && args.servicePriorities.every((service) => Boolean(args.services?.[service])),
-    (args) => ({
-      message: `Subtitles service list includes ${args.servicePriorities} but not all services are configured`,
-    })
-  );
+  .superRefine((args, ctx) => {
+    // zod v4 removed the function-returning-an-issue-object overload of
+    // refine()'s second arg (it's message-string/static-params only now) -
+    // superRefine()+ctx.addIssue() is the v4-correct way to get a dynamic
+    // message here.
+    const allConfigured = args.servicePriorities && args.servicePriorities.every((service) => Boolean(args.services?.[service]));
+    if (!allConfigured) {
+      ctx.addIssue({
+        code: "custom",
+        message: `Subtitles service list includes ${args.servicePriorities} but not all services are configured`,
+      });
+    }
+  });
 export type SubtitlesConfig = z.infer<typeof SubtitlesConfig>;
 export const SubtitlesConfigKey = "subtitles";
 
@@ -54,17 +61,17 @@ export const SubtitlesConfigUtils = {
     return SubtitlesConfigUtils.isAvailable(service, config.services || {});
   },
   getAvailableServices: (config: SubtitlesServicesConfig) => {
-    return Object.values(SubtitlesService.Values).filter((service) =>
+    return SubtitlesService.options.filter((service) =>
       SubtitlesConfigUtils.isAvailable(service, config)
     );
   },
   getConfiguredServices: (config: SubtitlesServicesConfig) => {
-    return Object.values(SubtitlesService.Values).filter((service) =>
+    return SubtitlesService.options.filter((service) =>
       SubtitlesConfigUtils.isAvailable(service, config)
     );
   },
   getNonConfiguredServices: (config: SubtitlesServicesConfig) => {
-    return Object.values(SubtitlesService.Values).filter(
+    return SubtitlesService.options.filter(
       (service) => !SubtitlesConfigUtils.isAvailable(service, config)
     );
   },

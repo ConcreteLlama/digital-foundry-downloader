@@ -57,7 +57,7 @@ const SubtitlesSettings = () => {
 
   return (
     <Fragment>
-      {Object.values(SubtitlesService.Values).map((serviceName) => (
+      {SubtitlesService.options.map((serviceName) => (
         <SubtitleServiceConfig
           serviceName={serviceName}
           key={serviceName}

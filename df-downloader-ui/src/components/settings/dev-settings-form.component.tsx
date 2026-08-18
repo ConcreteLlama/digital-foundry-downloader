@@ -28,7 +28,7 @@ const DevSettings = () => {
           name="downloadUrlOverride"
           label="Download URL Override"
           helperText="Overrides the download URL with the specified value. Useful for testing."
-          zodString={DevConfig._def.schema.shape.downloadUrlOverride}
+          zodString={DevConfig._def.in.shape.downloadUrlOverride}
         />
       )}
     </Fragment>

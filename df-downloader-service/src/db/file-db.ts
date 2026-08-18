@@ -42,7 +42,7 @@ export class FileDb<T> {
             }
             const parsed = schema.safeParse(patchedData);
             if (!parsed.success) {
-                throw new Error(parsed.error.errors.join("\n"));
+                throw new Error(parsed.error.issues.map((issue) => issue.message).join("\n"));
             }
             data = parsed.data;
             await fs.promises.writeFile(filename, JSON.stringify(data, null, 2));

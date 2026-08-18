@@ -15,6 +15,5 @@ export const ZSemVer = z.string().superRefine((data) => {
   if (!semver.valid(data)) {
     throw new Error(`Invalid semver version: ${data}`);
   }
-  return true;
 });
 export type ZSemVer = z.infer<typeof ZSemVer>;

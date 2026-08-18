@@ -13,13 +13,20 @@ import { AuthenticationConfig, AuthenticationConfigKey, DefaultAuthenticationCon
 import { DevConfig, DevConfigKey } from "./dev-config.js";
 import { MediaFormatsConfigKey, MediaFormatsConfig } from "./media-formats-config.js";
 
+// prefault(), not default() - these sections are {} with every field having
+// its own nested default, so the empty object is only valid as *input* (gets
+// parsed/defaulted through), not as the schema's fully-resolved *output*
+// type. zod v4 changed default() to require an output-shaped value; prefault()
+// restores the v3 "parse this as input" behavior. See sections below that
+// pass a fully-resolved literal object instead - those are already
+// output-shaped and correctly stay as default().
 export const DfDownloaderConfig = z.object({
-  [DfConfigKey]: DfConfig.default({}),
-  [ContentDetectionConfigKey]: ContentDetectionConfig.default({}),
-  [AutomaticDownloadsConfigKey]: AutomaticDownloadsConfig.default({}),
-  [ContentManagementConfigKey]: ContentManagementConfig.default({}),
-  [DownloadsConfigKey]: DownloadsConfig.default({}),
-  [MediaFormatsConfigKey]: MediaFormatsConfig.default({}),
+  [DfConfigKey]: DfConfig.prefault({}),
+  [ContentDetectionConfigKey]: ContentDetectionConfig.prefault({}),
+  [AutomaticDownloadsConfigKey]: AutomaticDownloadsConfig.prefault({}),
+  [ContentManagementConfigKey]: ContentManagementConfig.prefault({}),
+  [DownloadsConfigKey]: DownloadsConfig.prefault({}),
+  [MediaFormatsConfigKey]: MediaFormatsConfig.prefault({}),
   [AuthenticationConfigKey]: AuthenticationConfig.default(DefaultAuthenticationConfig),
   [RestApiConfigKey]: RestApiConfig.default(DefaultRestApiConfig),
   [MetadataConfigKey]: MetadataConfig.default(DefaultMetadataConfig),
@@ -34,5 +41,5 @@ export type DfDownloaderConfigKey = Extract<keyof DfDownloaderConfig, string>;
 export const DfDownloaderConfigKeys = Object.keys(DfDownloaderConfig.shape) as DfDownloaderConfigKey[];
 
 export const DfDownloaderContainerConfig = DfDownloaderConfig.extend({
-  [ContentManagementConfigKey]: ContainerContentManagementConfig.default({}),
+  [ContentManagementConfigKey]: ContainerContentManagementConfig.prefault({}),
 });
