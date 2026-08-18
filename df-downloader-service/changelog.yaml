@@ -1,4 +1,24 @@
 versions:
+  - version: "2.6.0"
+    date: "2026-08-18"
+    notes: "Digital Foundry's new independent site is now fully supported - automatic scanning and downloading work end-to-end again for the first time since the old site was decommissioned. The Patreon HTML-paste workaround from 2.5.0 has been retired now that it's no longer needed."
+    changes:
+      features:
+        - "Automatic scanning and downloading against the new digitalfoundry.net are back":
+          - "Detects new videos automatically on a relaxed timer, downloads your configured formats, and files them with metadata - the same automatic behavior the tool had before the old site was decommissioned"
+          - "Auto-download is capped to recently-published content by default (configurable) so it can't accidentally mass-download a large backlog after being offline for a while"
+        - "Already-seen content is now rechecked for newly-added formats - catches cases where, e.g., an audio-only version is published before the video follows"
+      bugfixes:
+        - "Fixed downloads silently failing (stuck at 0%) due to a bug that could send the download request without the login cookie attached"
+      security:
+        - "Fixed a critical dependency vulnerability (denial-of-service in a transitive package used for native module installation)"
+        - "Fixed a moderate open-redirect/XSS vulnerability in the routing library"
+      maintenance:
+        - "Retired the Patreon HTML-paste import workaround now that real scraping works again - manual single-URL download is still available"
+        - "Removed tag-based content filtering, since the new site doesn't expose per-video tags the way the old one did - title-based filtering covers the same use cases in practice"
+        - "Updated the Docker image to the current Node.js LTS release"
+    known_issues:
+      - "The new site doesn't expose per-video categories (e.g. DF Direct, DF Retro) in a way the tool can filter on yet"
   - version: "2.5.0"
     date: "2025-09-29"
     notes: "Digital Foundry has transitioned to independence and their original website is being decommissioned. This version adapts the tool to work primarily with Patreon imports while the new DF site is under development. Many DF site-dependent features have been temporarily disabled but preserved for future reactivation."
