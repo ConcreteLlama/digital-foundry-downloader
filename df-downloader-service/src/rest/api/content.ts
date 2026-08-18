@@ -48,6 +48,24 @@ export const makeContentApiRouter = (contentManager: DigitalFoundryContentManage
     return sendResponse(res, contentInfo);
   });
 
+  router.post("/entry/:id/fetch-youtube-meta", async (req: Request, res: Response) => {
+    let contentName: string = req.params.id;
+    if (!contentName) {
+      return res.status(400).send({
+        message: "Must supply content name",
+      });
+    }
+    contentName = sanitizeContentName(contentName);
+    // Lazy, on-demand only (called when the UI opens the content detail
+    // dialog) - never during scans, and cached in the DB after the first
+    // fetch so reopening the same item doesn't hit YouTube again.
+    const entry = await contentManager.getOrFetchYtVideoMeta(contentName);
+    if (!entry) {
+      return res.status(404).send();
+    }
+    return sendResponse(res, entry);
+  });
+
   router.post("/entry/refresh-metadata", async (req: Request, res: Response) => {
     await zodParseHttp(DfContentInfoRefreshMetaRequest, req, res, async (body) => {
       const contentNames = body.contentName.map((name) => sanitizeContentName(name));

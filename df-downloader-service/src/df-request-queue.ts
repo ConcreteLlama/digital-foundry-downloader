@@ -81,41 +81,59 @@ const parseRetryAfterMs = (response: Response): number | undefined => {
   return undefined;
 };
 
+const runWithBackoff = async (input: string, init?: RequestInit): Promise<Response> => {
+  let attempt = 0;
+  while (true) {
+    const response = await fetch(input, init);
+    if (!THROTTLE_STATUS_CODES.has(response.status)) {
+      return response;
+    }
+    attempt++;
+    if (attempt > MAX_RETRIES_PER_REQUEST) {
+      logger.log(
+        "error",
+        `digitalfoundry.net still responding ${response.status} for ${input} after ${attempt - 1} backoff retries - giving up and returning the response as-is`
+      );
+      return response;
+    }
+    const retryAfterMs = parseRetryAfterMs(response);
+    const backoffMs = retryAfterMs ?? Math.min(DEFAULT_BACKOFF_MS * attempt, MAX_BACKOFF_MS);
+    logger.log(
+      "warn",
+      `digitalfoundry.net responded ${response.status} for ${input} - backing off ${backoffMs}ms before retry ${attempt}/${MAX_RETRIES_PER_REQUEST}${retryAfterMs !== undefined ? " (honoring Retry-After)" : ""}`
+    );
+    await sleep(backoffMs);
+  }
+};
+
 /**
  * Drop-in replacement for `fetch()` for any request to digitalfoundry.net.
  * Queues behind every other in-flight dfFetch call, enforces a minimum
  * spacing between requests, and transparently backs off and retries on
  * 429/503 (honoring Retry-After) before returning - callers only ever see a
  * final response, never a throttling one, unless every retry is exhausted.
+ *
+ * `bypassQueue` skips both the queue and the artificial human-cadence
+ * spacing entirely - for a single, deliberate one-off request (e.g. the
+ * live link refresh right before a manual download), not bulk/automated
+ * work. Confirmed live 2026-08-18 that even jumping the priority queue
+ * still left a real download stuck behind the ~5-15s spacing gate if a scan
+ * had just fired a request. Still fully honors the 429/503 backoff below -
+ * that's the site's own signal to slow down, never optional - and still
+ * updates the shared spacing clock so a subsequent *queued* request doesn't
+ * immediately follow this one too closely.
  */
 export const dfFetch = (
   input: string,
   init?: RequestInit,
-  opts: { priority?: number } = {}
+  opts: { priority?: number; bypassQueue?: boolean } = {}
 ): Promise<Response> => {
+  if (opts.bypassQueue) {
+    lastRequestStartedAt = Date.now();
+    return runWithBackoff(input, init);
+  }
   return dfSiteRequestQueue.addWork(async () => {
-    let attempt = 0;
-    while (true) {
-      await waitForSpacing();
-      const response = await fetch(input, init);
-      if (!THROTTLE_STATUS_CODES.has(response.status)) {
-        return response;
-      }
-      attempt++;
-      if (attempt > MAX_RETRIES_PER_REQUEST) {
-        logger.log(
-          "error",
-          `digitalfoundry.net still responding ${response.status} for ${input} after ${attempt - 1} backoff retries - giving up and returning the response as-is`
-        );
-        return response;
-      }
-      const retryAfterMs = parseRetryAfterMs(response);
-      const backoffMs = retryAfterMs ?? Math.min(DEFAULT_BACKOFF_MS * attempt, MAX_BACKOFF_MS);
-      logger.log(
-        "warn",
-        `digitalfoundry.net responded ${response.status} for ${input} - backing off ${backoffMs}ms before retry ${attempt}/${MAX_RETRIES_PER_REQUEST}${retryAfterMs !== undefined ? " (honoring Retry-After)" : ""}`
-      );
-      await sleep(backoffMs);
-    }
+    await waitForSpacing();
+    return runWithBackoff(input, init);
   }, { priority: opts.priority });
 };

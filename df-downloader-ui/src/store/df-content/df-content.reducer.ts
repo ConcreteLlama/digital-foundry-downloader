@@ -2,6 +2,7 @@ import { createReducer } from "@reduxjs/toolkit";
 import { addQueryCases } from "../utils";
 import {
   fetchSingleDfContentEntry,
+  fetchYtVideoMeta,
   queryDfContent,
   refreshDfContentMeta,
   resetDfContentQuery,
@@ -31,6 +32,11 @@ export const dfContentReducer = createReducer(INITIAL_STATE, (builder) => {
     },
   });
   addQueryCases(builder, fetchSingleDfContentEntry, {
+    success: (state, payload) => {
+      state.content[payload.key] = payload;
+    },
+  });
+  addQueryCases(builder, fetchYtVideoMeta, {
     success: (state, payload) => {
       state.content[payload.key] = payload;
     },

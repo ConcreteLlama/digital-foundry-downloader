@@ -5,6 +5,7 @@ import { store } from "../store";
 import { addFetchListener } from "../utils";
 import {
   fetchSingleDfContentEntry,
+  fetchYtVideoMeta,
   queryDfContent,
   refreshDfContentMeta,
   resetDfContentQuery,
@@ -58,6 +59,9 @@ export const startListeningDfContentInfo = (startListening: AppStartListening) =
   });
   addFetchListener(startListening, fetchSingleDfContentEntry, DfContentEntry, (contentName) => {
     return [`${API_URL}/content/entry/${contentName}`];
+  });
+  addFetchListener(startListening, fetchYtVideoMeta, DfContentEntry, (contentName) => {
+    return [`${API_URL}/content/entry/${contentName}/fetch-youtube-meta`, { method: "POST" }];
   });
   addFetchListener(startListening, refreshDfContentMeta, DfContentInfoRefreshMetaResponse, (contentNames) => {
     return [

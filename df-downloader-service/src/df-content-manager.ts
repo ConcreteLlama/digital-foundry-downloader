@@ -19,12 +19,13 @@ import {
   MediaInfo,
   randomIntInRange,
   ScheduledDownloadInfo,
+  secondsToHHMMSS,
   slugifyTitle
 } from "df-downloader-common";
 import { getArchiveScanCheckpoint, setArchiveScanCheckpoint } from "./archive-scan-checkpoint.js";
 import { configService } from "./config/config.js";
 import { ContentInfoWithAvailability, DfDownloaderOperationalDb, DownloadInfoWithName } from "./db/df-operational-db.js";
-import { forEachListingPage, fetchContentInfo } from "./df-fetcher.js";
+import { forEachListingPage, fetchContentInfo, DfFetchOpts } from "./df-fetcher.js";
 import { DfFetchPriority } from "./df-request-queue.js";
 import { DfTaskManager } from "./df-task-manager.js";
 import { DfUserManager } from "./df-user-manager.js";
@@ -34,6 +35,7 @@ import { sanitizeContentName } from "./utils/df-utils.js";
 import { deleteFile, ensureDirectory, fileExists, pathIsEqual } from "./utils/file-utils.js";
 import { dfFetchWorkerQueue } from "./utils/queue-utils.js";
 import { getFileMoveList } from "./utils/template-utils.js";
+import { fetchYtVideoMeta } from "./utils/youtube/chapters.js";
 
 export class DigitalFoundryContentManager {
   private dfUserManager: DfUserManager;
@@ -621,7 +623,7 @@ export class DigitalFoundryContentManager {
               // already have on record for this entry.
               const existingEntry = await this.db.getContentEntry(contentName).catch(() => undefined);
               logger.log("info", `${contentName} has out of date meta; fetching info and patching`);
-              return fetchContentInfo(contentName, existingEntry?.contentInfo?.title, opts.priority);
+              return fetchContentInfo(contentName, existingEntry?.contentInfo?.title, { priority: opts.priority });
             })
           )
         );
@@ -902,20 +904,67 @@ export class DigitalFoundryContentManager {
     }
   }
 
-  async getUpdateMediaInfo(contentKey: string, titleHint?: string, priority?: number) {
+  async getUpdateMediaInfo(contentKey: string, titleHint?: string, opts: DfFetchOpts = {}) {
     logger.log("info", `Getting updated media info for ${contentKey}`);
     let resolvedTitleHint = titleHint;
     if (!resolvedTitleHint) {
       const existingEntry = await this.db.getContentEntry(contentKey).catch(() => undefined);
       resolvedTitleHint = existingEntry?.contentInfo?.title;
     }
-    const fetchResult = await fetchContentInfo(contentKey, resolvedTitleHint, priority);
+    const fetchResult = await fetchContentInfo(contentKey, resolvedTitleHint, opts);
     if (!fetchResult) {
       throw new Error(`Failed to get media info for ${contentKey}`);
     }
     const { contentInfo, availability } = fetchResult;
     await this.db.setContentInfosWithAvailability([{ contentInfo, availability }], this.dfUserManager.getCurrentTier() || "NONE");
     return fetchResult || null;
+  }
+
+  /**
+   * Lazily backfills description/duration from YouTube for a single entry -
+   * intended to be called when the user opens the content detail dialog,
+   * not during scans/refreshes. The new site's own listing never exposes
+   * either field (see docs/DF_SITE_MIGRATION.md), and eagerly fetching them
+   * for every scanned item would mean one extra YouTube request per item on
+   * every scan - unnecessary traffic for data most items will never have
+   * looked at. Fetched at most once per entry: skips the request entirely
+   * once both fields are already cached in the DB.
+   */
+  async getOrFetchYtVideoMeta(contentKey: string): Promise<DfContentEntry | undefined> {
+    const entry = await this.db.getContentEntry(contentKey);
+    if (!entry) {
+      return undefined;
+    }
+    const { contentInfo } = entry;
+    const videoId = contentInfo.youtubeVideoId;
+    if (!videoId) {
+      return entry;
+    }
+    const hasDescription = Boolean(contentInfo.description?.trim());
+    const existingDuration = contentInfo.mediaInfo.find((mediaInfo) => mediaInfo.duration)?.duration;
+    if (hasDescription && existingDuration) {
+      return entry;
+    }
+    logger.log("info", `Fetching YouTube metadata (description/duration) for ${contentKey}`);
+    const ytMeta = await fetchYtVideoMeta(videoId).catch((e) => {
+      logger.log("error", `Failed to fetch YouTube metadata for ${contentKey}`, e);
+      return null;
+    });
+    const durationString = existingDuration || (ytMeta?.durationSeconds != null ? secondsToHHMMSS(ytMeta.durationSeconds) : undefined);
+    const updatedContentInfo: DfContentInfo = {
+      ...contentInfo,
+      description: hasDescription ? contentInfo.description : ytMeta?.description || contentInfo.description,
+      // Duration is a property of the video, not any particular
+      // format/container, so the same value applies uniformly - only fills
+      // in entries that don't already have one (e.g. a format added after
+      // an earlier fetch already resolved this).
+      mediaInfo: contentInfo.mediaInfo.map((mediaInfo) => ({
+        ...mediaInfo,
+        duration: mediaInfo.duration || durationString,
+      })),
+    };
+    await this.db.setContentInfo(updatedContentInfo);
+    return { ...entry, contentInfo: updatedContentInfo };
   }
 
   async downloadContentIn(
@@ -1000,13 +1049,19 @@ export class DigitalFoundryContentManager {
       contentKey = content.key;
       contentInfoArg = content;
     }
-    // INTERACTIVE priority: a download attempt (whether from the UI's
-    // "Available" button or an auto-download) is more urgent than whatever
-    // bulk scan/refresh work might already be queued - it shouldn't have to
-    // wait behind an entire archive walk's worth of requests just to
-    // refresh one item's link (confirmed live 2026-08-18: this made the
-    // download button appear to hang for minutes during a scan).
-    const updateResult = await this.getUpdateMediaInfo(contentKey, contentInfoArg?.title, DfFetchPriority.INTERACTIVE).catch((e) => {
+    // Interactive priority AND bypassQueue: a download click is a single,
+    // deliberate one-off request - it doesn't need to queue behind (or even
+    // wait out the human-cadence spacing gate that comes with) whatever
+    // bulk scan/refresh work is already pending. Confirmed live 2026-08-18
+    // that priority alone still left this stuck for 5-15s if a scan had
+    // just fired a request; bypassing the queue entirely for this one
+    // lookup is safe precisely because it's a single request, not a burst
+    // (see findContentInfoByKey's fallback scan, which deliberately never
+    // bypasses even when asked).
+    const updateResult = await this.getUpdateMediaInfo(contentKey, contentInfoArg?.title, {
+      priority: DfFetchPriority.INTERACTIVE,
+      bypassQueue: true,
+    }).catch((e) => {
       logger.log(
         "error",
         `Failed to get updated media info for ${contentKey}${contentInfoArg ? " - using existing cached version" : ""

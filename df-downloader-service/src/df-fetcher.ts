@@ -60,10 +60,12 @@ type ListingQueryOpts = {
   autologinOverride?: string;
   /** See DfFetchPriority - defaults to BACKGROUND (bulk/scan work). */
   priority?: number;
+  /** See dfFetch - skip the queue/spacing entirely for a single one-off request. */
+  bypassQueue?: boolean;
 };
 
 async function fetchListingPage(opts: ListingQueryOpts = {}): Promise<ListingApiResponse> {
-  const { limit = 50, offset = 0, category, year, title, autologinOverride, priority } = opts;
+  const { limit = 50, offset = 0, category, year, title, autologinOverride, priority, bypassQueue } = opts;
   const params = new URLSearchParams({
     auth: "true",
     id: "videos",
@@ -83,7 +85,7 @@ async function fetchListingPage(opts: ListingQueryOpts = {}): Promise<ListingApi
         "x-requested-with": "XMLHttpRequest",
       },
     },
-    { priority }
+    { priority, bypassQueue }
   );
   if (!response.ok) {
     throw new Error(`Failed to fetch listing page (offset ${offset}): ${response.statusText}`);
@@ -282,9 +284,11 @@ const MAX_FALLBACK_SCAN_PAGES = 5;
  * pages of the unfiltered listing. This is inherently approximate for older
  * content that doesn't turn up in either - see docs/DF_SITE_MIGRATION.md.
  */
-async function findContentInfoByKey(key: string, titleHint?: string, priority?: number): Promise<DfContentInfo | undefined> {
+export type DfFetchOpts = { priority?: number; bypassQueue?: boolean };
+
+async function findContentInfoByKey(key: string, titleHint?: string, opts: DfFetchOpts = {}): Promise<DfContentInfo | undefined> {
   if (titleHint) {
-    const response = await fetchListingPage({ limit: 50, title: titleHint, priority });
+    const response = await fetchListingPage({ limit: 50, title: titleHint, ...opts });
     // A title with zero matches on the live API comes back without an
     // `items` field at all rather than an empty array - confirmed live
     // 2026-08-15 (was crashing every such lookup with a "reading 'map' of
@@ -304,14 +308,20 @@ async function findContentInfoByKey(key: string, titleHint?: string, priority?: 
       found = contentInfos.find((info) => info.key === key);
       return !found && scannedPages < MAX_FALLBACK_SCAN_PAGES;
     },
-    { priority }
+    // Never bypassQueue here even if the caller asked for it on the (single)
+    // title-search attempt above - this fallback can walk up to
+    // MAX_FALLBACK_SCAN_PAGES sequential pages, and firing several requests
+    // back-to-back with no spacing is exactly the bulk/automated-looking
+    // pattern the queue exists to prevent. Priority still applies so it at
+    // least doesn't queue behind other background work.
+    { priority: opts.priority }
   );
   return found;
 }
 
-export async function fetchContentInfo(key: string, titleHint?: string, priority?: number): Promise<FetchedContentInfo> {
+export async function fetchContentInfo(key: string, titleHint?: string, opts: DfFetchOpts = {}): Promise<FetchedContentInfo> {
   logger.log("debug", "Getting info for media", key);
-  const found = await findContentInfoByKey(key, titleHint, priority);
+  const found = await findContentInfoByKey(key, titleHint, opts);
   if (!found) {
     throw new Error(`Could not locate content info for ${key}${titleHint ? ` ("${titleHint}")` : ""}`);
   }

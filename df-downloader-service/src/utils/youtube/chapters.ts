@@ -20,19 +20,31 @@ const ytChaptersToChapters = (ytChapters: YtChapterRenderer[], videoDurationMs: 
     });
 }
 
-export const fetchYtChapters = async (videoId: string): Promise<Chapter[] | null> => {
+export type YtVideoMeta = {
+    chapters: Chapter[] | null;
+    durationSeconds: number | null;
+    description: string | null;
+};
+
+/**
+ * Single fetch of the YouTube watch page, parsed for everything this tool
+ * wants from it (chapters, duration, description) - both ytInitialData
+ * (chapters) and ytInitialPlayerResponse (duration/description) are
+ * embedded in the same page load, so this is genuinely one HTTP request no
+ * matter how many of the three fields a given caller actually needs.
+ */
+export const fetchYtVideoMeta = async (videoId: string): Promise<YtVideoMeta | null> => {
     const ytPageDom = await fetchYtVideoPageDom(videoId);
-    const initialData = getInitialData(ytPageDom);
-    if (!initialData) {
-        return null;
-    }
     const initialPlayerResponse = getInitialPlayerResponse(ytPageDom);
     if (!initialPlayerResponse) {
         return null;
     }
-    const chapters = getChapterInfo(initialData);
-    if (!chapters) {
-        return null;
-    }
-    return ytChaptersToChapters(chapters, parseInt(initialPlayerResponse.videoDetails.lengthSeconds) * 1000);
+    const parsedDurationSeconds = parseInt(initialPlayerResponse.videoDetails.lengthSeconds);
+    const durationSeconds = isNaN(parsedDurationSeconds) ? null : parsedDurationSeconds;
+    const description = initialPlayerResponse.videoDetails.shortDescription || null;
+    const initialData = getInitialData(ytPageDom);
+    const ytChapters = initialData ? getChapterInfo(initialData) : null;
+    const chapters =
+        ytChapters && durationSeconds !== null ? ytChaptersToChapters(ytChapters, durationSeconds * 1000) : null;
+    return { chapters, durationSeconds, description };
 }

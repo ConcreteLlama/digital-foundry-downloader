@@ -16,4 +16,14 @@ export const fetchSingleDfContentEntry = createQueryActions<string, DfContentEnt
   "dfContent/FETCH_SINGLE_DF_CONTENT_ENTRY"
 );
 
+// Lazily backfills description/duration from YouTube - the service only
+// does this on request (see content.ts's fetch-youtube-meta endpoint), not
+// during scans, so this should only be dispatched when the user actually
+// opens the content detail view. The service caches the result, so
+// repeat dispatches for an already-fetched entry are cheap no-ops.
+export const fetchYtVideoMeta = createQueryActions<string, DfContentEntry>(
+  "dfContent",
+  "dfContent/FETCH_YT_VIDEO_META"
+);
+
 export const resetState = createAction("dfContent/RESET_STATE");

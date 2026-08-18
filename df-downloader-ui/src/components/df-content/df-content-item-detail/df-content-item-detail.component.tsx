@@ -5,7 +5,7 @@ import { useEffect } from "react";
 import { useSelector } from "react-redux";
 import { clearPipeline } from "../../../api/tasks.ts";
 import { useDfContentEntry } from "../../../hooks/use-df-content-entry.ts";
-import { refreshDfContentMeta } from "../../../store/df-content/df-content.action.ts";
+import { fetchYtVideoMeta, refreshDfContentMeta } from "../../../store/df-content/df-content.action.ts";
 import { selectQueryPipelineIds } from "../../../store/df-tasks/tasks.selector.ts";
 import { store } from "../../../store/store.ts";
 import { theme } from "../../../themes/theme.ts";
@@ -26,6 +26,10 @@ export const DfContentInfoItemDetail = ({ dfContentName }: DfContentInfoItemDeta
   const dfContentEntry = useDfContentEntry(dfContentName);
   useEffect(() => {
     store.dispatch(refreshDfContentMeta.start(dfContentName));
+    // Description/duration aren't in the new site's own listing data at
+    // all - fetched lazily from YouTube here (dialog open), not during
+    // scans, and only once per entry (the service caches the result).
+    store.dispatch(fetchYtVideoMeta.start(dfContentName));
   }, [dfContentName]);
   const downloadingPipelineIds = useSelector(
     selectQueryPipelineIds({
@@ -84,9 +88,11 @@ export const DfContentInfoItemDetail = ({ dfContentName }: DfContentInfoItemDeta
           marginY: "16px",
         }}
       >
-        <Typography variant="caption">
-          Duration: {secondsToHHMMSS(DfContentInfoUtils.getDurationSeconds(contentInfo))}
-        </Typography>
+        {DfContentInfoUtils.getDurationSeconds(contentInfo) > 0 && (
+          <Typography variant="caption">
+            Duration: {secondsToHHMMSS(DfContentInfoUtils.getDurationSeconds(contentInfo))}
+          </Typography>
+        )}
         <Typography variant="body2" color="text.secondary">
           Published on {formatDate(contentInfo.publishedDate)}
         </Typography>{" "}
