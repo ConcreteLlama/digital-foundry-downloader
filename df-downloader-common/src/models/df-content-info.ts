@@ -108,12 +108,40 @@ export const DfContentInfoUtils = {
       0
     );
   },
+  /**
+   * Some new-site listing items are missing `.image img` in the source HTML,
+   * so `thumbnailUrl` comes back empty (see df-fetcher.ts's parseListingItem) -
+   * falls back to YouTube's own thumbnail when we at least have a video ID,
+   * rather than rendering a broken image. This is pure URL construction, not
+   * a network fetch - YouTube's per-video thumbnail paths are predictable
+   * from the video ID alone, unlike description/duration/chapters which
+   * need an actual page fetch (see sync-yt-video-meta.ts) - so no rate
+   * limiting or lazy-loading is needed here, it's cheap enough to compute on
+   * every render.
+   */
   getThumbnailUrl(dfContentInfo: DfContentInfo, width: number, height?: number) {
-    return this.thumbnailUrlToSize(dfContentInfo.thumbnailUrl || "", width, height);
+    if (dfContentInfo.thumbnailUrl) {
+      return this.thumbnailUrlToSize(dfContentInfo.thumbnailUrl, width, height);
+    }
+    if (dfContentInfo.youtubeVideoId) {
+      // maxresdefault is the best-quality option but 404s for older/lower-res
+      // uploads - callers rendering this in an <img> should pass an onError
+      // handler that retries with getYoutubeThumbnailUrl(id, "hqdefault"),
+      // which reliably exists for virtually every video (see
+      // DfThumbnailImage in df-downloader-ui).
+      return this.getYoutubeThumbnailUrl(dfContentInfo.youtubeVideoId, "maxresdefault");
+    }
+    return "";
   },
   thumbnailUrlToSize(thumbnailUrl: string, width: number, height?: number) {
     height = height ? height : Math.floor((width * 9) / 16);
     return (thumbnailUrl || "").replace(/\/thumbnail\/.*\//, `/thumbnail/${width}x${height}/`);
+  },
+  getYoutubeThumbnailUrl(
+    youtubeVideoId: string,
+    quality: "maxresdefault" | "sddefault" | "hqdefault" | "mqdefault" | "default" = "hqdefault"
+  ) {
+    return `https://i.ytimg.com/vi/${youtubeVideoId}/${quality}.jpg`;
   },
   getDurationSeconds(dfContentInfo: DfContentInfo) {
     return MediaInfoUtils.getDurationSeconds(dfContentInfo.mediaInfo);

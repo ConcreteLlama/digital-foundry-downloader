@@ -1,10 +1,10 @@
 import { Box, Stack, SxProps, Typography, useMediaQuery } from "@mui/material";
-import { DfContentEntry, DfContentInfoUtils } from "df-downloader-common";
-import { Image } from "mui-image";
+import { DfContentEntry } from "df-downloader-common";
 import { useSelector } from "react-redux";
 import { useDfContentEntry } from "../../hooks/use-df-content-entry.ts";
 import { selectActivePipelineIdsForContent, selectDetailsForPipelineIds } from "../../store/df-tasks/tasks.selector.ts";
 import { theme } from "../../themes/theme";
+import { DfThumbnailImage } from "../general/df-thumbnail-image.component.tsx";
 import { EllipsisTooltipText } from "../general/ellipsis-tooltip-text.component.tsx";
 
 export type DfContentInfoItemProps = {
@@ -41,11 +41,12 @@ export const DfContentInfoItem = ({ dfContentName, sx }: DfContentInfoItemProps)
           marginY: 0.5,
         }}
       >
-        <Image
-          src={DfContentInfoUtils.getThumbnailUrl(contentInfo, thumbWidth)}
+        <DfThumbnailImage
+          contentInfo={contentInfo}
+          width={thumbWidth}
           duration={500}
           style={{ borderRadius: 2 }}
-        ></Image>
+        />
       </Box>
       <Box sx={{ margin: 1, overflow: "hidden" }}>
         {/* Description is lazy-loaded from YouTube only when the detail
