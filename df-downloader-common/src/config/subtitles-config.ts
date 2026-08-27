@@ -92,18 +92,6 @@ export const SubtitlesService = z.enum(["deepgram", "google_stt", "whisper"]);
 export type SubtitlesService = z.infer<typeof SubtitlesService>;
 
 /**
- * When subtitles get generated automatically, if at all.
- *
- * `off` still leaves manual generation available - some content is worth
- * subtitling and some isn't, and there was previously no way to express
- * that: the only switch also governed whether services could be configured
- * at all.
- *
- * `during_download` is the original behaviour: the download isn't considered
- * finished until subtitles exist. Simple, but with local transcription a
- * long video holds its own download open for tens of minutes.
- */
-/**
  * How generated subtitles reach the video.
  *
  * `embed` remuxes them into the file itself, so they travel with it if it's
@@ -124,7 +112,24 @@ export type SubtitlesService = z.infer<typeof SubtitlesService>;
 export const SubtitlesOutputMode = z.enum(["auto", "embed", "sidecar"]);
 export type SubtitlesOutputMode = z.infer<typeof SubtitlesOutputMode>;
 
-export const AutomaticSubtitlesMode = z.enum(["off", "during_download"]);
+/**
+ * When subtitles get generated automatically, if at all.
+ *
+ * `off` still leaves manual generation available - some content is worth
+ * subtitling and some isn't, and there was previously no way to express
+ * that: the only switch also governed whether services could be configured
+ * at all.
+ *
+ * `during_download` is the original behaviour: the download isn't considered
+ * finished until subtitles exist. Simple, but with local transcription a
+ * long video holds its own download open for tens of minutes.
+ *
+ * `after_download` files the video first and generates subtitles afterwards,
+ * so it's watchable immediately. The pipeline's position is persisted (see
+ * db/pipeline-db-model.ts), so a restart part-way through picks up where it
+ * left off rather than re-downloading.
+ */
+export const AutomaticSubtitlesMode = z.enum(["off", "during_download", "after_download"]);
 export type AutomaticSubtitlesMode = z.infer<typeof AutomaticSubtitlesMode>;
 
 export const SubtitlesServicesConfig = z.object({

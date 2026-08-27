@@ -74,6 +74,7 @@ const SubtitlesSettings = () => {
         opts={[
           { id: "off", label: "Never - only when I ask" },
           { id: "during_download", label: "During download - the download isn't finished until subtitles are" },
+          { id: "after_download", label: "After download - the video is available straight away" },
         ]}
       />
       <SelectField

@@ -1205,7 +1205,7 @@ export class DigitalFoundryContentManager {
   ) {
     return pipelineExec.on("completed", (pipelineResult) => {
       if (pipelineResult.status === "success") {
-        const { size, downloadLocation, mediaInfo, subtitles } = pipelineResult.pipelineResult;
+        const { size, downloadLocation, mediaInfo, subtitles, dfContentInfo } = pipelineResult.pipelineResult;
         this.db.contentDownloaded(contentKey, {
           mediaInfo,
           downloadDate: new Date(),
@@ -1213,8 +1213,37 @@ export class DigitalFoundryContentManager {
           size: size ? bytesToHumanReadable(size) : undefined,
           subtitles: subtitles ? [{ service: subtitles.service, language: subtitles.language }] : undefined,
         });
+        this.queueDeferredSubtitles(dfContentInfo, mediaInfo, downloadLocation);
       }
     });
+  }
+
+  /**
+   * Starts subtitle generation once a download has been filed, when
+   * configured to run afterwards rather than inline.
+   *
+   * Deliberately fired after the download is recorded rather than as a step
+   * of the download pipeline: the point of this mode is that the video is
+   * watchable straight away, which means the download has to be able to
+   * finish without waiting for a transcription that can run for the better
+   * part of an hour. Its own pipeline is persisted like any other, so a
+   * restart part-way through picks it back up.
+   */
+  private queueDeferredSubtitles(dfContentInfo: DfContentInfo, mediaInfo: MediaInfo, fileLocation: string) {
+    const subtitlesConfig = configService.config.subtitles;
+    if (subtitlesConfig?.automaticGeneration !== "after_download") {
+      return;
+    }
+    const generators = serviceLocator.getSubtitleGenerators(subtitlesConfig.servicePriorities);
+    if (!generators.length) {
+      logger.log(
+        "warn",
+        `Not generating subtitles for ${dfContentInfo.name} - subtitles are set to generate after download but no services are configured`
+      );
+      return;
+    }
+    logger.log("info", `Queueing subtitle generation for ${dfContentInfo.name} now its download is filed`);
+    this.taskManager.generateSubs(dfContentInfo, mediaInfo, fileLocation, "en", generators);
   }
 
   /**
