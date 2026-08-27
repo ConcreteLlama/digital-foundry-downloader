@@ -103,6 +103,27 @@ export type SubtitlesService = z.infer<typeof SubtitlesService>;
  * finished until subtitles exist. Simple, but with local transcription a
  * long video holds its own download open for tens of minutes.
  */
+/**
+ * How generated subtitles reach the video.
+ *
+ * `embed` remuxes them into the file itself, so they travel with it if it's
+ * moved or copied. The cost is that it rewrites the whole file - fine while
+ * the download is still being assembled and nothing has seen it, less so
+ * once it's sitting in a library a media server has indexed.
+ *
+ * `sidecar` writes a separate .srt alongside the video, which Plex and
+ * Jellyfin both read. Near-instant, no rewrite of a multi-gigabyte file, and
+ * nothing touches a file that might be playing - but the subtitles are left
+ * behind if the video is moved without them.
+ *
+ * `auto` picks per situation: embed while the download is being assembled,
+ * sidecar when subtitles are generated for a file already in the library.
+ * That gets the durability of embedding where it's free, and avoids
+ * rewriting files that are already in use.
+ */
+export const SubtitlesOutputMode = z.enum(["auto", "embed", "sidecar"]);
+export type SubtitlesOutputMode = z.infer<typeof SubtitlesOutputMode>;
+
 export const AutomaticSubtitlesMode = z.enum(["off", "during_download"]);
 export type AutomaticSubtitlesMode = z.infer<typeof AutomaticSubtitlesMode>;
 
@@ -120,6 +141,8 @@ export const SubtitlesConfig = z
   .object({
     /** See AutomaticSubtitlesMode. */
     automaticGeneration: AutomaticSubtitlesMode.default("during_download"),
+    /** See SubtitlesOutputMode. */
+    output: SubtitlesOutputMode.default("auto"),
     /**
      * How many subtitle generations may run at once.
      *

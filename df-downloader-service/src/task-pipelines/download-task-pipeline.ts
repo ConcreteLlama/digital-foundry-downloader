@@ -13,6 +13,8 @@ import { makeFilePathWithTemplate } from "../utils/template-utils.js";
 import { pathIsEqual } from "../utils/file-utils.js";
 import { FetchChaptersTask } from "../tasks/fetch-chapters-task.js";
 import { MeasureDurationTask } from "../tasks/measure-duration-task.js";
+import { WriteSubtitlesSidecarTask } from "../tasks/write-subtitles-sidecar-task.js";
+import { resolveSubtitlesOutput } from "../media-utils/subtitles/sidecar.js";
 import { GeneratedSubtitleInfo } from "../media-utils/subtitles/subtitles.js";
 import { Chapter } from "../utils/chatpers.js";
 
@@ -145,7 +147,15 @@ export const createDownloadTaskPipeline = (opts: DownloadTaskPipelineOpts) => {
         const [_downloadTaskResult, _measureTaskResult, ytMetaTaskResult, subtitlesTaskResult] = allResults;
         const config = configService.config;
         const metaConfig = config.metadata;
-        const subtitles = subtitlesTaskResult?.status === "success" ? subtitlesTaskResult.result : null;
+        const generatedSubtitles = subtitlesTaskResult?.status === "success" ? subtitlesTaskResult.result : null;
+        // Only hand subtitles to the remux when they're meant to be embedded.
+        // In sidecar mode they're written as a separate file after the move -
+        // see the Write Subtitles step below.
+        const subtitles =
+          generatedSubtitles &&
+          resolveSubtitlesOutput(config.subtitles?.output ?? "auto", "assembling_download") === "embed"
+            ? generatedSubtitles
+            : null;
         const ytMeta = ytMetaTaskResult?.status === "success" ? ytMetaTaskResult.result : null;
         const chapters = ytMeta?.chapters ?? null;
         // dfContentInfo here is the context captured when the pipeline
@@ -221,6 +231,31 @@ export const createDownloadTaskPipeline = (opts: DownloadTaskPipelineOpts) => {
         );
       },
       taskManager: mediaProcessingTaskManager,
+    })
+    // After the move, so the .srt lands next to the finished file rather than
+    // in the work directory. Only does anything in sidecar mode; in embed
+    // mode the subtitles are already inside the file.
+    .next({
+      stepName: "Write Subtitles",
+      taskCreator: ({ context, allResults }) => {
+        const [_downloadTaskResult, _measureTaskResult, _ytMetaTaskResult, subtitlesTaskResult] = allResults;
+        const generatedSubtitles = subtitlesTaskResult?.status === "success" ? subtitlesTaskResult.result : null;
+        if (!generatedSubtitles || !context.finalLocation) {
+          return null;
+        }
+        const outputMode = resolveSubtitlesOutput(
+          configService.config.subtitles?.output ?? "auto",
+          "assembling_download"
+        );
+        if (outputMode !== "sidecar") {
+          return null;
+        }
+        return WriteSubtitlesSidecarTask(context.finalLocation, generatedSubtitles);
+      },
+      // A missing sidecar shouldn't fail a download that's otherwise complete
+      // and already filed.
+      continueOnFail: true,
+      taskManager: fileTaskManager,
     })
     .build({
       generateStatusMessage: ({ steps, context, pipelineResult }) => {

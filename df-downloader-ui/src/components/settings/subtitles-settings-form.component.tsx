@@ -76,6 +76,16 @@ const SubtitlesSettings = () => {
           { id: "during_download", label: "During download - the download isn't finished until subtitles are" },
         ]}
       />
+      <SelectField
+        name="output"
+        label="Subtitle output"
+        helperText="Embedding puts subtitles inside the video so they travel with it, but rewrites the whole file. A separate .srt is instant and doesn't touch a file your media server may be playing, but is left behind if you move the video without it."
+        opts={[
+          { id: "auto", label: "Automatic - embed during download, separate file otherwise" },
+          { id: "embed", label: "Always embed in the video file" },
+          { id: "sidecar", label: "Always write a separate .srt file" },
+        ]}
+      />
       {/* Deliberately not hidden when automatic generation is off. This list is
           also what the manual "Generate Subtitles" action offers, so hiding it
           previously made manual-only impossible to set up: you could turn

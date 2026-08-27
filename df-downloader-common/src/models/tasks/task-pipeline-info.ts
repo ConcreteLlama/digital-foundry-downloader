@@ -10,7 +10,14 @@ export type PipelineResultStatus = z.infer<typeof PipelineResultStatus>;
 // "Fetch Chapters" is still a fetch - chapters come from YouTube. Subtitles
 // are no longer fetched from anywhere: every remaining service transcribes
 // the downloaded file's own audio, so the step is a generation step.
-export const DfStepName = z.enum(["Download", "Generate Subtitles", "Fetch Chapters", "Inject Metadata", "Move File"]);
+export const DfStepName = z.enum([
+    "Download",
+    "Generate Subtitles",
+    "Fetch Chapters",
+    "Inject Metadata",
+    "Move File",
+    "Write Subtitles",
+]);
 export type DfStepName = z.infer<typeof DfStepName>;
 
 export const DfPipelineType = z.enum(["download", "subtitles", "update_download_meta"]);
