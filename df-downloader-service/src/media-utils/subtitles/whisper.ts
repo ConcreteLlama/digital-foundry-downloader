@@ -9,7 +9,7 @@ import { fileToAudioFile } from "../audio.js";
 import { runCommand } from "../../utils/command.js";
 import { fileExists } from "../../utils/file-utils.js";
 import { parseSrt } from "./srt-utils.js";
-import { GeneratedSubtitleInfo, SubtitleGenerator } from "./subtitles.js";
+import { GeneratedSubtitleInfo, SubtitleGenerator, SubtitleProgressReporter } from "./subtitles.js";
 
 /**
  * Where whisper.cpp publishes its GGML model files. Fetched on first use
@@ -31,6 +31,14 @@ const WHISPER_CHANNELS = 1;
  * legitimate SDH-style captions.
  */
 const NON_SPEECH_MARKERS = /^\[(?:BLANK_AUDIO|SILENCE|NO SPEECH|INAUDIBLE)\]$/i;
+
+/**
+ * whisper.cpp's --print-progress output, e.g.
+ * "whisper_print_progress_callback: progress =  40%". It only emits this when
+ * asked, and it's the only way to tell how far into a transcription it is - a
+ * two-hour episode otherwise sits silent for tens of minutes.
+ */
+const PROGRESS_LINE = /progress\s*=\s*(\d+)\s*%/g;
 
 const escapeRegExp = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
@@ -123,7 +131,8 @@ export class WhisperSubtitleGenerator implements SubtitleGenerator {
   async getSubs(
     dfContentInfo: DfContentInfo,
     filename: string,
-    language: LanguageCode | string
+    language: LanguageCode | string,
+    onProgress?: SubtitleProgressReporter
   ): Promise<GeneratedSubtitleInfo> {
     const workDir = configService.config.contentManagement.workDir;
     const modelPath = await ensureModel(this.config);
@@ -146,13 +155,33 @@ export class WhisperSubtitleGenerator implements SubtitleGenerator {
         "-of", outputPrefix,
         "-t", String(this.threads),
         "-l", requestedLanguage === "auto" ? "auto" : String(requestedLanguage),
+        // Progress is only emitted when asked for - see PROGRESS_LINE.
+        "--print-progress",
       ];
       logger.log(
         "info",
         `Transcribing ${filename} with Whisper (${this.config.model}, ${this.threads} threads) - this can take a while for long content`
       );
       const startedAt = Date.now();
-      await runCommand(this.binaryPath, args);
+      let lastPercent = -1;
+      await runCommand(this.binaryPath, args, undefined, {
+        onStderr: (chunk) => {
+          if (!onProgress) {
+            return;
+          }
+          // A single chunk can carry several progress lines; only the most
+          // recent one is meaningful.
+          let percent: number | undefined;
+          for (const match of chunk.matchAll(PROGRESS_LINE)) {
+            percent = Number(match[1]);
+          }
+          if (percent === undefined || percent === lastPercent) {
+            return;
+          }
+          lastPercent = percent;
+          onProgress({ percent, detail: `${this.config.model}, ${this.threads} threads` });
+        },
+      });
       logger.log("info", `Transcribed ${filename} in ${Math.round((Date.now() - startedAt) / 1000)}s`);
       if (!(await fileExists(srtPath))) {
         throw new Error(`Whisper produced no subtitle output for ${filename}`);

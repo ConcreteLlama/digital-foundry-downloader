@@ -2,7 +2,7 @@ import { SubtitlesConfig, SubtitlesService } from "df-downloader-common/config/s
 import { LanguageCode, SubtitleInfo } from "df-downloader-common";
 import { DeepgramSubtitleGenerator } from "./deepgram.js";
 import { serviceLocator } from "../../services/service-locator.js";
-import { DfContentInfo, logger } from "df-downloader-common";
+import { DfContentInfo, TaskProgress, logger } from "df-downloader-common";
 import { configService } from "../../config/config.js";
 import { GoogleSttSubtitlesGenerator } from "./google-stt.js";
 import { WhisperSubtitleGenerator } from "./whisper.js";
@@ -11,9 +11,21 @@ export type GeneratedSubtitleInfo = SubtitleInfo & {
   service: SubtitlesService;
 };
 
+/**
+ * Reports how far along generation is, for services that can tell.
+ * Transcribing locally can take tens of minutes on a long video, so without
+ * this the task sits at "running" with nothing to show for it.
+ */
+export type SubtitleProgressReporter = (progress: TaskProgress) => void;
+
 export interface SubtitleGenerator {
   serviceType: SubtitlesService;
-  getSubs(dfContentInfo: DfContentInfo, filename: string, language: LanguageCode | string): Promise<GeneratedSubtitleInfo>;
+  getSubs(
+    dfContentInfo: DfContentInfo,
+    filename: string,
+    language: LanguageCode | string,
+    onProgress?: SubtitleProgressReporter
+  ): Promise<GeneratedSubtitleInfo>;
   destroy(): void;
 }
 

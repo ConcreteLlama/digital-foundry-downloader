@@ -1,4 +1,4 @@
-import { DfContentInfo, LanguageCode, asyncGetFirstMatch, logger } from "df-downloader-common";
+import { DfContentInfo, LanguageCode, TaskProgress, asyncGetFirstMatch, logger } from "df-downloader-common";
 import { SubtitleGenerator, GeneratedSubtitleInfo } from "../media-utils/subtitles/subtitles.js";
 import { TaskManager, TaskManagerOpts } from "../task-manager/task-manager.js";
 import { configService } from "../config/config.js";
@@ -34,6 +34,8 @@ type SubtitlesTaskContext = {
   filePath: string;
   language: LanguageCode | string;
   currentSubtitleGenerator?: SubtitleGenerator;
+  /** Updated by the generator as it works - see SubtitleProgressReporter. */
+  progress?: TaskProgress;
 };
 
 const subtitlesTaskControls: TaskControls<GeneratedSubtitleInfo, SubtitlesTaskContext> = {
@@ -44,7 +46,9 @@ const subtitlesTaskControls: TaskControls<GeneratedSubtitleInfo, SubtitlesTaskCo
       context.currentSubtitleGenerator = generator;
       logger.log("info", `Generating subs for ${filePath} using ${generator.serviceType}`);
       try {
-        return await generator.getSubs(dfContentInfo, filePath, language);
+        return await generator.getSubs(dfContentInfo, filePath, language, (progress) => {
+          context.progress = progress;
+        });
       } catch (err) {
         logger.log("error", `Error getting subs for ${filePath} using ${generator.serviceType}: ${err}`);
         return null;
@@ -63,6 +67,7 @@ const subtitlesTaskControls: TaskControls<GeneratedSubtitleInfo, SubtitlesTaskCo
   getStatusMessage: ({ context, state }) => {
     return `Generating ${context.language} subs for ${context.filePath} using ${context.currentSubtitleGenerator?.serviceType}: ${state}`;
   },
+  getStatus: (context) => ({ progress: context.progress }),
 };
 export const SubtitlesTaskBuilder = TaskControllerTaskBuilder(subtitlesTaskControls, {
   taskType: "subtitles",

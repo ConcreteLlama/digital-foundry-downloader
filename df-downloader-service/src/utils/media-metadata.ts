@@ -1,4 +1,4 @@
-import { logger, MediaFileMeta, SrtLine, SubtitleInfo } from "df-downloader-common";
+import { logger, MediaFileMeta, SrtLine, SubtitleInfo, TaskProgress } from "df-downloader-common";
 import ffmpegPathImport from "ffmpeg-static";
 import ffprobePathImport from "ffprobe-static";
 import fs from "fs";
@@ -26,6 +26,19 @@ const ffprobePath = ffprobePathImport.path;
 //   pipeContent: string;
 // }
 
+/**
+ * ffmpeg reports the input's length on stderr as it opens it
+ * ("Duration: 00:10:59.84, start: ..."), and with `-progress` reports how far
+ * it has got on stdout as `out_time_ms=<microseconds>`. Together those give a
+ * real percentage for what is otherwise a silent multi-minute remux of a
+ * multi-gigabyte file.
+ *
+ * Note out_time_ms is microseconds despite the name - a long-standing ffmpeg
+ * misnomer.
+ */
+const FFMPEG_DURATION_LINE = /Duration:\s*(\d+):(\d{2}):(\d{2})(?:\.(\d+))?/;
+const FFMPEG_OUT_TIME_LINE = /out_time_ms=(\d+)/g;
+
 export type InjectMediaMetadataOpts = {
   /**
    * Write the result here instead of back over `mediaFilePath`, and remove
@@ -41,6 +54,8 @@ export type InjectMediaMetadataOpts = {
    * provide in the first place.
    */
   outputPath?: string;
+  /** Reports remux progress - see FFMPEG_DURATION_LINE. */
+  onProgress?: (progress: TaskProgress) => void;
 };
 
 export const injectMediaMetadata = async (
@@ -141,10 +156,44 @@ export const injectMediaMetadata = async (
     }
 
     ffmpegArgs.push(workingFilename);
+    if (opts.onProgress) {
+      // Global option, so it has to precede the inputs.
+      ffmpegArgs.unshift("-progress", "pipe:1");
+    }
 
     logger.log("debug", `Metadata args for ${mediaFilePath}: ${ffmpegArgs}`);
 
-    await runCommand(ffmpegPath, ffmpegArgs, subtitlesText).then(async () => {
+    let totalSeconds: number | undefined;
+    let lastPercent = -1;
+    await runCommand(ffmpegPath, ffmpegArgs, subtitlesText, {
+      onStderr: (chunk) => {
+        if (totalSeconds !== undefined) {
+          return;
+        }
+        const match = chunk.match(FFMPEG_DURATION_LINE);
+        if (match) {
+          totalSeconds = Number(match[1]) * 3600 + Number(match[2]) * 60 + Number(match[3]);
+        }
+      },
+      onStdout: (chunk) => {
+        if (!opts.onProgress || !totalSeconds) {
+          return;
+        }
+        let outTimeUs: number | undefined;
+        for (const match of chunk.matchAll(FFMPEG_OUT_TIME_LINE)) {
+          outTimeUs = Number(match[1]);
+        }
+        if (outTimeUs === undefined) {
+          return;
+        }
+        const percent = Math.min(100, Math.round((outTimeUs / 1_000_000 / totalSeconds) * 100));
+        if (percent === lastPercent) {
+          return;
+        }
+        lastPercent = percent;
+        opts.onProgress({ percent, detail: "Embedding metadata" });
+      },
+    }).then(async () => {
       logger.log("debug", `Moving ${workingFilename} to ${finalPath} after setting metadata`);
       // moveFile rather than a bare rename: same directory either way, but it
       // handles clobbering an existing file consistently across platforms

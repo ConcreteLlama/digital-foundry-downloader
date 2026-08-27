@@ -22,6 +22,7 @@ import {
   TaskInfo,
   TaskPipelineInfo,
   TaskPipelineUtils,
+  TaskProgress,
   TaskStatus,
   isChangePositionAction,
   isChangePriorityAction,
@@ -536,6 +537,9 @@ const makeCommonTaskStatusInfo = (managedTask: GenericManagedTask): TaskStatus =
   const taskState = task.getTaskState();
   const taskResult = task.result;
   const taskError = taskResult?.status === "failed" ? taskResult.error : undefined;
+  // Tasks opt into progress reporting by returning it from getStatus() - see
+  // TaskProgress. Most don't, in which case this is simply absent.
+  const statusDetail = task.getStatus() as { progress?: TaskProgress } | undefined;
   return {
     state: taskState,
     pauseTrigger: task.pauseTrigger || undefined,
@@ -544,6 +548,7 @@ const makeCommonTaskStatusInfo = (managedTask: GenericManagedTask): TaskStatus =
     message: task.getStatusMessage(),
     error: taskError ? makeErrorMessage(taskError) : undefined,
     forceStarted: task.forceRunFlag || undefined,
+    progress: statusDetail?.progress,
   };
 }
 

@@ -16,6 +16,24 @@ export const TaskState = z.enum([
 export type TaskState = z.infer<typeof TaskState>;
 export const TaskCapabilities = z.enum(["pause", "cancel"]);
 export type TaskCapabilities = z.infer<typeof TaskCapabilities>;
+/**
+ * Generic progress for any task that can report it.
+ *
+ * Downloads have always had their own richer progress (bytes, speed, ETA -
+ * see DownloadProgressInfo); this is the lowest common denominator so that
+ * anything else able to say how far along it is can, without inventing a
+ * per-task-type shape. Tasks opt in by returning `{ progress }` from their
+ * getStatus(); tasks that can't report progress simply omit it and the UI
+ * falls back to a status message as before.
+ */
+export const TaskProgress = z.object({
+  /** 0-100. */
+  percent: z.number(),
+  /** Optional human-readable detail, e.g. "3:12 / 11:00". */
+  detail: z.string().optional(),
+});
+export type TaskProgress = z.infer<typeof TaskProgress>;
+
 export const TaskStatus = z.object({
   state: TaskState,
   pauseTrigger: z.union([z.literal("manual"), z.literal("auto")]).optional(),
@@ -24,6 +42,8 @@ export const TaskStatus = z.object({
   attempt: z.number().default(1),
   error: z.any().optional(),
   isComplete: z.boolean(),
+  /** See TaskProgress - present only for tasks that can report progress. */
+  progress: TaskProgress.optional(),
 });
 export type TaskStatus = z.infer<typeof TaskStatus>;
 
