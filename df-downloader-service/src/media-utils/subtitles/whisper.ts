@@ -181,6 +181,12 @@ export class WhisperSubtitleGenerator implements SubtitleGenerator {
         // Progress is only emitted when asked for - see PROGRESS_LINE.
         "--print-progress",
       ];
+      if (!this.config.useGpu) {
+        // whisper.cpp tries a GPU by default when its build has one; -ng
+        // keeps it on the CPU. See WhisperConfig.useGpu for why that's
+        // sometimes the faster choice.
+        args.push("-ng");
+      }
       logger.log(
         "info",
         `Transcribing ${filename} with Whisper (${this.config.model}, ${this.threads} threads) - this can take a while for long content`

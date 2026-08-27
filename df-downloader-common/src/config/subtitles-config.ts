@@ -70,6 +70,18 @@ export const WhisperConfig = z.object({
    */
   threads: z.number().int().min(1).optional(),
   /**
+   * Whether whisper.cpp may use a GPU when one is available.
+   *
+   * The binary bundled in the Docker image is a CPU-only build, so this
+   * changes nothing there - it matters when `binaryPath` points at a
+   * CUDA/Vulkan/OpenVINO build. Worth being able to turn off rather than
+   * assuming a GPU is a win: on the kind of box this usually runs on, the
+   * GPU is often already busy transcoding for a media server, and competing
+   * for it can be slower than staying on the CPU as well as making playback
+   * stutter.
+   */
+  useGpu: z.boolean().default(true),
+  /**
    * Path to the whisper.cpp `whisper-cli` binary. The Docker image builds
    * one and points this at it; set it explicitly to run against your own
    * build (e.g. for local development outside the container).

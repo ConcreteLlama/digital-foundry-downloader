@@ -43,6 +43,7 @@ versions:
         - "Embedding metadata and moving files now happen one at a time rather than up to five - they're limited by disk speed, so running several just makes them contend"
         - "Fetching chapter information no longer fires several requests at once"
         - "Subtitle actions now say 'generate' rather than 'fetch'. Every remaining option transcribes the downloaded file's audio rather than downloading captions from somewhere, so 'fetch' no longer described what happens"
+        - "Whisper can now be told whether to use a GPU. The build bundled in the Docker image is CPU-only, so this applies if you've pointed Whisper at your own GPU-enabled build - and it's worth being able to turn off, since the GPU on this kind of machine is often already busy transcoding for a media server"
       bugfixes:
         - "Failures now say what actually went wrong":
           - "When subtitle generation or another external tool failed, the app reported whatever that tool happened to print last - usually its harmless startup banner rather than the error itself"

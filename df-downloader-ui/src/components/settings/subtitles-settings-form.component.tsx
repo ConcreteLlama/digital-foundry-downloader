@@ -203,6 +203,15 @@ const WhisperServiceConfig = () => (
       helperText="How many CPU threads to transcribe with. Defaults to two fewer than this machine has cores, so transcription doesn't starve everything else running on it."
       zodNumber={WhisperConfig.shape.threads.unwrap()}
     />
+    <CheckboxElement
+      name="services.whisper.useGpu"
+      label="Use GPU if available"
+    />
+    <FormHelperText>
+      The Whisper build bundled in the Docker image is CPU-only, so this has no effect unless you've pointed
+      "Whisper Binary Path" at your own GPU-enabled build. Worth turning off even then if the GPU is already busy
+      transcoding for your media server - competing for it can be slower than staying on the CPU.
+    </FormHelperText>
     <ZodTextField
       name="services.whisper.modelDir"
       label="Model Directory"
