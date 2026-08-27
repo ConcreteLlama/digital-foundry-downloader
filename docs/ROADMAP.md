@@ -307,12 +307,19 @@ measurement rather than overwrite/coexist with it.
 
 ### Queued follow-ups (not started)
 
-- **Deferred subtitle generation.** Whisper runs inline, so a long video holds up its own
-  download completing. Run it after the file has landed instead, with scheduling controls
-  so it doesn't fight Plex for CPU. **Important**: prefer writing an external `.srt`
-  sidecar over remuxing into the container for the deferred path - replacing a file that
-  Plex/Jellyfin may be streaming is at best undefined, and a sidecar avoids rewriting a
-  multi-GB file entirely.
+- **Deferred subtitle generation** is done for the "after download" case
+  (`automaticGeneration: after_download` + `subtitlesOutput`, 2026-08-27). The file lands
+  and is recorded first, then subtitles are queued separately, so a long transcription no
+  longer holds up its own download. Sidecar-by-default for that path went in as intended -
+  replacing a file Plex/Jellyfin may be streaming is at best undefined.
+- **A `scheduled` subtitles mode** is the remaining piece: defer generation not just past
+  the download but to a time when the machine is otherwise idle. **Open decision, needs
+  the project owner**: a fixed time window (say 02:00-06:00, predictable, easy to reason
+  about, but happily transcodes into a machine that's busy for unrelated reasons) versus
+  idle detection (adaptive, but "idle" on a box also running Plex is a judgement call, and
+  a half-finished transcription that gets suspended mid-file is worse than one that never
+  started). Not worth building until that's settled - the two lead to different designs,
+  not just different config.
 - **GPU/iGPU acceleration for Whisper** (OpenVINO or Vulkan on the N305's Intel UHD).
   Caveat: that iGPU is probably already doing QuickSync for Plex, so this may relocate
   contention rather than remove it. Measure before assuming a win.
