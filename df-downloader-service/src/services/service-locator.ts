@@ -4,12 +4,15 @@ import { DfNotificationConsumer } from "../notifiers/notification-consumer.js";
 import { logger, mapFilterEmpty } from "df-downloader-common";
 import { NotificationConsumerManager } from "../notifiers/notification-consumer-manager.js";
 import { DfDownloaderOperationalDb } from "../db/df-operational-db.js";
+import { ActivePipelineDb, CompletedPipelineDb } from "../db/file-dbs/pipeline-db.js";
 
 class ServiceLocator {
   public static instance = new ServiceLocator();
   private _subtitleGenerators: SubtitleGenerator[] = [];
   private _notificationConsumerManager: NotificationConsumerManager = new NotificationConsumerManager();
   private _db!: DfDownloaderOperationalDb;
+  private _activePipelineDb?: ActivePipelineDb;
+  private _completedPipelineDb?: CompletedPipelineDb;
 
   addSubtitleGenerator(subtitleGenerator: SubtitleGenerator) {
     this._subtitleGenerators.push(subtitleGenerator);
@@ -37,6 +40,24 @@ class ServiceLocator {
 
   setDb(db: DfDownloaderOperationalDb) {
     this._db = db;
+  }
+
+  /**
+   * Optional so anything constructing a task manager without a full startup
+   * (tests, one-off scripts) still works - persistence is skipped rather
+   * than crashing.
+   */
+  setPipelineDbs(active: ActivePipelineDb, completed: CompletedPipelineDb) {
+    this._activePipelineDb = active;
+    this._completedPipelineDb = completed;
+  }
+
+  get activePipelineDb() {
+    return this._activePipelineDb;
+  }
+
+  get completedPipelineDb() {
+    return this._completedPipelineDb;
   }
 
   get db() {

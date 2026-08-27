@@ -12,6 +12,8 @@ import { JwtManager } from "./rest/auth/jwt.js";
 import { serviceLocator } from "./services/service-locator.js";
 import { DfFileOperationalDb } from "./db/df-file-operational-db.js";
 import { closeAllQueues, forceCloseAllQueues } from "./utils/queue-utils.js";
+import { ActivePipelineDb, CompletedPipelineDb } from "./db/file-dbs/pipeline-db.js";
+import { ensureEnvString } from "./utils/env-utils.js";
 
 let closeAttempts = 0;
 
@@ -43,6 +45,11 @@ async function start() {
   const db = await DfFileOperationalDb.create();
   await db.init();
   serviceLocator.setDb(db);
+  // Kept separate from the content DBs: these track work in flight rather
+  // than what's been downloaded, and are written on a completely different
+  // cadence (see db/file-dbs/pipeline-db.ts).
+  const dbDir = ensureEnvString("DB_DIR", "db");
+  serviceLocator.setPipelineDbs(await ActivePipelineDb.create(dbDir), await CompletedPipelineDb.create(dbDir));
   const dfContentManager = new DigitalFoundryContentManager(db);
   loadServices();
   if (configService.config.restApi) {

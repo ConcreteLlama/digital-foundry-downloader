@@ -28,6 +28,7 @@ import {
   isChangePriorityAction,
   isControlPipelineRequest,
   isShiftAction,
+  logger,
   makeErrorMessage,
   MediaInfoUtils,
   sanitizeFilename
@@ -38,6 +39,7 @@ import { makeDfDownloadParams } from "./df-fetcher.js";
 import { DownloadContextStatus } from "./download/downloader/fsm/download-context.js";
 import { SubtitleGenerator } from "./media-utils/subtitles/subtitles.js";
 import { serviceLocator } from "./services/service-locator.js";
+import { PersistedPipeline, PersistedStepResult } from "./db/pipeline-db-model.js";
 import { PriorityPositionInfo } from "./task-manager/priority-item-manager.js";
 import { TaskManager } from "./task-manager/task-manager.js";
 import {
@@ -148,7 +150,36 @@ export class DfTaskManager {
 
   private addTaskPipelineExecution(pipelineExecution: PipelineExecutionTypes) {
     this.pipelineExecutions.set(pipelineExecution.id, pipelineExecution);
-    pipelineExecution.once("completed", () => {
+    // Every pipeline is registered here, so this is the one place persistence
+    // needs to hook into - it covers all pipeline types without the generic
+    // pipeline machinery needing to know anything about storage.
+    const persist = () => {
+      const activeDb = serviceLocator.activePipelineDb;
+      if (!activeDb) {
+        return;
+      }
+      activeDb
+        .upsert(makePersistedPipeline(pipelineExecution))
+        .catch((e) => logger.log("error", `Failed to record pipeline ${pipelineExecution.id}`, e));
+    };
+    persist();
+    // Recorded per step rather than continuously: a step boundary is exactly
+    // the point a restart could usefully resume from, and writing more often
+    // would rewrite the file for progress that can't be resumed into anyway.
+    pipelineExecution.on("stepCompleted", persist);
+    pipelineExecution.once("completed", (result: any) => {
+      const activeDb = serviceLocator.activePipelineDb;
+      const completedDb = serviceLocator.completedPipelineDb;
+      if (activeDb && completedDb) {
+        const persisted = makePersistedPipeline(pipelineExecution);
+        completedDb
+          .add({ ...persisted, completedAt: new Date(), result: result?.status || "failed" })
+          // Removed from the active set only once it's safely archived, so a
+          // crash between the two leaves it looking in-flight (and resumable)
+          // rather than vanishing entirely.
+          .then(() => activeDb.remove(pipelineExecution.id))
+          .catch((e) => logger.log("error", `Failed to archive pipeline ${pipelineExecution.id}`, e));
+      }
       if (this.autoClearCompletedPipelines) {
         this.clearCompletedPipelineExec(pipelineExecution.id);
       }
@@ -433,6 +464,53 @@ export class DfTaskManager {
     );
   }
 }
+
+/**
+ * Snapshot of a pipeline in the form that survives a restart.
+ *
+ * Only the context fields that are actually needed to continue are kept -
+ * notably not the request headers (they carry the Digital Foundry autologin
+ * cookie) or the download URL (a time-limited signed link). See
+ * PersistedPipeline.
+ */
+export const makePersistedPipeline = (taskPipelineExecution: PipelineExecutionTypes): PersistedPipeline => {
+  const { pipelineType, id, startTime } = taskPipelineExecution;
+  const steps = taskPipelineExecution.getSteps();
+  const currentStep = taskPipelineExecution.getCurrentStep();
+  const context: any = taskPipelineExecution.context;
+  const stepOrder = steps.map(({ step }) => step.id);
+  const stepResults: Record<string, PersistedStepResult> = {};
+  steps.forEach(({ step, managedTask }) => {
+    const result = managedTask?.task?.result;
+    if (!result) {
+      return;
+    }
+    stepResults[step.id] = {
+      status: result.status === "success" ? "success" : result.status === "cancelled" ? "cancelled" : "failed",
+      result: result.status === "success" ? result.result : undefined,
+      error: result.status === "failed" ? makeErrorMessage(result.error) : undefined,
+      startTime: managedTask?.task?.startTime || undefined,
+      endTime: managedTask?.task?.endTime || undefined,
+    };
+  });
+  const currentStepIndex = currentStep ? Math.max(0, stepOrder.indexOf(currentStep.step.id)) : 0;
+  return {
+    id,
+    pipelineType,
+    contentKey: context?.dfContentInfo?.key || "",
+    mediaFormat: context?.mediaInfo?.formatString,
+    queuedTime: startTime || new Date(),
+    currentStepIndex,
+    stepOrder,
+    stepResults,
+    context: {
+      downloadLocation: context?.downloadLocation,
+      finalLocation: context?.finalLocation,
+      fileAtFinalLocation: context?.fileAtFinalLocation,
+    },
+    resumeAttempts: 0,
+  };
+};
 
 export const makeTaskPipelineInfo = (
   taskPipelineExecution: PipelineExecutionTypes
