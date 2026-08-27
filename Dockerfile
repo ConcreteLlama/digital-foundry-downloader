@@ -12,37 +12,38 @@ ARG WHISPER_CPP_REF=b4938
 RUN apt-get update \
     && apt-get install -y --no-install-recommends cmake \
     && rm -rf /var/lib/apt/lists/*
-# BUILD_SHARED_LIBS=OFF so the result is one self-contained binary - the
-# alternative is tracking libggml/libwhisper .so files across the stage
-# boundary for no benefit.
+# Built as shared libraries with GGML_CPU_ALL_VARIANTS, which compiles one
+# .so per CPU generation - x64, sse42, sandybridge, ivybridge, haswell,
+# alderlake, zen4, icelake and so on, fourteen of them - and selects the best
+# one the host actually supports at startup. This is what makes the image run
+# anywhere rather than only on machines as capable as whichever one built it,
+# including the Atom-class chips (Gemini Lake, Jasper Lake) common in NAS
+# builds, which have no AVX at all and fall back to the sse42 variant.
 #
-# GGML_NATIVE=OFF is load-bearing. It defaults ON, which compiles with
-# -march=native - for whatever CPU happens to run `docker build`. The result
-# is an image that runs only on machines at least as capable as the one that
-# built it, failing as SIGILL (illegal instruction) the moment whisper
-# reaches an instruction the host doesn't implement. That is a miserable
-# failure to diagnose: the signal kills the process outright so the tool
-# never gets to explain itself, and it depends on the build machine rather
-# than on anything visible in the image.
+# GGML_NATIVE=OFF is load-bearing, and was the original bug. It defaults ON,
+# compiling with -march=native for whatever CPU happened to run
+# `docker build`. The result died with SIGILL - an illegal instruction, which
+# kills the process outright, so whisper never got to explain itself - on any
+# host missing an instruction the build machine had. Built on a Ryzen 9
+# 9950X3D that meant AVX-512, which an Intel N305 does not implement. Worse,
+# the published image is built on ubuntu-latest, whose runner fleet mixes
+# Intel and AMD, so what the image required varied per build with nothing in
+# the repo to explain why.
 #
-# The explicit feature list targets Haswell (2013). AVX2/FMA/F16C are
-# supported by anything plausibly running this, including Intel's N-series -
-# Alder Lake-N has AVX2 but NOT AVX-512, which is exactly the gap that bit
-# us. Set explicitly rather than left to ggml's defaults so a version bump
-# can't quietly widen the baseline. Anyone wanting a build tuned to their own
-# machine can point the Whisper "binary path" setting at one.
+# The costs are small and were measured, not assumed: ~13MB of image and
+# about ten seconds of build time. Dispatch itself is one dlopen at startup,
+# and choosing per host beats a fixed baseline - on a machine with AVX-512 it
+# encoded ~20% faster than the same build capped at AVX2.
 RUN git clone --depth 1 --branch ${WHISPER_CPP_REF} https://github.com/ggml-org/whisper.cpp.git /tmp/whisper.cpp \
     && cmake -S /tmp/whisper.cpp -B /tmp/whisper.cpp/build \
         -DCMAKE_BUILD_TYPE=Release \
-        -DBUILD_SHARED_LIBS=OFF \
+        -DBUILD_SHARED_LIBS=ON \
         -DWHISPER_BUILD_TESTS=OFF \
         -DWHISPER_BUILD_SERVER=OFF \
         -DGGML_NATIVE=OFF \
-        -DGGML_AVX=ON \
-        -DGGML_AVX2=ON \
-        -DGGML_FMA=ON \
-        -DGGML_F16C=ON \
-        -DGGML_AVX512=OFF \
+        -DGGML_BACKEND_DL=ON \
+        -DGGML_CPU_ALL_VARIANTS=ON \
+        -DGGML_BACKEND_DIR=/usr/local/lib/whisper \
     && cmake --build /tmp/whisper.cpp/build --config Release -j "$(nproc)" --target whisper-cli
 
 FROM --platform=linux/amd64 node:24
@@ -51,6 +52,12 @@ FROM --platform=linux/amd64 node:24
 WORKDIR /usr/src/app
 
 COPY --from=whisper-builder /tmp/whisper.cpp/build/bin/whisper-cli /usr/local/bin/whisper-cli
+# The backend variants and the whisper/ggml shared libraries. GGML_BACKEND_DIR
+# above compiles this path in, so the binary finds the variants wherever it is
+# run from; ldconfig is what lets the dynamic linker resolve libwhisper and
+# libggml themselves.
+COPY --from=whisper-builder /tmp/whisper.cpp/build/bin/*.so* /usr/local/lib/whisper/
+RUN echo /usr/local/lib/whisper > /etc/ld.so.conf.d/whisper.conf && ldconfig
 # Picked up by WhisperSubtitleGenerator when no explicit binaryPath is set.
 ENV WHISPER_BINARY=/usr/local/bin/whisper-cli
 

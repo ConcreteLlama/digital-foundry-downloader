@@ -49,8 +49,10 @@ Subtitles can now be generated locally on your own machine instead of being pull
 - Whisper can now be told whether to use a GPU. The build bundled in the Docker image is CPU-only, so this applies if you've pointed Whisper at your own GPU-enabled build - and it's worth being able to turn off, since the GPU on this kind of machine is often already busy transcoding for a media server
 ### Bug Fixes
 - Fixed subtitle generation failing instantly on some processors
-  - The bundled Whisper was compiled for whatever machine happened to build the Docker image, so it used instructions that processors like Intel's N-series don't have, and was killed the moment it ran
-  - It is now built for a baseline that every machine capable of running this understands, while still using AVX2 - so there is no meaningful speed difference
+  - The bundled Whisper was compiled for whatever machine happened to build the Docker image, so it used instructions that other processors don't have and was killed the moment it ran, with no error message to explain it
+  - Because the published image is built by a shared pool of machines, which processors it would run on varied from release to release
+  - It now ships a version for every processor generation and picks the right one for your machine when it starts, so it runs anywhere - including older low-power NAS chips
+  - This is slightly faster too, since it can now use whatever your processor supports rather than a lowest common denominator
 - Failures now say what actually went wrong
   - When subtitle generation or another external tool failed, the app reported whatever that tool happened to print last - usually its harmless startup banner rather than the error itself
   - A tool that died without printing anything at all replaced the failure with an unrelated internal error, hiding it completely
