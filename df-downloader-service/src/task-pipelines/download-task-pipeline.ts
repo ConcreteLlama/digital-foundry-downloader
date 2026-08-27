@@ -1,4 +1,4 @@
-import { DfContentInfo, MediaInfo, makeErrorMessage } from "df-downloader-common";
+import { DfContentInfo, MediaInfo, logger, makeErrorMessage } from "df-downloader-common";
 import { configService } from "../config/config.js";
 import { makeMediaFileMeta } from "../df-mpeg-meta.js";
 import { DownloadUrlOpt } from "../download/download-url.js";
@@ -176,11 +176,17 @@ export const createDownloadTaskPipeline = (opts: DownloadTaskPipelineOpts) => {
         }
         return InjectMetadataTask(downloadLocation, meta);
       },
+      // A failed remux must not cost the user the download. Without this the
+      // pipeline aborts here and Move File never runs, leaving a
+      // fully-downloaded file stranded in the work directory because a
+      // metadata step choked. The Move File step below detects the failure
+      // and files the un-injected download instead.
+      continueOnFail: true,
       taskManager: mediaProcessingTaskManager,
     })
     .next({
       stepName: "Move File",
-      taskCreator: ({ context }) => {
+      taskCreator: ({ context, allResults }) => {
         const { dfContentInfo, mediaInfo } = context;
         // Reuse the destination the injection step already resolved, so the
         // two can't disagree if the filename template changed mid-pipeline.
@@ -188,10 +194,23 @@ export const createDownloadTaskPipeline = (opts: DownloadTaskPipelineOpts) => {
           context.finalLocation ||
           makeFilePathWithTemplate(dfContentInfo, mediaInfo, configService.config.contentManagement.filenameTemplate);
         context.finalLocation = destination;
+        // fileAtFinalLocation is set when the injection task is *created*, so
+        // it only means "injection intended to write there" - it has to be
+        // confirmed against the actual result. Results are stored by index, so
+        // a skipped step leaves a hole rather than shifting anything.
+        const [_downloadTaskResult, _measureTaskResult, _ytMetaTaskResult, _subtitlesTaskResult, injectTaskResult] =
+          allResults;
+        const injectSucceeded = injectTaskResult?.status === "success";
+        if (context.fileAtFinalLocation && !injectSucceeded) {
+          logger.log(
+            "warn",
+            `Metadata injection failed for ${dfContentInfo.name} - moving the downloaded file to ${destination} without embedded metadata rather than leaving it in the work directory`
+          );
+        }
         // If injection wrote the file to its destination there's nothing to
         // move, but the published date still needs setting - MoveFileSetDateTask
         // no-ops the move itself when source and destination match.
-        const source = context.fileAtFinalLocation ? destination : context.downloadLocation;
+        const source = context.fileAtFinalLocation && injectSucceeded ? destination : context.downloadLocation;
         return MoveFileSetDateTask(
           source,
           destination,
