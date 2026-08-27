@@ -54,13 +54,13 @@ const registerTaskSnackbarTriggers = () => {
             } else if (task.pipelineType === 'subtitles') {
                 switch (pipelineResult) {
                     case 'success':
-                        snackbarMessage = `Subtitles for ${contentTitle} downloaded`;
+                        snackbarMessage = `Subtitles generated for ${contentTitle}`;
                         break;
                     case 'cancelled':
-                        snackbarMessage = `Subtitles for ${contentTitle} cancelled`;
+                        snackbarMessage = `Subtitle generation for ${contentTitle} cancelled`;
                         break;
                     case 'failed':
-                        snackbarMessage = `Subtitles for ${contentTitle} failed`;
+                        snackbarMessage = `Subtitle generation for ${contentTitle} failed`;
                         break;
                 }
             } else {
