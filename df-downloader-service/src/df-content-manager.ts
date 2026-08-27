@@ -116,6 +116,17 @@ export class DigitalFoundryContentManager {
     const contentDetectionConfig = configService.config.contentDetection;
     //TODO: Queue all downloads in "ATTEMPTING_DOWNLOAD" state
     await this.dfUserManager.start();
+    // Before the scans, not after. Interrupted work is the most
+    // time-sensitive thing at startup - a resumed pipeline may have an hour
+    // of transcription left - and the archive scan ahead of it can take
+    // tens of seconds against the rate-limited queue. Resuming last meant
+    // waiting all of that out first.
+    //
+    // Running it before the existing-files scan is safe: a resumed pipeline
+    // only ever makes a file appear at its final path via an atomic rename
+    // (see ContentManagementConfig.writeDirectToDestination), so a scan
+    // walking the same directory sees either nothing or a complete file.
+    await this.resumePersistedPipelines();
     if (await this.db.isFirstRunComplete()) {
       const newContentList = await this.getNewContentList();
       // Skip new content list when scanning whole archive so the normal auto download process can work
@@ -177,10 +188,6 @@ export class DigitalFoundryContentManager {
       const scanTask = this.taskManager.scanForExistingContent(this);
       await scanTask.awaitResult();
     }
-    // After the existing-files scan rather than before: a resumed pipeline can
-    // move a file into the destination, and starting that while the scan is
-    // walking the same directory would race it.
-    await this.resumePersistedPipelines();
     configService.on("configUpdated:digitalFoundry", async ({ oldValue, newValue }) => {
       if (newValue.sessionId === oldValue.sessionId) {
         return;

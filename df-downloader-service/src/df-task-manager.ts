@@ -166,6 +166,13 @@ export class DfTaskManager {
     // Recorded per step rather than continuously: a step boundary is exactly
     // the point a restart could usefully resume from, and writing more often
     // would rewrite the file for progress that can't be resumed into anyway.
+    //
+    // Both edges, not just completion. Recording only on completion leaves it
+    // ambiguous how far a pipeline had actually got when it died mid-step -
+    // the difference between re-running the step that was interrupted and
+    // re-running the one before it too. For a download followed by an hour of
+    // transcription, that difference is the whole point.
+    pipelineExecution.on("stepTaskStarted", persist);
     pipelineExecution.on("stepCompleted", persist);
     pipelineExecution.once("completed", (result: any) => {
       const activeDb = serviceLocator.activePipelineDb;
@@ -477,6 +484,54 @@ export class DfTaskManager {
 }
 
 /**
+ * Converts a step result into something that can actually be written to disk.
+ *
+ * Step results are whatever the step returned, and some of them are live
+ * objects rather than data - the download step's result reaches back into the
+ * downloader, which holds references that cycle. Persisting one directly
+ * threw "Converting circular structure to JSON" on every write *after* the
+ * first, which was the worst possible failure mode: the initial record (with
+ * no results yet) saved fine, so a pipeline looked persisted while silently
+ * never advancing past step 0. A restart then dutifully restarted the
+ * download it was supposed to be protecting.
+ *
+ * Cycles are tracked by ancestry rather than by everything seen, so an object
+ * legitimately referenced twice in different branches is kept both times -
+ * only genuine cycles are dropped. Functions are dropped; Dates are kept
+ * as-is for the schema to coerce back.
+ */
+const toPersistableResult = (value: unknown, ancestors: Set<object> = new Set()): any => {
+  if (typeof value === "function") {
+    return undefined;
+  }
+  if (value === null || typeof value !== "object") {
+    return value;
+  }
+  if (value instanceof Date) {
+    return value;
+  }
+  if (ancestors.has(value)) {
+    return undefined;
+  }
+  ancestors.add(value);
+  try {
+    if (Array.isArray(value)) {
+      return value.map((entry) => toPersistableResult(entry, ancestors));
+    }
+    const toReturn: Record<string, any> = {};
+    for (const [key, entry] of Object.entries(value)) {
+      const converted = toPersistableResult(entry, ancestors);
+      if (converted !== undefined) {
+        toReturn[key] = converted;
+      }
+    }
+    return toReturn;
+  } finally {
+    ancestors.delete(value);
+  }
+};
+
+/**
  * Snapshot of a pipeline in the form that survives a restart.
  *
  * Only the context fields that are actually needed to continue are kept -
@@ -498,7 +553,7 @@ export const makePersistedPipeline = (taskPipelineExecution: PipelineExecutionTy
     }
     stepResults[step.id] = {
       status: result.status === "success" ? "success" : result.status === "cancelled" ? "cancelled" : "failed",
-      result: result.status === "success" ? result.result : undefined,
+      result: result.status === "success" ? toPersistableResult(result.result) : undefined,
       error: result.status === "failed" ? makeErrorMessage(result.error) : undefined,
       startTime: managedTask?.task?.startTime || undefined,
       endTime: managedTask?.task?.endTime || undefined,
