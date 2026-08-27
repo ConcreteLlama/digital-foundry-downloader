@@ -53,6 +53,15 @@ export const BasicTaskInfo = z.object({
   startTime: z.coerce.date().optional(),
   /** When it finished, however it finished - absent while still running. */
   endTime: z.coerce.date().optional(),
+  /**
+   * True for a step that completed in an *earlier* run and was carried
+   * forward when the pipeline resumed, rather than running this time.
+   *
+   * Without this such a step is indistinguishable from one that never ran,
+   * so a resumed download reads as "Download: skipped" - which is both alarming
+   * and wrong. It didn't get skipped, it already happened.
+   */
+  carriedOver: z.boolean().optional(),
   type: z.literal("task"),
   taskType: z.string(),
   capabilities: TaskCapabilities.array(),

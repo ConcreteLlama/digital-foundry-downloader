@@ -148,11 +148,16 @@ export const TaskDetailsDialog = ({ pipelineId, open, onClose }: TaskDetailsDial
               {stepOrder.map((stepId) => {
                 const task = stepTasks[stepId];
                 const state = task?.status?.state;
-                // A step with no task at all was skipped - the pipeline
-                // decided it had nothing to do (e.g. no metadata to embed),
-                // which is normal and worth showing as such rather than
-                // leaving a blank row.
-                const stateLabel = state ?? (task ? "pending" : "skipped");
+                // Three distinct cases, and conflating them loses real
+                // information: a step with no task was genuinely skipped (the
+                // pipeline had nothing to do - no metadata to embed, say),
+                // whereas a carried-over one completed in an earlier run and
+                // was inherited when the pipeline resumed. Showing the latter
+                // as "skipped" made a resumed download report that it had
+                // skipped downloading, which is alarming and untrue.
+                const stateLabel = task?.carriedOver
+                  ? "done earlier"
+                  : state ?? (task ? "pending" : "skipped");
                 return (
                   <TableRow key={stepId}>
                     <TableCell>{steps[stepId]?.name || stepId}</TableCell>
@@ -160,8 +165,11 @@ export const TaskDetailsDialog = ({ pipelineId, open, onClose }: TaskDetailsDial
                       <Chip
                         size="small"
                         label={stateLabel}
-                        color={state ? STATE_COLOURS[state] || "default" : "default"}
-                        variant={state ? "filled" : "outlined"}
+                        color={task?.carriedOver ? "success" : state ? STATE_COLOURS[state] || "default" : "default"}
+                        // Outlined for anything that didn't run in this run,
+                        // so carried-over and skipped both read as "not this
+                        // time" at a glance while still being distinguishable.
+                        variant={state && !task?.carriedOver ? "filled" : "outlined"}
                       />
                     </TableCell>
                     <TableCell align="right">{formatTime(task?.startTime)}</TableCell>

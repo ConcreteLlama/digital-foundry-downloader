@@ -705,9 +705,32 @@ export const makeTaskPipelineInfo = (
       isComplete: isCompleted,
       currentStep: currentStep.step.id,
     },
-    stepTasks: steps.reduce((acc, { step, managedTask }) => {
+    stepTasks: steps.reduce((acc, { step, managedTask }, index) => {
       if (managedTask && managedTask.task) {
         acc[step.id] = makeTaskInfo(managedTask, positionInfoMap.get(managedTask.task.id) || null);
+        return acc;
+      }
+      // No task for this step in *this* run, but a result seeded into the
+      // pipeline means it completed in a previous one and was carried
+      // forward on resume. Reported as such, because otherwise it's
+      // indistinguishable from a step that was deliberately skipped.
+      const seededResult: any = (taskPipelineExecution.results as any)?.[index];
+      if (seededResult) {
+        acc[step.id] = {
+          id: `${step.id}-carried-over`,
+          type: "task",
+          taskType: String(step.name),
+          capabilities: [],
+          priority: -1,
+          position: -1,
+          priorityPosition: -1,
+          carriedOver: true,
+          status: {
+            state: seededResult.status === "success" ? "success" : "failed",
+            attempt: 1,
+            isComplete: true,
+          },
+        };
       }
       return acc;
     }, {} as Record<string, BasicTaskInfo | DownloadTaskInfo>),
