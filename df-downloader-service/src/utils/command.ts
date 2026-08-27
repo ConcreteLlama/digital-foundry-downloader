@@ -30,11 +30,22 @@ const STDERR_TAIL_LIMIT = 4096;
  * only evidence is whatever it had already printed - which reads like an
  * unrelated crash if the signal isn't reported alongside it.
  */
+/**
+ * What these signals nearly always mean here. The name alone tells you
+ * nothing, and a process killed by a signal never gets to explain itself.
+ */
+const SIGNAL_HINTS: Partial<Record<NodeJS.Signals, string>> = {
+  SIGKILL: "typically the out-of-memory killer or a container memory limit",
+  // Seen for real: whisper.cpp built with -march=native on one machine and
+  // run on a less capable one. Nothing about the crash points at the CPU.
+  SIGILL: "usually a binary compiled for a different CPU than the one running it",
+  SIGSEGV: "a crash inside the tool itself",
+};
+
 export const describeExit = (command: string, code: number | null, signal: NodeJS.Signals | null) => {
   if (signal) {
-    return signal === "SIGKILL"
-      ? `${command} was killed (SIGKILL) - typically the out-of-memory killer or a container memory limit`
-      : `${command} was killed by ${signal}`;
+    const hint = SIGNAL_HINTS[signal];
+    return `${command} was killed by ${signal}${hint ? ` - ${hint}` : ""}`;
   }
   return `${command} exited with code ${code}`;
 };
