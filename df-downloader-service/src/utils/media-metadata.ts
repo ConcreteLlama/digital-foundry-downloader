@@ -7,7 +7,7 @@ import { configService } from "../config/config.js";
 import { generateSrt, languageToSubsLanguage, parseSrt } from "../media-utils/subtitles/srt-utils.js";
 import { Chapter, makeChapterContent } from "./chatpers.js";
 import { runCommand } from "./command.js";
-import { fileExists, moveFile, pathIsEqual, setDateOnFile } from "./file-utils.js";
+import { fileExists, moveFile, pathIsEqual, setDateOnFile, TEMP_FILE_PREFIX } from "./file-utils.js";
 import path from "path";
 import { mediaSanitise, mediaSanitiseMultiline } from "./string-utils.js";
 
@@ -107,7 +107,7 @@ export const injectMediaMetadata = async (
     // directory, which media servers are watching - Plex and Jellyfin both
     // skip dotfiles, so they won't try to index a half-written remux. The
     // .mp4 extension has to stay: ffmpeg picks its muxer from it.
-    const makeWorkingName = () => path.join(workingDir, `.df-downloader-tmp-${_.uniqueId("")}.mp4`);
+    const makeWorkingName = () => path.join(workingDir, `${TEMP_FILE_PREFIX}${_.uniqueId("")}.mp4`);
     workingFilename = makeWorkingName();
     while (await fileExists(workingFilename)) {
       workingFilename = makeWorkingName();

@@ -2,6 +2,7 @@ import { logger } from "df-downloader-common";
 import { SubtitlesOutputMode } from "df-downloader-common/config/subtitles-config.js";
 import fs from "fs";
 import path from "path";
+import { TEMP_FILE_PREFIX } from "../../utils/file-utils.js";
 import { generateSrt, languageToSubsLanguage } from "./srt-utils.js";
 import { GeneratedSubtitleInfo } from "./subtitles.js";
 
@@ -22,7 +23,7 @@ export const writeSubtitleSidecar = async (videoPath: string, subtitles: Generat
   const base = path.basename(videoPath, path.extname(videoPath));
   const language = languageToSubsLanguage(subtitles.language) || subtitles.language;
   const sidecarPath = path.join(dir, `${base}.${language}.srt`);
-  const tempPath = path.join(dir, `.df-downloader-tmp-${path.basename(sidecarPath)}`);
+  const tempPath = path.join(dir, `${TEMP_FILE_PREFIX}${path.basename(sidecarPath)}`);
   await fs.promises.mkdir(dir, { recursive: true });
   try {
     await fs.promises.writeFile(tempPath, generateSrt(subtitles.lines), { encoding: "utf-8" });

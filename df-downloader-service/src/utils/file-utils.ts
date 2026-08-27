@@ -84,6 +84,60 @@ export const listAllFiles = async (dir: string, opts: ListFilesOpts) => {
   return listAllFilesInternal([dir], opts, 0);
 }
 
+/**
+ * Prefix used for the half-written files that metadata injection and sidecar
+ * writing produce before renaming them into place. Dot-prefixed so media
+ * servers ignore them while they exist.
+ */
+export const TEMP_FILE_PREFIX = ".df-downloader-tmp-";
+
+/**
+ * Removes temp files left behind by a process that was killed mid-write.
+ *
+ * Those writes clean up after themselves, but only if the process lives long
+ * enough to run the cleanup - a container restart or a kill leaves the file
+ * behind. Since these are written *into the destination directory* (so the
+ * final rename is atomic), an orphan sits in the media library indefinitely
+ * at the full size of whatever was being remuxed. Harmless to playback,
+ * because media servers skip dotfiles, but hundreds of megabytes each.
+ *
+ * Safe to run at startup: nothing else uses this prefix, and anything
+ * genuinely in progress can't exist yet because nothing has started.
+ */
+export const cleanUpOrphanedTempFiles = async (dirs: string[], maxDepth: number) => {
+  let removed = 0;
+  let bytes = 0;
+  for (const dir of dirs) {
+    if (!dir || !(await fileExists(dir))) {
+      continue;
+    }
+    const files = await listAllFiles(dir, { recursive: true, maxDepth }).catch(() => []);
+    for (const file of files) {
+      if (!file.filename.startsWith(TEMP_FILE_PREFIX)) {
+        continue;
+      }
+      const size = await fs.promises
+        .stat(file.fullPath)
+        .then((stat) => stat.size)
+        .catch(() => 0);
+      const deleted = await fs.promises
+        .rm(file.fullPath, { force: true })
+        .then(() => true)
+        .catch(() => false);
+      if (deleted) {
+        removed++;
+        bytes += size;
+      }
+    }
+  }
+  if (removed) {
+    logger.log(
+      "info",
+      `Cleaned up ${removed} leftover temporary file(s) (${Math.round(bytes / 1048576)}MB) from an interrupted run`
+    );
+  }
+};
+
 export function extractFilenameFromUrl(url: string) {
   const pathname = new URL(url).pathname;
   return decodeURIComponent(pathname.substring(pathname.lastIndexOf("/") + 1));

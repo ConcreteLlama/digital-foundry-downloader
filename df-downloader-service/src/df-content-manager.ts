@@ -31,7 +31,7 @@ import { DfUserManager } from "./df-user-manager.js";
 import { serviceLocator } from "./services/service-locator.js";
 import { findExistingContent } from "./utils/content-finder.js";
 import { sanitizeContentName } from "./utils/df-utils.js";
-import { deleteFile, ensureDirectory, fileExists, pathIsEqual } from "./utils/file-utils.js";
+import { cleanUpOrphanedTempFiles, deleteFile, ensureDirectory, fileExists, pathIsEqual } from "./utils/file-utils.js";
 import { dfFetchWorkerQueue } from "./utils/queue-utils.js";
 import { getFileMoveList } from "./utils/template-utils.js";
 import { syncYtVideoMeta } from "./utils/youtube/sync-yt-video-meta.js";
@@ -115,6 +115,13 @@ export class DigitalFoundryContentManager {
     const contentManagementConfig = configService.config.contentManagement;
     const contentDetectionConfig = configService.config.contentDetection;
     //TODO: Queue all downloads in "ATTEMPTING_DOWNLOAD" state
+    // Before anything starts writing: a previous run killed mid-remux leaves
+    // a part-written file in the destination directory, and nothing else
+    // would ever remove it.
+    await cleanUpOrphanedTempFiles(
+      [contentManagementConfig.destinationDir, contentManagementConfig.workDir],
+      contentManagementConfig.maxScanDepth
+    );
     await this.dfUserManager.start();
     // Before the scans, not after. Interrupted work is the most
     // time-sensitive thing at startup - a resumed pipeline may have an hour
