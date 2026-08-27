@@ -97,7 +97,10 @@ export const DfContentInfoItemDetail = ({ dfContentName }: DfContentInfoItemDeta
           Published on {formatDate(contentInfo.publishedDate)}
         </Typography>{" "}
       </Box>
-      <Typography>{contentInfo.description}</Typography>
+      {/* Descriptions are prose with real paragraph breaks (YouTube-sourced
+          ones especially - blurb, links, then a chapter list). HTML collapses
+          those newlines by default, running it all into one block. */}
+      <Typography sx={{ whiteSpace: "pre-line" }}>{contentInfo.description}</Typography>
       <Stack spacing={4} sx={{ marginTop: "16px" }}>
         {Boolean(pipelineIds?.length) && (
           <Stack spacing={2}>

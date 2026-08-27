@@ -8,7 +8,7 @@ import { generateSrt, languageToSubsLanguage, parseSrt } from "../media-utils/su
 import { Chapter, makeChapterContent } from "./chatpers.js";
 import { runCommand } from "./command.js";
 import { fileExists, moveFile, setDateOnFile } from "./file-utils.js";
-import { mediaSanitise } from "./string-utils.js";
+import { mediaSanitise, mediaSanitiseMultiline } from "./string-utils.js";
 
 if (!ffmpegPathImport) {
   throw new Error("FFmpeg path not found");
@@ -83,8 +83,11 @@ export const injectMediaMetadata = async (mediaFilePath: string, meta: MediaFile
       ffmpegArgs.push("-metadata", `year=${publishedDate.getFullYear()}`);
     }
     if (description) {
-      ffmpegArgs.push("-metadata", `synopsis=${mediaSanitise(description)}`);
-      ffmpegArgs.push("-metadata", `description=${mediaSanitise(description)}`);
+      // Multiline: this is prose shown in a description panel, not a
+      // single-line field - see mediaSanitiseMultiline.
+      const sanitisedDescription = mediaSanitiseMultiline(description);
+      ffmpegArgs.push("-metadata", `synopsis=${sanitisedDescription}`);
+      ffmpegArgs.push("-metadata", `description=${sanitisedDescription}`);
     }
     if (tags && tags.length > 0) {
       const tagListStr = tags.map((tag) => tag.replace(/:/g, "")).join(",");
