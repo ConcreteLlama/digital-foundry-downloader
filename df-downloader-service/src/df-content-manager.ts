@@ -35,6 +35,7 @@ import { deleteFile, ensureDirectory, fileExists, pathIsEqual } from "./utils/fi
 import { dfFetchWorkerQueue } from "./utils/queue-utils.js";
 import { getFileMoveList } from "./utils/template-utils.js";
 import { syncYtVideoMeta } from "./utils/youtube/sync-yt-video-meta.js";
+import { PersistedPipeline } from "./db/pipeline-db-model.js";
 
 export class DigitalFoundryContentManager {
   private dfUserManager: DfUserManager;
@@ -176,6 +177,10 @@ export class DigitalFoundryContentManager {
       const scanTask = this.taskManager.scanForExistingContent(this);
       await scanTask.awaitResult();
     }
+    // After the existing-files scan rather than before: a resumed pipeline can
+    // move a file into the destination, and starting that while the scan is
+    // walking the same directory would race it.
+    await this.resumePersistedPipelines();
     configService.on("configUpdated:digitalFoundry", async ({ oldValue, newValue }) => {
       if (newValue.sessionId === oldValue.sessionId) {
         return;
@@ -1175,33 +1180,139 @@ export class DigitalFoundryContentManager {
       );
     }
 
-    const pipelineExec = this.taskManager
-      .downloadContent(dfContentInfo, mediaInfo)
-      .on("completed", (pipelineResult) => {
-        if (pipelineResult.status === "success") {
-          const finalPipelineResult = pipelineResult.pipelineResult;
-          const { size, downloadLocation, mediaInfo, subtitles } = finalPipelineResult;
-          this.db.contentDownloaded(dfContentInfo.key, {
-            mediaInfo,
-            downloadDate: new Date(),
-            downloadLocation: downloadLocation,
-            size: size ? bytesToHumanReadable(size) : undefined,
-            subtitles: subtitles
-              ? [
-                {
-                  service: subtitles.service,
-                  language: subtitles.language,
-                },
-              ]
-              : undefined,
-          });
-        }
-      });
+    const pipelineExec = this.recordDownloadOnCompletion(
+      this.taskManager.downloadContent(dfContentInfo, mediaInfo),
+      dfContentInfo.key
+    );
     return {
       contentKey: dfContentInfo.key,
       mediaInfo: mediaInfo,
       pipelineExec,
     };
+  }
+
+  /**
+   * Records a finished download against its content entry.
+   *
+   * Extracted so the resume path shares it. This is the *only* thing that
+   * writes the download to the DB, and it fires on pipeline completion - so
+   * a resumed pipeline that bypassed it would download successfully and then
+   * never be recorded as downloaded.
+   */
+  private recordDownloadOnCompletion(
+    pipelineExec: ReturnType<DfTaskManager["downloadContent"]>,
+    contentKey: string
+  ) {
+    return pipelineExec.on("completed", (pipelineResult) => {
+      if (pipelineResult.status === "success") {
+        const { size, downloadLocation, mediaInfo, subtitles } = pipelineResult.pipelineResult;
+        this.db.contentDownloaded(contentKey, {
+          mediaInfo,
+          downloadDate: new Date(),
+          downloadLocation: downloadLocation,
+          size: size ? bytesToHumanReadable(size) : undefined,
+          subtitles: subtitles ? [{ service: subtitles.service, language: subtitles.language }] : undefined,
+        });
+      }
+    });
+  }
+
+  /**
+   * A pipeline that keeps dying on startup mustn't stop the app starting.
+   */
+  private static readonly MAX_RESUME_ATTEMPTS = 3;
+
+  /**
+   * Picks up pipelines that were still running when the process last stopped.
+   *
+   * Nothing durable records a download until its whole pipeline succeeds, so
+   * without this a restart during the long tail of a pipeline - subtitle
+   * generation can run for the better part of an hour - throws away a
+   * download that had already finished.
+   */
+  private async resumePersistedPipelines() {
+    const activeDb = serviceLocator.activePipelineDb;
+    if (!activeDb) {
+      return;
+    }
+    const records = activeDb.getAll();
+    if (!records.length) {
+      return;
+    }
+    logger.log("info", `Found ${records.length} pipeline(s) interrupted by a restart - resuming`);
+    // Cleared up front: each resumed pipeline gets a fresh id and re-records
+    // itself, so leaving the old entries behind would duplicate them.
+    await activeDb.clear();
+    for (const record of records) {
+      await this.resumePipeline(record).catch((e) =>
+        logger.log("error", `Failed to resume pipeline for ${record.contentKey}`, e)
+      );
+    }
+  }
+
+  private async resumePipeline(record: PersistedPipeline) {
+    if (record.pipelineType !== "download") {
+      // Subtitle and metadata-refresh pipelines act on a file that's already
+      // in place, so nothing is lost by not resuming them - and they can be
+      // re-triggered from the UI. Only downloads represent work that would
+      // otherwise have to be redone over the network.
+      logger.log("info", `Not resuming ${record.pipelineType} pipeline for ${record.contentKey} - re-run it if needed`);
+      return;
+    }
+    if (record.resumeAttempts >= DigitalFoundryContentManager.MAX_RESUME_ATTEMPTS) {
+      logger.log(
+        "warn",
+        `Giving up on ${record.contentKey} after ${record.resumeAttempts} resume attempts - it may be crashing the app on startup`
+      );
+      return;
+    }
+    const entry = await this.db.getContentEntry(record.contentKey);
+    if (!entry?.contentInfo) {
+      logger.log("warn", `Can't resume ${record.contentKey} - it's no longer in the database`);
+      return;
+    }
+    const contentInfo = entry.contentInfo;
+    const mediaInfo = record.mediaFormat
+      ? DfContentInfoUtils.getMediaInfo(contentInfo, record.mediaFormat)
+      : undefined;
+    const downloadLocation = record.context.downloadLocation;
+    const partialStillPresent = downloadLocation ? await fileExists(downloadLocation) : false;
+    // Resuming past the download step only makes sense if the file it
+    // produced is still there. If the download hadn't finished, or the work
+    // directory has since been cleared, start over rather than resuming into
+    // a step that operates on a file that isn't there.
+    if (!mediaInfo || record.currentStepIndex <= 0 || !partialStillPresent) {
+      logger.log(
+        "info",
+        `Restarting the download for ${contentInfo.name} - ${
+          record.currentStepIndex <= 0 ? "it hadn't finished downloading" : "the downloaded file is no longer present"
+        }`
+      );
+      await this.downloadContent(contentInfo, { mediaFormat: record.mediaFormat });
+      return;
+    }
+    const results = record.stepOrder.map((stepId) => {
+      const stepResult = record.stepResults[stepId];
+      if (!stepResult) {
+        return undefined;
+      }
+      return stepResult.status === "success"
+        ? { status: "success", result: stepResult.result }
+        : { status: stepResult.status, error: stepResult.error };
+    });
+    logger.log(
+      "info",
+      `Resuming ${contentInfo.name} from step ${record.currentStepIndex + 1} of ${record.stepOrder.length} - the download itself is already done`
+    );
+    this.recordDownloadOnCompletion(
+      this.taskManager.downloadContent(contentInfo, mediaInfo, undefined, {
+        stepIndex: record.currentStepIndex,
+        results,
+        downloadLocation,
+        resumeAttempts: record.resumeAttempts + 1,
+      }),
+      contentInfo.key
+    );
   }
 
   /**

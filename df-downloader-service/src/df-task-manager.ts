@@ -186,7 +186,12 @@ export class DfTaskManager {
     });
   }
 
-  downloadContent(dfContentInfo: DfContentInfo, mediaInfo: MediaInfo, directUrl?: string) {
+  downloadContent(
+    dfContentInfo: DfContentInfo,
+    mediaInfo: MediaInfo,
+    directUrl?: string,
+    resumeFrom?: { stepIndex: number; results: any[]; downloadLocation?: string; resumeAttempts?: number }
+  ) {
     let url: () => Promise<string>;
     let destination: string;
     let headers: Record<string, string>;
@@ -223,13 +228,19 @@ export class DfTaskManager {
       headers = downloadParams.headers;
     }
 
-    const downloadExecution = this.downloadTaskPipeline.start({
-      dfContentInfo,
-      mediaInfo,
-      url,
-      downloadLocation: destination,
-      headers,
-    });
+    const downloadExecution = this.downloadTaskPipeline.start(
+      {
+        dfContentInfo,
+        mediaInfo,
+        url,
+        // A resumed pipeline must operate on the file the previous run
+        // actually produced, not a freshly-derived path.
+        downloadLocation: resumeFrom?.downloadLocation || destination,
+        headers,
+        resumeAttempts: resumeFrom?.resumeAttempts,
+      },
+      resumeFrom ? { resumeFrom: { stepIndex: resumeFrom.stepIndex, results: resumeFrom.results } } : {}
+    );
     serviceLocator.notifier.downloadQueued(dfContentInfo);
     downloadExecution.once("stepTaskStarted", () => {
       serviceLocator.notifier.downloadStarting(dfContentInfo, mediaInfo);
@@ -508,7 +519,7 @@ export const makePersistedPipeline = (taskPipelineExecution: PipelineExecutionTy
       finalLocation: context?.finalLocation,
       fileAtFinalLocation: context?.fileAtFinalLocation,
     },
-    resumeAttempts: 0,
+    resumeAttempts: context?.resumeAttempts ?? 0,
   };
 };
 

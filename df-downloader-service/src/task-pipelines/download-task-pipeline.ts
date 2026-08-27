@@ -45,6 +45,14 @@ export const createDownloadTaskPipeline = (opts: DownloadTaskPipelineOpts) => {
        * move (see ContentManagementConfig.writeDirectToDestination).
        */
       fileAtFinalLocation?: boolean;
+      /**
+       * How many times this pipeline has already been resumed after a
+       * restart. Carried on the context so it survives into the next
+       * persisted record - a resumed pipeline gets a fresh id, so without
+       * this the count would reset every time and a pipeline that reliably
+       * kills the process could loop forever.
+       */
+      resumeAttempts?: number;
       headers: HeadersInit;
     },
     "download"

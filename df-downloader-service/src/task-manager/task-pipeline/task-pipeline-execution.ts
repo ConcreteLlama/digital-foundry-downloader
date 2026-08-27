@@ -55,7 +55,7 @@ export class TaskPipelineExecution<
     readonly context: PIPELINE_CONTEXT,
     readonly pipelineSteps: TASK_PIPELINE_STEPS,
     readonly pipelineOpts: TaskPipelineOpts<TASK_PIPELINE_STEPS, PIPELINE_CONTEXT, PIPELINE_SUCCESS_RESULT_TYPE>,
-    executionOpts: TaskPipelineExecutionOpts = {}
+    private readonly executionOpts: TaskPipelineExecutionOpts = {}
   ) {
     super();
     this.results = pipelineSteps.map(() => undefined) as any;
@@ -222,6 +222,23 @@ export class TaskPipelineExecution<
     }
     this._startTime = new Date();
     this.started = true;
+    const resumeFrom = this.executionOpts.resumeFrom;
+    if (resumeFrom && resumeFrom.stepIndex > 0) {
+      // Seed the completed steps' results before continuing: later steps read
+      // earlier ones (Inject Metadata consumes the subtitles and chapters
+      // results), so resuming without them would just re-run the steps that
+      // produced them - which is the expense this exists to avoid.
+      resumeFrom.results.forEach((result, index) => {
+        if (index < resumeFrom.stepIndex) {
+          (this.results as any)[index] = result;
+        }
+      });
+      this.currentStepIndex = resumeFrom.stepIndex;
+      const previous: any = (this.results as any)[resumeFrom.stepIndex - 1];
+      this.log("info", `Resuming pipeline at step ${resumeFrom.stepIndex} of ${this.pipelineSteps.length}`);
+      this.runNextTask(previous?.status === "success" ? previous.result : undefined, resumeFrom.stepIndex);
+      return;
+    }
     this.runNextTask(undefined, 0);
   }
 

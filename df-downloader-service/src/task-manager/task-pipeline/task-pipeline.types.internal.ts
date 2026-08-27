@@ -186,4 +186,18 @@ export type TaskPipelineOpts<
 export type TaskPipelineExecutionOpts = {
   label?: string;
   logger?: LoggerType;
+  /**
+   * Restart a pipeline part-way through, with the results of the steps that
+   * already completed.
+   *
+   * Used after a restart: nothing durable records that a download happened
+   * until the whole pipeline succeeds, so without this a crash during a long
+   * subtitle generation means downloading everything again. The step that was
+   * running is re-run from its start - only completed steps are skipped.
+   */
+  resumeFrom?: {
+    stepIndex: number;
+    /** Results of the completed steps, indexed to match the pipeline's steps. */
+    results: any[];
+  };
 };
