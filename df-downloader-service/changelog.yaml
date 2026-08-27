@@ -1,7 +1,7 @@
 versions:
   - version: "2.7.0"
     date: "2026-08-27"
-    notes: "Subtitles can now be generated locally on your own machine instead of being pulled from YouTube, which stopped serving them. This release also fixes a long-standing gap where newly published videos could go unnoticed entirely, and corrects chapter timings on videos with a sponsor segment."
+    notes: "Subtitles can now be generated locally on your own machine instead of being pulled from YouTube, which stopped serving them. This release also fixes a long-standing gap where newly published videos could go unnoticed entirely, corrects chapter timings on videos with a sponsor segment, and does a good deal less work on your disks along the way."
     changes:
       features:
         - "Local subtitle generation (Whisper)":
@@ -11,9 +11,25 @@ versions:
           - "Set how many CPU threads it may use, so transcribing doesn't slow down everything else on the machine (defaults to leaving two cores free)"
           - "Correct words the transcriber consistently mishears - useful for jargon like 'UE5', which every option tested gets wrong"
           - "Models download automatically the first time you use one"
+          - "Only one runs at a time by default, since transcribing uses most of your CPU for as long as it takes - configurable if you use a paid service where the work happens elsewhere"
+        - "Click a task to see the full details of its run":
+          - "Every step it went through, when each started and how long it took, so you can see where the time actually went"
+          - "Steps that were skipped are shown as skipped rather than left blank"
+          - "Failures show which step failed and why, instead of just a status line"
+        - "Long-running steps now show a progress bar rather than just a spinner":
+          - "Subtitle generation reports how far through it is - previously a two-hour episode could spend half an hour with no sign anything was happening"
+          - "Embedding metadata does the same while it rewrites the file"
         - "New 'Scan now' button to check for newly published videos immediately, rather than waiting for the next scheduled check"
         - "The request queue indicator now lists what is actually queued and what each request is doing, instead of only showing counts"
       enhancements:
+        - "Finished files are written directly to their destination rather than being assembled elsewhere and copied across":
+          - "Embedding metadata rewrites the whole file, so doing that somewhere else and then copying the result meant reading and writing a multi-gigabyte file twice over. This halves it"
+          - "The same applies to files already in your library - refreshing metadata or adding subtitles no longer copies them back and forth"
+          - "Replacing an existing file is now instantaneous rather than a slow overwrite, so a media server playing that file won't see it rewritten underneath"
+          - "Downloads still go to the working directory first, so a partially downloaded file never appears in your library"
+          - "Can be turned off with the 'Write Direct To Destination' setting if it doesn't suit your storage"
+        - "Embedding metadata and moving files now happen one at a time rather than up to five - they're limited by disk speed, so running several just makes them contend"
+        - "Fetching chapter information no longer fires several requests at once"
         - "Subtitle actions now say 'generate' rather than 'fetch'. Every remaining option transcribes the downloaded file's audio rather than downloading captions from somewhere, so 'fetch' no longer described what happens"
       bugfixes:
         - "Fixed newly published videos never being found at all if the app hadn't run for a while":
@@ -23,6 +39,9 @@ versions:
         - "Fixed chapter timings being wrong on videos with a sponsor segment":
           - "Digital Foundry's downloads have the sponsor read cut out, but chapters come from YouTube, where it's still present - so every chapter after it was out by up to a minute and a half"
           - "Video length is now measured from the downloaded file itself rather than taken from YouTube, which is what makes the correction possible"
+        - "Fixed a failed metadata embed leaving the downloaded file stranded":
+          - "The whole download was abandoned in the working directory and never appeared in your library, despite having downloaded successfully"
+          - "It's now filed as normal, just without the embedded metadata, and the failure is logged"
         - "Sponsor messages in descriptions are moved to the end so a video's description starts with what the video is actually about. Nothing is deleted"
         - "Fixed descriptions displaying as one unbroken block of text, both in the web UI and in the downloaded files' own metadata (so also in Plex, Jellyfin and similar)"
         - "Fixed subtitle files being read as a single subtitle containing the entire file, which affected refreshing metadata on already-downloaded content"
