@@ -1,0 +1,135 @@
+import { logger, zodParse } from "df-downloader-common";
+import path from "path";
+import { ensureDirectory } from "../../utils/file-utils.js";
+import {
+  ActivePipelineDbSchema,
+  CompletedPipeline,
+  CompletedPipelineDbSchema,
+  PersistedPipeline,
+} from "../pipeline-db-model.js";
+import { FileDb } from "../file-db.js";
+
+const CURRENT_DB_VERSION = "2.7.0";
+
+/**
+ * How many finished pipelines to keep. Enough to answer "why did that fail
+ * last week" without the file growing without bound - FileDb rewrites the
+ * whole file on every save, so size has an ongoing cost, not just a
+ * storage one.
+ */
+const COMPLETED_RETENTION = 500;
+
+const makePatchRoutine = (schema: typeof ActivePipelineDbSchema | typeof CompletedPipelineDbSchema) => async (data: any) => {
+  // First version of this DB, so there's nothing to patch forward from yet -
+  // the version chain exists so later changes have somewhere to hook in,
+  // matching the other FileDbs.
+  if (data?.version === CURRENT_DB_VERSION) {
+    return { data: zodParse(schema as any, data), patched: false };
+  }
+  logger.log("info", `Pipeline DB at version ${data?.version || "NO_VERSION"} - initialising at ${CURRENT_DB_VERSION}`);
+  return { data: zodParse(schema as any, { ...data, version: CURRENT_DB_VERSION }), patched: true };
+};
+
+const makeBackupDestination = (dbDir: string, name: string) => async (data: any) => {
+  const version = data?.version || "NO_VERSION";
+  const backupDir = path.join(dbDir, "backups");
+  ensureDirectory(backupDir);
+  return path.join(backupDir, `${name}-${version}-${Date.now()}.json`);
+};
+
+/**
+ * Pipelines that haven't finished, so they can be picked back up after a
+ * restart.
+ *
+ * Kept separate from the completed history deliberately. This file is small
+ * and written constantly - every step transition - while the completed one
+ * grows without bound and is written once per pipeline. FileDb rewrites the
+ * entire file on every save, so combining them would mean rewriting
+ * megabytes of history on each step of every running pipeline.
+ */
+export class ActivePipelineDb {
+  private constructor(private readonly fileDb: FileDb<ActivePipelineDbSchema>) {}
+
+  static async create(dbDir: string) {
+    ensureDirectory(dbDir);
+    const fileDb = await FileDb.create<ActivePipelineDbSchema>({
+      schema: ActivePipelineDbSchema,
+      filename: path.join(dbDir, "active-pipelines.json"),
+      initialData: { version: CURRENT_DB_VERSION, lastUpdated: new Date(), pipelines: {} },
+      backupDestination: makeBackupDestination(dbDir, "active-pipelines"),
+      patchRoutine: makePatchRoutine(ActivePipelineDbSchema),
+    });
+    return new ActivePipelineDb(fileDb);
+  }
+
+  getAll(): PersistedPipeline[] {
+    return Object.values(this.fileDb.getData().pipelines);
+  }
+
+  get(id: string): PersistedPipeline | undefined {
+    return this.fileDb.getData().pipelines[id];
+  }
+
+  async upsert(pipeline: PersistedPipeline) {
+    const data = this.fileDb.getData();
+    data.pipelines[pipeline.id] = pipeline;
+    data.lastUpdated = new Date();
+    await this.fileDb.updateDb(data);
+  }
+
+  async remove(id: string) {
+    const data = this.fileDb.getData();
+    if (!data.pipelines[id]) {
+      return;
+    }
+    delete data.pipelines[id];
+    data.lastUpdated = new Date();
+    await this.fileDb.updateDb(data);
+  }
+
+  /** Wipes everything - used once the in-flight set has been re-queued on startup. */
+  async clear() {
+    const data = this.fileDb.getData();
+    data.pipelines = {};
+    data.lastUpdated = new Date();
+    await this.fileDb.updateDb(data);
+  }
+}
+
+/**
+ * Finished pipelines, kept for history.
+ *
+ * A successful download is already largely recorded against the content
+ * itself (date, location, size, subtitles). The value here is mostly in the
+ * failures, which are currently recorded nowhere at all and vanish on
+ * restart - so "why did that download fail on Tuesday" is unanswerable
+ * today.
+ */
+export class CompletedPipelineDb {
+  private constructor(private readonly fileDb: FileDb<CompletedPipelineDbSchema>) {}
+
+  static async create(dbDir: string) {
+    ensureDirectory(dbDir);
+    const fileDb = await FileDb.create<CompletedPipelineDbSchema>({
+      schema: CompletedPipelineDbSchema,
+      filename: path.join(dbDir, "completed-pipelines.json"),
+      initialData: { version: CURRENT_DB_VERSION, lastUpdated: new Date(), pipelines: [] },
+      backupDestination: makeBackupDestination(dbDir, "completed-pipelines"),
+      patchRoutine: makePatchRoutine(CompletedPipelineDbSchema),
+    });
+    return new CompletedPipelineDb(fileDb);
+  }
+
+  getAll(): CompletedPipeline[] {
+    return this.fileDb.getData().pipelines;
+  }
+
+  async add(pipeline: CompletedPipeline) {
+    const data = this.fileDb.getData();
+    // Newest first, so trimming drops the oldest and reading the recent
+    // history doesn't mean walking the whole array.
+    data.pipelines = [pipeline, ...data.pipelines].slice(0, COMPLETED_RETENTION);
+    data.lastUpdated = new Date();
+    await this.fileDb.updateDb(data);
+  }
+}
