@@ -115,25 +115,7 @@ export class DigitalFoundryContentManager {
     const contentManagementConfig = configService.config.contentManagement;
     const contentDetectionConfig = configService.config.contentDetection;
     //TODO: Queue all downloads in "ATTEMPTING_DOWNLOAD" state
-    // Before anything starts writing: a previous run killed mid-remux leaves
-    // a part-written file in the destination directory, and nothing else
-    // would ever remove it.
-    await cleanUpOrphanedTempFiles(
-      [contentManagementConfig.destinationDir, contentManagementConfig.workDir],
-      contentManagementConfig.maxScanDepth
-    );
     await this.dfUserManager.start();
-    // Before the scans, not after. Interrupted work is the most
-    // time-sensitive thing at startup - a resumed pipeline may have an hour
-    // of transcription left - and the archive scan ahead of it can take
-    // tens of seconds against the rate-limited queue. Resuming last meant
-    // waiting all of that out first.
-    //
-    // Running it before the existing-files scan is safe: a resumed pipeline
-    // only ever makes a file appear at its final path via an atomic rename
-    // (see ContentManagementConfig.writeDirectToDestination), so a scan
-    // walking the same directory sees either nothing or a complete file.
-    await this.resumePersistedPipelines();
     if (await this.db.isFirstRunComplete()) {
       const newContentList = await this.getNewContentList();
       // Skip new content list when scanning whole archive so the normal auto download process can work
@@ -173,6 +155,14 @@ export class DigitalFoundryContentManager {
     ensureDirectory(configService.config.contentManagement.destinationDir);
     ensureDirectory(configService.config.contentManagement.workDir);
     const contentManagementConfig = configService.config.contentManagement;
+    // Before anything starts writing: a run killed mid-remux leaves a
+    // part-written file in the destination directory, and nothing else would
+    // ever remove it. Nothing is in progress yet, so anything matching the
+    // prefix is definitionally an orphan.
+    await cleanUpOrphanedTempFiles(
+      [contentManagementConfig.destinationDir, contentManagementConfig.workDir],
+      contentManagementConfig.maxScanDepth
+    );
     //TODO: Queue all downloads in "ATTEMPTING_DOWNLOAD" state
     await this.dfUserManager.start();
     // Never scan the new site unauthenticated - it's partially browsable
@@ -181,6 +171,16 @@ export class DigitalFoundryContentManager {
     // and isn't something to fetch by default just because it's technically
     // reachable. Only scan once dfUserManager confirms a real, subscribed
     // session (see DfUserManager.isUserSignedIn()).
+    // Before the scans, not after. Interrupted work is the most
+    // time-sensitive thing at startup - a resumed pipeline may have an hour
+    // of transcription left - and the archive scan ahead of it can take tens
+    // of seconds against the rate-limited queue.
+    //
+    // Running it before the existing-files scan is safe: a resumed pipeline
+    // only makes a file appear at its final path via an atomic rename (see
+    // ContentManagementConfig.writeDirectToDestination), so a scan walking
+    // that directory sees either nothing or a complete file.
+    await this.resumePersistedPipelines();
     if (this.dfUserManager.isUserSignedIn()) {
       await this.runInitialScan();
     } else {
