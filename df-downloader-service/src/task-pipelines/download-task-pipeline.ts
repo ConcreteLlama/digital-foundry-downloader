@@ -120,7 +120,9 @@ export const createDownloadTaskPipeline = (opts: DownloadTaskPipelineOpts) => {
         const { dfContentInfo, downloadLocation } = context;
         const config = configService.config;
         const subtitlesConfig = config.subtitles;
-        if (subtitlesConfig?.autoGenerateSubs) {
+        // Only the during_download mode generates subtitles inline. after_download
+        // runs them once the file has been filed; off never does.
+        if (subtitlesConfig?.automaticGeneration === "during_download") {
           const subtitleGenerator = serviceLocator.getSubtitleGenerators(subtitlesConfig.servicePriorities);
           const subtitleTask = SubtitlesTaskBuilder({
             subtitleGenerators: subtitleGenerator,

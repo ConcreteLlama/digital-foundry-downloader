@@ -91,6 +91,21 @@ export type WhisperConfig = z.infer<typeof WhisperConfig>;
 export const SubtitlesService = z.enum(["deepgram", "google_stt", "whisper"]);
 export type SubtitlesService = z.infer<typeof SubtitlesService>;
 
+/**
+ * When subtitles get generated automatically, if at all.
+ *
+ * `off` still leaves manual generation available - some content is worth
+ * subtitling and some isn't, and there was previously no way to express
+ * that: the only switch also governed whether services could be configured
+ * at all.
+ *
+ * `during_download` is the original behaviour: the download isn't considered
+ * finished until subtitles exist. Simple, but with local transcription a
+ * long video holds its own download open for tens of minutes.
+ */
+export const AutomaticSubtitlesMode = z.enum(["off", "during_download"]);
+export type AutomaticSubtitlesMode = z.infer<typeof AutomaticSubtitlesMode>;
+
 export const SubtitlesServicesConfig = z.object({
   /** Deepgram configuration */
   deepgram: DeepgramConfig.optional(),
@@ -103,8 +118,8 @@ export type SubtitlesServicesConfig = z.infer<typeof SubtitlesServicesConfig>;
 
 export const SubtitlesConfig = z
   .object({
-    /** Whether to auto-generate subs on download */
-    autoGenerateSubs: z.boolean().default(true),
+    /** See AutomaticSubtitlesMode. */
+    automaticGeneration: AutomaticSubtitlesMode.default("during_download"),
     /**
      * How many subtitle generations may run at once.
      *

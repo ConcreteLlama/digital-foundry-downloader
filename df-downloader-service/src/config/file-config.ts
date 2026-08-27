@@ -53,7 +53,7 @@ export class FileConfig extends ConfigService {
     if (rawConfig.subtitles) {
       if (rawConfig.subtitles.subtitlesService) {
         patched = true;
-        rawConfig.subtitles.autoGenerateSubs = true;
+        rawConfig.subtitles.automaticGeneration = "during_download";
         rawConfig.subtitles.servicePriorities = [rawConfig.subtitles.subtitlesService];
         delete rawConfig.subtitles.subtitlesService;
       }
@@ -63,6 +63,16 @@ export class FileConfig extends ConfigService {
           deepgram: rawConfig.subtitles.deepgram,
         };
         delete rawConfig.subtitles.deepgram;
+      }
+      // autoGenerateSubs became a three-way mode - subtitles can now be
+      // generated during the download (as before), after it, or not
+      // automatically at all. The boolean couldn't express "manual only",
+      // which is the case someone wants when only some content is worth
+      // subtitling.
+      if (typeof rawConfig.subtitles.autoGenerateSubs === "boolean") {
+        patched = true;
+        rawConfig.subtitles.automaticGeneration = rawConfig.subtitles.autoGenerateSubs ? "during_download" : "off";
+        delete rawConfig.subtitles.autoGenerateSubs;
       }
       // The "youtube" subtitles service was removed - YouTube stopped
       // serving captions to anything that can't produce a proof-of-origin

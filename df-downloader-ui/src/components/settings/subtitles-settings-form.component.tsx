@@ -10,8 +10,9 @@ import {
   WhisperModel,
 } from "df-downloader-common/config/subtitles-config";
 import { Fragment, useState } from "react";
-import { useFieldArray, useFormContext, useWatch } from "react-hook-form";
+import { useFieldArray, useFormContext } from "react-hook-form";
 import { CheckboxElement, TextFieldElement } from "react-hook-form-mui";
+import { SelectField } from "../general/select-field";
 import { OrderableListFormField } from "../general/ordered-list-form-field.component";
 import { ZodNumberField } from "../zod-fields/zod-number-field.component";
 import { ZodSelectField } from "../zod-fields/zod-select-field.component";
@@ -28,9 +29,6 @@ export const SubtitlesSettingsForm = () => {
 
 const SubtitlesSettings = () => {
   const context = useFormContext<SubtitlesConfig>();
-  const autoGenerateSubs = useWatch<SubtitlesConfig>({
-    name: "autoGenerateSubs",
-  }) as boolean;
   const [enabledServices, setEnabledServices] = useState<SubtitlesService[]>(
     Object.keys(context.getValues("services") || {}) as SubtitlesService[]
   );
@@ -69,13 +67,25 @@ const SubtitlesSettings = () => {
           onDisable={onServiceDisable}
         />
       ))}
-      <CheckboxElement name="autoGenerateSubs" label="Auto generate subtitles on download" />
-      {autoGenerateSubs && enabledServices.length > 0 && (
+      <SelectField
+        name="automaticGeneration"
+        label="Automatic subtitle generation"
+        helperText="Generating subtitles locally can take a while for long videos, so you may prefer the download to finish first - or to only ever trigger it yourself, per item."
+        opts={[
+          { id: "off", label: "Never - only when I ask" },
+          { id: "during_download", label: "During download - the download isn't finished until subtitles are" },
+        ]}
+      />
+      {/* Deliberately not hidden when automatic generation is off. This list is
+          also what the manual "Generate Subtitles" action offers, so hiding it
+          previously made manual-only impossible to set up: you could turn
+          automatic off, but then never configure which service to use. */}
+      {enabledServices.length > 0 && (
         <Fragment>
           <FormHelperText>
-            The order of the services in the list below determines the order in which they will be used to generate
-            subtitles. If a service fails, the next one will be used. If no services are enabled, subtitles will not be
-            generated.
+            The order of the services below is the order they'll be tried in, for both automatic and manual
+            generation. If a service fails, the next one is used. If no services are enabled, subtitles can't be
+            generated at all.
           </FormHelperText>
           <OrderableListFormField name="servicePriorities" label="Service Priorities" />
         </Fragment>
