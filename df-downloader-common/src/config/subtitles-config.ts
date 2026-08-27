@@ -6,25 +6,98 @@ export const DeepgramConfig = z.object({
 });
 export type DeepgramConfig = z.infer<typeof DeepgramConfig>;
 
-export const YoutubeConfig = z.object({});
-export type YoutubeConfig = z.infer<typeof YoutubeConfig>;
-
 export const GoogleSttConfig = z.object({
   apiKey: z.string().min(30),
 });
 export type GoogleSttConfig = z.infer<typeof GoogleSttConfig>;
 
-export const SubtitlesService = z.enum(["deepgram", "youtube", "google_stt"]);
+/**
+ * Whisper models, smallest/fastest first. Measured on a 660s video
+ * (Ryzen 9 9950X3D, 16 threads) and scaled to the project owner's Unraid
+ * i3-N305 (8 Alder Lake-N E-cores), which is roughly 6-8x slower:
+ *
+ *   tiny.en   51x realtime  -> ~17 min for a 2-hour DF Direct on the N305
+ *   base.en   35x realtime  -> ~24 min
+ *   small.en  14x realtime  -> ~60 min
+ *
+ * Accuracy on Digital Foundry content specifically: small.en matched
+ * YouTube's own ASR on every proper noun tested (GeForce, 4A Games, Metro
+ * 2039); base.en missed some; tiny.en missed all of them and isn't really
+ * usable for this content. Larger models exist and are selectable, but
+ * medium/large on a low-power box means hours per Direct.
+ */
+export const WhisperModel = z.enum([
+  "tiny.en",
+  "tiny",
+  "base.en",
+  "base",
+  "small.en",
+  "small",
+  "medium.en",
+  "medium",
+  "large-v3",
+  "large-v3-turbo",
+]);
+export type WhisperModel = z.infer<typeof WhisperModel>;
+
+/**
+ * A literal find/replace applied to Whisper's output.
+ *
+ * Speech-to-text reliably mangles domain jargon, and this content is full
+ * of it. Confirmed empirically: "UE5" came out as "UA5" from Whisper and
+ * "U5" from YouTube's own ASR, on every model tested. Whisper's initial
+ * prompt is *not* a fix for this - it only conditions the first 30-second
+ * window, and was measured to change nothing across a full transcript - so
+ * a substitution list is the mechanism that actually works.
+ */
+export const WhisperTermCorrection = z.object({
+  /** Text as Whisper transcribes it, e.g. "UA5". */
+  from: z.string().min(1),
+  /** What it should say, e.g. "UE5". */
+  to: z.string(),
+  /** Match regardless of case. Defaults to whole-word, case-sensitive. */
+  caseInsensitive: z.boolean().default(false),
+});
+export type WhisperTermCorrection = z.infer<typeof WhisperTermCorrection>;
+
+export const WhisperConfig = z.object({
+  /** Which model to transcribe with - see WhisperModel for speed/accuracy notes. */
+  model: WhisperModel.default("base.en"),
+  /**
+   * Threads for whisper.cpp. Defaults to two below the CPU's core count so
+   * a transcription doesn't starve everything else on the box (this
+   * typically runs on a NAS that's also serving media).
+   */
+  threads: z.number().int().min(1).optional(),
+  /**
+   * Path to the whisper.cpp `whisper-cli` binary. The Docker image builds
+   * one and points this at it; set it explicitly to run against your own
+   * build (e.g. for local development outside the container).
+   */
+  binaryPath: z.string().optional(),
+  /**
+   * Where model files are downloaded and cached. Defaults to a `whisper`
+   * directory alongside the app's other data. Models are fetched on first
+   * use rather than baked into the image - they range from 75MB to ~3GB.
+   */
+  modelDir: z.string().optional(),
+  /** Spoken language, or "auto" to let Whisper detect it. */
+  language: z.string().default("en"),
+  /** See WhisperTermCorrection - fixes jargon that speech-to-text reliably mangles. */
+  termCorrections: z.array(WhisperTermCorrection).default([]),
+});
+export type WhisperConfig = z.infer<typeof WhisperConfig>;
+
+export const SubtitlesService = z.enum(["deepgram", "google_stt", "whisper"]);
 export type SubtitlesService = z.infer<typeof SubtitlesService>;
 
 export const SubtitlesServicesConfig = z.object({
   /** Deepgram configuration */
   deepgram: DeepgramConfig.optional(),
-  /** Youtube configuration
-   * Basically we don't need to configure anything for youtube but we need to have this field to be able to use it **/
-  youtube: YoutubeConfig.default({}).optional(),
   /** Google STT configuration */
   google_stt: GoogleSttConfig.optional(),
+  /** Local Whisper transcription - no API key, no per-use cost, runs on this machine */
+  whisper: WhisperConfig.optional(),
 });
 export type SubtitlesServicesConfig = z.infer<typeof SubtitlesServicesConfig>;
 

@@ -1,7 +1,36 @@
+# whisper.cpp powers the "whisper" subtitles service - local speech-to-text,
+# so subtitles need no API key, cost nothing per use, and are timed against
+# the downloaded file itself. Built in its own stage so cmake and the build
+# tree don't end up in the shipped image; only the single static binary is
+# copied across.
+#
+# Pinned deliberately rather than tracking master: this is a fast-moving
+# project and an unpinned build would change under us between images. Bump
+# it intentionally.
+FROM --platform=linux/amd64 node:24 AS whisper-builder
+ARG WHISPER_CPP_REF=b4938
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends cmake \
+    && rm -rf /var/lib/apt/lists/*
+# BUILD_SHARED_LIBS=OFF so the result is one self-contained binary - the
+# alternative is tracking libggml/libwhisper .so files across the stage
+# boundary for no benefit.
+RUN git clone --depth 1 --branch ${WHISPER_CPP_REF} https://github.com/ggml-org/whisper.cpp.git /tmp/whisper.cpp \
+    && cmake -S /tmp/whisper.cpp -B /tmp/whisper.cpp/build \
+        -DCMAKE_BUILD_TYPE=Release \
+        -DBUILD_SHARED_LIBS=OFF \
+        -DWHISPER_BUILD_TESTS=OFF \
+        -DWHISPER_BUILD_SERVER=OFF \
+    && cmake --build /tmp/whisper.cpp/build --config Release -j "$(nproc)" --target whisper-cli
+
 FROM --platform=linux/amd64 node:24
 
 # Create app directory
 WORKDIR /usr/src/app
+
+COPY --from=whisper-builder /tmp/whisper.cpp/build/bin/whisper-cli /usr/local/bin/whisper-cli
+# Picked up by WhisperSubtitleGenerator when no explicit binaryPath is set.
+ENV WHISPER_BINARY=/usr/local/bin/whisper-cli
 
 ENV CONFIG_DIR=/config
 ENV DB_DIR=/db

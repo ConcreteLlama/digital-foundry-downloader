@@ -1,5 +1,6 @@
 import ffmpegPath from "ffmpeg-static";
 import { spawn } from "child_process";
+import { runCommand } from "../utils/command.js";
 
 export type AudioStreamOpts = {
   format?: string;
@@ -56,4 +57,30 @@ export const fileToAudioBuffer = async (filename: string, opts?: AudioStreamOpts
   }
   await audioStream.awaitStop(10000);
   return Buffer.concat(chunks);
+};
+
+/**
+ * Decodes a media file's audio to a standalone file on disk.
+ *
+ * Streaming variants above suit APIs that accept a stream, but a local
+ * transcriber is a subprocess that wants a real path it can seek around
+ * (whisper.cpp in particular reads the whole file up front). Writing a
+ * temporary WAV is cheap next to the transcription itself - a couple of
+ * seconds for a feature-length video.
+ */
+export const fileToAudioFile = async (filename: string, outputPath: string, opts?: AudioStreamOpts) => {
+  const { aCodec, channels, sampleRate } = opts || {};
+  const ffmpegArgs: string[] = ["-y", "-i", filename];
+  if (channels) {
+    ffmpegArgs.push("-ac", channels.toString());
+  }
+  if (sampleRate) {
+    ffmpegArgs.push("-ar", sampleRate.toString());
+  }
+  if (aCodec) {
+    ffmpegArgs.push("-acodec", aCodec);
+  }
+  ffmpegArgs.push("-map", "a", outputPath);
+  await runCommand(ffmpegPath, ffmpegArgs);
+  return outputPath;
 };

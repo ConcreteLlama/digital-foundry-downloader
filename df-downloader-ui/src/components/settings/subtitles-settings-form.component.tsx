@@ -6,11 +6,15 @@ import {
   SubtitlesConfig,
   SubtitlesService,
   SubtitlesServicesConfig,
+  WhisperConfig,
+  WhisperModel,
 } from "df-downloader-common/config/subtitles-config";
 import { Fragment, useState } from "react";
-import { useFormContext, useWatch } from "react-hook-form";
-import { CheckboxElement } from "react-hook-form-mui";
+import { useFieldArray, useFormContext, useWatch } from "react-hook-form";
+import { CheckboxElement, TextFieldElement } from "react-hook-form-mui";
 import { OrderableListFormField } from "../general/ordered-list-form-field.component";
+import { ZodNumberField } from "../zod-fields/zod-number-field.component";
+import { ZodSelectField } from "../zod-fields/zod-select-field.component";
 import { ZodTextField } from "../zod-fields/zod-text-field.component";
 import { DfSettingsSectionForm } from "./df-settings-section-form.component";
 
@@ -81,18 +85,17 @@ const SubtitlesSettings = () => {
 };
 
 const SubtitlesServiceDescriptions: Record<SubtitlesService, string> = {
-  youtube:
-    "This will extract the captions track from the associated Youtube video (if it exists). DF videos are auto captioned by Youtube; the results may not be perfect, and" +
-    " ASR tracks are not always available, but this option is at least free.",
   deepgram:
     "Deepgram is a speech-to-text service that uses AI to transcribe audio. For more information, visit https://www.deepgram.com/. This is a paid service, and requires a Deepgram API key.",
   google_stt:
     "Google's Speech-to-Text service. This is a paid service, and requires you to enable Speech-to-Text on your account (https://cloud.google.com/speech-to-text). It also requires a Google Cloud API key." +
     " You can generate one at https://console.cloud.google.com/apis/credentials an optionally restrict it to just the Speech-to-Text API.",
+  whisper:
+    "Transcribes the downloaded file locally using Whisper, on this machine. No API key and no per-use cost, and because it transcribes the actual file the timings always match it exactly." +
+    " The trade-off is CPU time: a 10-20 minute video takes a couple of minutes on a modest machine, but a 2-hour episode can take half an hour or more depending on the model chosen.",
 };
 
 const SubtitleServiceConfigComponents: Record<SubtitlesService, React.FC> = {
-  youtube: () => <Fragment />,
   deepgram: () => (
     <ZodTextField
       name="services.deepgram.apiKey"
@@ -111,16 +114,98 @@ const SubtitleServiceConfigComponents: Record<SubtitlesService, React.FC> = {
       zodString={DeepgramConfig.shape.apiKey}
     />
   ),
+  whisper: () => <WhisperServiceConfig />,
 };
 
+/**
+ * Speech-to-text reliably mangles domain jargon - "UE5" comes out as "UA5"
+ * from Whisper and "U5" from YouTube's own captions - and Whisper's initial
+ * prompt doesn't fix it, since it only conditions the first 30 seconds of
+ * audio. A plain find/replace over the finished transcript is the thing
+ * that actually works, so it's editable here.
+ */
+const WhisperTermCorrectionsField = () => {
+  const { fields, append, remove } = useFieldArray({ name: "services.whisper.termCorrections" });
+  return (
+    <Stack spacing={1}>
+      <Stack direction="row" alignItems="center" spacing={1}>
+        <Typography variant="subtitle2">Term Corrections</Typography>
+        <IconButton size="small" onClick={() => append({ from: "", to: "", caseInsensitive: false })}>
+          <AddIcon fontSize="small" />
+        </IconButton>
+      </Stack>
+      <FormHelperText>
+        Fixes words Whisper consistently mishears. Matches whole words only. For example, replacing "UA5" with "UE5".
+      </FormHelperText>
+      {fields.map((field, index) => (
+        <Stack direction="row" spacing={1} alignItems="center" key={field.id}>
+          <TextFieldElement
+            name={`services.whisper.termCorrections.${index}.from`}
+            label="Heard as"
+            size="small"
+          />
+          <TextFieldElement
+            name={`services.whisper.termCorrections.${index}.to`}
+            label="Replace with"
+            size="small"
+          />
+          <CheckboxElement
+            name={`services.whisper.termCorrections.${index}.caseInsensitive`}
+            label="Ignore case"
+          />
+          <IconButton size="small" onClick={() => remove(index)}>
+            <RemoveIcon fontSize="small" />
+          </IconButton>
+        </Stack>
+      ))}
+    </Stack>
+  );
+};
+
+const WhisperServiceConfig = () => (
+  <Stack spacing={2}>
+    <ZodSelectField
+      name="services.whisper.model"
+      label="Model"
+      helperText="Larger models are more accurate but considerably slower. base.en is a reasonable balance; small.en matches YouTube's own captions on proper nouns but takes around three times as long; tiny.en is fast but misses names entirely."
+      zodEnum={WhisperModel}
+    />
+    <ZodTextField
+      name="services.whisper.language"
+      label="Language"
+      helperText='Spoken language, or "auto" to detect it.'
+      zodString={WhisperConfig.shape.language.unwrap()}
+    />
+    <ZodNumberField
+      name="services.whisper.threads"
+      label="Threads"
+      helperText="How many CPU threads to transcribe with. Defaults to two fewer than this machine has cores, so transcription doesn't starve everything else running on it."
+      zodNumber={WhisperConfig.shape.threads.unwrap()}
+    />
+    <ZodTextField
+      name="services.whisper.modelDir"
+      label="Model Directory"
+      helperText="Where model files are downloaded and cached. Defaults to a folder alongside your config. Models are downloaded on first use and range from 75MB to around 3GB."
+      zodString={WhisperConfig.shape.modelDir.unwrap()}
+    />
+    <ZodTextField
+      name="services.whisper.binaryPath"
+      label="Whisper Binary Path"
+      helperText="Path to the whisper.cpp 'whisper-cli' binary. Leave blank to use the one bundled in the Docker image."
+      zodString={WhisperConfig.shape.binaryPath.unwrap()}
+    />
+    <WhisperTermCorrectionsField />
+  </Stack>
+);
+
 const SubtitleServiceDefaultValues: NonNullable<SubtitlesServicesConfig> = {
-  youtube: {},
   deepgram: {
     apiKey: "",
   },
   google_stt: {
     apiKey: "",
   },
+  whisper: WhisperConfig.parse({}),
 };
 
 const SubtitleServiceConfig = (props: {

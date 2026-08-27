@@ -1,24 +1,13 @@
 import { DfContentInfo } from "df-downloader-common";
 import { serviceLocator } from "../services/service-locator.js";
 import { syncYtVideoMeta } from "../utils/youtube/sync-yt-video-meta.js";
-import {
-  applySponsorSegmentToChapters,
-  resolveSponsorSegment,
-  SponsorSegment,
-} from "../utils/youtube/sponsorship.js";
+import { applySponsorSegmentToChapters, resolveSponsorSegment } from "../utils/youtube/sponsorship.js";
 import { taskify } from "../task-manager/utils.js";
 import type { Chapter } from "../utils/chatpers.js";
 
 export type FetchChaptersResult = {
   chapters: Chapter[] | null;
   description?: string;
-  /**
-   * Set when YouTube's timeline was found to contain a sponsorship segment
-   * the downloaded file doesn't. Subtitles come from the same un-cut
-   * YouTube timeline, so they need the identical correction - see
-   * download-task-pipeline.ts.
-   */
-  sponsorSegment: SponsorSegment | null;
 };
 
 /**
@@ -33,7 +22,7 @@ export const fetchChapters = async (
 ): Promise<FetchChaptersResult> => {
   const videoId = contentInfo.youtubeVideoId;
   if (!videoId) {
-    return { chapters: null, description: contentInfo.description, sponsorSegment: null };
+    return { chapters: null, description: contentInfo.description };
   }
   // alwaysFetch: chapters are embedded fresh into every downloaded file
   // rather than persisted anywhere, so this needs a live YouTube fetch
@@ -55,7 +44,7 @@ export const fetchChapters = async (
     label: contentInfo.name || contentInfo.key,
   });
   if (resolution.kind !== "located" || !chapters) {
-    return { chapters, description, sponsorSegment: null };
+    return { chapters, description };
   }
   return {
     chapters: applySponsorSegmentToChapters(
@@ -64,7 +53,6 @@ export const fetchChapters = async (
       measuredDurationSeconds ? measuredDurationSeconds * 1000 : undefined
     ),
     description,
-    sponsorSegment: resolution.segment,
   };
 };
 

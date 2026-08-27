@@ -84,9 +84,9 @@ export const createDownloadTaskPipeline = (opts: DownloadTaskPipelineOpts) => {
       continueOnFail: true,
       taskManager: fileTaskManager,
     })
-    // Chapters now come before subtitles rather than after: locating the
-    // sponsorship segment needs YouTube's chapter list, and the subtitles
-    // step needs that segment to align its own timings to the file.
+    // Chapters come before subtitles because locating the sponsorship
+    // segment needs both the measured duration above and YouTube's chapter
+    // list, and the injection step below wants the corrected result.
     .next({
       stepName: "Fetch Chapters",
       taskCreator: ({ context, allResults }) => {
@@ -100,20 +100,17 @@ export const createDownloadTaskPipeline = (opts: DownloadTaskPipelineOpts) => {
     })
     .next({
       stepName: "Fetch Subtitles",
-      taskCreator: ({ context, allResults }) => {
+      taskCreator: ({ context }) => {
         const { dfContentInfo, downloadLocation } = context;
         const config = configService.config;
         const subtitlesConfig = config.subtitles;
         if (subtitlesConfig?.autoGenerateSubs) {
-          const [_downloadTaskResult, _measureTaskResult, ytMetaTaskResult] = allResults;
-          const ytMeta = ytMetaTaskResult?.status === "success" ? ytMetaTaskResult.result : null;
           const subtitleGenerator = serviceLocator.getSubtitleGenerators(subtitlesConfig.servicePriorities);
           const subtitleTask = SubtitlesTaskBuilder({
             subtitleGenerators: subtitleGenerator,
             dfContentInfo: dfContentInfo,
             filePath: downloadLocation,
             language: "en",
-            sponsorSegment: ytMeta?.sponsorSegment ?? null,
           });
           return subtitleTask;
         } else {

@@ -8,8 +8,10 @@ import type { Chapter } from "../chatpers.js";
  * 1. The *description* opens with a sponsor blurb (see
  *    `moveSponsorshipToEnd`) that isn't really about the video.
  * 2. The *timeline* is longer than the downloaded file, so YouTube-sourced
- *    chapters and subtitles drift out of sync with it (see
- *    `resolveSponsorSegment` and the `apply*` helpers).
+ *    chapters drift out of sync with it (see `resolveSponsorSegment` and
+ *    `applySponsorSegmentToChapters`). Subtitles used to need the same
+ *    correction, but are now transcribed from the downloaded file itself
+ *    (see media-utils/subtitles/whisper.ts) and are correct by construction.
  *
  * Both are best-effort pattern matching against how DF happen to write
  * these today, so everything here is written to fail closed: when a
@@ -242,33 +244,4 @@ export const applySponsorSegmentToChapters = (
   return shifted
     .filter((chapter) => chapter.start < measuredDurationMs)
     .map((chapter) => ({ ...chapter, end: Math.min(chapter.end, measuredDurationMs) }));
-};
-
-/**
- * The same remapping for subtitle lines, which carry start/duration in
- * seconds. Lines spoken during the sponsor read are dropped; lines after it
- * move earlier. Lines before it are left alone - the previous
- * implementation shifted *every* line, which fixed the bulk of the timeline
- * but destroyed the intro that precedes the sponsor read.
- */
-export const applySponsorSegmentToSubs = <T extends { start: number; dur: number }>(
-  subs: T[],
-  segment: SponsorSegment
-): T[] => {
-  const startS = segment.startMs / 1000;
-  const endS = segment.endMs / 1000;
-  const durationS = segment.durationMs / 1000;
-  return subs.reduce<T[]>((toReturn, sub) => {
-    if (sub.start >= startS && sub.start < endS) {
-      return toReturn;
-    }
-    if (sub.start < startS) {
-      // Clamp a line that runs into the cut so it doesn't overlap what now
-      // follows it.
-      toReturn.push({ ...sub, dur: Math.min(sub.dur, startS - sub.start) });
-      return toReturn;
-    }
-    toReturn.push({ ...sub, start: sub.start - durationS });
-    return toReturn;
-  }, []);
 };

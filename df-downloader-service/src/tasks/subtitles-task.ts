@@ -1,6 +1,5 @@
 import { DfContentInfo, LanguageCode, asyncGetFirstMatch, logger } from "df-downloader-common";
 import { SubtitleGenerator, GeneratedSubtitleInfo } from "../media-utils/subtitles/subtitles.js";
-import type { SponsorSegment } from "../utils/youtube/sponsorship.js";
 import { TaskManager, TaskManagerOpts } from "../task-manager/task-manager.js";
 import { TaskControllerTaskBuilder, TaskControls } from "../task-manager/task/task-controller-task.js";
 
@@ -33,24 +32,18 @@ type SubtitlesTaskContext = {
   dfContentInfo: DfContentInfo;
   filePath: string;
   language: LanguageCode | string;
-  /**
-   * The sponsorship segment DF cut out of the downloaded file, when one was
-   * detected. Generators that source subtitles from YouTube need it to
-   * realign their timings onto the file (see media-utils/subtitles/youtube.ts).
-   */
-  sponsorSegment?: SponsorSegment | null;
   currentSubtitleGenerator?: SubtitleGenerator;
 };
 
 const subtitlesTaskControls: TaskControls<GeneratedSubtitleInfo, SubtitlesTaskContext> = {
   start: async (context: SubtitlesTaskContext) => {
-    const { subtitleGenerators, dfContentInfo, filePath, language, sponsorSegment } = context;
+    const { subtitleGenerators, dfContentInfo, filePath, language } = context;
     const generators = Array.isArray(subtitleGenerators) ? subtitleGenerators : [subtitleGenerators];
     const result = await asyncGetFirstMatch(generators, async (generator) => {
       context.currentSubtitleGenerator = generator;
       logger.log("info", `Getting subs for ${filePath} using ${generator.serviceType}`);
       try {
-        return await generator.getSubs(dfContentInfo, filePath, language, { sponsorSegment });
+        return await generator.getSubs(dfContentInfo, filePath, language);
       } catch (err) {
         logger.log("error", `Error getting subs for ${filePath} using ${generator.serviceType}: ${err}`);
         return null;
