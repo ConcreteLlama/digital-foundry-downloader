@@ -62,10 +62,17 @@ type ListingQueryOpts = {
   priority?: number;
   /** See dfFetch - skip the queue/spacing entirely for a single one-off request. */
   bypassQueue?: boolean;
+  /**
+   * What this listing request is *for* ("Archive scan", "New content
+   * check", ...), shown in the UI's queue popover. forEachListingPage
+   * passes its opts straight through, so a caller sets this once and every
+   * page it walks is labelled. Falls back to describing the page range.
+   */
+  label?: string;
 };
 
 async function fetchListingPage(opts: ListingQueryOpts = {}): Promise<ListingApiResponse> {
-  const { limit = 50, offset = 0, category, year, title, autologinOverride, priority, bypassQueue } = opts;
+  const { limit = 50, offset = 0, category, year, title, autologinOverride, priority, bypassQueue, label } = opts;
   const params = new URLSearchParams({
     auth: "true",
     id: "videos",
@@ -85,7 +92,13 @@ async function fetchListingPage(opts: ListingQueryOpts = {}): Promise<ListingApi
         "x-requested-with": "XMLHttpRequest",
       },
     },
-    { priority, bypassQueue }
+    {
+      priority,
+      bypassQueue,
+      label: title
+        ? `${label ? `${label}: s` : "S"}earching listing for "${title}"`
+        : `${label ? `${label}: items` : "Listing items"} ${offset + 1}-${offset + limit}`,
+    }
   );
   if (!response.ok) {
     throw new Error(`Failed to fetch listing page (offset ${offset}): ${response.statusText}`);
@@ -314,7 +327,7 @@ async function findContentInfoByKey(key: string, titleHint?: string, opts: DfFet
     // back-to-back with no spacing is exactly the bulk/automated-looking
     // pattern the queue exists to prevent. Priority still applies so it at
     // least doesn't queue behind other background work.
-    { priority: opts.priority }
+    { priority: opts.priority, label: `Looking up ${titleHint || key}` }
   );
   return found;
 }
@@ -414,7 +427,7 @@ export async function getDfUserInfo(sessionIdOverride?: string, priority?: numbe
           ...makeAuthHeaders(sessionIdOverride),
         },
       },
-      { priority }
+      { priority, label: "Checking Digital Foundry sign-in" }
     );
   } catch (e) {
     logger.log("warn", "Failed to reach digitalfoundry.net while checking auth status - treating as not signed in", e);

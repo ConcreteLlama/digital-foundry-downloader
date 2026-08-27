@@ -18,6 +18,7 @@ import {
   PreviewMoveRequest,
   PreviewMoveResponse,
   QueueStatusResponse,
+  logger,
   secondsToHHMMSS
 } from "df-downloader-common";
 import { testTemplate } from "df-downloader-common/utils/filename-template-utils.js";
@@ -29,7 +30,7 @@ import { sanitizeContentName } from "../../utils/df-utils.js";
 import { extractMediaMeta } from "../../utils/media-metadata.js";
 import { queryParamToInteger, queryParamToString, queryParamToStringArray } from "../../utils/query-utils.js";
 import { ServiceContentUtils } from "../../utils/service-content-utils.js";
-import { sendErrorAsResponse, sendResponse, zodParseHttp } from "../utils/utils.js";
+import { sendError, sendErrorAsResponse, sendResponse, zodParseHttp } from "../utils/utils.js";
 
 export const makeContentApiRouter = (contentManager: DigitalFoundryContentManager) => {
   const router = express.Router();
@@ -125,8 +126,34 @@ export const makeContentApiRouter = (contentManager: DigitalFoundryContentManage
     const response: QueueStatusResponse = {
       dfQueue: getDfRequestQueueStatus(),
       scanInProgress: contentManager.scanInProgress,
+      newContentCheckInProgress: contentManager.newContentCheckRunning,
+      signedInToDf: contentManager.signedInToDf,
     };
     return sendResponse(res, response);
+  });
+
+  /**
+   * Manually kick off a new-content check, for the UI's "Scan for new
+   * content now" button.
+   *
+   * Deliberately fire-and-forget: a check walks listing pages through the
+   * rate-limited queue and can easily outlast an HTTP request, so this
+   * starts it and returns immediately. Progress is visible through the same
+   * queue-status the button sits next to, which shows each request as it's
+   * made. checkForNewContents serializes against itself and no-ops while
+   * signed out, so this can't stack up work.
+   */
+  router.post("/check-new-content", async (req: Request, res: Response) => {
+    if (!contentManager.signedInToDf) {
+      return sendError(res, "Not signed in to Digital Foundry", 409);
+    }
+    if (contentManager.newContentCheckRunning) {
+      return sendError(res, "A new-content check is already running", 409);
+    }
+    contentManager.checkForNewContents().catch((e) => {
+      logger.log("error", "Manually triggered new-content check failed", e);
+    });
+    return sendResponse(res, { started: true });
   });
 
   router.get("/query", async (req: Request, res: Response) => {

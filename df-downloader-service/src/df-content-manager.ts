@@ -518,7 +518,11 @@ export class DigitalFoundryContentManager {
           }
           return shouldContinue;
         },
-        { offset: startOffset, limit: DigitalFoundryContentManager.ARCHIVE_SCAN_PAGE_LIMIT }
+        {
+          offset: startOffset,
+          limit: DigitalFoundryContentManager.ARCHIVE_SCAN_PAGE_LIMIT,
+          label: resolvingLegacy ? "Full archive walk" : "Archive scan",
+        }
       );
       if (resolvingLegacy && !hitPageCap) {
         // forEachListingPage ran off the true end of the archive (rather
@@ -824,7 +828,7 @@ export class DigitalFoundryContentManager {
         return false;
       }
       return pageIdx < DigitalFoundryContentManager.MAX_NEW_CONTENT_SCAN_PAGES;
-    });
+    }, { label: "New content check" });
     if (pagesWalked >= DigitalFoundryContentManager.MAX_NEW_CONTENT_SCAN_PAGES) {
       logger.log(
         "warn",
@@ -834,15 +838,42 @@ export class DigitalFoundryContentManager {
     return { newContent, updatedContent };
   }
 
+  /**
+   * Serializes new-content checks against each other. Reached from the poll
+   * loop, the sign-in handler and the UI's "Scan for new content now"
+   * button, none of which are naturally serialized - and the button in
+   * particular makes it trivial to ask for a second check while the first
+   * is still walking pages, which would just duplicate every request
+   * through the rate-limited queue for no benefit.
+   */
+  private newContentCheckInProgress = false;
+
+  get newContentCheckRunning() {
+    return this.newContentCheckInProgress;
+  }
+
   async checkForNewContents() {
-    // Same reasoning as scanWholeArchive/refreshMeta's guards - currently
-    // only reached via startContentPollLoop, which already checks this, but
-    // enforcing it here too means a future call site can't reintroduce the
-    // same "forgot to gate on sign-in" bug that userTierChanged had.
+    // Same reasoning as scanWholeArchive/refreshMeta's guards - the poll
+    // loop already checks this, but enforcing it here too means a future
+    // call site can't reintroduce the same "forgot to gate on sign-in" bug
+    // that userTierChanged had.
     if (!this.dfUserManager.isUserSignedIn()) {
       logger.log("info", "Skipping new-content check - not signed in to Digital Foundry");
       return;
     }
+    if (this.newContentCheckInProgress) {
+      logger.log("info", "Skipping new-content check - one is already running");
+      return;
+    }
+    this.newContentCheckInProgress = true;
+    try {
+      await this.runNewContentCheck();
+    } finally {
+      this.newContentCheckInProgress = false;
+    }
+  }
+
+  private async runNewContentCheck() {
     const noMediaInfoContents = [...this.noMediaContentInfos.values()];
     logger.log(
       "info",
@@ -1277,6 +1308,16 @@ export class DigitalFoundryContentManager {
 
   get scanInProgress() {
     return this.metaFetchesInProgress > 0 || this.currentFetchQueueSize > 0;
+  }
+
+  /**
+   * Whether there's a confirmed, subscribed Digital Foundry session. Every
+   * scan/refresh path hard no-ops without one, so the UI needs this to
+   * explain why an action is unavailable rather than appearing to do
+   * nothing.
+   */
+  get signedInToDf() {
+    return this.dfUserManager.isUserSignedIn();
   }
 
   getScheduledDownloads(): ScheduledDownloadInfo[] {

@@ -56,12 +56,83 @@ let lastRequestStartedAt = 0;
 /** Epoch ms until which a 429/503 backoff is in progress, or 0 if none - surfaced via getDfRequestQueueStatus for the UI's queue indicator. */
 let backingOffUntil = 0;
 
-const waitForSpacing = async () => {
+/**
+ * What a tracked request is currently doing. The distinction between
+ * `waiting` and `in_flight` is the whole point of tracking these: a request
+ * that has reached the front of the queue spends most of its life asleep in
+ * the spacing gate (5-15s) rather than actually talking to DF, so a bare
+ * "request in flight: yes" was reporting a request that hadn't been sent.
+ */
+export type DfRequestPhase = "queued" | "waiting" | "in_flight" | "backing_off";
+
+export type DfRequestEntry = {
+  id: number;
+  /** Human-readable description of what this request is for. */
+  label: string;
+  phase: DfRequestPhase;
+  /** True for requests that skipped the queue entirely (see dfFetch's bypassQueue). */
+  bypassedQueue: boolean;
+  priority: number;
+  startedWaitingAt: number;
+  /** Epoch ms this request expects to stop waiting, while phase is `waiting` or `backing_off`. */
+  waitingUntil: number | null;
+  /** Backoff retries so far - 0 until DF actually rate-limits this request. */
+  attempt: number;
+};
+
+let nextRequestId = 1;
+const trackedRequests = new Map<number, DfRequestEntry>();
+
+/**
+ * Fallback label for a caller that didn't supply one. Never shows the raw
+ * query string - it carries the listing API's internal params, which mean
+ * nothing to someone reading the queue popover.
+ */
+const describeRequest = (input: string): string => {
+  try {
+    const url = new URL(input);
+    const offset = url.searchParams.get("offset");
+    if (offset !== null) {
+      const limit = Number(url.searchParams.get("limit")) || 50;
+      const start = Number(offset);
+      return `Listing items ${start + 1}-${start + limit}`;
+    }
+    return `Request to ${url.pathname}`;
+  } catch {
+    return "Digital Foundry request";
+  }
+};
+
+const trackRequest = (label: string, priority: number, bypassedQueue: boolean): DfRequestEntry => {
+  const entry: DfRequestEntry = {
+    id: nextRequestId++,
+    label,
+    phase: bypassedQueue ? "in_flight" : "queued",
+    bypassedQueue,
+    priority,
+    startedWaitingAt: Date.now(),
+    waitingUntil: null,
+    attempt: 0,
+  };
+  trackedRequests.set(entry.id, entry);
+  return entry;
+};
+
+const waitForSpacing = async (entry?: DfRequestEntry) => {
   const { requestSpacingMinMs, requestSpacingMaxMs } = configService.config.digitalFoundry;
   const targetSpacingMs = randomIntInRange(requestSpacingMinMs, requestSpacingMaxMs);
   const elapsedMs = Date.now() - lastRequestStartedAt;
   if (elapsedMs < targetSpacingMs) {
-    await sleep(targetSpacingMs - elapsedMs);
+    const waitMs = targetSpacingMs - elapsedMs;
+    if (entry) {
+      entry.phase = "waiting";
+      entry.waitingUntil = Date.now() + waitMs;
+    }
+    await sleep(waitMs);
+  }
+  if (entry) {
+    entry.phase = "in_flight";
+    entry.waitingUntil = null;
   }
   lastRequestStartedAt = Date.now();
 };
@@ -83,9 +154,13 @@ const parseRetryAfterMs = (response: Response): number | undefined => {
   return undefined;
 };
 
-const runWithBackoff = async (input: string, init?: RequestInit): Promise<Response> => {
+const runWithBackoff = async (input: string, init?: RequestInit, entry?: DfRequestEntry): Promise<Response> => {
   let attempt = 0;
   while (true) {
+    if (entry) {
+      entry.phase = "in_flight";
+      entry.waitingUntil = null;
+    }
     const response = await fetch(input, init);
     if (!THROTTLE_STATUS_CODES.has(response.status)) {
       return response;
@@ -105,16 +180,43 @@ const runWithBackoff = async (input: string, init?: RequestInit): Promise<Respon
       `digitalfoundry.net responded ${response.status} for ${input} - backing off ${backoffMs}ms before retry ${attempt}/${MAX_RETRIES_PER_REQUEST}${retryAfterMs !== undefined ? " (honoring Retry-After)" : ""}`
     );
     backingOffUntil = Date.now() + backoffMs;
+    if (entry) {
+      entry.phase = "backing_off";
+      entry.waitingUntil = backingOffUntil;
+      entry.attempt = attempt;
+    }
     await sleep(backoffMs);
     backingOffUntil = 0;
   }
 };
 
-/** Snapshot of the DF-site request queue for the UI's queue-status indicator. */
+/**
+ * Snapshot of the DF-site request queue for the UI's queue-status
+ * indicator, including what each pending request actually is.
+ *
+ * The counts alone were genuinely confusing to read: with a single request
+ * being serviced the popover said "queued: 0" and "in flight: yes", which
+ * looks self-contradictory unless you know `queued` counts only the ones
+ * still waiting their turn. Worse, "in flight" was true while the request
+ * was merely sleeping through the spacing gate and hadn't been sent at all.
+ * `requests` carries the per-request phase so the UI can say which of those
+ * is actually happening, and to what.
+ */
 export const getDfRequestQueueStatus = () => ({
   queued: dfSiteRequestQueue.queuedJobs,
   active: dfSiteRequestQueue.activeJobs,
   backingOffUntil: backingOffUntil || null,
+  requests: Array.from(trackedRequests.values())
+    // Whatever is actually happening first, then the queue in the order it
+    // will be serviced: higher priority first, then oldest first (matching
+    // WorkerQueue's priority comparator).
+    .sort((a, b) => {
+      const phaseRank = (entry: DfRequestEntry) => (entry.phase === "queued" ? 1 : 0);
+      return (
+        phaseRank(a) - phaseRank(b) || b.priority - a.priority || a.startedWaitingAt - b.startedWaitingAt
+      );
+    })
+    .map((entry) => ({ ...entry })),
 });
 
 /**
@@ -134,17 +236,26 @@ export const getDfRequestQueueStatus = () => ({
  * updates the shared spacing clock so a subsequent *queued* request doesn't
  * immediately follow this one too closely.
  */
-export const dfFetch = (
+export const dfFetch = async (
   input: string,
   init?: RequestInit,
-  opts: { priority?: number; bypassQueue?: boolean } = {}
+  opts: { priority?: number; bypassQueue?: boolean; label?: string } = {}
 ): Promise<Response> => {
-  if (opts.bypassQueue) {
-    lastRequestStartedAt = Date.now();
-    return runWithBackoff(input, init);
+  const priority = opts.priority ?? DfFetchPriority.BACKGROUND;
+  const entry = trackRequest(opts.label || describeRequest(input), priority, Boolean(opts.bypassQueue));
+  try {
+    if (opts.bypassQueue) {
+      lastRequestStartedAt = Date.now();
+      return await runWithBackoff(input, init, entry);
+    }
+    return await dfSiteRequestQueue.addWork(
+      async () => {
+        await waitForSpacing(entry);
+        return runWithBackoff(input, init, entry);
+      },
+      { priority: opts.priority }
+    );
+  } finally {
+    trackedRequests.delete(entry.id);
   }
-  return dfSiteRequestQueue.addWork(async () => {
-    await waitForSpacing();
-    return runWithBackoff(input, init);
-  }, { priority: opts.priority });
 };
