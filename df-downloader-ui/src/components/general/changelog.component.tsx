@@ -1,5 +1,5 @@
 import { Button, Dialog, DialogActions, DialogContent, DialogTitle, Paper, Typography, useMediaQuery } from "@mui/material";
-import { Changelog, changelogToMarkdown, ChangelogToMarkdownOpts, dfDownloaderBranch, dfDownloaderVersion, logger, parseChangelog, UpdateUserInfoRequest } from "df-downloader-common";
+import { Changelog, changelogToMarkdown, ChangelogToMarkdownOpts, dfDownloaderBranch, dfDownloaderVersion, isDowngradeFrom, logger, parseChangelog, UpdateUserInfoRequest } from "df-downloader-common";
 import { useState } from "react";
 import Markdown from 'react-markdown';
 import { useSelector } from "react-redux";
@@ -75,6 +75,13 @@ export const ChangelogDialog = () => {
     }
     const { userInfo, id: userId } = authUser;
     const lastVersionAcknowledged = userInfo?.lastVersionAcknowledged;
+    // Moving to an older version - e.g. switching from the experimental
+    // DockerHub tag back to latest. Filtering to "newer than acknowledged"
+    // would then match nothing and show an empty changelog, so show this
+    // version's own notes instead.
+    const isDowngrade = Boolean(
+        lastVersionAcknowledged && isDowngradeFrom(lastVersionAcknowledged, dfDownloaderVersion)
+    );
     const shouldPopup = userInfo ? lastVersionAcknowledged !== dfDownloaderVersion : false;
     const [ open, setOpen ] = useState(shouldPopup);
     const closeDialog = async() => {
@@ -94,8 +101,12 @@ export const ChangelogDialog = () => {
             <DialogContent>
                 <ChangelogDisplay markdownOpts={{
                     title: `What's New?`,
-                    headerNotes: lastVersionAcknowledged ? `Here's what's changed since \`${lastVersionAcknowledged}\`:` : undefined,
-                    onlyAfterVersion: lastVersionAcknowledged
+                    headerNotes: isDowngrade
+                        ? `You've moved back to \`${dfDownloaderVersion}\` from \`${lastVersionAcknowledged}\`. Here's what's in this version:`
+                        : lastVersionAcknowledged
+                            ? `Here's what's changed since \`${lastVersionAcknowledged}\`:`
+                            : undefined,
+                    onlyAfterVersion: isDowngrade ? undefined : lastVersionAcknowledged
                 }}/>
             </DialogContent>
             <DialogActions sx={{

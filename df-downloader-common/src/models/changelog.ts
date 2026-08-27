@@ -72,6 +72,25 @@ const getVersionBadge = (version: string, currentVersion: string, latestVersion:
     return '';
 };
 
+/**
+ * True when the running version is *older* than the one last acknowledged.
+ *
+ * Normal rather than exceptional here: this project publishes several
+ * DockerHub tags, so moving from `experimental` back to `latest` is a
+ * downgrade. Without this the changelog dialog asks for entries newer than a
+ * version that no longer exists ahead of it and shows nothing at all, which
+ * reads as though the release were empty.
+ *
+ * Tolerates unparseable versions by reporting false - a nonsense version
+ * shouldn't suppress the changelog.
+ */
+export const isDowngradeFrom = (acknowledgedVersion: string, currentVersion: string): boolean => {
+    if (!semver.valid(acknowledgedVersion) || !semver.valid(currentVersion)) {
+        return false;
+    }
+    return semver.lt(currentVersion, acknowledgedVersion);
+};
+
 export const changelogHasVersionsSince = (version: string, changelog: Changelog): boolean => changelog.versions.some(v => semver.gt(v.version, version));
 
 export type ChangelogToMarkdownOpts = {
