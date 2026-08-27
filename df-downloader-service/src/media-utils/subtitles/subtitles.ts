@@ -6,14 +6,31 @@ import { DfContentInfo, logger } from "df-downloader-common";
 import { configService } from "../../config/config.js";
 import { YoutubeSubtitleGenerator } from "./youtube.js";
 import { GoogleSttSubtitlesGenerator } from "./google-stt.js";
+import type { SponsorSegment } from "../../utils/youtube/sponsorship.js";
 
 export type GeneratedSubtitleInfo = SubtitleInfo & {
   service: SubtitlesService;
 };
 
+export type GetSubsOpts = {
+  /**
+   * A segment present in the source the subtitles come from but absent from
+   * the downloaded file - in practice the sponsorship read DF cut out of
+   * their own copy. Only meaningful to generators that source subtitles
+   * from elsewhere (YouTube); generators that transcribe the downloaded
+   * file itself are already timed against it and ignore this.
+   */
+  sponsorSegment?: SponsorSegment | null;
+};
+
 export interface SubtitleGenerator {
   serviceType: SubtitlesService;
-  getSubs(dfContentInfo: DfContentInfo, filename: string, language: LanguageCode | string): Promise<GeneratedSubtitleInfo>;
+  getSubs(
+    dfContentInfo: DfContentInfo,
+    filename: string,
+    language: LanguageCode | string,
+    opts?: GetSubsOpts
+  ): Promise<GeneratedSubtitleInfo>;
   destroy(): void;
 }
 

@@ -9,8 +9,24 @@ import { AudioProperties } from "./audio-properties.js";
 export const MediaType = z.enum(["VIDEO", "AUDIO", "ARCHIVE", "UNKNOWN"]);
 export type MediaType = z.infer<typeof MediaType>;
 
+/**
+ * Where a MediaInfo's `duration` came from. Digital Foundry's own listing
+ * stopped carrying a duration when the site relaunched (see
+ * docs/DF_SITE_MIGRATION.md), so it's now backfilled from YouTube - but
+ * YouTube's timeline includes the sponsorship segment that DF's own
+ * downloads have cut out, making it up to ~1.5 minutes longer than the
+ * file on disk. Once a file has actually been downloaded we ffprobe it and
+ * overwrite the duration with the real measurement; `measured` marks that,
+ * and is the only source trustworthy enough to derive a sponsorship offset
+ * from (see sponsorship.ts). `undefined` means the value predates this
+ * field - treat it as unknown, not as measured.
+ */
+export const DurationSource = z.enum(["youtube", "measured"]);
+export type DurationSource = z.infer<typeof DurationSource>;
+
 export const MediaInfo = z.object({
   duration: z.string().optional(),
+  durationSource: DurationSource.optional(),
   size: z.number().optional(),
   type: MediaType,
   formatString: z.string(),

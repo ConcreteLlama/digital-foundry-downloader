@@ -165,6 +165,38 @@ export const extractBaseMetadata = async (mediaFilePath: string, includeChapters
   return meta;
 };
 
+/**
+ * Measures a downloaded file's real duration with ffprobe.
+ *
+ * This is the authoritative answer to "how long is this video", and it has
+ * to come from the file itself: Digital Foundry's own listing stopped
+ * carrying a duration when the site relaunched, so the value we hold
+ * otherwise is backfilled from YouTube - whose copy still contains the
+ * sponsorship segment DF cut out of the download. Comparing the two is what
+ * lets us realign YouTube-sourced chapters and subtitles onto the file (see
+ * utils/youtube/sponsorship.ts), and that comparison is meaningless unless
+ * this side of it is a genuine measurement.
+ */
+export const probeMediaDurationSeconds = async (mediaFilePath: string): Promise<number | null> => {
+  const ffprobeArgs = [
+    "-i",
+    mediaFilePath,
+    "-v",
+    "quiet",
+    "-print_format",
+    "json",
+    "-show_format",
+  ];
+  logger.log("info", `Measuring duration for ${mediaFilePath}`);
+  const metadataStr = await runCommand(ffprobePath, ffprobeArgs);
+  const duration = parseFloat(JSON.parse(metadataStr)?.format?.duration);
+  if (!isFinite(duration) || duration <= 0) {
+    logger.log("warn", `ffprobe reported no usable duration for ${mediaFilePath}`);
+    return null;
+  }
+  return duration;
+};
+
 export const extractMediaSubtitles = async (mediaFilePath: string): Promise<SrtLine[]> => {
   const ffmpegArgs = [
     "-i",

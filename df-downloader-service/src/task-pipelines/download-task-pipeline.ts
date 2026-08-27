@@ -12,6 +12,7 @@ import { SubtitlesTaskBuilder, SubtitlesTaskManager } from "../tasks/subtitles-t
 import { makeFilePathWithTemplate } from "../utils/template-utils.js";
 import { pathIsEqual } from "../utils/file-utils.js";
 import { FetchChaptersTask } from "../tasks/fetch-chapters-task.js";
+import { MeasureDurationTask } from "../tasks/measure-duration-task.js";
 import { GeneratedSubtitleInfo } from "../media-utils/subtitles/subtitles.js";
 import { Chapter } from "../utils/chatpers.js";
 
@@ -71,19 +72,48 @@ export const createDownloadTaskPipeline = (opts: DownloadTaskPipelineOpts) => {
       },
       taskManager: downloadTaskManager,
     })
+    // Measure before fetching anything from YouTube: the file's real
+    // duration is what reveals that DF cut the sponsorship read out of it,
+    // and both the chapter and subtitle steps below need to know that.
+    .next({
+      stepName: "Measure Duration",
+      taskCreator: ({ context }) => {
+        const { dfContentInfo, downloadLocation } = context;
+        return MeasureDurationTask(dfContentInfo.key, downloadLocation);
+      },
+      continueOnFail: true,
+      taskManager: fileTaskManager,
+    })
+    // Chapters now come before subtitles rather than after: locating the
+    // sponsorship segment needs YouTube's chapter list, and the subtitles
+    // step needs that segment to align its own timings to the file.
+    .next({
+      stepName: "Fetch Chapters",
+      taskCreator: ({ context, allResults }) => {
+        const { dfContentInfo } = context;
+        const [_downloadTaskResult, measureTaskResult] = allResults;
+        const measured = measureTaskResult?.status === "success" ? measureTaskResult.result : null;
+        return FetchChaptersTask(dfContentInfo, measured?.durationSeconds ?? null);
+      },
+      continueOnFail: true,
+      taskManager: fileTaskManager,
+    })
     .next({
       stepName: "Fetch Subtitles",
-      taskCreator: ({ context, previousTaskResult }) => {
+      taskCreator: ({ context, allResults }) => {
         const { dfContentInfo, downloadLocation } = context;
         const config = configService.config;
         const subtitlesConfig = config.subtitles;
         if (subtitlesConfig?.autoGenerateSubs) {
+          const [_downloadTaskResult, _measureTaskResult, ytMetaTaskResult] = allResults;
+          const ytMeta = ytMetaTaskResult?.status === "success" ? ytMetaTaskResult.result : null;
           const subtitleGenerator = serviceLocator.getSubtitleGenerators(subtitlesConfig.servicePriorities);
           const subtitleTask = SubtitlesTaskBuilder({
             subtitleGenerators: subtitleGenerator,
             dfContentInfo: dfContentInfo,
             filePath: downloadLocation,
             language: "en",
+            sponsorSegment: ytMeta?.sponsorSegment ?? null,
           });
           return subtitleTask;
         } else {
@@ -94,19 +124,10 @@ export const createDownloadTaskPipeline = (opts: DownloadTaskPipelineOpts) => {
       taskManager: subtitlesTaskManager,
     })
     .next({
-      stepName: "Fetch Chapters",
-      taskCreator: ({ context, previousTaskResult }) => {
-        const { dfContentInfo } = context;
-        return FetchChaptersTask(dfContentInfo);
-      },
-      continueOnFail: true,
-      taskManager: fileTaskManager,
-    })
-    .next({
       stepName: "Inject Metadata",
       taskCreator: ({ context, allResults }) => {
         const { dfContentInfo, downloadLocation } = context;
-        const [_downloadTaskResult, subtitlesTaskResult, ytMetaTaskResult] = allResults;
+        const [_downloadTaskResult, _measureTaskResult, ytMetaTaskResult, subtitlesTaskResult] = allResults;
         const config = configService.config;
         const metaConfig = config.metadata;
         const subtitles = subtitlesTaskResult?.status === "success" ? subtitlesTaskResult.result : null;
@@ -161,7 +182,7 @@ export const createDownloadTaskPipeline = (opts: DownloadTaskPipelineOpts) => {
         }
       },
       reduceResults: ({ context, results, steps }) => {
-        const [downloadTaskResult, subtitlesTaskResult] = results;
+        const [downloadTaskResult, _measureTaskResult, _ytMetaTaskResult, subtitlesTaskResult] = results;
         const downloadResult = downloadTaskResult?.status === "success" ? downloadTaskResult.result : null;
         const subtitlesResult = subtitlesTaskResult?.status === "success" ? subtitlesTaskResult.result : null;
         return {

@@ -5,6 +5,7 @@ import { TaskPipelineExecution, makeTaskPipeline } from "../task-manager/task-pi
 import { FetchChaptersTask } from "../tasks/fetch-chapters-task.js";
 import { InjectMetadataTask } from "../tasks/inject-metadata-task.js";
 import { RefreshContentInfoTask } from "../tasks/refresh-content-info-task.js";
+import { MeasureDurationTask } from "../tasks/measure-duration-task.js";
 import { Chapter } from "../utils/chatpers.js";
 
 type UpdateDownloadMetaPipelineCreatorOpts = {
@@ -34,13 +35,29 @@ export const createUpdateDownloadMetadataTaskPipeline = (opts: UpdateDownloadMet
       continueOnFail: true,
       taskManager: dfFetchTaskManager,
     })
+    // The file already exists here, so measure it for the same reason the
+    // download pipeline does: it's the only way to tell that YouTube's
+    // chapters describe a longer cut of the video than this file.
     .next({
-      stepName: "Fetch chapter info",
+      stepName: "Measure duration",
       taskCreator: ({ context }) => {
         if (context.mediaFileMeta) {
           return null;
-        }  
-        return FetchChaptersTask(context.dfContentInfo);
+        }
+        return MeasureDurationTask(context.dfContentInfo.key, context.fileLocation);
+      },
+      continueOnFail: true,
+      taskManager: fileTaskManager,
+    })
+    .next({
+      stepName: "Fetch chapter info",
+      taskCreator: ({ context, allResults }) => {
+        if (context.mediaFileMeta) {
+          return null;
+        }
+        const [_contentInfoResult, measureResult] = allResults;
+        const measured = measureResult?.status === "success" ? measureResult.result : null;
+        return FetchChaptersTask(context.dfContentInfo, measured?.durationSeconds ?? null);
       },
       continueOnFail: true,
       taskManager: youtubeFetchTaskManager,
@@ -49,7 +66,7 @@ export const createUpdateDownloadMetadataTaskPipeline = (opts: UpdateDownloadMet
       stepName: "Inject metadata",
       taskCreator: ({ context, allResults }) => {
         const { fileLocation, mediaFileMeta } = context;
-        const [ contentInfoResult, chapterInfoResult ] = allResults;
+        const [ contentInfoResult, _measureResult, chapterInfoResult ] = allResults;
         let meta: MediaFileMeta | null = mediaFileMeta || null;
         if (!meta) {
           const contentInfo = contentInfoResult?.status === "success" ? contentInfoResult.result : null;
