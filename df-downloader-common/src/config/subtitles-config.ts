@@ -108,6 +108,14 @@ export type SubtitlesService = z.infer<typeof SubtitlesService>;
  * sidecar when subtitles are generated for a file already in the library.
  * That gets the durability of embedding where it's free, and avoids
  * rewriting files that are already in use.
+ *
+ * Note how this interacts with AutomaticSubtitlesMode, because it isn't
+ * obvious from either setting alone: `after_download` always generates
+ * against a file that has already been filed, so `auto` resolves to sidecar
+ * every time and the embed branch is never reached. Anyone wanting embedded
+ * subtitles with deferred generation has to choose `embed` explicitly - and
+ * should know they're asking for a full rewrite of a file already in their
+ * library.
  */
 export const SubtitlesOutputMode = z.enum(["auto", "embed", "sidecar"]);
 export type SubtitlesOutputMode = z.infer<typeof SubtitlesOutputMode>;

@@ -80,7 +80,7 @@ const SubtitlesSettings = () => {
       <SelectField
         name="output"
         label="Subtitle output"
-        helperText="Embedding puts subtitles inside the video so they travel with it, but rewrites the whole file. A separate .srt is instant and doesn't touch a file your media server may be playing, but is left behind if you move the video without it."
+        helperText="Embedding puts subtitles inside the video so they travel with it, but rewrites the whole file. A separate .srt is instant and doesn't touch a file your media server may be playing, but is left behind if you move the video without it. Note that with 'After download' selected above, Automatic always means a separate file - the video is already in your library by the time subtitles are made."
         opts={[
           { id: "auto", label: "Automatic - embed during download, separate file otherwise" },
           { id: "embed", label: "Always embed in the video file" },
