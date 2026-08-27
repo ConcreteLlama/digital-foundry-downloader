@@ -12,6 +12,18 @@ versions:
           - "Correct words the transcriber consistently mishears - useful for jargon like 'UE5', which every option tested gets wrong"
           - "Models download automatically the first time you use one"
           - "Only one runs at a time by default, since transcribing uses most of your CPU for as long as it takes - configurable if you use a paid service where the work happens elsewhere"
+        - "Choose when subtitles are generated":
+          - "Never - only when you ask for them on a specific item. Useful when only some content is worth subtitling"
+          - "During the download, as before - the download isn't finished until subtitles are"
+          - "After the download - the video is available to watch straight away and subtitles follow, which matters when generating them locally can take the better part of an hour"
+        - "Choose how subtitles are attached to the video":
+          - "Embedded in the video file, so they travel with it if you move it"
+          - "As a separate .srt alongside it, which Plex and Jellyfin both read - instant, and doesn't rewrite a file your media server might be playing"
+          - "Or automatically: embedded when generated during a download, separate when added to a file already in your library"
+        - "Downloads and their follow-up work now survive a restart":
+          - "Previously nothing recorded that a download had happened until everything after it finished too, so restarting during subtitle generation threw the download away and started over"
+          - "The step a pipeline reached is remembered, so it picks up from there instead of re-downloading. The step that was actually running restarts, but everything before it is kept"
+          - "If the downloaded file has since gone missing, it starts over rather than continuing with a file that isn't there"
         - "Click a task to see the full details of its run":
           - "Every step it went through, when each started and how long it took, so you can see where the time actually went"
           - "Steps that were skipped are shown as skipped rather than left blank"
@@ -39,6 +51,8 @@ versions:
         - "Fixed chapter timings being wrong on videos with a sponsor segment":
           - "Digital Foundry's downloads have the sponsor read cut out, but chapters come from YouTube, where it's still present - so every chapter after it was out by up to a minute and a half"
           - "Video length is now measured from the downloaded file itself rather than taken from YouTube, which is what makes the correction possible"
+        - "Fixed being unable to set up manual-only subtitles":
+          - "Turning off automatic generation also hid the service configuration, so you could never choose which service a manual request should use - and if you'd never set one up, manual generation reported that none were configured with no way to fix it"
         - "Fixed a failed metadata embed leaving the downloaded file stranded":
           - "The whole download was abandoned in the working directory and never appeared in your library, despite having downloaded successfully"
           - "It's now filed as normal, just without the embedded metadata, and the failure is logged"
