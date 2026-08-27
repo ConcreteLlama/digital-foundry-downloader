@@ -4,6 +4,23 @@ import { TaskManager, TaskManagerOpts } from "../task-manager/task-manager.js";
 import { configService } from "../config/config.js";
 import { TaskControllerTaskBuilder, TaskControls } from "../task-manager/task/task-controller-task.js";
 
+const describeFailure = (serviceType: string, err: unknown) =>
+  `${serviceType}: ${err instanceof Error ? err.message : String(err)}`;
+
+/**
+ * Builds the error the task actually fails with.
+ *
+ * Previously the generators' own errors were only logged, and the task threw
+ * a flat "no subs found" - so the UI reported that subtitles failed while
+ * the reason existed solely in the container log. The generator that failed
+ * is nearly always the interesting part, so it belongs in the message that
+ * gets stored against the task and shown in the details dialog.
+ */
+const summariseFailure = (filePath: string, generators: SubtitleGenerator[], failures: string[]) =>
+  failures.length
+    ? `Could not generate subs for ${filePath} - ${failures.join("; ")}`
+    : `No subs found for ${filePath} using generators ${generators.map((g) => g.serviceType).join(", ")}`;
+
 const getSubs = async (
   subtitleGenerator: SubtitleGenerator | SubtitleGenerator[],
   contentInfo: DfContentInfo,
@@ -11,19 +28,19 @@ const getSubs = async (
   language: LanguageCode | string
 ) => {
   const generators = Array.isArray(subtitleGenerator) ? subtitleGenerator : [subtitleGenerator];
+  const failures: string[] = [];
   const result = await asyncGetFirstMatch(generators, async (generator) => {
     logger.log("info", `Generating subs for ${filePath} using ${generator.serviceType}`);
     try {
       return await generator.getSubs(contentInfo, filePath, language);
     } catch (err) {
       logger.log("error", `Error getting subs for ${filePath} using ${generator.serviceType}: ${err}`);
+      failures.push(describeFailure(generator.serviceType, err));
       return null;
     }
   });
   if (!result) {
-    throw new Error(
-      `No subs found for ${filePath} using generators ${generators.map((g) => g.serviceType).join(", ")}`
-    );
+    throw new Error(summariseFailure(filePath, generators, failures));
   }
   return result;
 };
@@ -42,6 +59,7 @@ const subtitlesTaskControls: TaskControls<GeneratedSubtitleInfo, SubtitlesTaskCo
   start: async (context: SubtitlesTaskContext) => {
     const { subtitleGenerators, dfContentInfo, filePath, language } = context;
     const generators = Array.isArray(subtitleGenerators) ? subtitleGenerators : [subtitleGenerators];
+    const failures: string[] = [];
     const result = await asyncGetFirstMatch(generators, async (generator) => {
       context.currentSubtitleGenerator = generator;
       logger.log("info", `Generating subs for ${filePath} using ${generator.serviceType}`);
@@ -51,13 +69,12 @@ const subtitlesTaskControls: TaskControls<GeneratedSubtitleInfo, SubtitlesTaskCo
         });
       } catch (err) {
         logger.log("error", `Error getting subs for ${filePath} using ${generator.serviceType}: ${err}`);
+        failures.push(describeFailure(generator.serviceType, err));
         return null;
       }
     });
     if (!result) {
-      throw new Error(
-        `No subs found for ${filePath} using generators ${generators.map((g) => g.serviceType).join(", ")}`
-      );
+      throw new Error(summariseFailure(filePath, generators, failures));
     }
     return {
       status: "success",

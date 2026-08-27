@@ -44,6 +44,11 @@ versions:
         - "Fetching chapter information no longer fires several requests at once"
         - "Subtitle actions now say 'generate' rather than 'fetch'. Every remaining option transcribes the downloaded file's audio rather than downloading captions from somewhere, so 'fetch' no longer described what happens"
       bugfixes:
+        - "Failures now say what actually went wrong":
+          - "When subtitle generation or another external tool failed, the app reported whatever that tool happened to print last - usually its harmless startup banner rather than the error itself"
+          - "A tool that died without printing anything at all replaced the failure with an unrelated internal error, hiding it completely"
+          - "The exit code is now reported, and a tool killed by the system - most often for running out of memory - is named as such"
+          - "The reason a subtitle generator failed now appears against the task itself, rather than only in the server log"
         - "Fixed newly published videos never being found at all if the app hadn't run for a while":
           - "Anything published more than the auto-download age limit before the next check was invisible to the app permanently - the age limit was accidentally being used to decide how far back to look, as well as what to download"
           - "One test install had missed ten videos across twelve days, including some only hours old"

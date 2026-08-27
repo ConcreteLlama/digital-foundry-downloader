@@ -128,6 +128,29 @@ export class WhisperSubtitleGenerator implements SubtitleGenerator {
     return this.config.threads ?? Math.max(1, os.cpus().length - 2);
   }
 
+  /**
+   * Runs whisper-cli, naming the model file if it fails.
+   *
+   * whisper.cpp says very little when it dies during model load - it prints
+   * its parameter banner and stops - so the raw failure is indistinguishable
+   * from a crash mid-transcription. A truncated or half-downloaded model is
+   * a real possibility (they're hundreds of MB, fetched on first use), and
+   * the file's size makes that obvious at a glance.
+   */
+  private async transcribe(args: string[], modelPath: string, onStderr: (chunk: string) => void) {
+    try {
+      return await runCommand(this.binaryPath, args, undefined, { onStderr });
+    } catch (e) {
+      const size = await fs.promises
+        .stat(modelPath)
+        .then((stat) => `${Math.round(stat.size / 1e6)}MB`)
+        .catch(() => "unreadable");
+      const message = e instanceof Error ? e.message : String(e);
+      throw new Error(`${message}
+(model ${modelPath}, ${size})`);
+    }
+  }
+
   async getSubs(
     dfContentInfo: DfContentInfo,
     filename: string,
@@ -164,23 +187,21 @@ export class WhisperSubtitleGenerator implements SubtitleGenerator {
       );
       const startedAt = Date.now();
       let lastPercent = -1;
-      await runCommand(this.binaryPath, args, undefined, {
-        onStderr: (chunk) => {
-          if (!onProgress) {
-            return;
-          }
-          // A single chunk can carry several progress lines; only the most
-          // recent one is meaningful.
-          let percent: number | undefined;
-          for (const match of chunk.matchAll(PROGRESS_LINE)) {
-            percent = Number(match[1]);
-          }
-          if (percent === undefined || percent === lastPercent) {
-            return;
-          }
-          lastPercent = percent;
-          onProgress({ percent, detail: `${this.config.model}, ${this.threads} threads` });
-        },
+      await this.transcribe(args, modelPath, (chunk) => {
+        if (!onProgress) {
+          return;
+        }
+        // A single chunk can carry several progress lines; only the most
+        // recent one is meaningful.
+        let percent: number | undefined;
+        for (const match of chunk.matchAll(PROGRESS_LINE)) {
+          percent = Number(match[1]);
+        }
+        if (percent === undefined || percent === lastPercent) {
+          return;
+        }
+        lastPercent = percent;
+        onProgress({ percent, detail: `${this.config.model}, ${this.threads} threads` });
       });
       logger.log("info", `Transcribed ${filename} in ${Math.round((Date.now() - startedAt) / 1000)}s`);
       if (!(await fileExists(srtPath))) {

@@ -1,6 +1,6 @@
 import ffmpegPath from "ffmpeg-static";
 import { spawn } from "child_process";
-import { runCommand } from "../utils/command.js";
+import { describeExit, runCommand } from "../utils/command.js";
 
 export type AudioStreamOpts = {
   format?: string;
@@ -25,17 +25,21 @@ export const fileToAudioStream = (filename: string, opts?: AudioStreamOpts) => {
 
   const process = spawn(ffmpegPath, ffmpegArgs);
   const procPromise = new Promise<void>((res, rej) => {
-    let lastErr: any;
+    // As in runCommand: keep a bounded tail rather than the last chunk, and
+    // survive a process that dies without printing anything.
+    let stderr = "";
     process.on("error", (err) => {
       rej(err);
     });
-    process.on("close", (rc) => {
-      if (rc !== 0) {
-        rej(lastErr.toString());
+    process.on("close", (code, signal) => {
+      if (code === 0) {
+        return res();
       }
-      res();
+      const detail = stderr.trim();
+      rej(new Error(`${describeExit("ffmpeg", code, signal)}${detail ? `:
+${detail}` : " without writing any output"}`));
     });
-    process.stderr.on("data", (chunk) => (lastErr = chunk));
+    process.stderr.on("data", (chunk) => (stderr = `${stderr}${chunk}`.slice(-4096)));
   });
   return {
     stdout: process.stdout,
