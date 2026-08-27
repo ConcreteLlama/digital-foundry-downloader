@@ -30,6 +30,11 @@ RUN apt-get update \
 # Intel and AMD, so what the image required varied per build with nothing in
 # the repo to explain why.
 #
+# The source tree and build directory are removed in the same RUN as they are
+# created, so the layer holds ~16MB of artifacts rather than a full checkout
+# and build tree. Nothing about the final image changes - only what gets
+# cached, which is the difference between restoring this stage costing
+# megabytes or hundreds of them.
 # The costs are small and were measured, not assumed: ~13MB of image and
 # about ten seconds of build time. Dispatch itself is one dlopen at startup,
 # and choosing per host beats a fixed baseline - on a machine with AVX-512 it
@@ -44,19 +49,22 @@ RUN git clone --depth 1 --branch ${WHISPER_CPP_REF} https://github.com/ggml-org/
         -DGGML_BACKEND_DL=ON \
         -DGGML_CPU_ALL_VARIANTS=ON \
         -DGGML_BACKEND_DIR=/usr/local/lib/whisper \
-    && cmake --build /tmp/whisper.cpp/build --config Release -j "$(nproc)" --target whisper-cli
+    && cmake --build /tmp/whisper.cpp/build --config Release -j "$(nproc)" --target whisper-cli \
+    && mkdir -p /opt/whisper \
+    && cp -a /tmp/whisper.cpp/build/bin/whisper-cli /tmp/whisper.cpp/build/bin/*.so* /opt/whisper/ \
+    && rm -rf /tmp/whisper.cpp
 
 FROM --platform=linux/amd64 node:24
 
 # Create app directory
 WORKDIR /usr/src/app
 
-COPY --from=whisper-builder /tmp/whisper.cpp/build/bin/whisper-cli /usr/local/bin/whisper-cli
+COPY --from=whisper-builder /opt/whisper/whisper-cli /usr/local/bin/whisper-cli
 # The backend variants and the whisper/ggml shared libraries. GGML_BACKEND_DIR
 # above compiles this path in, so the binary finds the variants wherever it is
 # run from; ldconfig is what lets the dynamic linker resolve libwhisper and
 # libggml themselves.
-COPY --from=whisper-builder /tmp/whisper.cpp/build/bin/*.so* /usr/local/lib/whisper/
+COPY --from=whisper-builder /opt/whisper/*.so* /usr/local/lib/whisper/
 RUN echo /usr/local/lib/whisper > /etc/ld.so.conf.d/whisper.conf && ldconfig
 # Picked up by WhisperSubtitleGenerator when no explicit binaryPath is set.
 ENV WHISPER_BINARY=/usr/local/bin/whisper-cli

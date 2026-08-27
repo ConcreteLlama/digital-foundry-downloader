@@ -58,3 +58,15 @@ jobs:
           version=${{ env.VERSION }}
         build-args: |
           GIT_BRANCH=${{ github.ref_name }}
+        # Without this every build recompiles whisper.cpp and re-runs npm ci
+        # from nothing, because runners are ephemeral and no layer cache
+        # survives between them.
+        #
+        # mode=max rather than the default: whisper is built in a separate
+        # stage and only its artifacts are copied forward, so the default
+        # (which caches only the layers of the final image) would not cache
+        # the compile - the expensive part. The whisper stage now reduces to
+        # ~16MB, so restoring it is close to free, and it is only rebuilt when
+        # WHISPER_CPP_REF or the build command itself changes.
+        cache-from: type=gha
+        cache-to: type=gha,mode=max
