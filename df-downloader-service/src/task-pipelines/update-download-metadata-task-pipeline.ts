@@ -10,12 +10,14 @@ import { Chapter } from "../utils/chatpers.js";
 
 type UpdateDownloadMetaPipelineCreatorOpts = {
   fileTaskManager: TaskManager;
+  /** Whole-file reads/writes (remux) - serialized, see df-task-manager.ts. */
+  mediaProcessingTaskManager: TaskManager;
   dfFetchTaskManager: TaskManager;
   youtubeFetchTaskManager: TaskManager;
 };
 
 export const createUpdateDownloadMetadataTaskPipeline = (opts: UpdateDownloadMetaPipelineCreatorOpts) => {
-  const { fileTaskManager, dfFetchTaskManager, youtubeFetchTaskManager } = opts;
+  const { fileTaskManager, mediaProcessingTaskManager, dfFetchTaskManager, youtubeFetchTaskManager } = opts;
   return makeTaskPipeline<
     {
       dfContentInfo: DfContentInfo;
@@ -81,7 +83,7 @@ export const createUpdateDownloadMetadataTaskPipeline = (opts: UpdateDownloadMet
         }
         return InjectMetadataTask(fileLocation, meta);
       },
-      taskManager: fileTaskManager,
+      taskManager: mediaProcessingTaskManager,
     })
     .build({
       reduceResults: (results) => {

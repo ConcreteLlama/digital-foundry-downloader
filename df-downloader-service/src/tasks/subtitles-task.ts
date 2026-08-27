@@ -1,6 +1,7 @@
 import { DfContentInfo, LanguageCode, asyncGetFirstMatch, logger } from "df-downloader-common";
 import { SubtitleGenerator, GeneratedSubtitleInfo } from "../media-utils/subtitles/subtitles.js";
 import { TaskManager, TaskManagerOpts } from "../task-manager/task-manager.js";
+import { configService } from "../config/config.js";
 import { TaskControllerTaskBuilder, TaskControls } from "../task-manager/task/task-controller-task.js";
 
 const getSubs = async (
@@ -75,6 +76,16 @@ export const SubtitlesTaskBuilder = TaskControllerTaskBuilder(subtitlesTaskContr
 export class SubtitlesTaskManager extends TaskManager {
   constructor(taskManagerOpts: TaskManagerOpts = {}) {
     super(taskManagerOpts);
+    // Mirrors DownloadTaskManager - pick up concurrency changes without a
+    // restart, since this is the setting most likely to need tuning to the
+    // machine it's running on.
+    configService.on("configUpdated:subtitles", (event) => {
+      const maxConcurrent = event?.newValue?.maxConcurrent;
+      if (maxConcurrent && maxConcurrent !== this.concurrentTasks) {
+        this.concurrentTasks = maxConcurrent;
+        this.log("info", `Updated subtitles task manager concurrent tasks to ${maxConcurrent}`);
+      }
+    });
   }
 }
 export type SubtitlesTask = ReturnType<typeof SubtitlesTaskBuilder>;

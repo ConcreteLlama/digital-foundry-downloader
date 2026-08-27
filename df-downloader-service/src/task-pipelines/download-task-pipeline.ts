@@ -19,11 +19,17 @@ import { Chapter } from "../utils/chatpers.js";
 type DownloadTaskPipelineOpts = {
   downloadTaskManager: DownloadTaskManager;
   subtitlesTaskManager: SubtitlesTaskManager;
+  /** Cheap filesystem work - see df-task-manager.ts. */
   fileTaskManager: TaskManager;
+  /** Whole-file reads/writes (remux, move) - serialized, see df-task-manager.ts. */
+  mediaProcessingTaskManager: TaskManager;
+  /** Serialized YouTube page fetches. */
+  youtubeFetchTaskManager: TaskManager;
 };
 
 export const createDownloadTaskPipeline = (opts: DownloadTaskPipelineOpts) => {
-  const { downloadTaskManager, subtitlesTaskManager, fileTaskManager } = opts;
+  const { downloadTaskManager, subtitlesTaskManager, fileTaskManager, mediaProcessingTaskManager, youtubeFetchTaskManager } =
+    opts;
   return makeTaskPipeline<
     {
       dfContentInfo: DfContentInfo;
@@ -96,7 +102,11 @@ export const createDownloadTaskPipeline = (opts: DownloadTaskPipelineOpts) => {
         return FetchChaptersTask(dfContentInfo, measured?.durationSeconds ?? null);
       },
       continueOnFail: true,
-      taskManager: fileTaskManager,
+      // Hits YouTube, not the disk - belongs on the serialized YouTube
+      // manager, same as the update-metadata pipeline's equivalent step.
+      // Previously ran on fileTaskManager, which allowed up to 5 concurrent
+      // YouTube page fetches from this pipeline.
+      taskManager: youtubeFetchTaskManager,
     })
     .next({
       stepName: "Generate Subtitles",
@@ -143,7 +153,7 @@ export const createDownloadTaskPipeline = (opts: DownloadTaskPipelineOpts) => {
         }
         return null;
       },
-      taskManager: fileTaskManager,
+      taskManager: mediaProcessingTaskManager,
     })
     .next({
       stepName: "Move File",
@@ -161,7 +171,7 @@ export const createDownloadTaskPipeline = (opts: DownloadTaskPipelineOpts) => {
         }
         return null;
       },
-      taskManager: fileTaskManager,
+      taskManager: mediaProcessingTaskManager,
     })
     .build({
       generateStatusMessage: ({ steps, context, pipelineResult }) => {

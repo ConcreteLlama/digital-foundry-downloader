@@ -97,8 +97,19 @@ export class DfTaskManager {
         retryDelayMultiplier: 2,
       },
     });
+    // Genuinely light filesystem work (ffprobe a file, stat it) - cheap
+    // enough that running several at once costs nothing.
     const fileTaskManager = new TaskManager({
       concurrentTasks: 5,
+    });
+    // Whole-file work: an ffmpeg remux to embed metadata, and moving a
+    // finished download into place. Both read and write multi-gigabyte files
+    // end to end, so they're bound by the disk rather than the CPU and
+    // running several concurrently just makes them contend - noticeably so on
+    // a NAS array. Serialized deliberately; these used to share
+    // fileTaskManager's limit of 5.
+    const mediaProcessingTaskManager = new TaskManager({
+      concurrentTasks: 1,
     });
     const dfFetchTaskManager = new TaskManager({
       concurrentTasks: 1,
@@ -107,19 +118,25 @@ export class DfTaskManager {
       concurrentTasks: 1,
     });
     const subtitlesTaskManager = new SubtitlesTaskManager({
-      concurrentTasks: 5,
+      // See SubtitlesConfig.maxConcurrent - defaults to 1 because local
+      // transcription is CPU-bound and each run already uses most of the
+      // machine's cores.
+      concurrentTasks: configService.config.subtitles?.maxConcurrent ?? 1,
     });
     this.subtitleTaskPipeline = createSubtitlesTaskPipeline({
       subtitlesTaskManager: subtitlesTaskManager,
-      fileTaskManager: fileTaskManager,
+      mediaProcessingTaskManager: mediaProcessingTaskManager,
     });
     this.downloadTaskPipeline = createDownloadTaskPipeline({
       downloadTaskManager: downloadTaskManager,
       subtitlesTaskManager: subtitlesTaskManager,
       fileTaskManager: fileTaskManager,
+      mediaProcessingTaskManager: mediaProcessingTaskManager,
+      youtubeFetchTaskManager: youtubeFetchTaskManager,
     });
     this.updateDownloadMetadataTaskPipeline = createUpdateDownloadMetadataTaskPipeline({
       fileTaskManager,
+      mediaProcessingTaskManager,
       dfFetchTaskManager,
       youtubeFetchTaskManager,
     });

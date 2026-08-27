@@ -105,6 +105,19 @@ export const SubtitlesConfig = z
   .object({
     /** Whether to auto-generate subs on download */
     autoGenerateSubs: z.boolean().default(true),
+    /**
+     * How many subtitle generations may run at once.
+     *
+     * Defaults to 1, deliberately. This was effectively 5 back when
+     * subtitles meant an API call to Deepgram or a caption fetch from
+     * YouTube - network-bound work where running several at once is free.
+     * Local Whisper transcription is the opposite: each run is CPU-bound and
+     * already claims most of the machine's cores (see WhisperConfig.threads),
+     * so allowing several concurrently oversubscribes the CPU several times
+     * over and makes everything - including anything else running on the same
+     * box - crawl. Raise it only if your subtitles service is a remote API.
+     */
+    maxConcurrent: z.number().int().min(1).default(1),
     /** The subtitles service to use */
     servicePriorities: SubtitlesService.array().default([]),
     /** The configuration for each subtitles service */

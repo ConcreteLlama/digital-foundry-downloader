@@ -8,11 +8,12 @@ import { SubtitlesTaskBuilder, SubtitlesTaskManager } from "../tasks/subtitles-t
 
 type SubtitlesTaskPipelineCreatorOpts = {
   subtitlesTaskManager: SubtitlesTaskManager;
-  fileTaskManager: TaskManager;
+  /** Whole-file reads/writes (remux) - serialized, see df-task-manager.ts. */
+  mediaProcessingTaskManager: TaskManager;
 };
 
 export const createSubtitlesTaskPipeline = (opts: SubtitlesTaskPipelineCreatorOpts) => {
-  const { subtitlesTaskManager, fileTaskManager } = opts;
+  const { subtitlesTaskManager, mediaProcessingTaskManager } = opts;
   return makeTaskPipeline<
     {
       dfContentInfo: DfContentInfo;
@@ -42,7 +43,7 @@ export const createSubtitlesTaskPipeline = (opts: SubtitlesTaskPipelineCreatorOp
         const { fileLocation } = context;
         return InjectMetadataTask(fileLocation, makeMediaFileMeta(undefined, previousTaskResult));
       },
-      taskManager: fileTaskManager,
+      taskManager: mediaProcessingTaskManager,
     })
     .build({
       generateStatusMessage: ({ steps }) => {
