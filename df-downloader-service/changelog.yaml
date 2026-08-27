@@ -45,6 +45,10 @@ versions:
         - "Subtitle actions now say 'generate' rather than 'fetch'. Every remaining option transcribes the downloaded file's audio rather than downloading captions from somewhere, so 'fetch' no longer described what happens"
         - "Whisper can now be told whether to use a GPU. The build bundled in the Docker image is CPU-only, so this applies if you've pointed Whisper at your own GPU-enabled build - and it's worth being able to turn off, since the GPU on this kind of machine is often already busy transcoding for a media server"
       bugfixes:
+        - "Fixed a newly started job showing another video's details after a restart":
+          - "Jobs are numbered from one each time the app starts, so the first job after a restart reused a number already held by one in the completed history, and the two were treated as the same job"
+          - "The older run also vanished from the history, having been mistaken for a duplicate of the new one"
+          - "Job numbers now include a marker for the run they belong to, so they can no longer collide across restarts"
         - "Fixed subtitle generation failing instantly on some processors":
           - "The bundled Whisper was compiled for whatever machine happened to build the Docker image, so it used instructions that other processors don't have and was killed the moment it ran, with no error message to explain it"
           - "Because the published image is built by a shared pool of machines, which processors it would run on varied from release to release"

@@ -1,5 +1,5 @@
-import _ from "lodash";
 import { CachedEventEmitter } from "../../utils/event-emitter.js";
+import { makeRunUniqueId } from "../../utils/run-id.js";
 import { LoggerType, makeLogger } from "../../utils/log.js";
 
 export type TaskSuccessfulResult<RESULT> = {
@@ -77,7 +77,7 @@ export abstract class Task<
     super();
     this.log = makeLogger(`task:${taskType}`, logger);
     this.taskType = taskType;
-    this.id = _.uniqueId(idPrefix || `${taskType}-task-`);
+    this.id = makeRunUniqueId(idPrefix || `${taskType}-task-`);
     this.on("stateChanged", (state) => {
       const taskState = this.stateToTaskState(state);
       if (taskState === "running") {

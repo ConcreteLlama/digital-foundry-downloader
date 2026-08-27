@@ -1,6 +1,6 @@
 import { makeErrorMessage } from "df-downloader-common";
-import _ from "lodash";
 import { CachedEventEmitter } from "../../utils/event-emitter.js";
+import { makeRunUniqueId } from "../../utils/run-id.js";
 import { LoggerType, makeLogger } from "../../utils/log.js";
 import { ManagedTask } from "../task/task-manager-task.js";
 import { InferTaskTaskResult, Task, isTaskCancelledResult, isTaskFailedResult } from "../task/task.js";
@@ -61,7 +61,7 @@ export class TaskPipelineExecution<
     this.results = pipelineSteps.map(() => undefined) as any;
     this.tasks = pipelineSteps.map(() => undefined) as any;
     const label = executionOpts.label || `${pipelineType}-pipeline`;
-    this.id = _.uniqueId(`${label}-`);
+    this.id = makeRunUniqueId(`${label}-`);
     this.log = makeLogger(this.id, executionOpts.logger);
     this.once("completed", (result) => {
       this.log("info", `Pipeline ${this.id} completed with status ${result.status}`);
