@@ -126,3 +126,91 @@ manual-download-only bypass so a deliberate click doesn't wait behind queued sca
 traffic, blocking downloads for content not yet confirmed against the live site
 (`legacy`), and lazily backfilling YouTube description/duration (never present in DF's
 own listing) with a small nav-bar indicator for DF request-queue activity.
+
+**2026-08-19**: `main`/`develop`/`experimental` fast-forwarded to be byte-identical
+(all three now point at the same commit) — `feature/new-df-site` was a clean ancestor of
+neither branch having diverged, so this was a plain fast-forward, not a merge. A real
+`autologin` token that had been sitting in `docs/DF_SITE_MIGRATION.md`'s git history
+since 2026-08-14 was also scrubbed from every branch via `git-filter-repo` + a
+force-push (the token itself was independently invalidated by logging out/in on the DF
+account first).
+
+## Phase 3 — YouTube metadata drift, subtitle extraction, AI summaries (not started)
+
+Raised by the project owner 2026-08-19, after live-testing the stabilization pass above.
+**Deliberately handed off for a fresh session** (this doc plus the pointers below should
+be enough context on their own — no need to read old conversation history). Work in
+separate branches off `main` (`feature/youtube-metadata-drift`,
+`feature/youtube-subtitle-extraction` — both created empty off `main` at commit
+`8864a9f`, ready to check out). Item 4 explicitly depends on item 3's outcome — don't
+start it first.
+
+### Core problem underlying items 1 & 2
+
+DF's downloaded video files are **not** a frame-accurate match for the YouTube upload -
+some DF content starts with a sponsorship segment on YouTube that the downloaded file
+has stripped out. Everything sourced from YouTube's page (`sync-yt-video-meta.ts`'s
+`fetchYtVideoMeta` - chapters, description, duration) reflects the **un-stripped**
+YouTube original, so it can be measurably longer than, and offset relative to, the
+actual downloaded file.
+
+**Important finding, not yet acted on**: `df-downloader-service/src/media-utils/subtitles/youtube.ts`
+(`YoutubeSubtitleGenerator.getSubs()`, lines ~18-41) *already implements* this exact
+offset-detection-and-correction pattern for subtitles - it computes
+`offset = youtubeDurationS - videoLengthS` (via `MediaInfoUtils.getDurationSeconds(dfContentInfo.mediaInfo)`)
+and shifts subtitle timestamps by it when YouTube's reported duration is longer. **This
+logic is very likely silently neutered right now**: `videoLengthS` is meant to be the
+*actual local file's* duration, but nothing in the download pipeline ever measures that
+via `ffprobe` (the capability exists - `extractMediaMeta` in
+`df-downloader-service/src/utils/media-metadata.ts`, currently only used for the
+"refresh downloaded content's metadata" UI feature) and writes it to
+`mediaInfo.duration`. Instead, `mediaInfo.duration` is now populated by *this session's*
+`sync-yt-video-meta.ts` work - **sourced from YouTube's own page** (`ytInitialPlayerResponse.videoDetails.lengthSeconds`).
+So `youtubeDurationS` and `videoLengthS` likely trace back to the same YouTube number,
+making `offset` compute to ~0 even for content with a real stripped intro. Confirm this
+live before assuming it's the actual bug, but if so: the fix is restoring a real
+ffprobe-measured local duration (written once, right after download completes, into
+`mediaInfo.duration` or a new field) as the authoritative "real length" side of that
+comparison - the sync-yt-video-meta.ts backfill should then defer to that real
+measurement rather than overwrite/coexist with it.
+
+- [ ] **1. Strip sponsorship mentions from YouTube descriptions.** Heuristic text
+  cleanup (regex/pattern-matching for "sponsored by", "thanks to X for sponsoring",
+  common sponsor-blurb boilerplate) applied when backfilling `description` in
+  `sync-yt-video-meta.ts`. Best-effort/conservative by nature - false negatives (missed
+  sponsor text) are much safer than false positives (stripping real content).
+- [ ] **2. Fix chapter timestamp offset from the stripped intro sponsorship.** The
+  bigger issue - chapters (`fetchYtVideoMeta`'s `ytChaptersToChapters`, embedded into
+  the downloaded file at download completion, see `fetch-chapters-task.ts`) are off by
+  the sponsorship segment's length for affected content, since they're built from
+  YouTube's un-stripped timeline. See "Core problem" above for the likely root cause and
+  the existing (probably-broken) precedent to model the fix on. **The project owner has
+  offered to trigger a real download of a known-affected video on request, to compare
+  YouTube's chapter/duration data against the actual downloaded file** - take them up on
+  this rather than guessing at the offset.
+- [ ] **3. Re-investigate YouTube subtitle extraction** - broken, reportedly since a
+  YouTube-side API/mechanism change (not yet diagnosed). Current implementation:
+  `df-downloader-service/src/utils/youtube/youtube-subs.ts` (`fetchYtSubs`/`getYtSubs`)
+  pulls a caption track's `baseUrl` straight out of
+  `ytInitialPlayerResponse.captions.playerCaptionsTracklistRenderer.captionTracks` and
+  fetches it directly - wired up as the `"youtube"` `SubtitlesService` in
+  `media-utils/subtitles/youtube.ts` (config already supports selecting it alongside
+  Deepgram/Google STT, see `subtitles-config.ts`). Start by actually attempting a fetch
+  against a real video and seeing what currently happens (network error? empty
+  response? YouTube now requiring a signature/session token on timedtext URLs is a
+  plausible cause, given known YouTube-side hardening in this area, but unconfirmed) -
+  diagnose before assuming a fix approach.
+- [ ] **4. Claude-API-powered content summaries (blocked on #3).** New feature: a
+  configurable Claude API token, used to generate a text summary of each piece of
+  content. Explicit ordering from the project owner: if YouTube subtitle extraction
+  (#3) works, summarize from subs (cheap/fast). If not, summarize from the audio stream
+  - needs a transcript first, which could reuse the existing Deepgram/Google STT
+  subtitle-generation infra already in `media-utils/subtitles/` rather than building a
+  new transcription path. Also floated as worth investigating: using Claude itself to
+  *generate* the subtitles from audio in the no-YouTube-subs case - flagged by the
+  project owner as a cost unknown worth sizing up front, since some DF content (e.g.
+  long-form DF Direct episodes) runs ~2 hours. Needs: a new config field for the API
+  token (follow the existing `df-downloader-common` config-schema-drives-the-UI-form
+  pattern - see `CLAUDE.md`'s "Conventions worth knowing"), a summarization
+  task/pipeline step, and a UI surface to display the result (and to enter/manage the
+  token, mirroring how the DF `autologin` cookie's settings form works).
