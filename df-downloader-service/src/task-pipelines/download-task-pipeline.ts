@@ -37,6 +37,12 @@ export const createDownloadTaskPipeline = (opts: DownloadTaskPipelineOpts) => {
       url: DownloadUrlOpt;
       downloadLocation: string;
       finalLocation?: string;
+      /**
+       * Set when metadata injection wrote the finished file directly to
+       * finalLocation, so the Move File step knows there's nothing left to
+       * move (see ContentManagementConfig.writeDirectToDestination).
+       */
+      fileAtFinalLocation?: boolean;
       headers: HeadersInit;
     },
     "download"
@@ -148,10 +154,27 @@ export const createDownloadTaskPipeline = (opts: DownloadTaskPipelineOpts) => {
         const metaForInjection = metaConfig.injectMetadata
           ? { ...dfContentInfo, description: dfContentInfo.description || ytMeta?.description }
           : undefined;
-        if (metaForInjection || subtitles || chapters) {
-          return InjectMetadataTask(downloadLocation, makeMediaFileMeta(metaForInjection, subtitles, chapters));
+        if (!metaForInjection && !subtitles && !chapters) {
+          // Nothing to embed, so there's no remux to redirect - the Move File
+          // step below still runs and moves the download into place as usual.
+          return null;
         }
-        return null;
+        const meta = makeMediaFileMeta(metaForInjection, subtitles, chapters);
+        const destination = makeFilePathWithTemplate(
+          dfContentInfo,
+          context.mediaInfo,
+          config.contentManagement.filenameTemplate
+        );
+        // Remuxing straight to the destination folds the subsequent move into
+        // this step, halving the post-download I/O on a large file. Skipped
+        // when the download already lives at its destination, since there'd
+        // be nothing to save.
+        if (config.contentManagement.writeDirectToDestination && !pathIsEqual(downloadLocation, destination)) {
+          context.finalLocation = destination;
+          context.fileAtFinalLocation = true;
+          return InjectMetadataTask(downloadLocation, meta, { outputPath: destination });
+        }
+        return InjectMetadataTask(downloadLocation, meta);
       },
       taskManager: mediaProcessingTaskManager,
     })
@@ -159,17 +182,22 @@ export const createDownloadTaskPipeline = (opts: DownloadTaskPipelineOpts) => {
       stepName: "Move File",
       taskCreator: ({ context }) => {
         const { dfContentInfo, mediaInfo } = context;
-        const destination = makeFilePathWithTemplate(dfContentInfo, mediaInfo, configService.config.contentManagement.filenameTemplate);
+        // Reuse the destination the injection step already resolved, so the
+        // two can't disagree if the filename template changed mid-pipeline.
+        const destination =
+          context.finalLocation ||
+          makeFilePathWithTemplate(dfContentInfo, mediaInfo, configService.config.contentManagement.filenameTemplate);
         context.finalLocation = destination;
-        if (!pathIsEqual(context.downloadLocation, destination)) {
-          return MoveFileSetDateTask(
-            context.downloadLocation,
-            destination,
-            { clobber: true, mkdirp: true },
-            dfContentInfo.publishedDate
-          );
-        }
-        return null;
+        // If injection wrote the file to its destination there's nothing to
+        // move, but the published date still needs setting - MoveFileSetDateTask
+        // no-ops the move itself when source and destination match.
+        const source = context.fileAtFinalLocation ? destination : context.downloadLocation;
+        return MoveFileSetDateTask(
+          source,
+          destination,
+          { clobber: true, mkdirp: true },
+          dfContentInfo.publishedDate
+        );
       },
       taskManager: mediaProcessingTaskManager,
     })

@@ -7,7 +7,8 @@ import { configService } from "../config/config.js";
 import { generateSrt, languageToSubsLanguage, parseSrt } from "../media-utils/subtitles/srt-utils.js";
 import { Chapter, makeChapterContent } from "./chatpers.js";
 import { runCommand } from "./command.js";
-import { fileExists, moveFile, setDateOnFile } from "./file-utils.js";
+import { fileExists, moveFile, pathIsEqual, setDateOnFile } from "./file-utils.js";
+import path from "path";
 import { mediaSanitise, mediaSanitiseMultiline } from "./string-utils.js";
 
 if (!ffmpegPathImport) {
@@ -25,9 +26,31 @@ const ffprobePath = ffprobePathImport.path;
 //   pipeContent: string;
 // }
 
-export const injectMediaMetadata = async (mediaFilePath: string, meta: MediaFileMeta) => {
+export type InjectMediaMetadataOpts = {
+  /**
+   * Write the result here instead of back over `mediaFilePath`, and remove
+   * the source afterwards - effectively folding the subsequent move into
+   * this remux, which otherwise reads and writes the whole file a second
+   * time (see ContentManagementConfig.writeDirectToDestination).
+   *
+   * The temporary file is created in the *destination's* directory rather
+   * than the work directory, specifically so the final step is a
+   * same-filesystem rename. That rename is atomic, so anything watching the
+   * destination (Plex, Jellyfin) only ever sees the real filename once the
+   * file is complete - which is the guarantee the work directory exists to
+   * provide in the first place.
+   */
+  outputPath?: string;
+};
+
+export const injectMediaMetadata = async (
+  mediaFilePath: string,
+  meta: MediaFileMeta,
+  opts: InjectMediaMetadataOpts = {}
+) => {
   const config = configService.config;
-  logger.log("info", `Setting metadata for ${mediaFilePath}`);
+  const finalPath = opts.outputPath || mediaFilePath;
+  logger.log("info", `Setting metadata for ${mediaFilePath}${opts.outputPath ? ` (writing to ${opts.outputPath})` : ""}`);
   logger.log("silly", `Metadata: ${JSON.stringify(meta)}`);
 
   let workingFilename: string = '';
@@ -50,9 +73,29 @@ export const injectMediaMetadata = async (mediaFilePath: string, meta: MediaFile
     //   return pipeIndex;
     // }
 
-    workingFilename = `${config.contentManagement.workDir}/${_.uniqueId("ffmpeg_")}.mp4`;
+    // Build the output next to wherever it's going to end up, so the move
+    // below is a same-filesystem rename.
+    //
+    // This matters just as much when updating a file in place (a metadata
+    // refresh, or embedding subtitles into an existing download) as it does
+    // for a fresh download. Remuxing into the work directory and moving the
+    // result back means reading and writing the whole file twice, and - since
+    // that move crosses filesystems - the original gets overwritten in place
+    // over however many minutes the copy takes. Anything streaming that file
+    // at the time is reading it as it's rewritten. Building alongside the
+    // target instead makes the swap a rename: instantaneous, and readers see
+    // either the old file or the new one, never a half-written one.
+    const writeAlongsideTarget = Boolean(opts.outputPath) || config.contentManagement.writeDirectToDestination;
+    const workingDir = writeAlongsideTarget ? path.dirname(finalPath) : config.contentManagement.workDir;
+    await fs.promises.mkdir(workingDir, { recursive: true });
+    // Dot-prefixed because this temp file can live in the destination
+    // directory, which media servers are watching - Plex and Jellyfin both
+    // skip dotfiles, so they won't try to index a half-written remux. The
+    // .mp4 extension has to stay: ffmpeg picks its muxer from it.
+    const makeWorkingName = () => path.join(workingDir, `.df-downloader-tmp-${_.uniqueId("")}.mp4`);
+    workingFilename = makeWorkingName();
     while (await fileExists(workingFilename)) {
-      workingFilename = `${config.contentManagement.workDir}/${_.uniqueId("ffmpeg_")}.mp4`;
+      workingFilename = makeWorkingName();
     }
     const chapterFileContent = makeChapterContent(chapters);
     chapterFilePath = chapterFileContent ? `${config.contentManagement.workDir}/${_.uniqueId("chapters_")}.txt` : null;
@@ -102,12 +145,21 @@ export const injectMediaMetadata = async (mediaFilePath: string, meta: MediaFile
     logger.log("debug", `Metadata args for ${mediaFilePath}: ${ffmpegArgs}`);
 
     await runCommand(ffmpegPath, ffmpegArgs, subtitlesText).then(async () => {
-      logger.log("debug", `Moving ${workingFilename} to ${mediaFilePath} after setting metadata`);
-      await moveFile(workingFilename, mediaFilePath, {
+      logger.log("debug", `Moving ${workingFilename} to ${finalPath} after setting metadata`);
+      // moveFile rather than a bare rename: same directory either way, but it
+      // handles clobbering an existing file consistently across platforms
+      // (Windows rename fails when the target exists).
+      await moveFile(workingFilename, finalPath, {
         clobber: true,
       });
     });
-    publishedDate && (await setDateOnFile(mediaFilePath, publishedDate));
+    publishedDate && (await setDateOnFile(finalPath, publishedDate));
+    if (opts.outputPath && !pathIsEqual(mediaFilePath, finalPath)) {
+      // Only now that the destination file is complete and in place - if
+      // anything above threw, the source is still there to retry from.
+      logger.log("debug", `Removing ${mediaFilePath} now the metadata-injected copy is at ${finalPath}`);
+      await fs.promises.rm(mediaFilePath, { force: true });
+    }
   } finally {
     if (workingFilename && fs.existsSync(workingFilename)) {
       fs.promises.rm(workingFilename).then(() => {
