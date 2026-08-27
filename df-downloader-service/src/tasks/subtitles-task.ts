@@ -11,7 +11,7 @@ const getSubs = async (
 ) => {
   const generators = Array.isArray(subtitleGenerator) ? subtitleGenerator : [subtitleGenerator];
   const result = await asyncGetFirstMatch(generators, async (generator) => {
-    logger.log("info", `Getting subs for ${filePath} using ${generator.serviceType}`);
+    logger.log("info", `Generating subs for ${filePath} using ${generator.serviceType}`);
     try {
       return await generator.getSubs(contentInfo, filePath, language);
     } catch (err) {
@@ -41,7 +41,7 @@ const subtitlesTaskControls: TaskControls<GeneratedSubtitleInfo, SubtitlesTaskCo
     const generators = Array.isArray(subtitleGenerators) ? subtitleGenerators : [subtitleGenerators];
     const result = await asyncGetFirstMatch(generators, async (generator) => {
       context.currentSubtitleGenerator = generator;
-      logger.log("info", `Getting subs for ${filePath} using ${generator.serviceType}`);
+      logger.log("info", `Generating subs for ${filePath} using ${generator.serviceType}`);
       try {
         return await generator.getSubs(dfContentInfo, filePath, language);
       } catch (err) {
@@ -60,7 +60,7 @@ const subtitlesTaskControls: TaskControls<GeneratedSubtitleInfo, SubtitlesTaskCo
     };
   },
   getStatusMessage: ({ context, state }) => {
-    return `Getting ${context.language} subs for ${context.filePath} using ${context.currentSubtitleGenerator?.serviceType}: ${state}`;
+    return `Generating ${context.language} subs for ${context.filePath} using ${context.currentSubtitleGenerator?.serviceType}: ${state}`;
   },
 };
 export const SubtitlesTaskBuilder = TaskControllerTaskBuilder(subtitlesTaskControls, {

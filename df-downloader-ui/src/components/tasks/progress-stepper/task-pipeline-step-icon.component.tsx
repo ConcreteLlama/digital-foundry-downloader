@@ -29,7 +29,7 @@ const getIconComponent = (stepName: string) => {
   switch (stepName) {
     case "Download":
       return DownloadIcon;
-    case "Fetch Subtitles":
+    case "Generate Subtitles":
       return SubtitlesIcon;
     case "Fetch Chapters":
       return ChaptersIcon;

@@ -99,7 +99,7 @@ export const createDownloadTaskPipeline = (opts: DownloadTaskPipelineOpts) => {
       taskManager: fileTaskManager,
     })
     .next({
-      stepName: "Fetch Subtitles",
+      stepName: "Generate Subtitles",
       taskCreator: ({ context }) => {
         const { dfContentInfo, downloadLocation } = context;
         const config = configService.config;

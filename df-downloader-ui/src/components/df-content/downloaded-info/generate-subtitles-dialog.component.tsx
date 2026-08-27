@@ -26,14 +26,14 @@ import { postJson } from "../../../utils/fetch.ts";
 import { Loading } from "../../general/loading.component.tsx";
 import { DownloadSummaryGrid } from "./download-summary-grid.component.tsx";
 
-type FetchSubtitlesDialogProps = {
+type GenerateSubtitlesDialogProps = {
   open: boolean;
   onClose: () => void;
   contentEntry: DfContentEntry;
   download: DfContentDownloadInfo;
 };
 
-export const FetchSubtitlesDialog = (props: FetchSubtitlesDialogProps) => {
+export const GenerateSubtitlesDialog = (props: GenerateSubtitlesDialogProps) => {
   const { open, onClose, contentEntry, download } = props;
   const dispatch = useDispatch();
   useEffect(() => {
@@ -58,21 +58,21 @@ export const FetchSubtitlesDialog = (props: FetchSubtitlesDialogProps) => {
     }
   }, [subtitlesConfig])
 
-  const fetchSubs = () => {
+  const generateSubs = () => {
     setSendingRequest(true);
-    const fetchSubtitlesRequest: GenerateSubtitlesRequest = {
+    const generateSubtitlesRequest: GenerateSubtitlesRequest = {
       dfContentName: contentEntry.key,
       mediaFilePath: download.downloadLocation,
       subtitlesService: selectedService,
       language: selectedLanguage as any,
     };
-    postJson(`${API_URL}/subtitles/generate`, fetchSubtitlesRequest)
+    postJson(`${API_URL}/subtitles/generate`, generateSubtitlesRequest)
       .then(() => {
         setSendingRequest(false);
         onClose();
       })
       .catch((error) => {
-        console.error("Failed to fetch subtitles", error);
+        console.error("Failed to generate subtitles", error);
         setSendingRequest(false);
       });
   };
@@ -88,8 +88,8 @@ export const FetchSubtitlesDialog = (props: FetchSubtitlesDialogProps) => {
   };
 
   return (
-    <Dialog open={open} onClose={onClose} id="fetch-subtitles-dialog">
-      <DialogTitle>Fetch Subtitles</DialogTitle>
+    <Dialog open={open} onClose={onClose} id="generate-subtitles-dialog">
+      <DialogTitle>Generate Subtitles</DialogTitle>
       <DialogContent>
         {configLoading ? (
           <Loading />
@@ -97,7 +97,7 @@ export const FetchSubtitlesDialog = (props: FetchSubtitlesDialogProps) => {
           <Typography>No subtitle services configured</Typography>
         ) : (
           <Stack>
-            <Typography>Fetch subtitles for the following download:</Typography>
+            <Typography>Generate subtitles for the following download:</Typography>
             <DownloadSummaryGrid contentEntry={contentEntry} download={download} sx={{ marginLeft: 2, marginY: 2 }} />
             <Stack gap={3}>
               <FormControl>
@@ -133,10 +133,10 @@ export const FetchSubtitlesDialog = (props: FetchSubtitlesDialogProps) => {
       <DialogActions>
         <Button onClick={onClose}>Cancel</Button>
         <Button
-          onClick={fetchSubs}
+          onClick={generateSubs}
           disabled={noServices || configLoading || !selectedService || !selectedLanguage || sendingRequest}
         >
-          {sendingRequest ? "Starting Fetch..." : "Fetch"}
+          {sendingRequest ? "Starting..." : "Generate"}
         </Button>
       </DialogActions>
     </Dialog>

@@ -41,7 +41,7 @@ export const getTaskFriendlyName = (task: TaskInfo | DfTaskType): string => {
     case "download":
       return "Download";
     case "subtitles":
-      return "Fetch subtitles";
+      return "Generate subtitles";
     case "inject_metadata":
       return "Inject metadata";
     case "move_file":

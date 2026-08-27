@@ -16,6 +16,8 @@ Subtitles can now be generated locally on your own machine instead of being pull
   - Models download automatically the first time you use one
 - New 'Scan now' button to check for newly published videos immediately, rather than waiting for the next scheduled check
 - The request queue indicator now lists what is actually queued and what each request is doing, instead of only showing counts
+### Enhancements
+- Subtitle actions now say 'generate' rather than 'fetch'. Every remaining option transcribes the downloaded file's audio rather than downloading captions from somewhere, so 'fetch' no longer described what happens
 ### Bug Fixes
 - Fixed newly published videos never being found at all if the app hadn't run for a while
   - Anything published more than the auto-download age limit before the next check was invisible to the app permanently - the age limit was accidentally being used to decide how far back to look, as well as what to download

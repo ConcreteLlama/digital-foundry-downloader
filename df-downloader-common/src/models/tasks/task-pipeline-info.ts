@@ -7,7 +7,10 @@ import { isDownloadTaskInfo } from "./download-task.js";
 export const PipelineResultStatus = z.enum(["success", "failed", "cancelled"]);
 export type PipelineResultStatus = z.infer<typeof PipelineResultStatus>;
 
-export const DfStepName = z.enum(["Download", "Fetch Subtitles", "Fetch Chapters", "Inject Metadata", "Move File"]);
+// "Fetch Chapters" is still a fetch - chapters come from YouTube. Subtitles
+// are no longer fetched from anywhere: every remaining service transcribes
+// the downloaded file's own audio, so the step is a generation step.
+export const DfStepName = z.enum(["Download", "Generate Subtitles", "Fetch Chapters", "Inject Metadata", "Move File"]);
 export type DfStepName = z.infer<typeof DfStepName>;
 
 export const DfPipelineType = z.enum(["download", "subtitles", "update_download_meta"]);
@@ -111,7 +114,7 @@ export const getTaskPipelineFriendlyName = (task: TaskPipelineInfo | string): st
         case "download":
             return "Download";
         case "subtitles":
-            return "Fetch Subtitles";
+            return "Generate Subtitles";
         default:
             return pipelineType;
     }

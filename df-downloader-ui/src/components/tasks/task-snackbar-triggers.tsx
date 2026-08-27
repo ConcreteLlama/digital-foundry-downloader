@@ -17,7 +17,7 @@ const registerTaskSnackbarTriggers = () => {
             if (task.pipelineType === 'download') {
                 snackbarMessage = `Added ${contentTitle} to download queue`;
             } else if (task.pipelineType === 'subtitles') {
-                snackbarMessage = `Queued fetch subtitles for ${contentTitle}`;
+                snackbarMessage = `Queued subtitle generation for ${contentTitle}`;
             } else {
                 snackbarMessage = `Queued ${getTaskPipelineFriendlyName(task)} task`;
             }

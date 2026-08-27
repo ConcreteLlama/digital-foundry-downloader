@@ -13,7 +13,7 @@ import { postJson } from "../../../utils/fetch.ts";
 import { TooltipIconButton } from "../../general/tooltip-button.component.tsx";
 import { DeleteDownloadDialog } from "./delete-download-dialog.component.tsx";
 import { EditMetadataDialog } from "./edit-metadata-dialog.component.tsx";
-import { FetchSubtitlesDialog } from "./fetch-subtitles-dialog.component.tsx";
+import { GenerateSubtitlesDialog } from "./generate-subtitles-dialog.component.tsx";
 
 type DownloadedItemActionsProps = {
   contentEntry: DfContentEntry;
@@ -74,7 +74,7 @@ export const DownloadedItemActions = ({ contentEntry, download }: DownloadedItem
         gap: "0.5rem",
       }}
     >
-      <TooltipIconButton tooltipTitle={downloadIsVideo ? makeTooltip("Fetch Subtitles") : "Cannot fetch subtitles for non-video media"} onClick={openSubtitlesDialog} disabled={!downloadIsVideo || updatesDisabled}>
+      <TooltipIconButton tooltipTitle={downloadIsVideo ? makeTooltip("Generate Subtitles") : "Cannot generate subtitles for non-video media"} onClick={openSubtitlesDialog} disabled={!downloadIsVideo || updatesDisabled}>
         <SubtitlesIcon />
       </TooltipIconButton>
       <TooltipIconButton tooltipTitle={makeTooltip("Delete")} onClick={openDeleteDialog} disabled={updatesDisabled}>
@@ -92,7 +92,7 @@ export const DownloadedItemActions = ({ contentEntry, download }: DownloadedItem
         contentEntry={contentEntry}
         download={download}
       />
-      <FetchSubtitlesDialog
+      <GenerateSubtitlesDialog
         open={subtitlesDialogOpen}
         onClose={closeSubtitlesDialog}
         contentEntry={contentEntry}
