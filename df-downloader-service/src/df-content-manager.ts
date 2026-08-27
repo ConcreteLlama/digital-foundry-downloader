@@ -197,6 +197,13 @@ export class DigitalFoundryContentManager {
         // running, hitting exactly this path, not just the one-time startup
         // window startupScanComplete was written for).
         await this.flushPendingMetaRefresh();
+        // runInitialScan only walks the archive from its saved checkpoint,
+        // which sits at the oldest end of a newest-first listing - so on its
+        // own it never surfaces anything published recently. Someone who has
+        // just pasted a working cookie is precisely the person waiting to see
+        // recent content, so check the newest end explicitly rather than
+        // leaving them until the poll loop's next tick.
+        await this.checkForNewContents();
       }
     });
     this.startContentPollLoop();
@@ -258,7 +265,7 @@ export class DigitalFoundryContentManager {
   private startContentPollLoop() {
     const { contentCheckInterval } = configService.config.contentDetection;
     logger.log("info", `Checking for new Digital Foundry content every ${contentCheckInterval}ms while signed in`);
-    setInterval(async () => {
+    const runCheck = async () => {
       if (!this.dfUserManager.isUserSignedIn()) {
         return;
       }
@@ -267,7 +274,15 @@ export class DigitalFoundryContentManager {
       } catch (e) {
         logger.log("error", "Error during scheduled content check", e);
       }
-    }, contentCheckInterval);
+    };
+    // Run once up front rather than waiting a full interval. Nothing else
+    // in startup looks at the newest end of the listing - runInitialScan
+    // only calls scanWholeArchive, which resumes near its saved checkpoint
+    // at the *oldest* end - so without this, an install that starts up
+    // already signed in doesn't notice anything published since it was last
+    // running until a whole contentCheckInterval has elapsed.
+    void runCheck();
+    setInterval(runCheck, contentCheckInterval);
   }
 
   private async runInitialScan() {
@@ -750,21 +765,45 @@ export class DigitalFoundryContentManager {
    *   would silently never get it. Detected purely by diffing formatString
    *   sets, so it's zero extra requests - the data's already being fetched.
    */
+  /**
+   * How many listing pages a single new-content check will walk before
+   * giving up. Only reached when an install has been off long enough to
+   * miss this much content at once (50 items/page, so 20 pages is roughly a
+   * year of DF's output); the usual case stops after one page. Bounded so a
+   * near-empty DB can't turn every poll into a full archive walk -
+   * scanWholeArchive is the mechanism for that.
+   */
+  private static readonly MAX_NEW_CONTENT_SCAN_PAGES = 20;
+
+  /**
+   * Walks the listing newest-first looking for content this install doesn't
+   * already know about, stopping once an entire page turns up nothing new.
+   *
+   * Deliberately does *not* filter by `automaticDownloads.maxContentAgeHours`.
+   * That setting gates whether a discovered item gets auto-downloaded, and
+   * checkForNewContents already applies it for that purpose (see its
+   * freshEnough/tooOld split). Applying it here as well quietly made it
+   * double as a *discovery* limit - pagination stopped at the first page
+   * with nothing inside the window - which left a permanent hole: anything
+   * that aged past the window before the next poll was never seen here, and
+   * scanWholeArchive's tail-only resume (it restarts near its saved
+   * checkpoint, at the oldest end of a newest-first listing) never revisits
+   * page 0 to catch it either. Content published while the app was off for
+   * longer than the window simply never appeared. Discovery is cheap and
+   * safe - it only writes content info to the DB; downloading stays gated.
+   */
   async getNewContentList(): Promise<{ newContent: DfContentInfo[]; updatedContent: DfContentInfo[] }> {
-    const maxAgeMs = configService.config.automaticDownloads.maxContentAgeHours * 60 * 60 * 1000;
-    const now = Date.now();
     const newContent: DfContentInfo[] = [];
     const updatedContent: DfContentInfo[] = [];
-    await forEachListingPage(async (contentInfos) => {
+    let pagesWalked = 0;
+    await forEachListingPage(async (contentInfos, pageIdx) => {
+      pagesWalked = pageIdx;
       const existingMeta = await this.db.getContentEntryList(contentInfos.map((contentInfo) => contentInfo.key));
-      let anyWithinWindow = false;
+      let anyNewOrUpdated = false;
       contentInfos.forEach((contentInfo, idx) => {
-        if (now - contentInfo.publishedDate.getTime() > maxAgeMs) {
-          return;
-        }
-        anyWithinWindow = true;
         const existing = existingMeta[idx];
         if (!existing) {
+          anyNewOrUpdated = true;
           if (!this.taskManager.hasPipelineForContent(contentInfo.key)) {
             newContent.push(contentInfo);
           }
@@ -772,14 +811,26 @@ export class DigitalFoundryContentManager {
         }
         const storedFormats = new Set(existing.contentInfo.mediaInfo.map((mediaInfo) => mediaInfo.formatString));
         if (contentInfo.mediaInfo.some((mediaInfo) => !storedFormats.has(mediaInfo.formatString))) {
+          anyNewOrUpdated = true;
           updatedContent.push(contentInfo);
         }
       });
-      // Listing is newest-first, so once a page has nothing within the
-      // window, nothing on later pages will be either - stop there
-      // regardless of whether this page held anything new/updated.
-      return anyWithinWindow;
+      // The listing is newest-first and the DB fills from that same end, so
+      // a page where everything is already known means we've caught up.
+      // Keyed on "nothing new anywhere on this page" rather than "the first
+      // already-known item" so one already-seen item sitting mid-page
+      // doesn't stop the walk while genuinely new content is still below it.
+      if (!anyNewOrUpdated) {
+        return false;
+      }
+      return pageIdx < DigitalFoundryContentManager.MAX_NEW_CONTENT_SCAN_PAGES;
     });
+    if (pagesWalked >= DigitalFoundryContentManager.MAX_NEW_CONTENT_SCAN_PAGES) {
+      logger.log(
+        "warn",
+        `New-content check stopped at its ${DigitalFoundryContentManager.MAX_NEW_CONTENT_SCAN_PAGES}-page limit while still finding new content - there is likely more further back that this pass didn't reach. The next check will continue from the newest end again.`
+      );
+    }
     return { newContent, updatedContent };
   }
 
