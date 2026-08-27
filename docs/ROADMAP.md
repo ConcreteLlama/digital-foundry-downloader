@@ -174,12 +174,35 @@ ffprobe-measured local duration (written once, right after download completes, i
 comparison - the sync-yt-video-meta.ts backfill should then defer to that real
 measurement rather than overwrite/coexist with it.
 
-- [ ] **1. Strip sponsorship mentions from YouTube descriptions.** Heuristic text
+- [x] **1. Strip sponsorship mentions from YouTube descriptions.** **Done 2026-08-27** -
+  implemented as *move to the end* rather than strip, at the project owner's preference:
+  the sponsor still gets its mention, the description opens with what the video is about,
+  and nothing is ever discarded, so a false positive costs a paragraph its position
+  rather than its existence. Matching is restricted to credit-line phrasing in the
+  opening paragraphs (see `utils/youtube/sponsorship.ts`). Validated against 13 real DF
+  videos: moved for all 7 sponsored, untouched for all 6 unsponsored, zero mismatches
+  against "does it have a `Sponsored by X` chapter" as ground truth. Original text: Heuristic text
   cleanup (regex/pattern-matching for "sponsored by", "thanks to X for sponsoring",
   common sponsor-blurb boilerplate) applied when backfilling `description` in
   `sync-yt-video-meta.ts`. Best-effort/conservative by nature - false negatives (missed
   sponsor text) are much safer than false positives (stripping real content).
-- [ ] **2. Fix chapter timestamp offset from the stripped intro sponsorship.** The
+- [x] **2. Fix chapter timestamp offset from the stripped intro sponsorship.**
+  **Done 2026-08-27, verified against a real download.** Two things differed from what
+  was anticipated below. First, the root cause was confirmed: the old fetcher scraped
+  `.duration` from DF's own listing (across 24 pre-relaunch videos it matched YouTube
+  exactly), the new site publishes none, so the field became YouTube-sourced and both
+  sides of the comparison traced back to the same number. Downloaded files are now
+  ffprobed on completion and that measurement stored, with `MediaInfo.durationSource`
+  marking it `measured` so the YouTube backfill can't overwrite it. Second - and this
+  changed the design - **the sponsor read is never at 0:00**; across a 13-video sample it
+  always followed a short intro (0:29 to 2:26 in). So this is a *mid-video excision*, not
+  a leading offset, and the leading-shift approach would have destroyed the intro's
+  subtitles to fix the rest. Chapters now keep everything before the cut, drop what falls
+  inside it, and shift only what follows. The segment is located from the "Sponsored by
+  X" chapter and cross-checked against the measured gap; if they disagree by more than
+  10s, or no such chapter exists, it logs and corrects nothing rather than guessing.
+  Measured on Metro 2039: YouTube 741s, real file 659.839s, an 81.161s gap against an 82s
+  sponsor chapter. Original text: The
   bigger issue - chapters (`fetchYtVideoMeta`'s `ytChaptersToChapters`, embedded into
   the downloaded file at download completion, see `fetch-chapters-task.ts`) are off by
   the sponsorship segment's length for affected content, since they're built from
@@ -188,7 +211,21 @@ measurement rather than overwrite/coexist with it.
   offered to trigger a real download of a known-affected video on request, to compare
   YouTube's chapter/duration data against the actual downloaded file** - take them up on
   this rather than guessing at the offset.
-- [ ] **3. Re-investigate YouTube subtitle extraction** - broken, reportedly since a
+- [x] **3. Re-investigate YouTube subtitle extraction** - **diagnosed 2026-08-27, and
+  resolved by removal rather than repair.** It cannot be fixed by adjusting the request:
+  the track is still advertised and its `baseUrl` still signed, but fetching returns HTTP
+  200 with an empty body - for ASR and human-authored tracks, DF and non-DF videos, every
+  format, with and without browser user-agent, cookies, referer and visitorData; and
+  InnerTube answers UNPLAYABLE for videos that play fine in a browser. That is YouTube's
+  proof-of-origin (PO token) requirement, minted by their attestation JavaScript, so no
+  plain HTTP client can produce one - hence a quiet empty 200 rather than an error.
+  yt-dlp *was* evaluated and does still work (it impersonates client identities Google
+  hasn't closed off - the visionOS one at time of testing), but the project owner
+  rejected that route: it is deliberate circumvention of an access control, and it
+  carries a permanent maintenance burden that fails *silently*, which is exactly why this
+  went unnoticed for months. **Replaced by local Whisper transcription** (item 5 below).
+  The `"youtube"` service is removed, with a config patch stripping it from existing
+  installs so they still boot. Original text:
   YouTube-side API/mechanism change (not yet diagnosed). Current implementation:
   `df-downloader-service/src/utils/youtube/youtube-subs.ts` (`fetchYtSubs`/`getYtSubs`)
   pulls a caption track's `baseUrl` straight out of
@@ -200,7 +237,13 @@ measurement rather than overwrite/coexist with it.
   response? YouTube now requiring a signature/session token on timedtext URLs is a
   plausible cause, given known YouTube-side hardening in this area, but unconfirmed) -
   diagnose before assuming a fix approach.
-- [ ] **4. Claude-API-powered content summaries (blocked on #3).** New feature: a
+- [ ] **4. Claude-API-powered content summaries.** **No longer blocked** - #3 resolved
+  the transcript question decisively: there are no YouTube subs, and local Whisper now
+  produces a transcript of every download as a by-product. So the "summarize from the
+  audio stream" branch below is simply the path, and the transcript already exists rather
+  than needing new infrastructure. The cost unknown the owner flagged (Claude generating
+  subtitles itself for ~2-hour DF Directs) is moot for transcription - Whisper handles
+  that locally for free - but still applies to summarization input size. Original text: New feature: a
   configurable Claude API token, used to generate a text summary of each piece of
   content. Explicit ordering from the project owner: if YouTube subtitle extraction
   (#3) works, summarize from subs (cheap/fast). If not, summarize from the audio stream
@@ -214,3 +257,67 @@ measurement rather than overwrite/coexist with it.
   pattern - see `CLAUDE.md`'s "Conventions worth knowing"), a summarization
   task/pipeline step, and a UI surface to display the result (and to enter/manage the
   token, mirroring how the DF `autologin` cookie's settings form works).
+
+- [x] **5. Local subtitle generation with Whisper.** **Done 2026-08-27**, added as the
+  replacement for #3 rather than as a planned item. Transcribes the downloaded file's own
+  audio via whisper.cpp: no API key, no per-use cost, no ToS or circumvention question,
+  and nothing that breaks when a third party changes their mind. Because it transcribes
+  the file itself the timings are the file's own, so the sponsorship realignment from #2
+  doesn't apply to subtitles at all - only chapters still need it. Everything is
+  configurable (model, threads, language, model dir, binary path, term corrections) and
+  the settings UI generates from the zod schema as usual.
+  - Measured on a 660s video at 16 threads, and scaled to the owner's 8-core i3-N305
+    (~6-8x slower): `tiny.en` 51x realtime, `base.en` 35x, `small.en` 14x - so a 2-hour
+    Direct is roughly 17/24/60 minutes on that box. `base.en` is the default.
+  - Accuracy on DF content: `small.en` matched YouTube's own ASR on every proper noun
+    tested (GeForce, 4A Games, Metro 2039), `base.en` missed some, `tiny.en` missed all
+    of them and isn't usable here.
+  - **Whisper's initial prompt does not fix jargon** - it only conditions the first
+    30-second window, and measured across a full transcript it changed nothing ("UE5"
+    stayed "UA5"). The configurable term-correction list is what actually works. Don't
+    re-litigate this by adding a prompt field.
+  - The Docker image builds whisper.cpp (pinned) in a separate stage and copies out the
+    single static binary; models download on first use into the config dir, which is a
+    persisted mount, rather than the work dir which is scratch.
+
+### Also done in this session (2026-08-27), not planned items
+
+- **New content could be missed permanently.** `getNewContentList()` used
+  `automaticDownloads.maxContentAgeHours` as its *pagination stop condition* as well as
+  the download gate, so discovery gave up after roughly one page - and `scanWholeArchive`
+  resumes near its saved checkpoint at the *oldest* end of a newest-first listing, so it
+  never revisits page 0. Anything that aged past the window before the next poll was
+  invisible forever. A dev install had missed ten videos over twelve days, some only
+  hours old. Discovery now walks newest-first until a whole page is already known
+  (bounded at 20 pages), and a check runs on startup and on sign-in rather than only on
+  the timer.
+- **Descriptions were flattened into one run-on block**, in the UI (HTML collapsing
+  newlines) and in the embedded file metadata (`mediaSanitise` replacing every newline
+  with a space). Neither the container nor the players required that - MP4 round-trips
+  newlines through ffmpeg fine.
+- **The request queue indicator** now lists what's actually queued, what each request is
+  for, and which phase it's in - "queued: 0 / in flight: yes" read as self-contradictory,
+  and "in flight" was true while a request was merely asleep in the spacing gate. Adds a
+  manual "Scan now" button, since nothing could previously trigger a new-content check on
+  demand.
+- **`parseSrt` returned the entire file as one subtitle line** for any CRLF-terminated
+  SRT (it compared the untrimmed line against `""`). Also affected `extractMediaSubtitles`
+  on the refresh-metadata path, so this was a pre-existing latent bug, not just new-code
+  fallout.
+
+### Queued follow-ups (not started)
+
+- **Deferred subtitle generation.** Whisper runs inline, so a long video holds up its own
+  download completing. Run it after the file has landed instead, with scheduling controls
+  so it doesn't fight Plex for CPU. **Important**: prefer writing an external `.srt`
+  sidecar over remuxing into the container for the deferred path - replacing a file that
+  Plex/Jellyfin may be streaming is at best undefined, and a sidecar avoids rewriting a
+  multi-GB file entirely.
+- **GPU/iGPU acceleration for Whisper** (OpenVINO or Vulkan on the N305's Intel UHD).
+  Caveat: that iGPU is probably already doing QuickSync for Plex, so this may relocate
+  contention rather than remove it. Measure before assuming a win.
+- **Docker image size.** `npm ci` creates a 961MB layer including devDependencies; the
+  later `npm prune --omit=dev` can't reclaim it because layers are additive. A multi-stage
+  build copying only `dist/`, `public/` and production `node_modules` would likely cut
+  this substantially. (The 2.94GB reported locally vs ~713MB on DockerHub is just
+  uncompressed vs compressed, not a regression.)

@@ -21,7 +21,8 @@ Digital Foundry left their old host and relaunched independently at `digitalfoun
 - File paths are configurable with templates to allow you to specify where the content is downloaded to based on metadata from the content (e.g. can put in YYYY/MM directories, or put all content tagged with "df direct" into a DF Direct dir)
 - Can send pushbullet notifications when various events occur
 - Stores content info and related download info to a file so it doesn't have to re-scan on restart
-- Ability to automatically generate subtitles for videos - either extracted from YouTube or generated with Deepgram or Google STT (Google STT implementation is quite slow due to using streaming recognize)
+- Ability to automatically generate subtitles for videos, either locally with Whisper (no API key, no per-video cost, and because it transcribes the downloaded file itself the timings always match it) or via Deepgram or Google STT (Google STT is quite slow due to using streaming recognize). Model, thread count and a term-correction list for jargon the transcriber mishears are all configurable
+  - Note: subtitles used to be extractable from YouTube's own captions. That no longer works - YouTube stopped serving captions to anything that isn't a browser, returning an empty response without a proof-of-origin token - so the option was removed in 2.7.0. Existing configurations are migrated automatically on startup
 - A small status indicator in the UI's nav bar shows whether the tool is currently waiting on Digital Foundry (queued/rate-limited) or mid-archive-scan — click it for a breakdown
 
 # DF Login Cookie

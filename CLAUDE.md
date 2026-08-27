@@ -12,15 +12,27 @@ generating subtitles, etc. Not a general-purpose product — built by and for on
 (the repo owner) who shares it publicly. Keep that in mind for scope: prefer pragmatic
 fixes over enterprise-grade abstraction, and don't add config/features speculatively.
 
-## Current state (as of 2026-08-19) — read this first
+## Current state (as of 2026-08-27) — read this first
 
-**Branch state**: `main`, `develop`, and `experimental` are all byte-identical as of
-2026-08-19 (fast-forwarded together, commit `8864a9f`) — Phase 1 plus the full
-stabilization pass below are live on all three, and on DockerHub's `latest`/`development`/
-`experimental` tags. New work happens on fresh branches off `main`
-(`feature/youtube-metadata-drift`, `feature/youtube-subtitle-extraction` already created
-empty, ready to check out) — see `docs/ROADMAP.md`'s Phase 3 for what's queued next and
-why it's structured that way.
+**Version 2.7.0.** Phase 3's items 1, 2 and 3 are done, plus local Whisper subtitle
+generation and several unplanned fixes — see `docs/ROADMAP.md`'s Phase 3 for the full
+write-up including the measurements and the two negative results worth not repeating
+(Whisper's initial prompt doesn't fix jargon; YouTube captions can't be fetched at all).
+Item 4 (Claude summaries) is now unblocked, since Whisper produces a transcript of every
+download as a by-product.
+
+**Branch state**: this work sits on `experimental` (and `feature/queue-contents-indicator`,
+kept aligned), 10 commits ahead of where the remote was at `8864a9f`. Local `main` and
+`develop` are still at `8864a9f`, so `experimental` is deliberately ahead of both until
+this is promoted.
+
+A warning for anyone working in a sandbox without repo credentials: **remote-tracking
+refs in a checkout can be months out of date**, and `git fetch` fails outright without
+SSH access rather than telling you the refs are stale. On 2026-08-27 the cached
+`origin/experimental` pointed at a commit predating the entire new-site rewrite, which
+led to a wrong conclusion about how large a push would be; the actual remote was fine and
+matched `main`. Check `stat .git/refs/remotes/origin/<branch>` before trusting a
+remote-tracking ref you haven't just fetched.
 
 Digital Foundry left their old host and relaunched independently at
 `digitalfoundry.net` with an entirely different CMS, HTML structure, and auth
@@ -147,19 +159,19 @@ with `@deepgram/sdk`, see `deepgram.ts`).
 - `DigitalFoundryContentManager.start_reinstate_when_new_site()` — dead code, the
   pre-relaunch version of `start()`, kept intentionally as a reference for what the
   polling loop used to do; not currently called.
-- **YouTube subtitle extraction is broken** (`youtube-subs.ts`'s `fetchYtSubs`,
-  wired as the `"youtube"` `SubtitlesService`) — reportedly since a YouTube-side change,
-  not yet diagnosed. See `docs/ROADMAP.md`'s Phase 3, item 3.
-- **DF's downloaded videos aren't a frame-accurate match for the YouTube source** for
-  content with a sponsorship intro on YouTube that the download has stripped out - this
-  means YouTube-sourced chapters/duration (and to a lesser extent description) can be
-  offset/wrong relative to the actual file. There's already a working offset-correction
-  pattern for *subtitles* (`media-utils/subtitles/youtube.ts`'s `getSubs()`) that's very
-  likely silently defeated by this session's `mediaInfo.duration` backfill work (both
-  sides of its offset comparison probably now trace back to the same YouTube number
-  instead of one being the real local file's measured duration). See `docs/ROADMAP.md`'s
-  Phase 3 "Core problem" writeup before touching chapters, description, or duration
-  backfilling again.
+- **YouTube captions can no longer be fetched at all** — diagnosed 2026-08-27 and
+  resolved by removal, not repair. The caption track is still advertised in the watch
+  page and its `baseUrl` is still signed, but fetching it returns HTTP 200 with an empty
+  body: for ASR and human-authored tracks, DF and non-DF videos, every format, with and
+  without browser user-agent/cookies/referer/visitorData. InnerTube answers UNPLAYABLE
+  for videos that play fine in a browser. That's YouTube's proof-of-origin (PO token)
+  requirement, minted by their attestation JS, so no plain HTTP client can satisfy it.
+  Working around it (yt-dlp-style client impersonation) was considered and rejected by
+  the project owner - it's deliberate circumvention plus a permanent maintenance burden
+  that fails *silently*. The `"youtube"` `SubtitlesService` is gone, with a config patch
+  in `file-config.ts` stripping it from existing installs so they still boot. Local
+  Whisper transcription replaced it. **Only captions are gated** - chapters, duration and
+  descriptions still come from the watch page HTML and work fine.
 
 Don't assume TypeScript errors you might see referenced in old notes/logs are still
 current — a `df-content-manager.ts`/`tasks.ts` type mismatch around
