@@ -2,6 +2,38 @@
 
 
 
+## 2.7.0 (2026-08-27)
+
+Subtitles can now be generated locally on your own machine instead of being pulled from YouTube, which stopped serving them. This release also fixes a long-standing gap where newly published videos could go unnoticed entirely, and corrects chapter timings on videos with a sponsor segment.
+
+### Features
+- Local subtitle generation (Whisper)
+  - Transcribes the downloaded file on this machine - no API key, no per-video cost, and nothing that can stop working because a third party changed their mind
+  - Because it transcribes the actual file, the timings always line up with it exactly
+  - Choose your own model to trade speed against accuracy - the smallest is fast but misses names, the larger ones match or beat YouTube's own captions
+  - Set how many CPU threads it may use, so transcribing doesn't slow down everything else on the machine (defaults to leaving two cores free)
+  - Correct words the transcriber consistently mishears - useful for jargon like 'UE5', which every option tested gets wrong
+  - Models download automatically the first time you use one
+- New 'Scan now' button to check for newly published videos immediately, rather than waiting for the next scheduled check
+- The request queue indicator now lists what is actually queued and what each request is doing, instead of only showing counts
+### Bug Fixes
+- Fixed newly published videos never being found at all if the app hadn't run for a while
+  - Anything published more than the auto-download age limit before the next check was invisible to the app permanently - the age limit was accidentally being used to decide how far back to look, as well as what to download
+  - One test install had missed ten videos across twelve days, including some only hours old
+  - The app now also checks for new content immediately on startup and when you sign in, rather than waiting for the next scheduled check
+- Fixed chapter timings being wrong on videos with a sponsor segment
+  - Digital Foundry's downloads have the sponsor read cut out, but chapters come from YouTube, where it's still present - so every chapter after it was out by up to a minute and a half
+  - Video length is now measured from the downloaded file itself rather than taken from YouTube, which is what makes the correction possible
+- Sponsor messages in descriptions are moved to the end so a video's description starts with what the video is actually about. Nothing is deleted
+- Fixed descriptions displaying as one unbroken block of text, both in the web UI and in the downloaded files' own metadata (so also in Plex, Jellyfin and similar)
+- Fixed subtitle files being read as a single subtitle containing the entire file, which affected refreshing metadata on already-downloaded content
+### Maintenance
+- Removed YouTube subtitle extraction. YouTube no longer serves captions to anything that isn't a web browser, so this had silently stopped working - an empty response is indistinguishable from 'this video has no captions', which is why it went unnoticed. Existing configurations are updated automatically on startup
+### Known Issues
+- If you had YouTube selected as your only subtitles service, subtitle generation will be switched off after upgrading until you enable Whisper (or Deepgram/Google STT) in Settings
+- Whisper transcription is CPU-intensive and runs as part of the download, so a long video can hold up that download finishing on low-power hardware. Running it as a separate background task afterwards is planned
+- Whisper has no GPU acceleration yet, so it can't make use of an integrated or discrete GPU
+
 ## 2.6.0 (2026-08-18)
 
 Digital Foundry's new independent site is now fully supported - automatic scanning and downloading work end-to-end again for the first time since the old site was decommissioned. The Patreon HTML-paste workaround from 2.5.0 has been retired now that it's no longer needed.
