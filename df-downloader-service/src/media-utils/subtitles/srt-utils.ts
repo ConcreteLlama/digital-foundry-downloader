@@ -94,32 +94,46 @@ export const parseSrt: (srt: string) => SrtLine[] = (srt) => {
   let curTimestampStart: SrtTimestamp | null = null;
   let curTimestampEnd: SrtTimestamp | null = null;
   let curTranscript: string[] = [];
-  return srt.split("\n").reduce<SrtLine[]>((lines, line, idx) => {
+  const lines: SrtLine[] = [];
+  const flushCue = () => {
+    if (curTimestampStart && curTimestampEnd && curTranscript.length > 0) {
+      lines.push({
+        start: curTimestampStart,
+        end: curTimestampEnd,
+        transcript: curTranscript.join("\n"),
+      });
+    }
+    curTimestampStart = null;
+    curTimestampEnd = null;
+    curTranscript = [];
+    curTimestampIdx = null;
+  };
+  for (const line of srt.split("\n")) {
     const trimmed = line.trim();
-    if (line === "") {
-      if (curTimestampStart && curTimestampEnd && curTranscript.length > 0) {
-        lines.push({
-          start: curTimestampStart,
-          end: curTimestampEnd,
-          transcript: curTranscript.join("\n"),
-        });
-        curTimestampStart = null;
-        curTimestampEnd = null;
-        curTranscript = [];
-        curTimestampIdx = null;
-      }
-      return lines;
-    } else if (curTimestampIdx === null) {
+    // Compare the *trimmed* line, not the raw one. SRT files written on
+    // Windows (whisper.cpp's output, and ffmpeg's depending on platform)
+    // separate cues with "\r\n", so a blank separator line arrives here as
+    // "\r" - which is not "" and so never ended a cue. The result was the
+    // entire file being returned as a single subtitle line containing every
+    // timestamp and index as literal text.
+    if (trimmed === "") {
+      flushCue();
+      continue;
+    }
+    if (curTimestampIdx === null) {
       curTimestampIdx = parseInt(trimmed, 10);
-      return lines;
-    } else if (!curTimestampStart) {
+      continue;
+    }
+    if (!curTimestampStart) {
       const [start, end] = trimmed.split(" --> ");
       curTimestampStart = parseStrTimestampString(start);
       curTimestampEnd = parseStrTimestampString(end);
-      return lines;
-    } else {
-      curTranscript.push(trimmed);
+      continue;
     }
-    return lines;
-  }, []);
+    curTranscript.push(trimmed);
+  }
+  // Not every writer terminates the final cue with a trailing blank line,
+  // and without this that cue is silently dropped.
+  flushCue();
+  return lines;
 };
