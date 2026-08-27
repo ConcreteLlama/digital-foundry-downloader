@@ -49,6 +49,10 @@ export type TaskStatus = z.infer<typeof TaskStatus>;
 
 export const BasicTaskInfo = z.object({
   id: z.string(),
+  /** When the task first started running - absent while it's still queued. */
+  startTime: z.coerce.date().optional(),
+  /** When it finished, however it finished - absent while still running. */
+  endTime: z.coerce.date().optional(),
   type: z.literal("task"),
   taskType: z.string(),
   capabilities: TaskCapabilities.array(),

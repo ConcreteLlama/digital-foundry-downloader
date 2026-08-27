@@ -522,6 +522,8 @@ const makeCommonTaskInfo = (
     id: task.id,
     type: "task",
     taskType: task.taskType,
+    startTime: task.startTime || undefined,
+    endTime: task.endTime || undefined,
     priority: positionInfo ? positionInfo.priority : -1,
     position: positionInfo ? positionInfo.position : -1,
     priorityPosition: positionInfo ? positionInfo.priorityPosition : -1,

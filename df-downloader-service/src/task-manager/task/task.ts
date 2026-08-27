@@ -69,6 +69,7 @@ export abstract class Task<
   private _pauseTrigger: PauseTrigger | null = null;
   private pauseTriggerInProgress: PauseTrigger | null = null;
   private _forceRunFlag: boolean = false;
+  private _startTime: Date | null = null;
   private _endTime: Date | null = null;
   private startedEmitted: boolean = false;
 
@@ -82,6 +83,10 @@ export abstract class Task<
       if (taskState === "running") {
         if (!this.startedEmitted) {
           this.startedEmitted = true;
+          // First transition to running only - a task that pauses and
+          // resumes keeps its original start, so elapsed time reflects how
+          // long the step has actually been going rather than restarting.
+          this._startTime = new Date();
           this.emit("started", undefined);
         }
       }
@@ -123,6 +128,10 @@ export abstract class Task<
 
   get result() {
     return this._result;
+  }
+
+  get startTime() {
+    return this._startTime;
   }
 
   get endTime() {
