@@ -39,7 +39,7 @@ import { makeDfDownloadParams } from "./df-fetcher.js";
 import { DownloadContextStatus } from "./download/downloader/fsm/download-context.js";
 import { SubtitleGenerator } from "./media-utils/subtitles/subtitles.js";
 import { serviceLocator } from "./services/service-locator.js";
-import { PersistedPipeline, PersistedStepResult } from "./db/pipeline-db-model.js";
+import { CompletedPipeline, PersistedPipeline, PersistedStepResult } from "./db/pipeline-db-model.js";
 import { PriorityPositionInfo } from "./task-manager/priority-item-manager.js";
 import { TaskManager } from "./task-manager/task-manager.js";
 import {
@@ -545,6 +545,10 @@ export const makePersistedPipeline = (taskPipelineExecution: PipelineExecutionTy
   const currentStep = taskPipelineExecution.getCurrentStep();
   const context: any = taskPipelineExecution.context;
   const stepOrder = steps.map(({ step }) => step.id);
+  const stepNames = steps.reduce<Record<string, string>>((toReturn, { step }) => {
+    toReturn[step.id] = String(step.name);
+    return toReturn;
+  }, {});
   const stepResults: Record<string, PersistedStepResult> = {};
   steps.forEach(({ step, managedTask }) => {
     const result = managedTask?.task?.result;
@@ -568,6 +572,7 @@ export const makePersistedPipeline = (taskPipelineExecution: PipelineExecutionTy
     queuedTime: startTime || new Date(),
     currentStepIndex,
     stepOrder,
+    stepNames,
     stepResults,
     context: {
       downloadLocation: context?.downloadLocation,
@@ -575,6 +580,80 @@ export const makePersistedPipeline = (taskPipelineExecution: PipelineExecutionTy
       fileAtFinalLocation: context?.fileAtFinalLocation,
     },
     resumeAttempts: context?.resumeAttempts ?? 0,
+  };
+};
+
+/**
+ * Rebuilds a UI-shaped pipeline from a completed record on disk.
+ *
+ * The task list is otherwise built purely from in-memory executions, so a
+ * restart made every finished download vanish from the view even though the
+ * history was being written to disk. This is what makes that history
+ * visible again.
+ *
+ * Step tasks are synthesised from the persisted step results rather than
+ * left empty, so the details dialog works on historical runs too - which is
+ * the case it matters most for: a failure you want to look at after the
+ * fact is exactly the one you can no longer reproduce.
+ */
+export const makeTaskPipelineInfoFromPersisted = (
+  record: CompletedPipeline,
+  dfContent: DfContentInfo
+): TaskPipelineInfo => {
+  const stepTasks: Record<string, any> = {};
+  record.stepOrder.forEach((stepId, index) => {
+    const stepResult = record.stepResults[stepId];
+    if (!stepResult) {
+      return;
+    }
+    stepTasks[stepId] = {
+      id: stepId,
+      type: "task",
+      taskType: record.stepNames?.[stepId] || "task",
+      capabilities: [],
+      // Positions are meaningless for something already finished - nothing
+      // is queued behind it.
+      priority: -1,
+      position: -1,
+      priorityPosition: -1,
+      startTime: stepResult.startTime,
+      endTime: stepResult.endTime,
+      status: {
+        state: stepResult.status,
+        attempt: 1,
+        isComplete: true,
+        error: stepResult.error,
+      },
+    };
+  });
+  return {
+    id: record.id,
+    type: "pipeline",
+    pipelineType: record.pipelineType,
+    pipelineDetails: {
+      id: record.id,
+      type: record.pipelineType,
+      queuedTime: record.queuedTime,
+      dfContent,
+      mediaFormat: record.mediaFormat || "",
+      destinationPath: record.context.finalLocation,
+      stepOrder: record.stepOrder,
+      steps: record.stepOrder.reduce<Record<string, StepDetails>>((toReturn, stepId) => {
+        toReturn[stepId] = { id: stepId, name: record.stepNames?.[stepId] || stepId };
+        return toReturn;
+      }, {}),
+    },
+    pipelineStatus: {
+      statusMessage:
+        record.result === "success"
+          ? "Completed"
+          : record.result === "cancelled"
+            ? "Cancelled"
+            : "Failed",
+      isComplete: true,
+      pipelineResult: record.result,
+    },
+    stepTasks,
   };
 };
 

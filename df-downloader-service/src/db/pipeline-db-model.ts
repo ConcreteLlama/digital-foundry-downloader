@@ -47,6 +47,13 @@ export const PersistedPipeline = z.object({
   /** Index into stepOrder that was in progress when this was last written. */
   currentStepIndex: z.number(),
   stepOrder: z.string().array(),
+  /**
+   * Step id -> display name. Step ids are generated per execution
+   * ("download-pipeline-2-step-0"), so without this a pipeline restored from
+   * history would list its steps by opaque id. Optional so records written
+   * before this existed still load.
+   */
+  stepNames: z.record(z.string(), z.string()).optional(),
   /** Keyed by step id - see PersistedStepResult. */
   stepResults: z.record(z.string(), PersistedStepResult).default({}),
   /**
