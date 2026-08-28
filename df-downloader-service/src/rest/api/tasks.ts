@@ -56,7 +56,7 @@ export const makeDownloadsApiRouter = (contentManager: DigitalFoundryContentMana
   router.post("/control", async (req: Request, res: Response) => {
     await zodParseHttp(ControlRequest, req, res, async (data) => {
       try {
-        taskManager.control(data);
+        await taskManager.control(data);
         sendResponse(res, {});
       } catch (e) {
         sendErrorAsResponse(res, e, {
@@ -67,7 +67,7 @@ export const makeDownloadsApiRouter = (contentManager: DigitalFoundryContentMana
   });
 
   router.post("/clear-completed/", async (req: Request, res: Response) => {
-    taskManager.clearCompletedPipelineExecs();
+    await taskManager.clearCompletedPipelineExecs();
     taskManager.clearCompletedTasks();
     sendResponse(res, {});
   });

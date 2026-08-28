@@ -188,7 +188,7 @@ export class DfTaskManager {
           .catch((e) => logger.log("error", `Failed to archive pipeline ${pipelineExecution.id}`, e));
       }
       if (this.autoClearCompletedPipelines) {
-        this.clearCompletedPipelineExec(pipelineExecution.id);
+        this.forgetCompletedPipelineExec(pipelineExecution.id);
       }
     });
   }
@@ -329,15 +329,35 @@ export class DfTaskManager {
     return removeEmptyDirsTask;
   }
 
-  clearCompletedPipelineExecs() {
+  async clearCompletedPipelineExecs() {
     this.pipelineExecutions.forEach((execution, name) => {
       if (execution.isCompleted) {
         this.pipelineExecutions.delete(name);
       }
     });
+    // Finished pipelines are persisted as well, and the tasks endpoint tops
+    // the list back up from that history - so clearing only the in-memory
+    // copies left the list looking untouched as soon as it next polled.
+    await serviceLocator.completedPipelineDb?.clear();
   }
 
-  clearCompletedPipelineExec(id: string) {
+  async clearCompletedPipelineExec(id: string) {
+    this.forgetCompletedPipelineExec(id);
+    // Deliberately not conditional on there being a live execution: an entry
+    // restored from a previous run exists only in the history, and is exactly
+    // the kind of thing someone clears individually.
+    await serviceLocator.completedPipelineDb?.remove(id);
+  }
+
+  /**
+   * Drops the in-memory copy but leaves the history alone.
+   *
+   * Separate from clearCompletedPipelineExec because autoClearCompletedPipelines
+   * means "don't accumulate finished pipelines in the running list", not
+   * "discard the record of them" - archiving to the history and then deleting
+   * it again would make that option quietly destroy what it just wrote.
+   */
+  private forgetCompletedPipelineExec(id: string) {
     const execution = this.pipelineExecutions.get(id);
     if (execution && execution.isCompleted) {
       this.pipelineExecutions.delete(id);
@@ -384,15 +404,17 @@ export class DfTaskManager {
     }
   }
 
-  controlPipeline(controlPipelineRequest: ControlPipelineRequest) {
+  async controlPipeline(controlPipelineRequest: ControlPipelineRequest) {
     const { pipelineExecutionId, stepId, action } = controlPipelineRequest;
+    // Checked before the lookup below, not after it: a pipeline from a
+    // previous run has no live execution, so demanding one made clearing
+    // precisely those entries fail with "no task with id".
+    if (action === "clear") {
+      return this.clearCompletedPipelineExec(pipelineExecutionId);
+    }
     const pipeline = this.pipelineExecutions.get(pipelineExecutionId);
     if (!pipeline) {
       throw new Error(`No task with id ${pipelineExecutionId}`);
-    }
-    if (action === "clear") {
-      this.clearCompletedPipelineExec(pipelineExecutionId);
-      return;
     }
     const step = stepId ? pipeline.getStepById(stepId) : pipeline.getCurrentStep();
     const managedTask = step?.managedTask as GenericManagedTask | undefined;
@@ -414,9 +436,9 @@ export class DfTaskManager {
     this.controlTaskManagerTask(task, controlTaskRequest.action);
   }
 
-  control(controlRequest: ControlRequest) {
+  async control(controlRequest: ControlRequest) {
     if (isControlPipelineRequest(controlRequest)) {
-      this.controlPipeline(controlRequest);
+      await this.controlPipeline(controlRequest);
     } else {
       this.controlTask(controlRequest);
     }

@@ -124,6 +124,29 @@ export class CompletedPipelineDb {
     return this.fileDb.getData().pipelines;
   }
 
+  /** Drops one record - the "clear" action on a single finished pipeline. */
+  async remove(id: string) {
+    const data = this.fileDb.getData();
+    const remaining = data.pipelines.filter((pipeline) => pipeline.id !== id);
+    if (remaining.length === data.pipelines.length) {
+      return;
+    }
+    data.pipelines = remaining;
+    data.lastUpdated = new Date();
+    await this.fileDb.updateDb(data);
+  }
+
+  /** Drops the lot - "clear completed". */
+  async clear() {
+    const data = this.fileDb.getData();
+    if (!data.pipelines.length) {
+      return;
+    }
+    data.pipelines = [];
+    data.lastUpdated = new Date();
+    await this.fileDb.updateDb(data);
+  }
+
   async add(pipeline: CompletedPipeline) {
     const data = this.fileDb.getData();
     // Newest first, so trimming drops the oldest and reading the recent
