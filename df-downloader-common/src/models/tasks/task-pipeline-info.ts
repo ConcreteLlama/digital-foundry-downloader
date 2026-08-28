@@ -26,6 +26,17 @@ export type DfPipelineType = z.infer<typeof DfPipelineType>;
 const StepDetails = z.object({
     name: z.union([DfStepName, z.string()]),
     id: z.string(),
+    /**
+     * Why this step is known in advance not to run, when that is knowable from
+     * configuration alone - "subtitles are embedded during metadata injection",
+     * say. Distinct from a step that was GOING to run and then didn't: that is
+     * a runtime outcome (skipped), whereas this is a prediction the pipeline
+     * could have made before it started.
+     *
+     * Optional and additive, so persisted records written before it existed
+     * parse unchanged.
+     */
+    notApplicableReason: z.string().optional(),
 });
 export type StepDetails = z.infer<typeof StepDetails>;
 

@@ -1,5 +1,6 @@
 import { Box, Stack, Typography } from "@mui/material";
 import {
+  activeMsSoFar,
   bytesToHumanReadable,
   DownloadProgressUtils,
   estimateProgressTimeRemainingMs,
@@ -11,6 +12,7 @@ import {
   selectBasicTaskField,
   selectCurrentStep,
   selectDownloadTask,
+  selectTaskState,
 } from "../../../store/df-tasks/tasks.selector";
 import { monoFontFamily } from "../../../themes/build-theme";
 
@@ -28,6 +30,8 @@ const formatMs = (ms?: number) =>
  */
 export const TaskReadout = ({ pipelineId }: { pipelineId: string }) => {
   const currentStep = useSelector(selectCurrentStep(pipelineId)) ?? "";
+  const taskState = useSelector(selectTaskState(pipelineId, currentStep));
+  const isRunning = taskState === "running";
   const downloadTask = useSelector(selectDownloadTask(pipelineId, currentStep));
   const status = useSelector(selectBasicTaskField<"status", TaskStatus | null>(pipelineId, currentStep, "status"));
   const startTime = useSelector(
@@ -46,11 +50,13 @@ export const TaskReadout = ({ pipelineId }: { pipelineId: string }) => {
         progress.totalBytes || 0
       )}`,
     });
-    const remaining = DownloadProgressUtils.calculateTimeRemainingSeconds(progress);
-    readouts.push({
-      label: "Remaining",
-      value: Number.isFinite(remaining) ? formatMs(remaining * 1000) ?? "-" : "-",
-    });
+    // Only project forward while the task is actually running. A paused
+    // download has a rate of zero, and an estimate built on that is fiction -
+    // see calculateTimeRemainingSeconds.
+    const remaining = isRunning ? DownloadProgressUtils.calculateTimeRemainingSeconds(progress) : undefined;
+    if (remaining !== undefined) {
+      readouts.push({ label: "Remaining", value: formatMs(remaining * 1000) ?? "-" });
+    }
     if (progress.retries) {
       readouts.push({ label: "Attempt", value: String(progress.retries + 1) });
     }
@@ -59,9 +65,22 @@ export const TaskReadout = ({ pipelineId }: { pipelineId: string }) => {
     if (status.progress.detail) {
       readouts.push({ label: "Detail", value: status.progress.detail });
     }
-    const remainingMs = estimateProgressTimeRemainingMs(startTime, status.progress);
+    const remainingMs = isRunning ? estimateProgressTimeRemainingMs(startTime, status.progress) : undefined;
     if (remainingMs !== undefined) {
       readouts.push({ label: "Remaining", value: formatMs(remainingMs) ?? "-" });
+    }
+  }
+
+  // Elapsed keeps running while paused (correct - it is wall clock); Active
+  // stops. Showing both is what makes a paused row honest: "Elapsed 6m 29s,
+  // Active 2m 14s" says more than either number alone, and neither is
+  // extrapolated unless the task is running.
+  const activeMs = activeMsSoFar(status);
+  if (startTime) {
+    const elapsedMs = Date.now() - new Date(startTime).getTime();
+    readouts.push({ label: "Elapsed", value: formatMs(elapsedMs) ?? "-" });
+    if (activeMs !== undefined && Math.abs(elapsedMs - activeMs) >= 2000) {
+      readouts.push({ label: "Active", value: formatMs(activeMs) ?? "-" });
     }
   }
 

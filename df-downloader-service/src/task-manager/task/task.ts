@@ -71,6 +71,15 @@ export abstract class Task<
   private _forceRunFlag: boolean = false;
   private _startTime: Date | null = null;
   private _endTime: Date | null = null;
+  /**
+   * Working time, as a two-scalar stopwatch - see TaskStatus.accumulatedActiveMs.
+   *
+   * Separate from _startTime, which is wall clock and deliberately keeps
+   * running while paused. This one stops, so throughput has something honest
+   * to divide by and a paused row can say "Elapsed 6m 29s - Active 2m 14s".
+   */
+  private _accumulatedActiveMs = 0;
+  private _lastResumedAt: Date | null = null;
   private startedEmitted: boolean = false;
 
   constructor({ idPrefix, taskType, logger }: TaskOpts) {
@@ -80,6 +89,16 @@ export abstract class Task<
     this.id = makeRunUniqueId(idPrefix || `${taskType}-task-`);
     this.on("stateChanged", (state) => {
       const taskState = this.stateToTaskState(state);
+      // Stopwatch: start counting on every entry to running, bank the interval
+      // on every departure from it. Driven off the same transition as the rest
+      // of the state bookkeeping so it cannot drift out of step with what the
+      // task reports.
+      if (taskState === "running" && !this._lastResumedAt) {
+        this._lastResumedAt = new Date();
+      } else if (taskState !== "running" && this._lastResumedAt) {
+        this._accumulatedActiveMs += Date.now() - this._lastResumedAt.getTime();
+        this._lastResumedAt = null;
+      }
       if (taskState === "running") {
         if (!this.startedEmitted) {
           this.startedEmitted = true;
@@ -136,6 +155,16 @@ export abstract class Task<
 
   get endTime() {
     return this._endTime;
+  }
+
+  /** Banked working time, excluding any interval currently in progress. */
+  get accumulatedActiveMs() {
+    return this._accumulatedActiveMs;
+  }
+
+  /** When the current working interval began, or null if not running. */
+  get lastResumedAt() {
+    return this._lastResumedAt;
   }
 
   protected setResult(result: TaskResult<RESULT>) {

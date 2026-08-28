@@ -1,4 +1,5 @@
 import {
+  getDownloadStepNotApplicableReasons,
   BasicTaskInfo,
   ClearMissingFilesTaskInfo,
   ContentMoveFileInfo,
@@ -759,6 +760,7 @@ export const makeTaskPipelineInfoFromPersisted = (
 export const makeTaskPipelineInfo = (
   taskPipelineExecution: PipelineExecutionTypes
 ): TaskPipelineInfo => {
+  const notApplicableReasons = getDownloadStepNotApplicableReasons(configService.config.subtitles);
   const { pipelineType, id, startTime, isCompleted } = taskPipelineExecution;
   const currentStep = taskPipelineExecution.getCurrentStep();
   const steps = taskPipelineExecution.getSteps();
@@ -794,6 +796,13 @@ export const makeTaskPipelineInfo = (
         acc[step.id] = {
           id: step.id,
           name: step.name,
+          // Evaluated from live config rather than frozen when the pipeline
+          // object was built: the pipeline definition is created once at
+          // startup and reused for every download, so freezing it there would
+          // pin a prediction made before the service had run at all. Deriving
+          // it per snapshot means changing the setting mid-download updates
+          // what the UI says will happen - which is the truthful answer.
+          notApplicableReason: notApplicableReasons[step.name],
         };
         return acc;
       }, {} as Record<string, StepDetails>),
@@ -896,6 +905,8 @@ const makeCommonTaskStatusInfo = (managedTask: GenericManagedTask): TaskStatus =
     error: taskError ? makeErrorMessage(taskError) : undefined,
     forceStarted: task.forceRunFlag || undefined,
     progress: statusDetail?.progress,
+    accumulatedActiveMs: task.accumulatedActiveMs,
+    lastResumedAt: task.lastResumedAt,
   };
 }
 

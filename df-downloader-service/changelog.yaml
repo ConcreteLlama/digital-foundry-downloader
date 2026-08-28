@@ -24,6 +24,16 @@ versions:
           - "Previously nothing recorded that a download had happened until everything after it finished too, so restarting during subtitle generation threw the download away and started over"
           - "The step a pipeline reached is remembered, so it picks up from there instead of re-downloading. The step that was actually running restarts, but everything before it is kept"
           - "If the downloaded file has since gone missing, it starts over rather than continuing with a file that isn't there"
+        - "Fixed a job's steps being described differently depending on where you looked":
+          - "The steps a job had yet to reach were listed as 'skipped' in its details window while the card correctly showed them as still to come. The two views worked it out separately; they now share one answer"
+          - "Steps that were never going to run for your settings - writing a separate subtitle file when subtitles are being embedded, for instance - are marked 'not needed' with the reason, rather than appearing as work still to come. They are listed in the details window and left out of the card, and if one runs anyway it appears regardless"
+          - "The bar for each step is now sized by how much of the job it represents rather than every step getting an equal share. Transcribing is usually the longest part of a download, and now looks like it"
+        - "Fixed the time remaining on a paused download being nonsense":
+          - "A paused download reported about 641286 hours remaining - roughly 73 years - because the estimate was still dividing by a made-up transfer rate after the real one had dropped to zero"
+          - "No estimate is shown at all now unless something is actually running, and the underlying calculation says it does not know rather than inventing a number"
+        - "A job now shows both how long it has been going and how long it has actually been working":
+          - "The single duration kept counting while a download was paused, which is right for one question and wrong for the other"
+          - "Paused jobs show both, so 'Elapsed 6m 29s, Active 2m 14s' tells you the pause is why it is taking a while"
         - "Fixed several things a job could do without telling you anything":
           - "A paused download kept its progress bar - pausing at 60% used to empty the bar completely, which looked like the transfer had been thrown away"
           - "A queued, paused or waiting job now says so in words. It could previously show a title, an empty bar and two buttons with no explanation anywhere - which mattered most for exactly the case the app pauses deliberately, when it is spacing out its requests to Digital Foundry"
