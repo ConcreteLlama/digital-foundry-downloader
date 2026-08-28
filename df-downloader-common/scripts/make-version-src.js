@@ -8,7 +8,18 @@ const getGitBranch = () => {
     if (process.env.GIT_BRANCH) {
         return process.env.GIT_BRANCH;
     }
-    const head = fs.readFileSync(path.join(projectRoot, '.git', 'HEAD'), 'utf8').trim();
+    // In a normal checkout `.git` is a directory; in a git worktree it's a
+    // file containing "gitdir: <path>" pointing at the real per-worktree git
+    // dir. Reading it blindly as a directory made `npm run build` fail
+    // outright in any worktree, which is exactly where a branch name is most
+    // worth reporting.
+    const gitPath = path.join(projectRoot, '.git');
+    let gitDir = gitPath;
+    if (fs.statSync(gitPath).isFile()) {
+        const gitDirRef = fs.readFileSync(gitPath, 'utf8').trim().replace(/^gitdir:\s*/, '');
+        gitDir = path.resolve(projectRoot, gitDirRef);
+    }
+    const head = fs.readFileSync(path.join(gitDir, 'HEAD'), 'utf8').trim();
     const branch = head.replace('ref: refs/heads/', '');
     return branch;
 }

@@ -84,6 +84,10 @@ Subtitles can now be generated locally on your own machine instead of being pull
   - The page is painted in your theme before the app finishes loading, so there is no flash of the wrong colours on the way in
 - New 'Scan now' button to check for newly published videos immediately, rather than waiting for the next scheduled check
 - The request queue indicator now lists what is actually queued and what each request is doing, instead of only showing counts
+- Opening a video's details no longer asks Digital Foundry about it every single time
+  - The details window refreshed a video's information on every open, and each of those requests waits its turn behind a deliberate gap - so browsing the library felt like everything was being held up, and it put one request on Digital Foundry per item you looked at
+  - Information confirmed against the live site within the last six hours is now reused instead. Anything older, anything never confirmed since the site move, and the check made immediately before a download still ask properly
+  - The queue indicator now also shows requests that have just finished, and whether they succeeded. Quick requests used to vanish before they could be seen, which made the queue look like it only ever delays things
 ### Enhancements
 - The interface has had its foundations reworked, and now looks like a considered piece of software rather than a default one
   - The app finally ships the typefaces it was designed with. It had been asking for fonts that were never included, so on most machines everything fell back to plain Helvetica or Arial - text is now noticeably clearer and more consistent, and it looks the same on every machine because nothing is downloaded from elsewhere

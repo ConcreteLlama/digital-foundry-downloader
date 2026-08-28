@@ -24,6 +24,68 @@ type FetchListenerOpts<T extends z.ZodTypeAny, SUCCESS_PAYLOAD> = {
   generateSuccessPayload: (data: z.infer<T>) => SUCCESS_PAYLOAD;
 };
 
+/**
+ * In-flight requests, keyed by exactly what is being sent. Two dispatches of
+ * the same query with the same payload can only be asking for the same thing,
+ * so the second joins the first's response rather than issuing a second HTTP
+ * request - both still dispatch their own success/failed action, so nothing
+ * downstream can tell the difference.
+ *
+ * This exists because React.StrictMode (see main.tsx) deliberately runs every
+ * effect twice in dev, and the content detail dialog kicks off its metadata
+ * refresh from one - so opening an item fired two identical
+ * POST /content/entry/refresh-metadata calls, and therefore two requests to
+ * Digital Foundry, the second of which sat out the 5-15s spacing gate (see
+ * df-request-queue.ts). It guards genuine double-dispatch in production too.
+ *
+ * Applied to every query rather than just the read-only ones, which is safe
+ * given what actually goes through here (see the addFetchListener call sites):
+ * only *concurrent* byte-identical requests collapse, and the entry is dropped
+ * the moment the request settles, so a deliberate repeat - the user doing the
+ * same thing again a moment later - always goes out for real. That leaves only
+ * "fire the identical mutation twice simultaneously", which for every mutating
+ * endpoint here (start a download, control a task, log in, update user info) is
+ * a double-click rather than an intent to do it twice. If an endpoint is ever
+ * added where two identical simultaneous calls should mean two effects, it
+ * needs to opt out of this.
+ */
+const inFlightFetches = new Map<string, Promise<any>>();
+
+/**
+ * Null for anything that can't be compared cheaply and reliably - a FormData
+ * or stream body would stringify to "{}" and collide with every other one, so
+ * such requests skip the dedupe rather than risk being wrongly merged.
+ */
+const fetchKey = (url: RequestInfo, requestOpts: RequestInit): string | null => {
+  const { body } = requestOpts;
+  if (body !== undefined && body !== null && typeof body !== "string") {
+    return null;
+  }
+  // Method and body matter as much as the URL here - several endpoints are
+  // POSTs whose payload is the entire query (e.g. /content/search).
+  return JSON.stringify([String(url), requestOpts.method || "GET", body ?? null]);
+};
+
+/**
+ * fetchJson, but collapses concurrent identical requests onto one. Rejections
+ * are shared too, so a failure still reaches every caller.
+ */
+const dedupedFetchJson = (url: RequestInfo, requestOpts: RequestInit) => {
+  const key = fetchKey(url, requestOpts);
+  if (key === null) {
+    return fetchJson(url, requestOpts);
+  }
+  const existing = inFlightFetches.get(key);
+  if (existing) {
+    return existing;
+  }
+  const pending = fetchJson(url, requestOpts).finally(() => {
+    inFlightFetches.delete(key);
+  });
+  inFlightFetches.set(key, pending);
+  return pending;
+};
+
 export function addFetchListener<
   T extends z.ZodTypeAny,
   START_PAYLOAD,
@@ -68,7 +130,7 @@ export function addFetchListener<
       const [url, requestOpts = {}] = makeFetchProps(action.payload);
       let jsonResponse: any;
       try {
-        jsonResponse = await fetchJson(url, {
+        jsonResponse = await dedupedFetchJson(url, {
           ...requestOpts,
         });
         const result = parseResponseBody(jsonResponse, responseSchema);

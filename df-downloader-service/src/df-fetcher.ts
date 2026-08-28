@@ -202,19 +202,27 @@ function parseListingItem(itemHtml: string): DfContentInfo | null {
 
   const name = slugifyTitle(title);
 
-  return DfContentInfoUtils.create(
-    key,
-    name,
-    title,
-    undefined,
-    mediaInfos,
-    thumbnail,
-    youtubeVideoId || undefined,
-    publishedDate,
-    [],
-    "digitalfoundry",
-    possibleAltKeys
-  );
+  return {
+    ...DfContentInfoUtils.create(
+      key,
+      name,
+      title,
+      undefined,
+      mediaInfos,
+      thumbnail,
+      youtubeVideoId || undefined,
+      publishedDate,
+      [],
+      "digitalfoundry",
+      possibleAltKeys
+    ),
+    // Stamped here rather than in create() because this is the single point
+    // where DF's own live HTML becomes a DfContentInfo - every path that
+    // produces confirmed-fresh data (archive scan, refreshMeta, the link
+    // refresh before a download) goes through it, and nothing else should
+    // claim freshness it didn't earn. See DfContentInfo.metaRefreshedAt.
+    metaRefreshedAt: new Date(),
+  };
 }
 
 /**

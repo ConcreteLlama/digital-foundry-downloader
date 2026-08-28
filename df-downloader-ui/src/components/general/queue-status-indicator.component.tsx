@@ -20,7 +20,10 @@ const secondsUntil = (epochMs: number | null, now: number) =>
  * actually cares about: is it talking to DF, deliberately pausing, or just
  * waiting its turn.
  */
-const describePhase = (request: DfRequestEntry, now: number): { text: string; color: "default" | "primary" | "warning" } => {
+const describePhase = (
+  request: DfRequestEntry,
+  now: number
+): { text: string; color: "default" | "primary" | "warning" | "success" | "error" } => {
   switch (request.phase) {
     case "in_flight":
       return { text: "Sending", color: "primary" };
@@ -34,6 +37,13 @@ const describePhase = (request: DfRequestEntry, now: number): { text: string; co
         text: `Rate limited - retrying in ${secondsUntil(request.waitingUntil, now)}s (attempt ${request.attempt})`,
         color: "warning",
       };
+    case "done":
+      // Kept on screen briefly after finishing (see DONE_LINGER_MS in
+      // df-request-queue.ts) so a request that was sent straight away is
+      // actually visible, rather than the list only ever showing pauses.
+      return request.failed
+        ? { text: "Failed", color: "error" }
+        : { text: "Sent", color: "success" };
     case "queued":
     default:
       return { text: "Waiting its turn", color: "default" };
@@ -116,7 +126,11 @@ export const QueueStatusIndicator = () => {
   const { dfQueue, scanInProgress, newContentCheckInProgress, signedInToDf } = status;
   const requests = dfQueue.requests;
   const isBackingOff = requests.some((request) => request.phase === "backing_off");
-  const isActive = scanInProgress || newContentCheckInProgress || requests.length > 0;
+  // Finished requests linger in the list for a few seconds so they can be
+  // seen, but they aren't work - they shouldn't light up the nav bar icon or
+  // inflate the badge count.
+  const pendingCount = requests.filter((request) => request.phase !== "done").length;
+  const isActive = scanInProgress || newContentCheckInProgress || pendingCount > 0;
 
   const scanDisabledReason = !signedInToDf
     ? "Not signed in to Digital Foundry - configure it in Settings"
@@ -130,7 +144,7 @@ export const QueueStatusIndicator = () => {
     <>
       <Tooltip title="Digital Foundry request queue">
         <IconButton onClick={(e) => setAnchorEl(e.currentTarget)} color="inherit">
-          <Badge badgeContent={requests.length > 0 ? requests.length : undefined} color="secondary">
+          <Badge badgeContent={pendingCount > 0 ? pendingCount : undefined} color="secondary">
             {/* A continuous spin here would be running near-constantly
                 during any scan (which can take a while) - distracting for
                 something meant to sit passively in the nav bar. Active
