@@ -23,7 +23,7 @@ import { Link, Outlet, useLocation } from "react-router-dom";
 import { LiveStatusStrip } from "../../components/general/live-status-strip.component";
 import { DfLogoIcon } from "../../icons/df-logo.component";
 import { selectConfigSectionField, selectDevConfigEnabled } from "../../store/config/config.selector.ts";
-import { monoFontFamily } from "../../themes/build-theme";
+import { monoFontFamily, NARROW_RAIL_MAX_WIDTH } from "../../themes/build-theme";
 import { getStoredRailState, RailState, storeRailState } from "../../themes/ui-preferences";
 import { MobileTabBar } from "./mobile-tab-bar.component";
 import { useNavBadge } from "./nav-badges";
@@ -43,8 +43,13 @@ export const Nav = ({ onOpenChangelog }: NavProps) => {
   const useMobileLayout = useMediaQuery(theme.breakpoints.down("md"));
   // Narrow desktops (an unfolded foldable is 833) default to the icon rail so
   // the content keeps the width, but it is only a default - see below.
+  // One named source rather than a literal that got left behind when md moved
+  // from 900 to 720 - which had the 833px foldable and 768px tablets, exactly
+  // what C2 existed to fix, defaulting off the old number.
   const [railState, setRailState] = useState<RailState>(() =>
-    getStoredRailState(typeof window !== "undefined" && window.innerWidth < 900 ? "icon" : "expanded")
+    getStoredRailState(
+      typeof window !== "undefined" && window.innerWidth < NARROW_RAIL_MAX_WIDTH ? "icon" : "expanded"
+    )
   );
   const [overlayOpen, setOverlayOpen] = useState(false);
 

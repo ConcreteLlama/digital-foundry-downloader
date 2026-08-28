@@ -25,6 +25,12 @@ export const makeWebRouter = (publicAddress: string) => {
 
   router.use("/assets", express.static(assetsDir));
   router.use("/static", express.static(staticDir));
+  // Anything the build drops at the root of the UI dir - favicon.svg today.
+  // Without this it falls through to the catch-all below and is answered with
+  // index.html, so a built image served HTML as its favicon (200, text/html).
+  // /vite.svg had the same problem, so this has never worked in a real image.
+  // index: false so a directory request still reaches the catch-all.
+  router.use(express.static(uiDir, { index: false }));
   router.use("/js/df-content-manager.js", (req, res) => {
     res.setHeader("Content-Type", "application/javascript");
     res.send(bundleJs);

@@ -20,21 +20,43 @@ export type ContentRowState =
 /**
  * How a state is drawn.
  *
- * Colour is deliberately only one of four channels. The palettes differ in how
- * far apart their accent, warn and err sit - foundry's amber accent is much
- * closer to its warn than signal's teal is - so a row whose state is carried
- * by hue alone is legible in one theme and ambiguous in another. Every state
- * therefore also has its own icon (shape), its own spine treatment (solid /
- * dashed / dotted / none), and a filled or hollow dot. Desaturate the page and
- * all seven remain distinguishable.
+ * THE RULE, and it is testable: every state must differ from every other on at
+ * least TWO of - icon shape, spine pattern, dot fill, or >=20 greyscale levels.
+ *
+ * Colour on its own does almost nothing here. Measured on the shipped
+ * palettes, the closest pair of state colours was 2 greyscale levels apart in
+ * signal (downloading vs needs-refresh) and 3 in paper; in a light theme every
+ * readable colour is dark by construction, so the whole set collapses into a
+ * ~30-level band. Hue is therefore a nicety, not a channel.
+ *
+ * What actually carries state is structure: all seven icons are distinct, and
+ * all seven spine patterns are distinct. That is two independent channels for
+ * every possible pair, so the rule holds without relying on colour at all -
+ * which is why it still holds in greyscale and in Paper.
+ *
+ * See content-row-state.spec-check (scripts/check-state-channels.mjs) for the
+ * assertion that keeps this true.
  */
+/** Every value here is used by exactly one state. */
+export type SpinePattern =
+  | "solid"
+  | "pulse"
+  | "dashed"
+  | "dotted"
+  | "hatch"
+  | "sparse"
+  | "none";
+
 export type ContentRowStateSpec = {
   label: string;
   icon: React.FC<SvgIconProps>;
   /** Palette token for the spine, chip text and dot. */
   colour: string;
-  /** The spine's second channel: how the 2px edge is drawn. */
-  spine: "solid" | "dashed" | "dotted" | "none";
+  /**
+   * The spine's pattern. UNIQUE per state - that uniqueness is what makes the
+   * pattern a channel in its own right rather than a decoration.
+   */
+  spine: SpinePattern;
   /** The dot's second channel: filled centre or hollow ring. */
   dot: "filled" | "hollow";
 };
@@ -44,7 +66,8 @@ export const contentRowStateSpecs: Record<ContentRowState, ContentRowStateSpec> 
     label: "Downloading",
     icon: DownloadingIcon,
     colour: "primary.main",
-    spine: "solid",
+    // Moving, so "happening now" reads without colour or even a percentage.
+    spine: "pulse",
     dot: "filled",
   },
   working: {
@@ -72,14 +95,14 @@ export const contentRowStateSpecs: Record<ContentRowState, ContentRowStateSpec> 
     label: "Needs refresh",
     icon: SyncProblemIcon,
     colour: "warning.main",
-    spine: "dashed",
+    spine: "sparse",
     dot: "hollow",
   },
   paywalled: {
     label: "Paywalled",
     icon: LockIcon,
     colour: "text.disabled",
-    spine: "dotted",
+    spine: "hatch",
     dot: "hollow",
   },
   unknown: {
@@ -117,18 +140,47 @@ export const getRestingRowState = (entry: DfContentEntry): ContentRowState => {
 
 /** CSS for the 2px status spine, including its non-colour pattern. */
 export const spineStyles = (spec: ContentRowStateSpec) => {
-  if (spec.spine === "none") {
-    return { backgroundColor: "transparent" as const };
+  switch (spec.spine) {
+    case "none":
+      return { backgroundColor: "transparent" as const };
+    case "solid":
+      return { backgroundColor: spec.colour };
+    case "pulse":
+      // Moving stripes: the only animated pattern, so "live" is legible even
+      // with the page desaturated and the percentage unknown.
+      return {
+        backgroundColor: "transparent" as const,
+        color: spec.colour,
+        backgroundImage:
+          "repeating-linear-gradient(to bottom, currentColor 0 6px, transparent 6px 12px)",
+        backgroundSize: "100% 12px",
+        animation: "df-spine-pulse 900ms linear infinite",
+        "@keyframes df-spine-pulse": {
+          from: { backgroundPosition: "0 0" },
+          to: { backgroundPosition: "0 12px" },
+        },
+        "@media (prefers-reduced-motion: reduce)": { animation: "none" },
+      };
+    case "hatch":
+      return {
+        backgroundColor: "transparent" as const,
+        color: spec.colour,
+        backgroundImage:
+          "repeating-linear-gradient(45deg, currentColor 0 1px, transparent 1px 4px)",
+      };
+    default: {
+      // Dashes and dots are drawn as a repeating gradient so the pattern
+      // survives at 2px wide, where a real dashed border would not render
+      // reliably. "sparse" is deliberately much airier than "dotted" so the
+      // two read apart at a glance.
+      const [on, off] = spec.spine === "dashed" ? [10, 6] : spec.spine === "sparse" ? [2, 12] : [3, 5];
+      return {
+        backgroundImage: `repeating-linear-gradient(to bottom, currentColor 0 ${on}px, transparent ${on}px ${
+          on + off
+        }px)`,
+        color: spec.colour,
+        backgroundColor: "transparent" as const,
+      };
+    }
   }
-  if (spec.spine === "solid") {
-    return { backgroundColor: spec.colour };
-  }
-  // Dashes and dots are drawn as a repeating gradient so the pattern survives
-  // at 2px wide, where a real dashed border would not render reliably.
-  const [on, off] = spec.spine === "dashed" ? [10, 6] : [3, 5];
-  return {
-    backgroundImage: `repeating-linear-gradient(to bottom, currentColor 0 ${on}px, transparent ${on}px ${on + off}px)`,
-    color: spec.colour,
-    backgroundColor: "transparent" as const,
-  };
 };

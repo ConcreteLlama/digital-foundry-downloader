@@ -24,6 +24,18 @@ versions:
           - "Previously nothing recorded that a download had happened until everything after it finished too, so restarting during subtitle generation threw the download away and started over"
           - "The step a pipeline reached is remembered, so it picks up from there instead of re-downloading. The step that was actually running restarts, but everything before it is kept"
           - "If the downloaded file has since gone missing, it starts over rather than continuing with a file that isn't there"
+        - "Fixed several things a job could do without telling you anything":
+          - "A paused download kept its progress bar - pausing at 60% used to empty the bar completely, which looked like the transfer had been thrown away"
+          - "A queued, paused or waiting job now says so in words. It could previously show a title, an empty bar and two buttons with no explanation anywhere - which mattered most for exactly the case the app pauses deliberately, when it is spacing out its requests to Digital Foundry"
+          - "A step that cannot report a percentage - most of the steps after the download - now shows moving activity rather than an empty bar indistinguishable from one that has not started"
+          - "Pause, resume and cancel no longer open the job's details window as well as doing what you asked"
+          - "Finished jobs can be cleared individually again, not only all at once"
+          - "After a restart, the history of finished jobs shows which steps were skipped rather than marking them all as never reached"
+        - "The content list is usable from the keyboard again - rows can be tabbed to and opened with Enter or Space, as they could before the list was rebuilt"
+        - "Every job and content state is now told apart by its outline pattern as well as its icon and colour, so the two never rely on colour alone. Measured across the themes, colour by itself was separating some states by as little as one shade of grey"
+        - "Fixed the app icon showing as a blank page in the released build - the file was never actually served, so this has never worked in a real installation"
+        - "The list and grid buttons are now available on a phone. Switching to grid on a phone previously left no way back"
+        - "Changing how many downloads run at once now responds to every click, and saves once when you have finished rather than on each press"
         - "The Activity page is now a rack rather than a stack of cards":
           - "Each job shows its pipeline as a row of segments, one per step, with the step that is actually running filling up as it goes - so you can see how far through a step is, not just which step it is on"
           - "Underneath, the numbers that matter - progress, rate, transferred, time remaining - in a fixed-width typeface so they stop jittering as they change"

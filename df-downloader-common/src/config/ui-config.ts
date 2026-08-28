@@ -72,7 +72,9 @@ export const uiPalettes = {
     ok: "#4ade80",
     warn: "#fbbf24",
     err: "#f87171",
-    idle: "#4b5b6b",
+    // Raised from #4b5b6b, which sat at 2.71:1 on the surface - below the 3:1
+    // floor for non-text UI. Now 4.64:1.
+    idle: "#6b8095",
   },
   foundry: {
     label: "Foundry",
@@ -103,7 +105,8 @@ export const uiPalettes = {
     ok: "#7cc267",
     warn: "#f2e07a",
     err: "#e8455f",
-    idle: "#5e5140",
+    // Was #5e5140 at 2.46:1. Now 4.77:1.
+    idle: "#8f7d64",
   },
   paper: {
     label: "Paper",
@@ -130,7 +133,9 @@ export const uiPalettes = {
     ok: "#2f7d51",
     warn: "#8a5a04",
     err: "#c8412a",
-    idle: "#a89f8d",
+    // Was #a89f8d at 2.58:1. Now 3.64:1. Still the lightest token here, which
+    // is correct for a light theme - "inert" reads as quieter, i.e. paler.
+    idle: "#8d8472",
   },
 } as const satisfies Record<string, UiPalette>;
 
@@ -141,8 +146,16 @@ export const uiThemeNames = Object.keys(uiPalettes) as [UiThemeName, ...UiThemeN
 export const DefaultUiThemeName: UiThemeName = "signal";
 
 export const UiConfig = z.object({
-  /** Which palette the interface uses. */
-  theme: z.enum(uiThemeNames).default(DefaultUiThemeName),
+  /**
+   * Which palette the interface uses.
+   *
+   * .catch() rather than bare .default(): a hand-edited config.yaml, or a
+   * palette removed in a later version, would otherwise fail the whole config
+   * parse and stop the service booting over a colour scheme. Same failure
+   * shape as the YouTube subtitles service that needed a config patch to keep
+   * existing installs starting.
+   */
+  theme: z.enum(uiThemeNames).default(DefaultUiThemeName).catch(DefaultUiThemeName),
 });
 export type UiConfig = z.infer<typeof UiConfig>;
 export const UiConfigKey = "ui";
