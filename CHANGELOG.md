@@ -31,9 +31,11 @@ Subtitles can now be generated locally on your own machine instead of being pull
   - Every step it went through, when each started and how long it took, so you can see where the time actually went
   - Steps that were skipped are shown as skipped rather than left blank
   - Failures show which step failed and why, instead of just a status line
+  - A step that is still running shows its progress and how much longer it is likely to need, rather than only how long it has been going
 - Long-running steps now show a progress bar rather than just a spinner
   - Subtitle generation reports how far through it is - previously a two-hour episode could spend half an hour with no sign anything was happening
   - Embedding metadata does the same while it rewrites the file
+  - An estimated time remaining is shown alongside, so a long transcription tells you how much longer it needs and not just how far along it is - downloads already did this, everything else now does too
 - New 'Scan now' button to check for newly published videos immediately, rather than waiting for the next scheduled check
 - The request queue indicator now lists what is actually queued and what each request is doing, instead of only showing counts
 ### Enhancements

@@ -13,9 +13,17 @@ import {
   TableRow,
   Typography,
 } from "@mui/material";
-import { TaskInfo, TaskState } from "df-downloader-common";
+import {
+  DownloadTaskStatus,
+  TaskInfo,
+  TaskState,
+  calculateTimeRemainingSeconds,
+  estimateProgressTimeRemainingMs,
+} from "df-downloader-common";
 import { useSelector } from "react-redux";
 import { selectPipeline } from "../../store/df-tasks/tasks.selector.ts";
+import { LinearProgressWithLabel } from "../general/linear-progress-with-label.component.tsx";
+import { Fragment } from "react";
 
 /**
  * Renders a span of milliseconds the way someone reading a task list wants to
@@ -58,6 +66,44 @@ const stepDuration = (task?: TaskInfo | null): string => {
   const start = new Date(task.startTime).getTime();
   const end = task.endTime ? new Date(task.endTime).getTime() : Date.now();
   return formatDuration(end - start);
+};
+
+/**
+ * How far a running step has got, from whichever of the two shapes it
+ * reports in.
+ *
+ * Downloads carry bytes and a live transfer rate, so their estimate comes
+ * from that rate directly. Everything else reports a bare percentage, so the
+ * estimate has to be extrapolated from elapsed time. Finished steps report
+ * nothing - a completed bar sitting at 100% is just noise next to a duration
+ * that already says how long it took.
+ */
+const stepProgress = (task?: TaskInfo | null) => {
+  const status = task?.status;
+  if (!status || status.isComplete) {
+    return undefined;
+  }
+  const download = (status as DownloadTaskStatus).currentProgress;
+  if (download?.totalBytes) {
+    return {
+      percent: download.percentComplete,
+      remainingMs:
+        calculateTimeRemainingSeconds(
+          download.totalBytesDownloaded,
+          download.totalBytes,
+          download.currentBytesPerSecond || 1
+        ) * 1000,
+      detail: undefined as string | undefined,
+    };
+  }
+  if (!status.progress) {
+    return undefined;
+  }
+  return {
+    percent: status.progress.percent,
+    remainingMs: estimateProgressTimeRemainingMs(task?.startTime, status.progress),
+    detail: status.progress.detail,
+  };
 };
 
 const SummaryRow = ({ label, value }: { label: string; value: React.ReactNode }) => (
@@ -103,6 +149,12 @@ export const TaskDetailsDialog = ({ pipelineId, open, onClose }: TaskDetailsDial
     : undefined;
   const totalElapsed =
     firstStart !== undefined ? formatDuration((lastEnd ?? Date.now()) - firstStart) : "-";
+  // Only one step runs at a time, so the running step's estimate is the
+  // pipeline's - the steps after it are typically seconds (writing a sidecar,
+  // moving a file) against minutes or hours for this one.
+  const timeRemaining = stepOrder
+    .map((stepId) => stepProgress(stepTasks[stepId])?.remainingMs)
+    .find((remaining) => remaining !== undefined);
 
   return (
     <Dialog open={open} onClose={onClose} maxWidth="md" fullWidth>
@@ -127,6 +179,9 @@ export const TaskDetailsDialog = ({ pipelineId, open, onClose }: TaskDetailsDial
           <SummaryRow label="Status" value={pipelineStatus.statusMessage} />
           <SummaryRow label="Queued" value={formatTime(queuedTime)} />
           <SummaryRow label="Total time" value={totalElapsed} />
+          {timeRemaining !== undefined && (
+            <SummaryRow label="Time remaining" value={`about ${formatDuration(timeRemaining)}`} />
+          )}
           {destinationPath && <SummaryRow label="Destination" value={destinationPath} />}
         </Stack>
 
@@ -158,8 +213,10 @@ export const TaskDetailsDialog = ({ pipelineId, open, onClose }: TaskDetailsDial
                 const stateLabel = task?.carriedOver
                   ? "done earlier"
                   : state ?? (task ? "pending" : "skipped");
+                const progress = stepProgress(task);
                 return (
-                  <TableRow key={stepId}>
+                  <Fragment key={stepId}>
+                  <TableRow>
                     <TableCell>{steps[stepId]?.name || stepId}</TableCell>
                     <TableCell>
                       <Chip
@@ -175,6 +232,30 @@ export const TaskDetailsDialog = ({ pipelineId, open, onClose }: TaskDetailsDial
                     <TableCell align="right">{formatTime(task?.startTime)}</TableCell>
                     <TableCell align="right">{stepDuration(task)}</TableCell>
                   </TableRow>
+                  {/* A second row rather than a column: the bar needs the full
+                      width to be readable, and only ever one step has one. */}
+                  {progress && (
+                    <TableRow>
+                      <TableCell colSpan={4} sx={{ pt: 0 }}>
+                        <Stack direction="row" spacing={1} alignItems="center">
+                          <Box sx={{ flexGrow: 1 }}>
+                            <LinearProgressWithLabel value={progress.percent} />
+                          </Box>
+                          {progress.detail && (
+                            <Typography variant="caption" color="text.secondary" sx={{ whiteSpace: "nowrap" }}>
+                              {progress.detail}
+                            </Typography>
+                          )}
+                          {progress.remainingMs !== undefined && (
+                            <Typography variant="caption" color="text.secondary" sx={{ whiteSpace: "nowrap" }}>
+                              ~{formatDuration(progress.remainingMs)} left
+                            </Typography>
+                          )}
+                        </Stack>
+                      </TableCell>
+                    </TableRow>
+                  )}
+                  </Fragment>
                 );
               })}
             </TableBody>

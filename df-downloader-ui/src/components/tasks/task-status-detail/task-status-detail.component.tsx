@@ -1,7 +1,8 @@
 import { Stack, Typography } from "@mui/material";
-import { TaskStatus } from "df-downloader-common";
+import { TaskStatus, estimateProgressTimeRemainingMs } from "df-downloader-common";
 import { useSelector } from "react-redux";
 import { selectBasicTaskField, selectCurrentStep, selectIsComplete } from "../../../store/df-tasks/tasks.selector.ts";
+import prettyMilliseconds from "pretty-ms";
 import { LinearProgressWithLabel } from "../../general/linear-progress-with-label.component.tsx";
 import { TaskPipelineStepper } from "../progress-stepper/task-pipeline-stepper.component.tsx";
 import { CompletedTaskStatusDetail } from "./completed-task-status-detail.component.tsx";
@@ -19,7 +20,12 @@ import { DownloadTaskStatusDetail } from "./download-task-status-detail.componen
  */
 const OtherTaskStatusDetail = ({ pipelineId, stepId }: { pipelineId: string; stepId: string }) => {
   const status = useSelector(selectBasicTaskField<"status", TaskStatus | null>(pipelineId, stepId, "status"));
+  const startTime = useSelector(selectBasicTaskField<"startTime", Date | undefined>(pipelineId, stepId, "startTime"));
   const progress = status?.progress;
+  // Downloads show an ETA from their byte rate; these steps had a bar and no
+  // sense of how much longer it represented, which for a transcription is the
+  // question actually being asked.
+  const remainingMs = estimateProgressTimeRemainingMs(startTime, progress);
   return (
     <Stack sx={{ width: "100%" }} spacing={0.5}>
       <TaskPipelineStepper pipelineId={pipelineId} />
@@ -29,6 +35,11 @@ const OtherTaskStatusDetail = ({ pipelineId, stepId }: { pipelineId: string; ste
           {progress.detail && (
             <Typography variant="caption" color="text.secondary" sx={{ whiteSpace: "nowrap" }}>
               {progress.detail}
+            </Typography>
+          )}
+          {remainingMs !== undefined && (
+            <Typography variant="caption" color="text.secondary" sx={{ whiteSpace: "nowrap" }}>
+              ETA: {prettyMilliseconds(remainingMs, { secondsDecimalDigits: 0, unitCount: 2 })}
             </Typography>
           )}
         </Stack>

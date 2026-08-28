@@ -34,6 +34,45 @@ export const TaskProgress = z.object({
 });
 export type TaskProgress = z.infer<typeof TaskProgress>;
 
+/**
+ * Below this, an estimate is not worth showing.
+ *
+ * At 1%, a couple of seconds of noise moves the projection by minutes, and a
+ * confidently wrong number is worse than no number.
+ */
+const MIN_PERCENT_FOR_ESTIMATE = 3;
+
+/**
+ * Roughly how long a step reporting a percentage has left, extrapolated from
+ * how long it took to get this far.
+ *
+ * This assumes the rest of the work costs about what the work so far did,
+ * which holds well enough for the steps that report this way - transcribing
+ * and remuxing both grind through a file at a fairly even rate. Downloads do
+ * not use this: they know their byte rate, so they can do better (see
+ * calculateTimeRemainingSeconds).
+ *
+ * Returns undefined rather than a guess when there isn't enough to go on,
+ * so callers render nothing at all in that case.
+ */
+export const estimateProgressTimeRemainingMs = (
+  startTime: Date | string | undefined,
+  progress: TaskProgress | undefined
+): number | undefined => {
+  if (!startTime || !progress) {
+    return undefined;
+  }
+  const { percent } = progress;
+  if (percent < MIN_PERCENT_FOR_ESTIMATE || percent >= 100) {
+    return undefined;
+  }
+  const elapsed = Date.now() - new Date(startTime).getTime();
+  if (elapsed <= 0) {
+    return undefined;
+  }
+  return (elapsed / percent) * (100 - percent);
+};
+
 export const TaskStatus = z.object({
   state: TaskState,
   pauseTrigger: z.union([z.literal("manual"), z.literal("auto")]).optional(),
