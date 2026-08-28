@@ -15,14 +15,14 @@ import { toolsRouteDefinitions } from "./routes/tools/tools.routes.tsx";
 import { queryCurrentUser } from "./store/auth-user/auth-user.actions";
 import { selectAuthUser } from "./store/auth-user/auth-user.selector";
 import { queryConfigSection } from "./store/config/config.action.ts";
-import { queryTasks } from "./store/df-tasks/tasks.action.ts";
 import { queryDfUserInfo } from "./store/df-user/df-user.actions";
 import { selectIsLoading } from "./store/general.selector.ts";
 import { queryServiceInfo } from "./store/service-info/service-info.actions";
 import { selectServiceError } from "./store/service-info/service-info.selector.ts";
 import { store } from "./store/store";
+import { subscribeToChannel } from "./store/realtime/realtime-stream.ts";
+import { queryTasks } from "./store/df-tasks/tasks.action.ts";
 import { theme } from "./themes/theme";
-import { setIntervalImmediate } from "./utils/timer.ts";
 import registerTaskSnackbarTriggers from "./components/tasks/task-snackbar-triggers.tsx";
 import { BranchCheckDialog } from "./components/general/branch-check.component.tsx";
 import { ManualDownloadFloatingButton } from "./components/df-content/manual-download-fab.component.tsx";
@@ -131,14 +131,14 @@ const MainApp = () => {
   useEffect(() => {
     store.dispatch(queryConfigSection.start("dev"));
   }, []);
-  useEffect(() => {
-    const interval = setIntervalImmediate(() => {
-      store.dispatch(queryTasks.start());
-    }, 1000);
-    return () => {
-      clearInterval(interval);
-    };
-  }, []);
+  // Was an unconditional 1s poll. The backend pushes a snapshot on every
+  // task/pipeline change now, and samples for download progress only while
+  // something is actually running - so an idle app makes no requests at all.
+  // Falls back to the old polling behaviour if the stream can't be held open.
+  useEffect(
+    () => subscribeToChannel("tasks", (tasks) => store.dispatch(queryTasks.success(tasks))),
+    []
+  );
   return (
     <Box sx={{ display: "flex", width: "100vw" }} key="main-app">
       {dfDownloaderBranch !== 'main' && <BranchCheckDialog />}

@@ -4,8 +4,8 @@ import { DfRequestEntry, QueueStatusResponse, parseResponseBody } from "df-downl
 import { useCallback, useEffect, useState } from "react";
 import { API_URL } from "../../config";
 import { fetchJson } from "../../utils/fetch";
+import { subscribeToChannel } from "../../store/realtime/realtime-stream";
 
-const POLL_INTERVAL_MS = 5000;
 /**
  * Countdowns ("sending in 8s") need to tick faster than the poll or they
  * visibly jump in 5s steps. Only runs while the popover is actually open.
@@ -71,11 +71,18 @@ export const QueueStatusIndicator = () => {
     }
   }, []);
 
-  useEffect(() => {
-    poll();
-    const interval = setInterval(poll, POLL_INTERVAL_MS);
-    return () => clearInterval(interval);
-  }, [poll]);
+  // Was a 5s poll. Now a channel on the shared realtime stream - same
+  // connection App.tsx uses for tasks, so this costs no extra socket. The
+  // server dedupes identical snapshots, so an idle queue sends nothing at all
+  // while still reflecting a change within a second rather than up to five.
+  useEffect(
+    () =>
+      subscribeToChannel("queue-status", (data) => {
+        setStatus(data);
+        setNow(Date.now());
+      }),
+    []
+  );
 
   const triggerScan = useCallback(async () => {
     setTriggering(true);
@@ -84,7 +91,7 @@ export const QueueStatusIndicator = () => {
       await fetchJson(`${API_URL}/content/check-new-content`, { method: "POST" });
       // Refresh straight away rather than waiting out the poll interval, so
       // the button flips to "Scanning..." and the first queued requests
-      // appear immediately instead of up to POLL_INTERVAL_MS later.
+      // appear immediately rather than waiting for the next stream update.
       await poll();
     } catch (e) {
       setScanError(e instanceof Error ? e.message : "Failed to start scan");

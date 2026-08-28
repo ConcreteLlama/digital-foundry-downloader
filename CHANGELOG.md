@@ -4,7 +4,7 @@
 
 ## 2.7.0 (2026-08-27)
 
-Subtitles can now be generated locally on your own machine instead of being pulled from YouTube, which stopped serving them. This release also fixes a long-standing gap where newly published videos could go unnoticed entirely, corrects chapter timings on videos with a sponsor segment, and does a good deal less work on your disks along the way.
+Subtitles can now be generated locally on your own machine instead of being pulled from YouTube, which stopped serving them. This release also fixes a long-standing gap where newly published videos could go unnoticed entirely, corrects chapter timings on videos with a sponsor segment, and does a good deal less work on your disks along the way. The interface now updates the moment something changes rather than asking the server for everything once a second, so progress appears immediately and an app with nothing running sits completely quiet.
 
 ### Features
 - Local subtitle generation (Whisper)
@@ -50,6 +50,18 @@ Subtitles can now be generated locally on your own machine instead of being pull
 - Fetching chapter information no longer fires several requests at once
 - Subtitle actions now say 'generate' rather than 'fetch'. Every remaining option transcribes the downloaded file's audio rather than downloading captions from somewhere, so 'fetch' no longer described what happens
 - Whisper can now be told whether to use a GPU. The build bundled in the Docker image is CPU-only, so this applies if you've pointed Whisper at your own GPU-enabled build - and it's worth being able to turn off, since the GPU on this kind of machine is often already busy transcoding for a media server
+- The interface now updates as things happen, rather than asking for everything once a second
+  - Progress, status changes and finished downloads appear the instant they happen instead of up to a second later
+  - When nothing is running, the app now makes no requests at all - previously it asked for the full task list every second around the clock, whether anything was happening or not
+  - While a download is running it still refreshes once a second, because the transfer speed and byte count genuinely change that often - everything else is sent only when it actually changes
+  - Having several tabs or browsers open no longer multiplies the work. The server builds each update once and sends the same one to everyone watching
+  - The request queue indicator now reacts within a second rather than up to five, and goes quiet when the queue is idle
+  - If the connection can't be held open - some networks and reverse proxies interfere with this kind of connection - it falls back to the old behaviour automatically, and quietly switches back once the connection works again
+- The app no longer re-checks the oldest end of the Digital Foundry archive every time it starts
+  - Once it has been all the way through the archive, it now remembers that and skips it on later starts
+  - It previously re-requested the last few pages of a completed pass on every restart, which could never turn up anything - those pages hold the oldest content, and newly published videos are found by the separate check that looks at the newest end
+  - This means a slightly faster startup, and fewer requests to Digital Foundry from every installation on every restart
+  - Deleting db/archive-scan-checkpoint.json still forces a fresh pass through the whole archive if you need one
 ### Bug Fixes
 - Fixed a newly started job showing another video's details after a restart
   - Jobs are numbered from one each time the app starts, so the first job after a restart reused a number already held by one in the completed history, and the two were treated as the same job

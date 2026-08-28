@@ -5,47 +5,16 @@ import { makeTaskPipelineInfo, makeTaskPipelineInfoFromPersisted } from "../../d
 import { serviceLocator } from "../../services/service-locator.js";
 import { sendErrorAsResponse, sendResponse, zodParseHttp } from "../utils/utils.js";
 import { configService } from "../../config/config.js";
+import { makeBuildTasksResponse } from "./tasks-response.js";
 
 export const makeDownloadsApiRouter = (contentManager: DigitalFoundryContentManager) => {
   const router = express.Router();
   const taskManager = contentManager.taskManager;
 
-  /**
-   * How many finished pipelines from previous runs to include.
-   *
-   * The full history is capped far higher on disk, but this response is
-   * polled, and each entry carries its content info - returning hundreds
-   * would mean megabytes on every poll for history nobody is scrolling
-   * that far back through.
-   */
-  const HISTORY_LIMIT = 50;
+  const buildTasksResponse = makeBuildTasksResponse(contentManager);
 
   router.get("/list", async (req: Request, res: Response) => {
-    const taskPipelines = taskManager.getAllPipelineInfos();
-    const tasks = taskManager.getAllTaskInfos();
-    // Finished pipelines only live in memory, so a restart used to empty the
-    // completed list entirely. Top them up from the persisted history,
-    // skipping any the running process already knows about.
-    const liveIds = new Set(taskPipelines.map((pipeline) => pipeline.id));
-    const history = (serviceLocator.completedPipelineDb?.getAll() || [])
-      .filter((record) => !liveIds.has(record.id))
-      .slice(0, HISTORY_LIMIT);
-    let historyPipelines: typeof taskPipelines = [];
-    if (history.length) {
-      const contentEntries = await contentManager.db.getContentEntryMap(history.map((record) => record.contentKey));
-      historyPipelines = mapFilterEmpty(history, (record) => {
-        const contentInfo = contentEntries.get(record.contentKey)?.contentInfo;
-        // Content deleted since the run happened - there's nothing sensible
-        // to show for it, so leave it out rather than inventing a title.
-        return contentInfo ? makeTaskPipelineInfoFromPersisted(record, contentInfo) : undefined;
-      });
-    }
-    const queuedContent: TasksResponse = {
-      taskPipelines: [...taskPipelines, ...historyPipelines],
-      tasks: tasks,
-      scheduledDownloads: contentManager.getScheduledDownloads(),
-    };
-    return sendResponse(res, queuedContent);
+    return sendResponse(res, await buildTasksResponse());
   });
 
   router.get("/task/:id", async (req: Request, res: Response) => {

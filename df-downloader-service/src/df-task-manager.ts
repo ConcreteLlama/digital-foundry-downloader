@@ -41,6 +41,7 @@ import { SubtitleGenerator } from "./media-utils/subtitles/subtitles.js";
 import { serviceLocator } from "./services/service-locator.js";
 import { CompletedPipeline, PersistedPipeline, PersistedStepResult } from "./db/pipeline-db-model.js";
 import { PriorityPositionInfo } from "./task-manager/priority-item-manager.js";
+import { TypedEventEmitter } from "./utils/event-emitter.js";
 import { TaskManager } from "./task-manager/task-manager.js";
 import {
   isPipelineExecutionFailedResult,
@@ -85,6 +86,25 @@ export class DfTaskManager {
 
   readonly pipelineExecutions = new Map<string, PipelineExecutionTypes>();
   readonly tasks = new Map<string, ManagedTask<any, any>>();
+
+  /**
+   * Fires whenever something happened that would change what the tasks
+   * endpoint returns. Exists so a push transport (the SSE stream) can
+   * subscribe in one place, rather than tracking every live pipeline and task
+   * individually and re-subscribing as they come and go.
+   *
+   * Deliberately a plain TypedEventEmitter, not the CachedEventEmitter that
+   * pipelines and tasks themselves extend: that one replays its whole event
+   * cache to every new `.on()` listener, so a client connecting midway through
+   * a download would be handed a burst of historical events on subscribe.
+   *
+   * This covers state *transitions* only. Download byte progress is pull-only
+   * (Download.getStatus() reads the context on demand; the FSM emits
+   * stateChanged solely on genuine state changes), so nothing fires as bytes
+   * arrive - a subscriber that wants a moving progress bar has to sample while
+   * work is in flight. See hasActiveWork().
+   */
+  readonly events = new TypedEventEmitter<{ changed: undefined }>();
 
   autoClearCompletedPipelines: boolean;
 
@@ -148,8 +168,52 @@ export class DfTaskManager {
     });
   }
 
+  private notifyChanged() {
+    this.events.emit("changed", undefined);
+  }
+
+  /**
+   * True if anything is still in flight. Used to decide whether a subscriber
+   * needs to keep sampling for progress that no event will announce - see the
+   * `events` doc comment.
+   */
+  hasActiveWork() {
+    for (const pipelineExecution of this.pipelineExecutions.values()) {
+      if (!pipelineExecution.isCompleted) {
+        return true;
+      }
+    }
+    for (const task of this.tasks.values()) {
+      if (!task.isCompleted()) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  /**
+   * Registers a standalone (non-pipeline) task and wires it into the aggregate
+   * change signal.
+   */
+  private trackTask<MANAGED_TASK extends ManagedTask<any, any>>(managedTask: MANAGED_TASK): MANAGED_TASK {
+    this.tasks.set(managedTask.task.id, managedTask);
+    managedTask.task.on("taskStateChanged", () => this.notifyChanged());
+    this.notifyChanged();
+    return managedTask;
+  }
+
   private addTaskPipelineExecution(pipelineExecution: PipelineExecutionTypes) {
     this.pipelineExecutions.set(pipelineExecution.id, pipelineExecution);
+    // Step boundaries and each step task's own coarse state transitions are
+    // what actually move a pipeline through its lifecycle, so they're the
+    // events worth pushing promptly.
+    pipelineExecution.on("stepTaskStarted", ({ task }) => {
+      task?.task?.on("taskStateChanged", () => this.notifyChanged());
+      this.notifyChanged();
+    });
+    pipelineExecution.on("stepCompleted", () => this.notifyChanged());
+    pipelineExecution.on("completed", () => this.notifyChanged());
+    this.notifyChanged();
     // Every pipeline is registered here, so this is the one place persistence
     // needs to hook into - it covers all pipeline types without the generic
     // pipeline machinery needing to know anything about storage.
@@ -307,26 +371,22 @@ export class DfTaskManager {
     }, {
       maxConcurrent: 10,
     }));
-    this.tasks.set(fileMoveTask.task.id, fileMoveTask);
-    return fileMoveTask;
+    return this.trackTask(fileMoveTask);
   }
 
   clearMissingFiles() {
     const removeMissingFilesTask = this.maintenanceOperationsTaskManager.addTask(ClearMissingFilesTask());
-    this.tasks.set(removeMissingFilesTask.task.id, removeMissingFilesTask);
-    return removeMissingFilesTask;
+    return this.trackTask(removeMissingFilesTask);
   }
 
   scanForExistingContent(contentManager: DigitalFoundryContentManager) {
     const scanForExistingContentTask = this.maintenanceOperationsTaskManager.addTask(ScanForExistingContentTask(contentManager));
-    this.tasks.set(scanForExistingContentTask.task.id, scanForExistingContentTask);
-    return scanForExistingContentTask;
+    return this.trackTask(scanForExistingContentTask);
   }
 
   removeEmptyDirs(dir: string) {
     const removeEmptyDirsTask = this.maintenanceOperationsTaskManager.addTask(RemoveEmptyDirsTask(dir));
-    this.tasks.set(removeEmptyDirsTask.task.id, removeEmptyDirsTask);
-    return removeEmptyDirsTask;
+    return this.trackTask(removeEmptyDirsTask);
   }
 
   async clearCompletedPipelineExecs() {
@@ -339,6 +399,7 @@ export class DfTaskManager {
     // the list back up from that history - so clearing only the in-memory
     // copies left the list looking untouched as soon as it next polled.
     await serviceLocator.completedPipelineDb?.clear();
+    this.notifyChanged();
   }
 
   async clearCompletedPipelineExec(id: string) {
@@ -347,6 +408,7 @@ export class DfTaskManager {
     // restored from a previous run exists only in the history, and is exactly
     // the kind of thing someone clears individually.
     await serviceLocator.completedPipelineDb?.remove(id);
+    this.notifyChanged();
   }
 
   /**
@@ -361,6 +423,7 @@ export class DfTaskManager {
     const execution = this.pipelineExecutions.get(id);
     if (execution && execution.isCompleted) {
       this.pipelineExecutions.delete(id);
+      this.notifyChanged();
     }
   }
 
@@ -370,12 +433,14 @@ export class DfTaskManager {
         this.tasks.delete(name);
       }
     });
+    this.notifyChanged();
   }
 
   clearCompletedTask(id: string) {
     const task = this.tasks.get(id);
     if (task && task.isCompleted()) {
       this.tasks.delete(id);
+      this.notifyChanged();
     }
   }
 
@@ -442,6 +507,9 @@ export class DfTaskManager {
     } else {
       this.controlTask(controlRequest);
     }
+    // Reordering and priority changes alter the response without moving any
+    // task's state, so they'd otherwise go unannounced until the next sample.
+    this.notifyChanged();
   }
 
   private getTaskPipelineExecutionArray() {

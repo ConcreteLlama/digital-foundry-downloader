@@ -113,6 +113,12 @@ npm run dev:service        # nodemon-driven service dev server (needs df-downloa
 npm run dev:ui              # vite dev server for the UI
 npm run check-build        # tsc --noEmit across all 3 workspaces
 ```
+To test a real built image rather than the dev server — running it locally against
+throwaway config/db, separate from the live deployment — see
+`docs/LOCAL_DOCKER_TESTING.md`. It covers the mounts, the port having to agree in
+four places, and the fact that `config.yaml` holds a live DF credential that must
+never be committed.
+
 `node_modules` are not pre-installed in this checkout — run `npm install` at the repo
 root before trying to build/typecheck (there is no more per-package install step).
 
@@ -153,6 +159,41 @@ with `@deepgram/sdk`, see `deepgram.ts`).
   unwrapped client-side via `df-downloader-common`'s `parseResponseBody()` against a
   zod schema. New endpoints should follow this pattern (`sendResponse`/`sendError` in
   `rest/utils/utils.ts`).
+
+## Changelog process (read before finishing any user-facing body of work)
+
+`df-downloader-service/changelog.yaml` is the source of truth; `CHANGELOG.md` at the
+repo root is **auto-generated from it** by the pre-commit hook (`npm run
+build-changelog`) — never hand-edit `CHANGELOG.md`, it'll just get overwritten.
+
+**Mechanism**: the pre-commit hook's `validate-changelog` step fails the commit unless
+`changelog.yaml`'s `versions[0].version` matches root `package.json`'s `version` field
+exactly. **This is the only thing it checks** — it does not check that real content was
+added, so bumping the version without writing a meaningful entry will technically pass
+and produce a useless changelog. This gap has already caused real problems (see git
+history around v2.6.0) — self-police this, the tooling won't catch it for you.
+
+**When to add an entry**: batch related, user-meaningful work into one version bump +
+one entry at a natural checkpoint (finishing a phase, promoting a branch) — not one
+entry per commit, and not for WIP/investigation-only/internal-refactor-only work in
+progress on a feature branch. Bump `version` in root `package.json` and add a matching
+new entry at the *top* of `changelog.yaml`'s `versions` array in the same commit that
+finishes the batch of work.
+
+**How to write it — this is the part that's easy to get wrong**: entries are genuinely
+**user-facing prose**, not developer changelog/commit-message style. Read the `2.7.0`
+and `2.6.0` entries in `changelog.yaml` as the reference for the expected voice before
+writing a new one:
+- A short prose `notes` field summarizing the whole release, written for someone
+  deciding whether to upgrade, not a technical audience.
+- Each bullet explains the *benefit or reason*, not just the mechanism - e.g. "Set how
+  many CPU threads it may use, so transcribing doesn't slow down everything else on the
+  machine" (why it matters), not "Added `whisperConfig.threads` option" (what changed).
+- Nested sub-bullets under a headline bullet for a feature with multiple facets, rather
+  than one flat list.
+- Pick honestly from the real category enum (`features`, `bugfixes`, `enhancements`,
+  `maintenance`, `security`, `misc`, `internal`) plus optional `known_issues` - most
+  entries only use one or two of these, not all of them.
 
 ## Things that are currently known-broken or intentionally disabled
 

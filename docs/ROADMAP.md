@@ -295,6 +295,72 @@ measurement rather than overwrite/coexist with it.
   newlines) and in the embedded file metadata (`mediaSanitise` replacing every newline
   with a space). Neither the container nor the players required that - MP4 round-trips
   newlines through ffmpeg fine.
+
+## Phase 4 — Infrastructure & UX initiatives (proposed, not started)
+
+Raised by the project owner 2026-08-27, tracked here as a master list rather than
+handed to a single branch - these are more independent of each other than Phase 3's
+items were. **The author of this section is acting as project orchestrator only**
+(planning/light investigation/handoff prompts) - not creating branches or committing on
+behalf of whoever picks each one up; do the same if you're extending this list.
+
+- [ ] **1. Real-time updates via SSE.** Full plan: `docs/REALTIME_UPDATES_PLAN.md`
+  (built on the investigation in `docs/INFRASTRUCTURE_PROPOSALS.md`). Scoped to
+  replacing `App.tsx`'s unconditional 1-second task/pipeline-progress poll first - the
+  backend's task/download engine is already fully event-driven internally, so this is a
+  transport-layer addition, not new backend event modeling. Queue-status-indicator and
+  content-list polling are explicitly deferred follow-ups. Ready to hand off.
+- [ ] **2. JSON-file DB → SQLite.** Full plan: `docs/DATABASE_MIGRATION_PLAN.md`.
+  **Not fully greenlit** - confirmed in discussion that SQLite's generated-columns-over-
+  `json_extract()` pattern gives real indexed queries while keeping the existing JSON
+  blob as source of truth (tags need one small join table, everything else doesn't), but
+  the plan explicitly flags that just fixing the JSON approach's real problems (whole-
+  file rewrite per write, non-atomic writes) may be sufficient on its own. Needs the
+  project owner's call on how far to go before implementation starts.
+- [ ] **3. AI-generated content summaries.** See Phase 3 item 4 above for the up-to-date
+  scope (no longer blocked - Whisper's transcript is the summarization input, not a new
+  problem to solve). Not yet written up as a full plan doc the way #1/#2 above are -
+  worth doing if this is picked up next.
+- [ ] **4. UI styling/UX pass.** The project owner's first-ever UI project, largely
+  written pre-LLM-assisted-coding - wants a fresh pass at the look/feel now. **No
+  investigation done yet** - surface-level review of current theming/component patterns
+  (`df-downloader-ui/src/themes/`, MUI version/usage consistency, any obviously dated
+  patterns) needed before this can become a real plan.
+- [ ] **5. Bulk post-process page.** New tool: list all *downloaded* content with
+  multi-select, to batch-apply actions currently only available one item at a time
+  (generate subs, generate an AI summary once #3 exists, etc.) - rather than opening
+  each item individually. **Explicit requirement, not yet resolved**: selection should
+  be smart per action, e.g. "select only items without subtitles yet" for a bulk
+  subtitle-generation run, not just a blanket select-all followed by wasted no-op work
+  on items that already have them. The project owner flagged this as unresolved design,
+  not just unimplemented - whoever picks this up should propose an approach (e.g. a
+  per-action "applicable to" predicate driving a "select all applicable" button,
+  alongside plain manual multi-select) rather than assume one. Not starting from
+  scratch: `df-downloader-ui/src/components/tools/batch-move-files/reorganize-files.components.tsx`
+  already implements a working multi-select + grid-table + batch-action UI pattern
+  (`Checkbox` per row, `Set<string>` selection state) for the existing "reorganize
+  files" tool - worth reusing/adapting rather than inventing a new pattern.
+- [ ] **6. Embed the YouTube video ID in injected file metadata.** Currently injected
+  fields (`MediaFileMeta` in `df-downloader-common`): `title`, `publishedDate`,
+  `description`, `tags` - via `ffmpeg -metadata key=value` flags
+  (`injectMediaMetadata` in `df-downloader-service/src/utils/media-metadata.ts`).
+  Adding the YouTube video ID (the app's own stable `key` for most content) as a custom
+  metadata field is mechanically trivial - one more `-metadata` flag; use a distinct
+  custom key rather than overloading an existing one like `comment`. The actual
+  motivation is future-facing: `findExistingContent`
+  (`df-downloader-service/src/utils/content-finder.ts`) currently matches downloaded
+  files back to DB entries by **normalized filename** (fuzzy string comparison + a
+  size-difference tiebreak) - reading the file's own embedded ID back out (via
+  `ffprobe`) would be a much more reliable match, immune to renamed files or filename
+  template changes. The project owner already flagged the real tradeoff: filename
+  matching is "free" (works off a directory listing, no per-file I/O), while reading
+  embedded metadata means `ffprobe`-ing every candidate file, which is real added cost
+  for a directory with thousands of files. **Worth considering as a hybrid** rather than
+  an outright replacement: keep filename matching as the cheap first pass, and only
+  `ffprobe` for confirmation when a match is ambiguous or low-confidence - not
+  investigated/decided yet, just captured as the shape of the tradeoff. Writing the ID
+  (cheap, no downside) and actually using it for matching (the more involved half) could
+  reasonably ship as two separate pieces of work.
 - **The request queue indicator** now lists what's actually queued, what each request is
   for, and which phase it's in - "queued: 0 / in flight: yes" read as self-contradictory,
   and "in flight" was true while a request was merely asleep in the spacing gate. Adds a
