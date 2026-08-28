@@ -100,7 +100,17 @@ export const WhisperConfig = z.object({
 });
 export type WhisperConfig = z.infer<typeof WhisperConfig>;
 
-export const SubtitlesService = z.enum(["deepgram", "google_stt", "whisper"]);
+/**
+ * Listed with the recommended option first - this order is what the settings
+ * form presents, and nothing depends on it otherwise, so please don't sort it
+ * alphabetically.
+ *
+ * Whisper leads because it is the one most people should use: no API key, no
+ * per-use cost, no third party who can change their terms or withdraw the
+ * service. The other two are paid APIs, kept for anyone who would rather rent
+ * the CPU time than spend their own.
+ */
+export const SubtitlesService = z.enum(["whisper", "deepgram", "google_stt"]);
 export type SubtitlesService = z.infer<typeof SubtitlesService>;
 
 /**
