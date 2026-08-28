@@ -1,5 +1,6 @@
 import { DndContext, DragEndEvent } from "@dnd-kit/core";
-import { Box, Button, Divider, Stack, Typography, useMediaQuery } from "@mui/material";
+import { Box, Button, Divider, Stack, Typography, useMediaQuery,
+  useTheme } from "@mui/material";
 import { useDispatch, useSelector } from "react-redux";
 import { Fragment } from "react/jsx-runtime";
 import { clearCompletedPipelines } from "../../api/tasks.ts";
@@ -9,7 +10,6 @@ import {
   selectDownloadingPipelineIds,
   selectPostProcessingPipelineIds,
 } from "../../store/df-tasks/tasks.selector.ts";
-import { theme } from "../../themes/theme.ts";
 import { ScheduledDownloadsList } from "./scheduled-downloads-list.component.tsx";
 import { DraggableTaskInfo, DraggableTaskInfoData, TaskInfo } from "./task-info.component.tsx";
 
@@ -18,6 +18,7 @@ export const TaskList = () => {
   const postProcessingTasks = useSelector(selectPostProcessingPipelineIds);
   const completedTasks = useSelector(selectCompletedPipelineIds);
   const onClearCompleted = () => clearCompletedPipelines().catch((e) => console.error(e));
+  const theme = useTheme();
   const belowSm = useMediaQuery(theme.breakpoints.down("sm"));
 
   return (

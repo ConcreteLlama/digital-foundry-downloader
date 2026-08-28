@@ -1,4 +1,5 @@
-import { Button, Dialog, DialogActions, DialogContent, DialogTitle, Paper, Typography, useMediaQuery } from "@mui/material";
+import { Button, Dialog, DialogActions, DialogContent, DialogTitle, Paper, Typography, useMediaQuery,
+  useTheme } from "@mui/material";
 import { Changelog, changelogToMarkdown, ChangelogToMarkdownOpts, dfDownloaderBranch, dfDownloaderVersion, isDowngradeFrom, logger, parseChangelog, UpdateUserInfoRequest } from "df-downloader-common";
 import { useState } from "react";
 import Markdown from 'react-markdown';
@@ -9,7 +10,6 @@ import { updateUserInfo } from "../../store/auth-user/auth-user.actions.ts";
 import { selectAuthUser } from "../../store/auth-user/auth-user.selector.ts";
 import { store } from "../../store/store.ts";
 import { Loading } from "./loading.component.tsx";
-import { theme } from "../../themes/theme.ts";
 
 const GITHUB_URL = 'https://raw.githubusercontent.com/ConcreteLlama/digital-foundry-downloader/refs/heads';
 const githubChangelogUrl = `${GITHUB_URL}/${dfDownloaderBranch}/df-downloader-service/changelog.yaml`;
@@ -68,13 +68,19 @@ export const ChangelogDisplay = ({markdownOpts, changelog: propsChangelog}: Chan
     )
 }
 
-export const ChangelogDialog = () => {
+export type ChangelogDialogProps = {
+    /**
+     * Forces the dialog open. Without it the dialog still opens itself once
+     * after an upgrade, as it always has - this is what lets the version in the
+     * nav rail re-open it afterwards, from any page.
+     */
+    open?: boolean;
+    onClose?: () => void;
+};
+
+export const ChangelogDialog = ({ open: openProp, onClose }: ChangelogDialogProps = {}) => {
     const authUser = useSelector(selectAuthUser);
-    if (!authUser) {
-        return null;
-    }
-    const { userInfo, id: userId } = authUser;
-    const lastVersionAcknowledged = userInfo?.lastVersionAcknowledged;
+    const lastVersionAcknowledged = authUser?.userInfo?.lastVersionAcknowledged;
     // Moving to an older version - e.g. switching from the experimental
     // DockerHub tag back to latest. Filtering to "newer than acknowledged"
     // would then match nothing and show an empty changelog, so show this
@@ -82,10 +88,20 @@ export const ChangelogDialog = () => {
     const isDowngrade = Boolean(
         lastVersionAcknowledged && isDowngradeFrom(lastVersionAcknowledged, dfDownloaderVersion)
     );
-    const shouldPopup = userInfo ? lastVersionAcknowledged !== dfDownloaderVersion : false;
-    const [ open, setOpen ] = useState(shouldPopup);
+    const shouldPopup = Boolean(authUser?.userInfo) && lastVersionAcknowledged !== dfDownloaderVersion;
+    const [ selfOpened, setSelfOpened ] = useState(shouldPopup);
+    const theme = useTheme();
+    const fullScreen = useMediaQuery(theme.breakpoints.down('md'));
+    // Hooks first - this used to return early on a missing user, which made the
+    // hook order depend on whether the user had loaded yet.
+    if (!authUser) {
+        return null;
+    }
+    const userId = authUser.id;
+    const open = openProp ?? selfOpened;
     const closeDialog = async() => {
-        setOpen(false);
+        setSelfOpened(false);
+        onClose?.();
         const updateUserInfoRequest: UpdateUserInfoRequest = {
             userId,
             userInfo: {
@@ -94,7 +110,6 @@ export const ChangelogDialog = () => {
         }
         store.dispatch(updateUserInfo.start(updateUserInfoRequest));
     }
-    const fullScreen = useMediaQuery(theme.breakpoints.down('md'));
     return (
         <Dialog open={open} onClose={closeDialog} maxWidth="md" fullWidth fullScreen={fullScreen}>
             <DialogTitle>DF Downloader Updated</DialogTitle>

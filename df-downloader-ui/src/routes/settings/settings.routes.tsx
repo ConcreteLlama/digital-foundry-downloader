@@ -1,4 +1,5 @@
 import CodeIcon from "@mui/icons-material/Code";
+import PaletteIcon from "@mui/icons-material/Palette";
 import DataObjectIcon from "@mui/icons-material/DataObject";
 import DownloadIcon from "@mui/icons-material/Download";
 import DownloadingIcon from "@mui/icons-material/Downloading";
@@ -8,6 +9,7 @@ import RadarIcon from "@mui/icons-material/Radar";
 import SettingsIcon from "@mui/icons-material/Settings";
 import SubtitlesIcon from "@mui/icons-material/Subtitles";
 import VideoSettingsIcon from "@mui/icons-material/VideoSettings";
+import { AppearanceSettingsForm } from "../../components/settings/appearance-settings-form.component.tsx";
 import { AutomaticDownloadsSettingsForm } from "../../components/settings/automatic-download-settings-form.component";
 import { ContentDetectionSettingsForm } from "../../components/settings/content-detection-settings-form.component";
 import { ContentManagementSettingsForm } from "../../components/settings/content-management-settings.component";
@@ -79,6 +81,12 @@ export const settingsRouteDefinitions: NestedSubRoute = {
       element: <NotificationSettingsForm />,
       name: "Notifications",
       icon: NotificationsIcon,
+    },
+    {
+      path: "/settings/appearance",
+      element: <AppearanceSettingsForm />,
+      name: "Appearance",
+      icon: PaletteIcon,
     },
     {
       path: "/settings/dev",

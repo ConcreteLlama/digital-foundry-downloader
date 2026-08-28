@@ -1,4 +1,5 @@
-import { Box, Button, Stack, Typography, useMediaQuery } from "@mui/material";
+import { Box, Button, Stack, Typography, useMediaQuery,
+  useTheme } from "@mui/material";
 import { DfContentInfoUtils, secondsToHHMMSS } from "df-downloader-common";
 import { Image } from "mui-image";
 import { useEffect } from "react";
@@ -8,7 +9,6 @@ import { useDfContentEntry } from "../../../hooks/use-df-content-entry.ts";
 import { fetchYtVideoMeta, refreshDfContentMeta } from "../../../store/df-content/df-content.action.ts";
 import { selectQueryPipelineIds } from "../../../store/df-tasks/tasks.selector.ts";
 import { store } from "../../../store/store.ts";
-import { theme } from "../../../themes/theme.ts";
 import { formatDate } from "../../../utils/date.ts";
 import { YouTubeEmbed } from "../../general/youtube-embed.tsx";
 import { DfTagList } from "../df-tag-list.component.tsx";
@@ -22,6 +22,7 @@ export type DfContentInfoItemDetailProps = {
 };
 
 export const DfContentInfoItemDetail = ({ dfContentName }: DfContentInfoItemDetailProps) => {
+  const theme = useTheme();
   const belowMd = useMediaQuery(theme.breakpoints.down("md"));
   const dfContentEntry = useDfContentEntry(dfContentName);
   useEffect(() => {

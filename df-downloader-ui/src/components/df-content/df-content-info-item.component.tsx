@@ -1,9 +1,9 @@
-import { Box, Stack, SxProps, Typography, useMediaQuery } from "@mui/material";
+import { Box, Stack, SxProps, Typography, useMediaQuery,
+  useTheme } from "@mui/material";
 import { DfContentEntry } from "df-downloader-common";
 import { useSelector } from "react-redux";
 import { useDfContentEntry } from "../../hooks/use-df-content-entry.ts";
 import { selectActivePipelineIdsForContent, selectDetailsForPipelineIds } from "../../store/df-tasks/tasks.selector.ts";
-import { theme } from "../../themes/theme";
 import { DfThumbnailImage } from "../general/df-thumbnail-image.component.tsx";
 import { EllipsisTooltipText } from "../general/ellipsis-tooltip-text.component.tsx";
 
@@ -25,6 +25,7 @@ const mobileLayout: SxProps = {
 };
 
 export const DfContentInfoItem = ({ dfContentName, sx }: DfContentInfoItemProps) => {
+  const theme = useTheme();
   const useMobileLayout = useMediaQuery(theme.breakpoints.down("md"));
   const sxProps = sx || useMobileLayout ? mobileLayout : desktopLayout;
 

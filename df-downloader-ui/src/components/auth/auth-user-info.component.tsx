@@ -1,7 +1,7 @@
 import PasswordIcon from "@mui/icons-material/Password";
 import LogoutIcon from "@mui/icons-material/Logout";
 import DevIcon from "@mui/icons-material/DeveloperMode";
-import { Avatar, Box, IconButton, Menu, MenuItem, Typography } from "@mui/material";
+import { Avatar, Badge, Box, Divider, IconButton, Menu, MenuItem, Tooltip, Typography } from "@mui/material";
 import React, { useState } from "react";
 import { useSelector } from "react-redux";
 import { logout } from "../../store/auth-user/auth-user.actions";
@@ -12,8 +12,17 @@ import { selectConfigSectionField } from "../../store/config/config.selector.ts"
 
 export type AuthUserInfoProps = {
   mode: "full" | "minimal";
+  /**
+   * Optional dot on the avatar. Used by the nav rail to keep the Digital
+   * Foundry connection state visible once the rail collapses and the status
+   * strip that normally carries it is gone.
+   */
+  statusColour?: string;
+  statusTooltip?: string;
+  /** Rendered above the menu items - the collapsed rail puts the version here. */
+  menuHeader?: React.ReactNode;
 };
-export const AuthUserInfo = ({ mode }: AuthUserInfoProps) => {
+export const AuthUserInfo = ({ mode, statusColour, statusTooltip, menuHeader }: AuthUserInfoProps) => {
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
   const open = Boolean(anchorEl);
   const devModeEnabled = useSelector(selectConfigSectionField("dev", "devModeEnabled"));
@@ -29,7 +38,7 @@ export const AuthUserInfo = ({ mode }: AuthUserInfoProps) => {
     <Box sx={{ display: "flex", alignItems: "center", gap: "10px" }}>
       <ChangePasswordFormDialog onClose={() => setChangePasswordOpen(false)} open={changePasswordOpen}/>
       {mode === "full" && <Typography>{`${user.id}${devModeEnabled ? " (dev)" : ""}`}</Typography>}
-      <IconButton onClick={handleClick}>{devModeEnabled ? <DevIcon /> : <Avatar />}</IconButton>
+      <IconButton onClick={handleClick}>{renderAvatar(devModeEnabled, statusColour, statusTooltip)}</IconButton>
       <Menu
         id="basic-menu"
         anchorEl={anchorEl}
@@ -39,6 +48,12 @@ export const AuthUserInfo = ({ mode }: AuthUserInfoProps) => {
           "aria-labelledby": "basic-button",
         }}
       >
+        {menuHeader && (
+          <Box sx={{ paddingX: 2, paddingY: 1 }}>
+            {menuHeader}
+            <Divider sx={{ marginTop: 1 }} />
+          </Box>
+        )}
         <MenuItem
           onClick={() => {
             handleClose();
@@ -66,4 +81,32 @@ export const AuthUserInfo = ({ mode }: AuthUserInfoProps) => {
   ) : (
     <Typography>Not signed in (THIS IS A BUG)</Typography>
   );
+};
+
+const renderAvatar = (devModeEnabled: boolean | undefined, statusColour?: string, statusTooltip?: string) => {
+  const avatar = devModeEnabled ? <DevIcon /> : <Avatar />;
+  if (!statusColour) {
+    return avatar;
+  }
+  const badged = (
+    <Badge
+      overlap="circular"
+      anchorOrigin={{ vertical: "bottom", horizontal: "right" }}
+      badgeContent={
+        <Box
+          sx={{
+            width: 9,
+            height: 9,
+            borderRadius: "50%",
+            backgroundColor: statusColour,
+            border: "2px solid",
+            borderColor: "background.paper",
+          }}
+        />
+      }
+    >
+      {avatar}
+    </Badge>
+  );
+  return statusTooltip ? <Tooltip title={statusTooltip}>{badged}</Tooltip> : badged;
 };

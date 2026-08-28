@@ -4,6 +4,19 @@
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="theme-color" content="#07090c" />
+    <script>
+      // Paint the chosen theme's background before the bundle loads, so a dark
+      // theme doesn't flash white (or a light one black) on every page load.
+      // The colour is cached by the app; #07090c is the default theme's.
+      (function () {
+        try {
+          document.documentElement.style.backgroundColor =
+            localStorage.getItem("df-ui-bg") || "#07090c";
+        } catch (e) {
+          document.documentElement.style.backgroundColor = "#07090c";
+        }
+      })();
+    </script>
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Digital Foundry Content Manager</title>
   </head>

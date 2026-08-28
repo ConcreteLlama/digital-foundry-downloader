@@ -10,6 +10,7 @@ import {
   Stack,
   Typography,
   useMediaQuery,
+  useTheme,
 } from "@mui/material";
 import { DfContentEntrySearchBody, logger } from "df-downloader-common";
 import { Fragment, useState } from "react";
@@ -20,7 +21,6 @@ import { resetDfContentQuery, updateDfContentQuery } from "../../store/df-conten
 import { useSelector } from "react-redux";
 import { selectCurrentQuery } from "../../store/df-content/df-content.selector";
 import CloseIcon from "@mui/icons-material/Close";
-import { theme } from "../../themes/theme";
 
 export type DfAdvancedSearchProps = {
   open: boolean;
@@ -30,6 +30,7 @@ export type DfAdvancedSearchProps = {
 export const DfAdvancedSearch = ({ open, onClose }: DfAdvancedSearchProps) => {
   const currentSearchValues = useSelector(selectCurrentQuery);
   const currentInclude = currentSearchValues?.filter?.include;
+  const theme = useTheme();
   const fullScreen = useMediaQuery(theme.breakpoints.down("md"));
   const defaultFilter =
     !currentInclude || (Array.isArray(currentInclude) && currentInclude.length === 0)

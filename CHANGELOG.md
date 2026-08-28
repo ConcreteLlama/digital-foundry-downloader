@@ -37,6 +37,11 @@ Subtitles can now be generated locally on your own machine instead of being pull
   - Subtitle generation reports how far through it is - previously a two-hour episode could spend half an hour with no sign anything was happening
   - Embedding metadata does the same while it rewrites the file
   - An estimated time remaining is shown alongside, so a long transcription tells you how much longer it needs and not just how far along it is - downloads already did this, everything else now does too
+- Choose how the app looks
+  - Three themes to pick from under Settings > Appearance: Signal, the dark teal look the app now ships with; Foundry, a warmer dark amber; and Paper, a proper light theme for anyone who does not want a dark interface
+  - The choice applies the moment you pick it, so you can see what you are choosing rather than having to save first
+  - It is remembered in the browser you chose it in, and saving also stores it against the installation - so a phone or a second machine that has never picked one follows whatever you set, while a browser you have themed yourself keeps its own choice
+  - The page is painted in your theme before the app finishes loading, so there is no flash of the wrong colours on the way in
 - New 'Scan now' button to check for newly published videos immediately, rather than waiting for the next scheduled check
 - The request queue indicator now lists what is actually queued and what each request is doing, instead of only showing counts
 ### Enhancements
@@ -47,6 +52,13 @@ Subtitles can now be generated locally on your own machine instead of being pull
   - Leftover styling from the project template the app was first created from has been removed. It had been quietly fighting the app's own theme, giving buttons and links a look that belonged to nothing in particular
   - Greyed-out text - 'No downloaded content yet', 'No download tasks' and the like - now uses the theme's own muted colour rather than a flat grey picked at random, so it stays legible and consistent
   - The browser tab now shows the Digital Foundry mark instead of the placeholder logo it had been shipping with
+- The sidebar and title bar have been reworked around what you actually need to see
+  - The sidebar collapses to a narrow strip of icons, or back again, freeing about 158px of width for the content itself. Press [ to toggle it, and it stays how you left it
+  - It now carries five destinations and nothing else. Settings, Tools and System used to unfold into nested lists inside the sidebar; each section now shows its own pages in a column on the page itself, which is a much better fit for a list as long as Settings
+  - The bar along the top tells you where you are instead of repeating the app name. It also used to lose the name entirely on a narrow window, leaving just a menu button
+  - The bottom of the sidebar now shows the version and whether the app is signed in to Digital Foundry - including the brief period at startup while it is still checking, which previously showed nothing at all. Clicking the status takes you straight to the Digital Foundry settings, since nothing can download while it is out
+  - Clicking the version opens the release notes. Previously they appeared once after an upgrade and could never be opened again
+- 'Downloads' in the sidebar is now called 'Activity'. The page lists scheduled items, running jobs, post-processing and completed runs, most of which are not downloads - and 'Downloads' already meant something different as a settings section. Existing links still work
 - Finished files are written directly to their destination rather than being assembled elsewhere and copied across
   - Embedding metadata rewrites the whole file, so doing that somewhere else and then copying the result meant reading and writing a multi-gigabyte file twice over. This halves it
   - The same applies to files already in your library - refreshing metadata or adding subtitles no longer copies them back and forth

@@ -1,4 +1,5 @@
-import { Box, Stack, ThemeProvider, Toolbar } from "@mui/material";
+import { Box, Stack, Toolbar } from "@mui/material";
+import { useState } from "react";
 import { useEffect } from "react";
 import { useSelector } from "react-redux";
 import { Route, Routes } from "react-router-dom";
@@ -21,17 +22,18 @@ import { selectServiceError } from "./store/service-info/service-info.selector.t
 import { store } from "./store/store";
 import { subscribeToChannel } from "./store/realtime/realtime-stream.ts";
 import { queryTasks } from "./store/df-tasks/tasks.action.ts";
-import { theme } from "./themes/theme";
+import { AppThemeProvider } from "./themes/theme-provider.tsx";
 import registerTaskSnackbarTriggers from "./components/tasks/task-snackbar-triggers.tsx";
 import { BranchCheckDialog } from "./components/general/branch-check.component.tsx";
+import { ChangelogDialog } from "./components/general/changelog.component.tsx";
 import { ManualDownloadFloatingButton } from "./components/df-content/manual-download-fab.component.tsx";
 import { dfDownloaderBranch } from "df-downloader-common";
 
 function App() {
   return (
-    <ThemeProvider theme={theme}>
+    <AppThemeProvider>
       <MainContainer />
-    </ThemeProvider>
+    </AppThemeProvider>
   );
 }
 
@@ -42,6 +44,9 @@ const MainContainer = () => {
   }, []);
   useEffect(() => {
     store.dispatch(queryServiceInfo.start());
+    // Fetched here rather than in MainApp so the theme choice is picked up
+    // before sign-in, not just after it.
+    store.dispatch(queryConfigSection.start("ui"));
   }, []);
   const loading = useSelector(selectIsLoading("serviceInfo"));
   const serviceError = useSelector(selectServiceError);
@@ -130,6 +135,10 @@ const MainApp = () => {
   useEffect(() => {
     store.dispatch(queryConfigSection.start("dev"));
   }, []);
+  // Lifted out of the content directory: it used to only ever open itself, so
+  // once dismissed there was no way back to it, and it did not exist at all on
+  // any page but the content list. The version in the rail foot opens it now.
+  const [changelogOpen, setChangelogOpen] = useState(false);
   // Was an unconditional 1s poll. The backend pushes a snapshot on every
   // task/pipeline change now, and samples for download progress only while
   // something is actually running - so an idle app makes no requests at all.
@@ -141,7 +150,7 @@ const MainApp = () => {
   return (
     <Box sx={{ display: "flex", width: "100vw" }} key="main-app">
       {dfDownloaderBranch !== 'main' && <BranchCheckDialog />}
-      <Nav />
+      <Nav onOpenChangelog={() => setChangelogOpen(true)} />
       <Stack
         key={"main-app-stack"}
         id="main-app-stack"
@@ -171,6 +180,7 @@ const MainApp = () => {
           </Route>
         </Routes>
       </Stack>
+      <ChangelogDialog open={changelogOpen || undefined} onClose={() => setChangelogOpen(false)} />
       <ManualDownloadFloatingButton />
     </Box>
   );
