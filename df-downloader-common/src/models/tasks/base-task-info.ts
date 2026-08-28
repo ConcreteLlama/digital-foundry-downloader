@@ -83,7 +83,42 @@ export const TaskStatus = z.object({
   isComplete: z.boolean(),
   /** See TaskProgress - present only for tasks that can report progress. */
   progress: TaskProgress.optional(),
+  /**
+   * Working time, as a two-scalar stopwatch rather than a history of intervals.
+   *
+   *   pause:  accumulatedActiveMs += now - lastResumedAt; lastResumedAt = null
+   *   resume: lastResumedAt = now
+   *   read:   accumulatedActiveMs + (lastResumedAt ? now - lastResumedAt : 0)
+   *
+   * Distinct from wall-clock elapsed (endTime/startTime), which keeps running
+   * while a task is paused and SHOULD - "queued at 14:02, still not done" is a
+   * real thing to know. This is the other number: what throughput should divide
+   * by, and what stops ticking the moment you pause. On a paused row,
+   * "Elapsed 6m 29s - Active 2m 14s" says more than either alone.
+   *
+   * Both optional and additive, so persisted records written before they
+   * existed parse unchanged.
+   */
+  accumulatedActiveMs: z.number().optional(),
+  /** Null or absent while not running - see accumulatedActiveMs. */
+  lastResumedAt: z.coerce.date().nullish(),
 });
+
+/**
+ * Working time so far. The client may project forward from lastResumedAt ONLY
+ * while the task is running - the general rule that keeps a paused row from
+ * inventing numbers.
+ */
+export const activeMsSoFar = (status: TaskStatus | null | undefined): number | undefined => {
+  if (!status) {
+    return undefined;
+  }
+  const accumulated = status.accumulatedActiveMs ?? 0;
+  if (status.state !== "running" || !status.lastResumedAt) {
+    return status.accumulatedActiveMs === undefined && !status.lastResumedAt ? undefined : accumulated;
+  }
+  return accumulated + (Date.now() - new Date(status.lastResumedAt).getTime());
+};
 export type TaskStatus = z.infer<typeof TaskStatus>;
 
 export const BasicTaskInfo = z.object({

@@ -12,6 +12,7 @@ import {
   TableHead,
   TableRow,
   Typography,
+  Tooltip,
 } from "@mui/material";
 import {
   DownloadTaskStatus,
@@ -25,6 +26,11 @@ import { selectPipeline } from "../../store/df-tasks/tasks.selector.ts";
 import { LinearProgressWithLabel } from "../general/linear-progress-with-label.component.tsx";
 import { MiddleModal } from "../general/middle-modal.component.tsx";
 import { DfContentInfoItemDetail } from "../df-content/df-content-item-detail/df-content-item-detail.component.tsx";
+import { activeMsSoFar } from "df-downloader-common";
+import {
+  derivePipelineStepViews,
+  PipelineStepVisualState,
+} from "./pipeline-track/pipeline-step-state";
 import { Fragment, useState } from "react";
 
 /**
@@ -55,19 +61,71 @@ const STATE_COLOURS: Partial<Record<TaskState, "success" | "error" | "warning" |
   running: "info",
 };
 
+/** One label per shared visual state - see pipeline-step-state.ts. */
+const STEP_STATE_LABELS: Record<PipelineStepVisualState, string> = {
+  done: "success",
+  carried_over: "done earlier",
+  running: "running",
+  paused: "paused",
+  failed: "failed",
+  cancelled: "cancelled",
+  skipped: "skipped",
+  not_applicable: "not needed",
+  pending: "pending",
+};
+
+const STEP_STATE_CHIP_COLOURS: Record<
+  PipelineStepVisualState,
+  "success" | "error" | "warning" | "info" | "default"
+> = {
+  done: "success",
+  carried_over: "success",
+  running: "info",
+  paused: "warning",
+  failed: "error",
+  cancelled: "default",
+  skipped: "default",
+  not_applicable: "default",
+  pending: "default",
+};
+
 /**
  * How long a step took, or - if it's still going - how long it has been
  * going. A step that never started (the pipeline failed before reaching it,
  * or it was skipped) has no start time and reports nothing rather than a
  * misleading zero.
  */
-const stepDuration = (task?: TaskInfo | null): string => {
+/**
+ * Wall clock since the step first started - keeps running while paused, which
+ * is correct for "elapsed" and is why it is now labelled that rather than the
+ * ambiguous "duration".
+ */
+const stepElapsed = (task?: TaskInfo | null): string => {
   if (!task?.startTime) {
     return "-";
   }
   const start = new Date(task.startTime).getTime();
   const end = task.endTime ? new Date(task.endTime).getTime() : Date.now();
   return formatDuration(end - start);
+};
+
+/**
+ * Working time - stops while paused. Shown only when it differs meaningfully
+ * from elapsed, so an ordinary uninterrupted step doesn't carry two nearly
+ * identical numbers.
+ */
+const stepActive = (task?: TaskInfo | null): string | undefined => {
+  const activeMs = activeMsSoFar(task?.status);
+  if (activeMs === undefined || !task?.startTime) {
+    return undefined;
+  }
+  const start = new Date(task.startTime).getTime();
+  const end = task.endTime ? new Date(task.endTime).getTime() : Date.now();
+  // Within a couple of seconds of wall clock means nothing was ever paused.
+  if (Math.abs(end - start - activeMs) < 2000) {
+    return undefined;
+  }
+  return formatDuration(activeMs);
 };
 
 /**
@@ -157,6 +215,7 @@ export const TaskDetailsDialog = ({ pipelineId, open, onClose }: TaskDetailsDial
   // Only one step runs at a time, so the running step's estimate is the
   // pipeline's - the steps after it are typically seconds (writing a sidecar,
   // moving a file) against minutes or hours for this one.
+  const stepViews = derivePipelineStepViews(pipeline);
   const timeRemaining = stepOrder
     .map((stepId) => stepProgress(stepTasks[stepId])?.remainingMs)
     .find((remaining) => remaining !== undefined);
@@ -197,7 +256,7 @@ export const TaskDetailsDialog = ({ pipelineId, open, onClose }: TaskDetailsDial
         <Stack spacing={0.5} sx={{ mb: 2 }}>
           <SummaryRow label="Status" value={pipelineStatus.statusMessage} />
           <SummaryRow label="Queued" value={formatTime(queuedTime)} />
-          <SummaryRow label="Total time" value={totalElapsed} />
+          <SummaryRow label="Elapsed" value={totalElapsed} />
           {timeRemaining !== undefined && (
             <SummaryRow label="Time remaining" value={`about ${formatDuration(timeRemaining)}`} />
           )}
@@ -215,47 +274,54 @@ export const TaskDetailsDialog = ({ pipelineId, open, onClose }: TaskDetailsDial
                 <TableCell>Step</TableCell>
                 <TableCell>State</TableCell>
                 <TableCell align="right">Started</TableCell>
-                <TableCell align="right">Duration</TableCell>
+                <TableCell align="right">Elapsed</TableCell>
+                <TableCell align="right">Active</TableCell>
               </TableRow>
             </TableHead>
             <TableBody>
-              {stepOrder.map((stepId) => {
-                const task = stepTasks[stepId];
-                const state = task?.status?.state;
-                // Three distinct cases, and conflating them loses real
-                // information: a step with no task was genuinely skipped (the
-                // pipeline had nothing to do - no metadata to embed, say),
-                // whereas a carried-over one completed in an earlier run and
-                // was inherited when the pipeline resumed. Showing the latter
-                // as "skipped" made a resumed download report that it had
-                // skipped downloading, which is alarming and untrue.
-                const stateLabel = task?.carriedOver
-                  ? "done earlier"
-                  : state ?? (task ? "pending" : "skipped");
+              {stepViews.map((view) => {
+                const { stepId, task, state } = view;
+                // One shared derivation with the card's track - see
+                // pipeline-step-state.ts. Deriving this here from the task
+                // object alone meant a step not yet instantiated (no task) was
+                // labelled "skipped", so every FUTURE step read as skipped
+                // while the track correctly showed it pending.
+                //
+                // "done earlier" is preserved from that original handling: a
+                // carried-over step completed in a previous run and was
+                // inherited on resume, and calling it skipped made a resumed
+                // download report that it had skipped downloading.
+                const stateLabel = STEP_STATE_LABELS[state];
                 const progress = stepProgress(task);
                 return (
                   <Fragment key={stepId}>
-                  <TableRow>
-                    <TableCell>{steps[stepId]?.name || stepId}</TableCell>
+                  {/* Shown rather than hidden here - the dialog is the
+                      inventory, the card is the glance - but dimmed, because
+                      it is not part of what this run will do. */}
+                  <TableRow sx={state === "not_applicable" ? { opacity: 0.55 } : undefined}>
+                    <TableCell>{view.name}</TableCell>
                     <TableCell>
-                      <Chip
-                        size="small"
-                        label={stateLabel}
-                        color={task?.carriedOver ? "success" : state ? STATE_COLOURS[state] || "default" : "default"}
-                        // Outlined for anything that didn't run in this run,
-                        // so carried-over and skipped both read as "not this
-                        // time" at a glance while still being distinguishable.
-                        variant={state && !task?.carriedOver ? "filled" : "outlined"}
-                      />
+                      <Tooltip title={view.reason ?? ""} disableHoverListener={!view.reason}>
+                        <Chip
+                          size="small"
+                          label={stateLabel}
+                          color={STEP_STATE_CHIP_COLOURS[state]}
+                          // Outlined for anything that didn't run in this run,
+                          // so carried-over and skipped both read as "not this
+                          // time" at a glance while still being distinguishable.
+                          variant={state === "running" || state === "done" || state === "failed" ? "filled" : "outlined"}
+                        />
+                      </Tooltip>
                     </TableCell>
                     <TableCell align="right">{formatTime(task?.startTime)}</TableCell>
-                    <TableCell align="right">{stepDuration(task)}</TableCell>
+                    <TableCell align="right">{stepElapsed(task)}</TableCell>
+                    <TableCell align="right">{stepActive(task) ?? "-"}</TableCell>
                   </TableRow>
                   {/* A second row rather than a column: the bar needs the full
                       width to be readable, and only ever one step has one. */}
                   {progress && (
                     <TableRow>
-                      <TableCell colSpan={4} sx={{ pt: 0 }}>
+                      <TableCell colSpan={5} sx={{ pt: 0 }}>
                         <Stack direction="row" spacing={1} alignItems="center">
                           <Box sx={{ flexGrow: 1 }}>
                             <LinearProgressWithLabel value={progress.percent} />

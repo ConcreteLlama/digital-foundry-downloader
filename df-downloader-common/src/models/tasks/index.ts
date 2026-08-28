@@ -7,3 +7,4 @@ export * from './download-task.js';
 export * from './task-info.js';
 export * from './tasks.js';
 export * from './task-pipeline-info.js';
+export * from './step-applicability.js';

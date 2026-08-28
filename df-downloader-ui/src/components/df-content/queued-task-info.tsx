@@ -76,13 +76,16 @@ export const DownloadTaskDetail = ({ downloadTaskInfo }: DownloadTaskDetailCompo
             )}`}
           </Typography>
           <Typography>
-            {`${
-              progress
-                ? prettyMs(DownloadProgressUtils.calculateTimeRemainingSeconds(progress) * 1000, {
-                    secondsDecimalDigits: 0,
-                  })
-                : "unknown"
-            } remaining${progress?.retries ? ` (attempt ${progress.retries + 1})` : ""}`}
+            {(() => {
+              const remaining = progress
+                ? DownloadProgressUtils.calculateTimeRemainingSeconds(progress)
+                : undefined;
+              const remainingText =
+                remaining === undefined
+                  ? "unknown"
+                  : prettyMs(remaining * 1000, { secondsDecimalDigits: 0 });
+              return `${remainingText} remaining${progress?.retries ? ` (attempt ${progress.retries + 1})` : ""}`;
+            })()}
           </Typography>
         </Box>
       </Box>{" "}

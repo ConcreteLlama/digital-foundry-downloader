@@ -14,10 +14,26 @@ export const DownloadProgressInfo = z.object({
 export type DownloadProgressInfo = z.infer<typeof DownloadProgressInfo>;
 
 export const DownloadProgressUtils = {
-  calculateTimeRemainingSeconds(progress: DownloadProgressInfo): number {
+  /**
+   * Seconds left at the current rate, or undefined when that cannot be
+   * answered - matching estimateProgressTimeRemainingMs, so callers render
+   * nothing rather than a guess.
+   *
+   * The rate is genuinely 0 whenever bytes have stopped arriving: samples
+   * older than 3s are ignored (see DownloadConnectionProgressInfo), so a
+   * paused download reports exactly zero within a few seconds. This used to
+   * fall back to `|| 1`, i.e. one byte per second, which turned "no idea" into
+   * a confident finite number - a paused 6GB download at 23.71% reported about
+   * 641286h, roughly 73 years. Dividing by a made-up rate is the bug; the
+   * pause is not.
+   */
+  calculateTimeRemainingSeconds(progress: DownloadProgressInfo): number | undefined {
     const { totalBytes, totalBytesDownloaded, currentBytesPerSecond } = progress;
     const bytesRemaining = totalBytes - totalBytesDownloaded;
-    return Math.min(bytesRemaining / (currentBytesPerSecond || 1), Number.MAX_SAFE_INTEGER);
+    if (!currentBytesPerSecond || currentBytesPerSecond <= 0 || bytesRemaining <= 0) {
+      return undefined;
+    }
+    return Math.min(bytesRemaining / currentBytesPerSecond, Number.MAX_SAFE_INTEGER);
   },
 };
 
