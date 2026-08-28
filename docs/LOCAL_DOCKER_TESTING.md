@@ -23,7 +23,7 @@ it would publish a live credential. A session scratchpad directory is ideal.
 
 | Host                   | Container         | What it holds                                    |
 | ---------------------- | ----------------- | ------------------------------------------------ |
-| `<scratch>/config`     | `/config`         | `config.yaml`, `users.yaml`                      |
+| `<scratch>/config`     | `/config`         | `config.yaml`, `users.yaml`, `jwt-secret.yaml`   |
 | `<scratch>/db`         | `/db`             | content, pipeline and status databases           |
 | `<scratch>/dest`       | `/destination_dir`| finished downloads                               |
 | `<scratch>/work`       | `/working_dir`    | in-progress downloads, extracted audio           |

@@ -82,6 +82,13 @@ Subtitles can now be generated locally on your own machine instead of being pull
   - This means a slightly faster startup, and fewer requests to Digital Foundry from every installation on every restart
   - Deleting db/archive-scan-checkpoint.json still forces a fresh pass through the whole archive if you need one
 ### Bug Fixes
+- Fixed being signed out of the app every time it restarts
+  - The key used to sign your login was thrown away and made again on every start, so every browser that was signed in was quietly logged out - including on an unattended restart or an automatic image update
+  - It is now kept with the rest of the installation's settings, so a restart leaves you signed in
+  - If you want to sign every browser out deliberately, delete config/jwt-secret.yaml and restart
+- Logging out now genuinely ends the session on the server, rather than only forgetting it in the browser
+  - The list of ended sessions was never actually consulted, so a login that had been copied elsewhere stayed usable until it expired of its own accord
+  - This mattered little when every restart ended every session anyway, but now that signing in survives a restart it needed to work properly
 - Fixed a newly started job showing another video's details after a restart
   - Jobs are numbered from one each time the app starts, so the first job after a restart reused a number already held by one in the completed history, and the two were treated as the same job
   - The older run also vanished from the history, having been mistaken for a duplicate of the new one

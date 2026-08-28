@@ -138,7 +138,12 @@ resource: `content`, `tasks`, `config`, `auth`, `user`, `df-user-info`, `subtitl
 `preview`, `service-info`) plus a static file server for the built UI
 (`src/rest/web.ts`). Auth for the app's own local accounts is JWT-in-cookie
 (`src/rest/auth/jwt.ts`, `src/rest/middleware/authentication.ts`) — this is entirely
-separate from the DF-site session cookie and is unaffected by the DF relaunch.
+separate from the DF-site session cookie and is unaffected by the DF relaunch. The JWT
+signing secret is persisted per-installation in `config/jwt-secret.yaml`
+(`src/rest/auth/signing-secret.ts`), generated on first run, overridable with the
+`JWT_SIGNING_SECRET` env var — deliberately *not* in `config.yaml`, since `GET
+/api/config` returns that whole object to the UI. Deleting the file (or changing the
+env var) rotates the secret and signs everyone out.
 
 ## df-downloader-ui
 
