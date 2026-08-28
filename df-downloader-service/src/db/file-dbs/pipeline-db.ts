@@ -9,7 +9,7 @@ import {
 } from "../pipeline-db-model.js";
 import { FileDb } from "../file-db.js";
 
-const CURRENT_DB_VERSION = "2.7.0";
+const CURRENT_DB_VERSION = "2.7.1";
 
 /**
  * How many finished pipelines to keep. Enough to answer "why did that fail
@@ -19,15 +19,71 @@ const CURRENT_DB_VERSION = "2.7.0";
  */
 const COMPLETED_RETENTION = 500;
 
+/**
+ * Strips `connections` arrays out of a persisted step result.
+ *
+ * A bug in DownloadConnectionProgressInfo (fixed alongside this DB patch) let
+ * per-chunk progress samples grow without bound for the life of a download
+ * connection, and the whole live connection state was captured into
+ * `finalStatus.connections` the moment a download step completed - a handful
+ * of pipelines recorded before the fix could each carry tens of megabytes of
+ * it. The aggregate stats anything actually reads (bytesDownloaded,
+ * percentComplete, etc.) live directly on the parent object, not inside
+ * `connections`, so it's safe to drop wherever it turns up rather than trying
+ * to enumerate every place a download result can be nested.
+ */
+const stripConnections = (value: unknown): unknown => {
+  if (Array.isArray(value)) {
+    return value.map(stripConnections);
+  }
+  if (value && typeof value === "object") {
+    const toReturn: Record<string, any> = {};
+    for (const [key, entry] of Object.entries(value)) {
+      if (key === "connections" && Array.isArray(entry)) {
+        continue;
+      }
+      toReturn[key] = stripConnections(entry);
+    }
+    return toReturn;
+  }
+  return value;
+};
+
+const stripConnectionsFromPipeline = (pipeline: any) => {
+  if (!pipeline?.stepResults) {
+    return pipeline;
+  }
+  const stepResults: Record<string, any> = {};
+  for (const [stepId, stepResult] of Object.entries<any>(pipeline.stepResults)) {
+    stepResults[stepId] =
+      stepResult && typeof stepResult === "object"
+        ? { ...stepResult, result: stripConnections(stepResult.result) }
+        : stepResult;
+  }
+  return { ...pipeline, stepResults };
+};
+
+const stripConnectionsFromPipelines = (pipelines: any): any => {
+  if (Array.isArray(pipelines)) {
+    return pipelines.map(stripConnectionsFromPipeline);
+  }
+  const toReturn: Record<string, any> = {};
+  for (const [id, pipeline] of Object.entries<any>(pipelines || {})) {
+    toReturn[id] = stripConnectionsFromPipeline(pipeline);
+  }
+  return toReturn;
+};
+
 const makePatchRoutine = (schema: typeof ActivePipelineDbSchema | typeof CompletedPipelineDbSchema) => async (data: any) => {
-  // First version of this DB, so there's nothing to patch forward from yet -
-  // the version chain exists so later changes have somewhere to hook in,
-  // matching the other FileDbs.
   if (data?.version === CURRENT_DB_VERSION) {
     return { data: zodParse(schema as any, data), patched: false };
   }
-  logger.log("info", `Pipeline DB at version ${data?.version || "NO_VERSION"} - initialising at ${CURRENT_DB_VERSION}`);
-  return { data: zodParse(schema as any, { ...data, version: CURRENT_DB_VERSION }), patched: true };
+  logger.log("info", `Pipeline DB at version ${data?.version || "NO_VERSION"} - patching to ${CURRENT_DB_VERSION}`);
+  const patchedPipelines = stripConnectionsFromPipelines(data?.pipelines);
+  return {
+    data: zodParse(schema as any, { ...data, pipelines: patchedPipelines, version: CURRENT_DB_VERSION }),
+    patched: true,
+  };
 };
 
 const makeBackupDestination = (dbDir: string, name: string) => async (data: any) => {

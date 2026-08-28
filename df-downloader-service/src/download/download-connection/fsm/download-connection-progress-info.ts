@@ -37,6 +37,9 @@ export class DownloadConnectionProgressInfo {
         break;
       }
     }
+    if (firstValidIndex > 0) {
+      this.samples = this.samples.slice(firstValidIndex);
+    }
   }
 
   getBytesPerSecond() {
