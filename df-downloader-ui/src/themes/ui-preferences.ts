@@ -63,7 +63,15 @@ export const storeThemeName = (name: UiThemeName) => {
 /** Keeps the pre-paint background in step when the theme came from config. */
 export const storeThemeBackground = (name: UiThemeName) => write(BG_KEY, uiPalettes[name].bg);
 
-export const getStoredRailState = (): RailState => (read(RAIL_KEY) === "icon" ? "icon" : "expanded");
+/**
+ * `fallback` is what a browser that has never chosen gets - narrow desktops
+ * default to the icon rail, wide ones to the full one. An explicit choice
+ * always wins, at any width.
+ */
+export const getStoredRailState = (fallback: RailState = "expanded"): RailState => {
+  const stored = read(RAIL_KEY);
+  return stored === "icon" || stored === "expanded" ? stored : fallback;
+};
 
 export const storeRailState = (state: RailState) => write(RAIL_KEY, state);
 
