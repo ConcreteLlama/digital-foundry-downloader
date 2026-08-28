@@ -1,7 +1,7 @@
 import { ImageList, ImageListItem, Paper, useMediaQuery,
   useTheme } from "@mui/material";
 import { DfContentInfoUtils, PreviewThumbnailResponse, logger, parseResponseBody } from "df-downloader-common";
-import Image from "mui-image";
+import { Thumb } from "./thumb.component";
 import { Fragment, useEffect, useState } from "react";
 import { API_URL } from "../../config";
 import { fetchJson } from "../../utils/fetch";
@@ -40,7 +40,7 @@ const BigImageBackground = ({ refresh }: BigImageBackgroundProps) => {
       interval && clearInterval(interval);
     };
   }, [thumbs, refresh]);
-  return <Fragment>{thumb && <Image src={thumb} />}</Fragment>;
+  return <Fragment>{thumb && <Thumb src={thumb} width="100%" />}</Fragment>;
 };
 
 type CollageBackgroundProps = {
@@ -60,17 +60,12 @@ const CollageBackground = ({ refresh }: CollageBackgroundProps) => {
       interval && clearInterval(interval);
     };
   }, [refresh]);
-  const shiftOpts: ("left" | "right" | "bottom" | "top")[] = ["left", "right", "bottom", "top"];
   return (
     <Fragment>
       <ImageList sx={{ height: "100vh", top: -20, position: "absolute" }} cols={4}>
         {thumbs.map((thumb) => (
           <ImageListItem key={`bg-thumb-${thumb}`}>
-            <Image
-              src={DfContentInfoUtils.thumbnailUrlToSize(thumb, 200)}
-              shift={shiftOpts[Math.floor(Math.random() * shiftOpts.length)]}
-              shiftDuration={Math.floor(Math.random() * 1600) + 400}
-            />
+            <Thumb src={DfContentInfoUtils.thumbnailUrlToSize(thumb, 200)} width="100%" />
           </ImageListItem>
         ))}
       </ImageList>

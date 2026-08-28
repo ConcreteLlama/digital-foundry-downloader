@@ -15,6 +15,8 @@ import { isNestedRoute, NestedRoute, NestedSubRoute } from "./nested-routes";
  * nested accordion in a 240px column.
  */
 export type NavDestination = {
+  /** Which live count, if any, the rail shows against this destination. */
+  badge?: "content" | "activity";
   /** Path prefix owned by this destination, used for active-state matching. */
   prefix: string;
   label: string;
@@ -26,12 +28,12 @@ export type NavDestination = {
 };
 
 export const navDestinations: NavDestination[] = [
-  { prefix: "/content", label: "Content", icon: VideoCameraIcon, path: "/content" },
+  { prefix: "/content", label: "Content", icon: VideoCameraIcon, path: "/content", badge: "content" },
   // Renamed from "Downloads": the page lists scheduled items, running
   // pipelines, post-processing and completed runs, most of which are not
   // downloads - and "Downloads" already means a different thing as a settings
   // section. The path is left alone so existing links and bookmarks still work.
-  { prefix: "/downloads", label: "Activity", icon: DownloadIcon, path: "/downloads" },
+  { prefix: "/downloads", label: "Activity", icon: DownloadIcon, path: "/downloads", badge: "activity" },
   { prefix: "/tools", label: "Tools", icon: HandymanIcon, section: toolsRouteDefinitions },
   { prefix: "/settings", label: "Settings", icon: SettingsIcon, section: settingsRouteDefinitions },
   { prefix: "/system", label: "System", icon: ComputerIcon, section: systemRouteDefinitions },

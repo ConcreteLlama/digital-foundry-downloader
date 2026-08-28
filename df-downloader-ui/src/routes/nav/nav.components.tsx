@@ -2,6 +2,7 @@ import MenuIcon from "@mui/icons-material/Menu";
 import MenuOpenIcon from "@mui/icons-material/MenuOpen";
 import {
   AppBar,
+  Badge,
   Box,
   Divider,
   Drawer,
@@ -11,6 +12,7 @@ import {
   ListItemIcon,
   ListItemText,
   SwipeableDrawer,
+  Chip,
   Toolbar,
   Tooltip,
   Typography,
@@ -20,12 +22,14 @@ import {
 import { useCallback, useEffect, useState } from "react";
 import { useSelector } from "react-redux";
 import { Link, Outlet, useLocation } from "react-router-dom";
-import { QueueStatusIndicator } from "../../components/general/queue-status-indicator.component";
-import { CumulativeDownloadInfo } from "../../components/tasks/cumulative-download-info.component";
+import { LiveStatusStrip } from "../../components/general/live-status-strip.component";
 import { DfLogoIcon } from "../../icons/df-logo.component";
 import { selectConfigSectionField, selectDevConfigEnabled } from "../../store/config/config.selector.ts";
+import { monoFontFamily } from "../../themes/build-theme";
 import { getStoredRailState, RailState, storeRailState } from "../../themes/ui-preferences";
-import { findDestination, getDestinationPath, getPageTitle, navDestinations } from "./nav-destinations";
+import { MobileTabBar } from "./mobile-tab-bar.component";
+import { useNavBadge } from "./nav-badges";
+import { findDestination, getDestinationPath, getPageTitle, NavDestination, navDestinations } from "./nav-destinations";
 import { RailFoot } from "./rail-foot.component";
 import { SectionNav, SectionNavCompact } from "./section-nav.component";
 
@@ -98,7 +102,9 @@ export const Nav = ({ onOpenChangelog }: NavProps) => {
         >
           {railContent}
         </SwipeableDrawer>
-      ) : (
+      ) : null}
+      {useMobileLayout && <MobileTabBar />}
+      {!useMobileLayout && (
         <Drawer
           variant="permanent"
           sx={{ width, flexShrink: 0 }}
@@ -175,53 +181,16 @@ const RailContents = ({ collapsed, onOpenChangelog, onItemSelected, onToggleRail
       <Divider />
 
       <List sx={{ flex: "1 1 auto", overflowY: "auto", overflowX: "hidden", paddingX: collapsed ? 0.5 : 1 }}>
-        {navDestinations.map((destination) => {
-          const selected = active?.prefix === destination.prefix;
-          const DestinationIcon = destination.icon;
-          const item = (
-            <ListItemButton
-              key={destination.prefix}
-              component={Link}
-              to={getDestinationPath(destination, devModeEnabled)}
-              selected={selected}
-              onClick={onItemSelected}
-              sx={{
-                borderRadius: 1,
-                marginBottom: 0.25,
-                minHeight: 40,
-                justifyContent: collapsed ? "center" : "flex-start",
-                paddingX: collapsed ? 1 : 1.5,
-              }}
-            >
-              <ListItemIcon
-                sx={{
-                  minWidth: collapsed ? 0 : 34,
-                  justifyContent: "center",
-                  color: selected ? "primary.main" : "text.secondary",
-                }}
-              >
-                <DestinationIcon fontSize="small" />
-              </ListItemIcon>
-              {!collapsed && (
-                <ListItemText
-                  primary={destination.label}
-                  primaryTypographyProps={{
-                    variant: "body2",
-                    fontWeight: selected ? 600 : 400,
-                    color: selected ? "text.primary" : "text.secondary",
-                  }}
-                />
-              )}
-            </ListItemButton>
-          );
-          return collapsed ? (
-            <Tooltip key={destination.prefix} title={destination.label} placement="right">
-              <Box>{item}</Box>
-            </Tooltip>
-          ) : (
-            item
-          );
-        })}
+        {navDestinations.map((destination) => (
+          <RailItem
+            key={destination.prefix}
+            destination={destination}
+            collapsed={collapsed}
+            selected={active?.prefix === destination.prefix}
+            devModeEnabled={devModeEnabled}
+            onItemSelected={onItemSelected}
+          />
+        ))}
       </List>
 
       {onToggleRail && (
@@ -236,6 +205,87 @@ const RailContents = ({ collapsed, onOpenChangelog, onItemSelected, onToggleRail
 
       <RailFoot collapsed={collapsed} onOpenChangelog={onOpenChangelog} />
     </Box>
+  );
+};
+
+type RailItemProps = {
+  destination: NavDestination;
+  collapsed: boolean;
+  selected: boolean;
+  devModeEnabled?: boolean;
+  onItemSelected: () => void;
+};
+
+/**
+ * Split out of the map because the count badge is a hook. The count is
+ * meaningful enough to survive the collapse, so at icon width it becomes a
+ * dot on the icon rather than disappearing with the label.
+ */
+const RailItem = ({ destination, collapsed, selected, devModeEnabled, onItemSelected }: RailItemProps) => {
+  const badge = useNavBadge(destination);
+  const DestinationIcon = destination.icon;
+  const item = (
+    <ListItemButton
+      component={Link}
+      to={getDestinationPath(destination, devModeEnabled)}
+      selected={selected}
+      onClick={onItemSelected}
+      sx={{
+        borderRadius: 1,
+        marginBottom: 0.25,
+        minHeight: 40,
+        justifyContent: collapsed ? "center" : "flex-start",
+        paddingX: collapsed ? 1 : 1.5,
+      }}
+    >
+      <ListItemIcon
+        sx={{
+          minWidth: collapsed ? 0 : 34,
+          justifyContent: "center",
+          color: selected ? "primary.main" : "text.secondary",
+        }}
+      >
+        {collapsed && badge && destination.badge === "activity" ? (
+          <Badge variant="dot" color="primary">
+            <DestinationIcon fontSize="small" />
+          </Badge>
+        ) : (
+          <DestinationIcon fontSize="small" />
+        )}
+      </ListItemIcon>
+      {!collapsed && (
+        <>
+          <ListItemText
+            primary={destination.label}
+            primaryTypographyProps={{
+              variant: "body2",
+              fontWeight: selected ? 600 : 400,
+              color: selected ? "text.primary" : "text.secondary",
+            }}
+          />
+          {badge && (
+            <Chip
+              label={badge}
+              size="small"
+              sx={{
+                height: 17,
+                fontSize: "0.625rem",
+                fontFamily: monoFontFamily,
+                backgroundColor: "action.hover",
+                color: destination.badge === "activity" ? "primary.main" : "text.disabled",
+              }}
+            />
+          )}
+        </>
+      )}
+    </ListItemButton>
+  );
+  return collapsed ? (
+    <Tooltip title={badge ? `${destination.label} (${badge})` : destination.label} placement="right">
+      <Box>{item}</Box>
+    </Tooltip>
+  ) : (
+    item
   );
 };
 
@@ -271,8 +321,7 @@ const AppTopBar = ({ railWidth, showMenuButton, onMenuClick }: AppTopBarProps) =
         <Typography variant="h6" noWrap sx={{ flex: "1 1 auto", minWidth: 0 }}>
           {getPageTitle(pathname)}
         </Typography>
-        <CumulativeDownloadInfo />
-        <QueueStatusIndicator />
+        <LiveStatusStrip />
       </Toolbar>
     </AppBar>
   );

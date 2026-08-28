@@ -10,6 +10,8 @@ import { DefaultUiThemeName, uiPalettes, UiThemeName } from "df-downloader-commo
  */
 const THEME_KEY = "df-ui-theme";
 const RAIL_KEY = "df-ui-rail";
+const DENSITY_KEY = "df-ui-density";
+const VIEW_KEY = "df-ui-view";
 /**
  * The chosen palette's page background, cached so the inline script in
  * index.html can paint it before the bundle has even loaded. Storing the
@@ -19,6 +21,10 @@ const RAIL_KEY = "df-ui-rail";
 const BG_KEY = "df-ui-bg";
 
 export type RailState = "expanded" | "icon";
+/** How much vertical room a library row gets. */
+export type RowDensity = "comfortable" | "compact";
+/** Library layout: one row per item, or a thumbnail grid. */
+export type ContentView = "list" | "grid";
 
 const read = (key: string): string | null => {
   try {
@@ -60,3 +66,11 @@ export const storeThemeBackground = (name: UiThemeName) => write(BG_KEY, uiPalet
 export const getStoredRailState = (): RailState => (read(RAIL_KEY) === "icon" ? "icon" : "expanded");
 
 export const storeRailState = (state: RailState) => write(RAIL_KEY, state);
+
+export const getStoredDensity = (): RowDensity => (read(DENSITY_KEY) === "compact" ? "compact" : "comfortable");
+
+export const storeDensity = (density: RowDensity) => write(DENSITY_KEY, density);
+
+export const getStoredView = (): ContentView => (read(VIEW_KEY) === "grid" ? "grid" : "list");
+
+export const storeView = (view: ContentView) => write(VIEW_KEY, view);

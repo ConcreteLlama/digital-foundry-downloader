@@ -1,7 +1,6 @@
 import { Box, Button, Stack, Typography, useMediaQuery,
   useTheme } from "@mui/material";
 import { DfContentInfoUtils, secondsToHHMMSS } from "df-downloader-common";
-import { Image } from "mui-image";
 import { useEffect } from "react";
 import { useSelector } from "react-redux";
 import { clearPipeline } from "../../../api/tasks.ts";
@@ -10,6 +9,7 @@ import { fetchYtVideoMeta, refreshDfContentMeta } from "../../../store/df-conten
 import { selectQueryPipelineIds } from "../../../store/df-tasks/tasks.selector.ts";
 import { store } from "../../../store/store.ts";
 import { formatDate } from "../../../utils/date.ts";
+import { Thumb } from "../../general/thumb.component.tsx";
 import { YouTubeEmbed } from "../../general/youtube-embed.tsx";
 import { DfTagList } from "../df-tag-list.component.tsx";
 import { DownloadedInfoList } from "../downloaded-info/downloaded-info-list.component.tsx";
@@ -73,10 +73,11 @@ export const DfContentInfoItemDetail = ({ dfContentName }: DfContentInfoItemDeta
         {contentInfo.youtubeVideoId ? (
           <YouTubeEmbed videoId={contentInfo.youtubeVideoId} width={belowMd ? "90%" : "70%"} />
         ) : (
-          <Image
+          <Thumb
             src={DfContentInfoUtils.getThumbnailUrl(contentInfo, 1200, 600)}
+            alt={contentInfo.title}
             width={belowMd ? "90%" : "70%"}
-          ></Image>
+          />
         )}
       </Box>
       <DfTagList tags={contentInfo.tags || []} sx={{ alignSelf: "center" }} />
