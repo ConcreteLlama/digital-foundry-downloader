@@ -3,7 +3,8 @@ import { Box, Button, Divider, Typography, styled } from "@mui/material";
 import { logger } from "df-downloader-common";
 import { DfDownloaderConfig } from "df-downloader-common/config/df-downloader-config";
 import { createContext, useEffect } from "react";
-import { FormContainer, useFormState } from "react-hook-form-mui";
+import { setSectionDirty } from "./dirty-sections";
+import { FormContainer, useFormContext, useFormState } from "react-hook-form-mui";
 import { useSelector } from "react-redux";
 import { queryConfigSection, updateConfigSection } from "../../store/config/config.action";
 import { selectConfigError, selectConfigLoading, selectConfigSection } from "../../store/config/config.selector";
@@ -54,8 +55,8 @@ export const DfSettingsSectionForm = ({ sectionName, title, children, onSubmit }
           >
             <SettingsStack>
               {children}
-              <SubmitButton />
             </SettingsStack>
+            <StickySaveBar sectionName={sectionName} />
           </FormContainer>
         </Box>
       </CurrentSettingsContext.Provider>
@@ -109,12 +110,51 @@ export const InlineDfSettingsSection = ({ sectionName, children, onSubmit }: Inl
   }
 }
 
-const SubmitButton = () => {
-  const { isDirty } = useFormState();
+/**
+ * The Save button used to sit at the bottom of the settings stack, which on a
+ * long section meant scrolling to the end to find out whether it was even
+ * enabled - i.e. whether you had actually changed anything. It sticks to the
+ * bottom of the form now and says how many fields are pending, and it also
+ * publishes the dirty flag so the sub-nav can mark the section.
+ */
+const StickySaveBar = ({ sectionName }: { sectionName: keyof DfDownloaderConfig }) => {
+  const { isDirty, dirtyFields } = useFormState();
+  const { reset } = useFormContext();
+  useEffect(() => {
+    setSectionDirty(sectionName, isDirty);
+  }, [sectionName, isDirty]);
+  // Clear the marker when the form unmounts, or navigating away would leave a
+  // dot on a section that is no longer holding anything.
+  useEffect(() => () => setSectionDirty(sectionName, false), [sectionName]);
+
+  const changedCount = Object.keys(dirtyFields || {}).length;
   return (
-    <Button disabled={!isDirty} type="submit" variant="contained">
-      Save
-    </Button>
+    <Box
+      sx={{
+        position: "sticky",
+        bottom: 0,
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "flex-end",
+        gap: 2,
+        marginTop: 4,
+        paddingY: 1.5,
+        backgroundColor: "background.default",
+        borderTop: "1px solid",
+        borderColor: "divider",
+        zIndex: 1,
+      }}
+    >
+      <Typography variant="body2" color={isDirty ? "text.secondary" : "text.disabled"}>
+        {isDirty ? `${changedCount} unsaved change${changedCount === 1 ? "" : "s"}` : "No changes"}
+      </Typography>
+      <Button disabled={!isDirty} variant="outlined" onClick={() => reset()}>
+        Discard
+      </Button>
+      <Button disabled={!isDirty} type="submit" variant="contained">
+        Save
+      </Button>
+    </Box>
   );
 };
 

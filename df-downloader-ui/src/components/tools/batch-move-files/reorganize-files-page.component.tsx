@@ -17,7 +17,7 @@ import { InlineDfSettingsSection } from "../../settings/df-settings-section-form
 import { TemplateBuilderField } from "../../settings/template/template-builder-field.tsx";
 import { BatchMoveFilesActionButton, BatchMoveFilesActions, BatchMoveFilesContent, BatchMoveFilesHeader, makeRecordKey } from "./reorganize-files.components.tsx";
 
-export const ReorgnaizeFilesPage = () => {
+export const ReorganizeFilesPage = () => {
   // TODO: Separate this out so I can have the query elsewhere, may want to just do limited subset of move. But for now let's
   // just assume this is always a batch mover from template
   useEffect(() => {

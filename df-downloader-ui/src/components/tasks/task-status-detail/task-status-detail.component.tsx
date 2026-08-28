@@ -1,62 +1,45 @@
-import { Stack, Typography } from "@mui/material";
-import { TaskStatus, estimateProgressTimeRemainingMs } from "df-downloader-common";
+import { Box } from "@mui/material";
+import { TaskStatus } from "df-downloader-common";
 import { useSelector } from "react-redux";
-import { selectBasicTaskField, selectCurrentStep, selectIsComplete } from "../../../store/df-tasks/tasks.selector.ts";
-import prettyMilliseconds from "pretty-ms";
-import { LinearProgressWithLabel } from "../../general/linear-progress-with-label.component.tsx";
-import { TaskPipelineStepper } from "../progress-stepper/task-pipeline-stepper.component.tsx";
+import {
+  selectBasicTaskField,
+  selectCurrentStep,
+  selectDownoadingProgressField,
+  selectIsComplete,
+} from "../../../store/df-tasks/tasks.selector.ts";
+import { PipelineTrack } from "../pipeline-track/pipeline-track.component.tsx";
+import { TaskReadout } from "../pipeline-track/task-readout.component.tsx";
 import { CompletedTaskStatusDetail } from "./completed-task-status-detail.component.tsx";
-import { DownloadTaskStatusDetail } from "./download-task-status-detail.component.tsx";
+import { TaskControls } from "../task-controls.component.tsx";
 
 /**
- * Anything that isn't a download: the pipeline stepper, plus a progress bar
- * for steps that can report one.
+ * A running pipeline: the segmented track, then its figures.
  *
- * Downloads have always had their own detailed progress (speed, ETA, bytes).
- * Everything else used to show the stepper alone, which for the long steps -
- * transcribing a two-hour episode takes tens of minutes - meant no indication
- * of whether anything was happening at all. Steps that can't report progress
- * are unchanged and simply show the stepper.
+ * Downloads and everything else share one presentation now. They used to
+ * diverge - downloads had a gradient-backed grid of stats, everything else got
+ * the stepper and maybe a bar - which meant the same pipeline looked like two
+ * different things depending on which step it happened to be on.
  */
-const OtherTaskStatusDetail = ({ pipelineId, stepId }: { pipelineId: string; stepId: string }) => {
-  const status = useSelector(selectBasicTaskField<"status", TaskStatus | null>(pipelineId, stepId, "status"));
-  const startTime = useSelector(selectBasicTaskField<"startTime", Date | undefined>(pipelineId, stepId, "startTime"));
-  const progress = status?.progress;
-  // Downloads show an ETA from their byte rate; these steps had a bar and no
-  // sense of how much longer it represented, which for a transcription is the
-  // question actually being asked.
-  const remainingMs = estimateProgressTimeRemainingMs(startTime, progress);
-  return (
-    <Stack sx={{ width: "100%" }} spacing={0.5}>
-      <TaskPipelineStepper pipelineId={pipelineId} />
-      {progress && (
-        <Stack direction="row" spacing={1} alignItems="center" sx={{ width: "100%" }}>
-          <LinearProgressWithLabel value={progress.percent} />
-          {progress.detail && (
-            <Typography variant="caption" color="text.secondary" sx={{ whiteSpace: "nowrap" }}>
-              {progress.detail}
-            </Typography>
-          )}
-          {remainingMs !== undefined && (
-            <Typography variant="caption" color="text.secondary" sx={{ whiteSpace: "nowrap" }}>
-              ETA: {prettyMilliseconds(remainingMs, { secondsDecimalDigits: 0, unitCount: 2 })}
-            </Typography>
-          )}
-        </Stack>
-      )}
-    </Stack>
-  );
-};
-
 export const TaskStatusDetail = ({ pipelineId }: { pipelineId: string }) => {
-  const currentStep = useSelector(selectCurrentStep(pipelineId));
-  const taskType = useSelector(selectBasicTaskField(pipelineId, currentStep || "", "taskType"));
+  const currentStep = useSelector(selectCurrentStep(pipelineId)) ?? "";
   const isComplete = useSelector(selectIsComplete(pipelineId));
-  return isComplete ? (
-    <CompletedTaskStatusDetail pipelineId={pipelineId} />
-  ) : taskType === "download" ? (
-    <DownloadTaskStatusDetail pipelineId={pipelineId} stepId={currentStep || ""} />
-  ) : (
-    <OtherTaskStatusDetail pipelineId={pipelineId} stepId={currentStep || ""} />
+  const downloadPercent = useSelector(selectDownoadingProgressField(pipelineId, currentStep, "percentComplete"));
+  const status = useSelector(selectBasicTaskField<"status", TaskStatus | null>(pipelineId, currentStep, "status"));
+  const activePercent = typeof downloadPercent === "number" ? downloadPercent : status?.progress?.percent;
+
+  if (isComplete) {
+    return <CompletedTaskStatusDetail pipelineId={pipelineId} />;
+  }
+
+  return (
+    <Box sx={{ width: "100%" }}>
+      <Box sx={{ display: "flex", alignItems: "flex-start", gap: 1 }}>
+        <Box sx={{ flex: "1 1 auto", minWidth: 0 }}>
+          <PipelineTrack pipelineId={pipelineId} activePercent={activePercent} />
+        </Box>
+        <TaskControls pipelineId={pipelineId} />
+      </Box>
+      <TaskReadout pipelineId={pipelineId} />
+    </Box>
   );
 };

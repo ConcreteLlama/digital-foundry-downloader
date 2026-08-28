@@ -1,10 +1,12 @@
-import { Box, Chip, Stack, SvgIconProps, Tooltip, Typography, useMediaQuery, useTheme } from "@mui/material";
+import { Box, Chip, Stack, Typography, useMediaQuery, useTheme } from "@mui/material";
 import { bytesToHumanReadable, DfContentInfoUtils, secondsToHHMMSS } from "df-downloader-common";
 import { useDfContentEntry } from "../../../hooks/use-df-content-entry.ts";
 import { monoFontFamily } from "../../../themes/build-theme.ts";
 import { RowDensity } from "../../../themes/ui-preferences.ts";
 import { DfThumbnailImage } from "../../general/df-thumbnail-image.component.tsx";
 import { contentRowStateSpecs, spineStyles } from "./content-row-state.ts";
+import { StartDownloadingButton } from "../start-download-dialog.component.tsx";
+import { StateBlock, STATE_BLOCK_WIDTH } from "./state-block.component.tsx";
 import { useContentRowStatus } from "./use-content-row-status.ts";
 
 export type ContentRowProps = {
@@ -53,8 +55,14 @@ export const ContentRow = ({ dfContentName, density, onClick }: ContentRowProps)
 
   const { contentInfo } = entry;
   const spec = contentRowStateSpecs[status.state];
-  const StateIcon = spec.icon;
   const thumbWidth = THUMB_WIDTH[density][belowMd ? "mobile" : "desktop"];
+  // "Available" used to BE the download control - the old status summary
+  // rendered a real StartDownloadingButton there. Phase C replaced it with a
+  // passive label, which quietly removed one-click download from the library.
+  // Only this state: an already-downloaded item deliberately has no download
+  // button, and everywhere else the control would only ever be disabled.
+  // The state block stays the state block - it is just clickable here.
+  const canDownload = status.state === "available";
 
   const durationSeconds = DfContentInfoUtils.getDurationSeconds(contentInfo);
   const bestSize = entry.downloads[0]?.mediaInfo.size ?? contentInfo.mediaInfo.find((m) => m.size)?.size;
@@ -78,7 +86,7 @@ export const ContentRow = ({ dfContentName, density, onClick }: ContentRowProps)
       sx={{
         position: "relative",
         display: "grid",
-        gridTemplateColumns: belowMd ? "2px auto 1fr" : "2px auto 1fr auto",
+        gridTemplateColumns: belowMd ? "2px auto 1fr" : `2px auto 1fr ${STATE_BLOCK_WIDTH}px`,
         columnGap: belowMd ? 1.5 : 2,
         alignItems: "center",
         paddingY: density === "compact" ? 0.5 : 1,
@@ -156,12 +164,37 @@ export const ContentRow = ({ dfContentName, density, onClick }: ContentRowProps)
             ))}
           </Stack>
         )}
-        {belowMd && <StateBlock spec={spec} StateIcon={StateIcon} status={status} compact />}
+        {belowMd && (
+          <Box onClick={(event) => event.stopPropagation()} sx={{ marginTop: 0.5 }}>
+            {canDownload ? (
+              <StartDownloadingButton
+                contentEntry={entry}
+                trigger={
+                  <StateBlock spec={spec} detail={status.detail} extraCount={status.extraCount} align="start" />
+                }
+              />
+            ) : (
+              <StateBlock spec={spec} detail={status.detail} extraCount={status.extraCount} align="start" />
+            )}
+          </Box>
+        )}
       </Box>
 
       {!belowMd && (
-        <Box sx={{ textAlign: "right", minWidth: 132 }}>
-          <StateBlock spec={spec} StateIcon={StateIcon} status={status} />
+        <Box
+          sx={{ width: STATE_BLOCK_WIDTH, flexShrink: 0, display: "flex", justifyContent: "flex-end" }}
+          // The download control lives inside the row, so clicking it must not
+          // also open the detail dialog the rest of the row opens.
+          onClick={(event) => event.stopPropagation()}
+        >
+          {canDownload ? (
+            <StartDownloadingButton
+              contentEntry={entry}
+              trigger={<StateBlock spec={spec} detail={status.detail} extraCount={status.extraCount} />}
+            />
+          ) : (
+            <StateBlock spec={spec} detail={status.detail} extraCount={status.extraCount} />
+          )}
         </Box>
       )}
 
@@ -185,60 +218,3 @@ export const ContentRow = ({ dfContentName, density, onClick }: ContentRowProps)
     </Box>
   );
 };
-
-type StateBlockProps = {
-  spec: (typeof contentRowStateSpecs)[keyof typeof contentRowStateSpecs];
-  StateIcon: React.FC<SvgIconProps>;
-  status: ReturnType<typeof useContentRowStatus>;
-  compact?: boolean;
-};
-
-const StateBlock = ({ spec, StateIcon, status, compact }: StateBlockProps) => (
-  <Stack
-    direction="row"
-    spacing={0.75}
-    sx={{
-      alignItems: "center",
-      justifyContent: compact ? "flex-start" : "flex-end",
-      marginTop: compact ? 0.5 : 0,
-    }}
-  >
-    {/* Dot: filled or hollow, a second channel independent of hue. */}
-    <Box
-      sx={{
-        width: 7,
-        height: 7,
-        borderRadius: "50%",
-        flexShrink: 0,
-        backgroundColor: spec.dot === "filled" ? spec.colour : "transparent",
-        border: spec.dot === "hollow" ? "1.5px solid" : "none",
-        borderColor: spec.colour,
-        color: spec.colour,
-      }}
-    />
-    <StateIcon sx={{ fontSize: 14, color: spec.colour }} />
-    <Tooltip title={status.detail ?? ""} disableHoverListener={!status.detail}>
-      <Box sx={{ minWidth: 0 }}>
-        <Typography sx={{ fontSize: "0.6875rem", fontWeight: 600, color: spec.colour, lineHeight: 1.3 }}>
-          {spec.label}
-        </Typography>
-        {status.detail && (
-          <Typography
-            sx={{
-              fontFamily: monoFontFamily,
-              fontSize: "0.625rem",
-              color: "text.disabled",
-              lineHeight: 1.3,
-              whiteSpace: "nowrap",
-              overflow: "hidden",
-              textOverflow: "ellipsis",
-              maxWidth: compact ? 220 : 132,
-            }}
-          >
-            {status.detail}
-          </Typography>
-        )}
-      </Box>
-    </Tooltip>
-  </Stack>
-);

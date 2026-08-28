@@ -1,8 +1,6 @@
 import { DndContext, DragEndEvent } from "@dnd-kit/core";
-import { Box, Button, Divider, Stack, Typography, useMediaQuery,
-  useTheme } from "@mui/material";
+import { Box, Button, Stack, Typography, useMediaQuery, useTheme } from "@mui/material";
 import { useDispatch, useSelector } from "react-redux";
-import { Fragment } from "react/jsx-runtime";
 import { clearCompletedPipelines } from "../../api/tasks.ts";
 import { controlTaskAction } from "../../store/df-tasks/tasks.action.ts";
 import {
@@ -10,6 +8,7 @@ import {
   selectDownloadingPipelineIds,
   selectPostProcessingPipelineIds,
 } from "../../store/df-tasks/tasks.selector.ts";
+import { monoFontFamily } from "../../themes/build-theme.ts";
 import { ScheduledDownloadsList } from "./scheduled-downloads-list.component.tsx";
 import { DraggableTaskInfo, DraggableTaskInfoData, TaskInfo } from "./task-info.component.tsx";
 
@@ -26,7 +25,7 @@ export const TaskList = () => {
       sx={{
         display: "flex",
         flexDirection: "column",
-        gap: "1rem",
+        gap: "1.5rem",
         paddingX: belowSm ? "0" : "8px",
         paddingY: "12px",
         width: "100%",
@@ -39,11 +38,9 @@ export const TaskList = () => {
         pipelineIds={completedTasks}
         name="Completed"
         header={
-          <Box sx={{ display: "flex", justifyContent: "right" }}>
-            <Button variant="outlined" disabled={completedTasks.length === 0} onClick={onClearCompleted}>
-              Clear
-            </Button>
-          </Box>
+          <Button size="small" disabled={completedTasks.length === 0} onClick={onClearCompleted}>
+            Clear all
+          </Button>
         }
       />
     </Stack>
@@ -58,21 +55,61 @@ type TaskInfoSetProps = {
   draggable?: boolean;
 };
 
+/**
+ * A group of pipelines.
+ *
+ * The heading used to be a centred <Divider> with the label floating in a gap
+ * either side, and any group action (Clear) sat on its own line underneath -
+ * so three groups read as three unrelated blobs rather than one rack. The
+ * label, its count and its action are one left-aligned row now, matching the
+ * overline headings used everywhere else.
+ */
 const TaskInfoSet = ({ pipelineIds, name, noTasksMessage, header, draggable }: TaskInfoSetProps) => {
   return (
-    <Fragment>
-      <Divider>{name}</Divider>
+    <Box>
+      <Box
+        sx={{
+          display: "flex",
+          alignItems: "center",
+          gap: 1,
+          minHeight: 32,
+          paddingX: 1,
+          borderBottom: "1px solid",
+          borderColor: "divider",
+        }}
+      >
+        <Typography variant="overline">{name}</Typography>
+        {pipelineIds.length > 0 && (
+          <Typography
+            sx={{
+              fontFamily: monoFontFamily,
+              fontSize: "0.6875rem",
+              color: "text.disabled",
+              flexShrink: 0,
+            }}
+          >
+            {pipelineIds.length}
+          </Typography>
+        )}
+        <Box sx={{ flex: "1 1 auto" }} />
+        {header}
+      </Box>
       {pipelineIds.length ? (
-        <Fragment>
-          {header ? header : null}
+        <Stack sx={{ gap: 1, marginTop: 1 }}>
           {pipelineIds.map((pipelineId) =>
-            draggable ? <DraggableTaskInfo pipelineId={pipelineId} /> : <TaskInfo pipelineId={pipelineId} />
+            draggable ? (
+              <DraggableTaskInfo key={pipelineId} pipelineId={pipelineId} />
+            ) : (
+              <TaskInfo key={pipelineId} pipelineId={pipelineId} />
+            )
           )}
-        </Fragment>
+        </Stack>
       ) : (
-        <Typography color="text.disabled">{noTasksMessage || `No ${name} tasks`}</Typography>
+        <Typography sx={{ color: "text.disabled", fontSize: "0.8125rem", paddingX: 1, paddingY: 1.5 }}>
+          {noTasksMessage || `No ${name.toLowerCase()} tasks`}
+        </Typography>
       )}
-    </Fragment>
+    </Box>
   );
 };
 

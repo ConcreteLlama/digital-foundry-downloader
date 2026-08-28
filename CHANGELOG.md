@@ -27,6 +27,21 @@ Subtitles can now be generated locally on your own machine instead of being pull
   - Previously nothing recorded that a download had happened until everything after it finished too, so restarting during subtitle generation threw the download away and started over
   - The step a pipeline reached is remembered, so it picks up from there instead of re-downloading. The step that was actually running restarts, but everything before it is kept
   - If the downloaded file has since gone missing, it starts over rather than continuing with a file that isn't there
+- The Activity page is now a rack rather than a stack of cards
+  - Each job shows its pipeline as a row of segments, one per step, with the step that is actually running filling up as it goes - so you can see how far through a step is, not just which step it is on
+  - Underneath, the numbers that matter - progress, rate, transferred, time remaining - in a fixed-width typeface so they stop jittering as they change
+  - A job that failed now keeps its whole track, so you can see which step died and which never ran. Previously a failure collapsed to a single error icon at the end
+  - Finished jobs collapse to one line each. Twenty completed downloads used to bury the two still running
+  - Every step state has its own icon and its own fill as well as its own colour, so the track stays readable whichever theme you use
+  - How many downloads run at once is now a plus/minus control in the toolbar rather than a dropdown of ten numbers
+- The content details window is now two columns
+  - The video and its description on the left, everything you can act on - what is on disk, what can still be fetched, what is running - on the right and always in view
+  - Previously it was one long column, so on a video with a lengthy description the download options were off the bottom of the screen
+- Settings now have a save bar that follows you down the page
+  - It shows how many fields you have changed, and adds a Discard button to put them back
+  - The Save button used to sit at the very bottom of a long page, so you had to scroll to the end just to find out whether you had changed anything
+  - A section with unsaved changes is marked in the settings list, so leaving one behind is visible rather than silent
+- The add-download button no longer appears on Settings and Tools pages, where it did nothing useful and sat on top of the save bar
 - Click a task to see the full details of its run
   - Every step it went through, when each started and how long it took, so you can see where the time actually went
   - Steps that were skipped are shown as skipped rather than left blank

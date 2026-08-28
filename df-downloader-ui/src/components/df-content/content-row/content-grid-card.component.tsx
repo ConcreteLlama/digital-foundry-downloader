@@ -4,6 +4,8 @@ import { useDfContentEntry } from "../../../hooks/use-df-content-entry.ts";
 import { monoFontFamily } from "../../../themes/build-theme.ts";
 import { DfThumbnailImage } from "../../general/df-thumbnail-image.component.tsx";
 import { contentRowStateSpecs, spineStyles } from "./content-row-state.ts";
+import { StartDownloadingButton } from "../start-download-dialog.component.tsx";
+import { StateBlock } from "./state-block.component.tsx";
 import { useContentRowStatus } from "./use-content-row-status.ts";
 
 export type ContentGridCardProps = {
@@ -24,7 +26,6 @@ export const ContentGridCard = ({ dfContentName, onClick }: ContentGridCardProps
   }
   const { contentInfo } = entry;
   const spec = contentRowStateSpecs[status.state];
-  const StateIcon = spec.icon;
   const durationSeconds = DfContentInfoUtils.getDurationSeconds(contentInfo);
   const spine = spineStyles(spec);
 
@@ -94,21 +95,18 @@ export const ContentGridCard = ({ dfContentName, onClick }: ContentGridCardProps
         <Typography sx={{ fontFamily: monoFontFamily, fontSize: "0.625rem", color: "text.secondary" }}>
           {contentInfo.publishedDate.toISOString().slice(0, 10)}
         </Typography>
-        <Stack direction="row" spacing={0.5} sx={{ alignItems: "center", marginTop: "auto" }}>
-          <Box
-            sx={{
-              width: 7,
-              height: 7,
-              borderRadius: "50%",
-              flexShrink: 0,
-              backgroundColor: spec.dot === "filled" ? spec.colour : "transparent",
-              border: spec.dot === "hollow" ? "1.5px solid" : "none",
-              borderColor: spec.colour,
-            }}
-          />
-          <StateIcon sx={{ fontSize: 13, color: spec.colour }} />
-          <Typography sx={{ fontSize: "0.625rem", fontWeight: 600, color: spec.colour }}>{spec.label}</Typography>
-        </Stack>
+        <Box sx={{ marginTop: "auto" }} onClick={(event) => event.stopPropagation()}>
+          {status.state === "available" ? (
+            <StartDownloadingButton
+              contentEntry={entry}
+              trigger={
+                <StateBlock spec={spec} detail={status.detail} extraCount={status.extraCount} align="start" compact />
+              }
+            />
+          ) : (
+            <StateBlock spec={spec} detail={status.detail} extraCount={status.extraCount} align="start" compact />
+          )}
+        </Box>
       </Stack>
       {typeof status.percent === "number" && (
         <Box
