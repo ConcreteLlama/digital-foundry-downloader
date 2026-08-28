@@ -233,6 +233,22 @@ export const SubtitlesConfig = z
     /** See SubtitlesOutputMode. */
     output: SubtitlesOutputMode.default("auto"),
     /**
+     * Also write the .srt beside the video when subtitles are being embedded.
+     *
+     * Off by default, deliberately: turning it on starts writing new files
+     * into a library that already exists, which is not something to do to
+     * someone without being asked. With the default "auto" output mode a
+     * fresh download embeds its subtitles and no .srt is ever written, so
+     * there is no transcript on disk to open, search, or feed to anything
+     * else - this is how you get one without giving up embedding.
+     */
+    keepTranscript: z
+      .boolean()
+      .default(false)
+      .describe(
+        "Also save the subtitles as a separate .srt next to the video, even when they are being embedded in it. Useful if you want a readable transcript you can search or open on its own - embedding alone leaves no file to read."
+      ),
+    /**
      * How many subtitle generations may run at once.
      *
      * Defaults to 1, deliberately. This was effectively 5 back when

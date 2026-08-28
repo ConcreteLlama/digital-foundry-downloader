@@ -1,3 +1,4 @@
+import { backfillTranscriptPaths } from "../../media-utils/subtitles/transcript-backfill.js";
 import {
   ContentMoveFileInfo,
   DeleteDownloadRequest,
@@ -46,6 +47,23 @@ export const makeContentApiRouter = (contentManager: DigitalFoundryContentManage
     const contentInfo = await contentManager.db.getContentEntry(contentName);
     if (!contentInfo) {
       return res.status(404).send();
+    }
+    // Downloads recorded before the transcript path was stored have no idea
+    // where their .srt is. Filled in here, when an entry is actually opened,
+    // rather than by walking the whole library at startup - and only when the
+    // derived file genuinely exists (see transcript-backfill.ts).
+    try {
+      const backfilled = await backfillTranscriptPaths(contentInfo);
+      for (const { downloadLocation, subtitle } of backfilled) {
+        await contentManager.db.subsGenerated(contentName, downloadLocation, subtitle);
+      }
+      if (backfilled.length) {
+        const refreshed = await contentManager.db.getContentEntry(contentName);
+        return sendResponse(res, refreshed ?? contentInfo);
+      }
+    } catch (e) {
+      // Cosmetic - never fail the request over it.
+      logger.log("debug", `Transcript backfill failed for ${contentName}: ${e}`);
     }
     return sendResponse(res, contentInfo);
   });

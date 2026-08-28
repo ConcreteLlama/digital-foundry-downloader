@@ -132,6 +132,11 @@ Subtitles can now be generated locally on your own machine instead of being pull
   - It previously re-requested the last few pages of a completed pass on every restart, which could never turn up anything - those pages hold the oldest content, and newly published videos are found by the separate check that looks at the newest end
   - This means a slightly faster startup, and fewer requests to Digital Foundry from every installation on every restart
   - Deleting db/archive-scan-checkpoint.json still forces a fresh pass through the whole archive if you need one
+- The app now records where a transcript is, and can keep one for you
+  - When subtitles are saved as a separate .srt, the app remembers where it put it, and the file is listed against the download in the content details
+  - New 'keep transcript' option: also save the .srt next to the video even when the subtitles are being embedded in it. Embedding alone leaves nothing you can open, search or read on its own
+  - Off by default - turning it on starts writing new files into a library you already have, so it is your call rather than ours
+  - Existing downloads get their transcript found automatically the first time you open their details, but only if the file is really there. Nothing is guessed and recorded blind, because files move and filenames are yours to configure
 - Settings now explain themselves
   - Every setting that had no explanation now has one - retry and connection behaviour under Downloads, the archive scan depth, the Pushbullet fields, the log level, and more besides
   - Where a setting is a trade-off rather than a preference, the text says what you are trading. Opening more connections per download is faster but harder on the server; a shorter gap between checks finds new videos sooner but asks more of Digital Foundry

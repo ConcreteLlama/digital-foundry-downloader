@@ -1259,7 +1259,9 @@ export class DigitalFoundryContentManager {
           downloadDate: new Date(),
           downloadLocation: downloadLocation,
           size: size ? bytesToHumanReadable(size) : undefined,
-          subtitles: subtitles ? [{ service: subtitles.service, language: subtitles.language }] : undefined,
+          subtitles: subtitles
+            ? [{ service: subtitles.service, language: subtitles.language, path: subtitles.path }]
+            : undefined,
         });
         this.queueDeferredSubtitles(dfContentInfo, mediaInfo, downloadLocation);
       }

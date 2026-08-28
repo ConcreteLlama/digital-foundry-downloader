@@ -59,9 +59,11 @@ export const createSubtitlesTaskPipeline = (opts: SubtitlesTaskPipelineCreatorOp
       taskCreator: ({ context, allResults }) => {
         const [subtitlesTaskResult] = allResults;
         const subtitles = subtitlesTaskResult?.status === "success" ? subtitlesTaskResult.result : null;
+        const subtitlesConfig = configService.config.subtitles;
         if (
           !subtitles ||
-          resolveSubtitlesOutput(configService.config.subtitles?.output ?? "auto", "existing_file") !== "sidecar"
+          (resolveSubtitlesOutput(subtitlesConfig?.output ?? "auto", "existing_file") !== "sidecar" &&
+            !subtitlesConfig?.keepTranscript)
         ) {
           return null;
         }
@@ -87,9 +89,16 @@ export const createSubtitlesTaskPipeline = (opts: SubtitlesTaskPipelineCreatorOp
       reduceResults: ({ results, context }) => {
         const [subtitlesTaskResult] = results;
         const subtitlesResult = subtitlesTaskResult?.status === "success" ? subtitlesTaskResult.result : null;
+        // Where the sidecar landed, when one was written - previously discarded.
+        const sidecarResult = results[results.length - 1];
+        const subtitlePath =
+          sidecarResult?.status === "success" && typeof sidecarResult.result === "string"
+            ? sidecarResult.result
+            : undefined;
         return {
           language: context.language,
           service: subtitlesResult!.service,
+          path: subtitlePath,
         };
       },
     });

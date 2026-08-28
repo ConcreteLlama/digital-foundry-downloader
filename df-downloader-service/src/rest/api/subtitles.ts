@@ -57,10 +57,11 @@ export const makeSubtitlesRouter = (contentManager: DigitalFoundryContentManager
         );
         subsTask.on("completed", (result) => {
           if (result.status === "success") {
-            const { language, service } = result.pipelineResult;
+            const { language, service, path } = result.pipelineResult;
             contentManager.db.subsGenerated(contentName, mediaFilePath, {
               language,
               service,
+              path,
             });
           }
         });

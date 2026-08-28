@@ -251,11 +251,12 @@ export const createDownloadTaskPipeline = (opts: DownloadTaskPipelineOpts) => {
         if (!generatedSubtitles || !context.finalLocation) {
           return null;
         }
-        const outputMode = resolveSubtitlesOutput(
-          configService.config.subtitles?.output ?? "auto",
-          "assembling_download"
-        );
-        if (outputMode !== "sidecar") {
+        const subtitlesConfig = configService.config.subtitles;
+        const outputMode = resolveSubtitlesOutput(subtitlesConfig?.output ?? "auto", "assembling_download");
+        // keepTranscript means "write the .srt as well", so it also runs in
+        // embed mode - where otherwise no readable transcript is produced at
+        // all, the subtitles existing only inside the container.
+        if (outputMode !== "sidecar" && !subtitlesConfig?.keepTranscript) {
           return null;
         }
         return WriteSubtitlesSidecarTask(context.finalLocation, generatedSubtitles);
@@ -284,6 +285,14 @@ export const createDownloadTaskPipeline = (opts: DownloadTaskPipelineOpts) => {
         const [downloadTaskResult, _measureTaskResult, _ytMetaTaskResult, subtitlesTaskResult] = results;
         const downloadResult = downloadTaskResult?.status === "success" ? downloadTaskResult.result : null;
         const subtitlesResult = subtitlesTaskResult?.status === "success" ? subtitlesTaskResult.result : null;
+        // writeSubtitleSidecar returns where it wrote; that value was being
+        // discarded, so nothing recorded where the transcript lives. Null when
+        // the sidecar step was skipped, which is the common case.
+        const sidecarResult = results[results.length - 1];
+        const subtitlePath =
+          sidecarResult?.status === "success" && typeof sidecarResult.result === "string"
+            ? sidecarResult.result
+            : undefined;
         return {
           dfContentInfo: context.dfContentInfo,
           mediaInfo: context.mediaInfo,
@@ -295,6 +304,7 @@ export const createDownloadTaskPipeline = (opts: DownloadTaskPipelineOpts) => {
             ? {
                 service: subtitlesResult.service,
                 language: subtitlesResult.language,
+                path: subtitlePath,
               }
             : null,
         };

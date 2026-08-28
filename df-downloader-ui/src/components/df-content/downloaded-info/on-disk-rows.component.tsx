@@ -31,9 +31,6 @@ type OnDiskRowProps = {
 };
 
 const OnDiskRow = ({ contentEntry, download }: OnDiskRowProps) => {
-  // The transcript itself is not persisted anywhere on the model - only the
-  // fact that a subtitle track exists, and which service produced it. Showing
-  // that honestly rather than implying a file that may not be there.
   const subtitles = download.subtitles || [];
   const fileName = download.downloadLocation.split(/[\\/]/).pop() || download.downloadLocation;
   return (
@@ -65,11 +62,26 @@ const OnDiskRow = ({ contentEntry, download }: OnDiskRowProps) => {
             {fileName}
           </Typography>
         </Tooltip>
-        {subtitles.length > 0 && (
-          <Typography sx={{ fontFamily: monoFontFamily, fontSize: "0.625rem", color: "text.disabled" }} noWrap>
-            {subtitles.map((s) => `srt · ${s.service} · ${s.language}`).join("  ·  ")}
-          </Typography>
-        )}
+        {subtitles.map((subtitle, index) => (
+          <Tooltip
+            key={`${subtitle.language}-${index}`}
+            title={
+              subtitle.path
+                ? subtitle.path
+                : "Embedded in the video - no separate transcript file. Turn on \"keep transcript\" in Subtitles settings to get one."
+            }
+          >
+            <Typography
+              sx={{ fontFamily: monoFontFamily, fontSize: "0.625rem", color: "text.disabled" }}
+              noWrap
+            >
+              {/* A transcript that exists as a file is a different thing from
+                  one that only exists inside the container - you can open,
+                  search and feed the first to something else. Say which. */}
+              {subtitle.path ? "srt" : "embedded"} · {subtitle.service} · {subtitle.language}
+            </Typography>
+          </Tooltip>
+        ))}
       </Box>
       <DownloadedItemActions contentEntry={contentEntry} download={download} />
     </Box>
