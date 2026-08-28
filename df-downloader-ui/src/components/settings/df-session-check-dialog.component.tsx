@@ -30,7 +30,17 @@ export const DfSessionCheckDialog = () => {
   // partially browsable logged-out, but that's not useful data), so this
   // blocks the main UI until a valid autologin cookie is confirmed, or the
   // user explicitly says they're just browsing.
-  const open = !userExists && !ignoreDfSessionCheck;
+  //
+  // Only actually opens once that's *known* - either a check is in flight
+  // (showChecking) or one has completed and found no user
+  // (userInfoInitialized && !userExists). `dfUser` being falsy is also the
+  // state before the very first check has resolved, and opening straight off
+  // that alone popped "Not Connected" on every fresh load/restart - a false
+  // negative that self-corrected a moment later once the real answer came
+  // back (reported 2026-08-28). A slow first check (the service's own DF
+  // recheck is rate-limited and can take several seconds) now shows the
+  // "Checking" spinner for the whole wait instead of a false "Not Connected".
+  const open = (showChecking || (userInfoInitialized && !userExists)) && !ignoreDfSessionCheck;
   const onClose = () => {
     window.sessionStorage.setItem("ignoreDfSessionCheck", "true");
     setIgnoreDfSessionCheck(true);
