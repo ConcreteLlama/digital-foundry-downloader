@@ -1,5 +1,3 @@
-import MenuIcon from "@mui/icons-material/Menu";
-import MenuOpenIcon from "@mui/icons-material/MenuOpen";
 import {
   AppBar,
   Badge,
@@ -43,7 +41,11 @@ export type NavProps = {
 export const Nav = ({ onOpenChangelog }: NavProps) => {
   const theme = useTheme();
   const useMobileLayout = useMediaQuery(theme.breakpoints.down("md"));
-  const [railState, setRailState] = useState<RailState>(() => getStoredRailState());
+  // Narrow desktops (an unfolded foldable is 833) default to the icon rail so
+  // the content keeps the width, but it is only a default - see below.
+  const [railState, setRailState] = useState<RailState>(() =>
+    getStoredRailState(typeof window !== "undefined" && window.innerWidth < 900 ? "icon" : "expanded")
+  );
   const [overlayOpen, setOverlayOpen] = useState(false);
 
   const toggleRail = useCallback(() => {
@@ -149,35 +151,49 @@ const RailContents = ({ collapsed, onOpenChangelog, onItemSelected, onToggleRail
         and "Content Manager" says what the app does now that downloading is
         one pipeline step among several. No tagline - a second line only earns
         its place if it carries data, which is what the foot strip is for.
+
+        It is also the rail control. A separate hamburger at the foot was
+        undiscoverable at icon width, where the nav labels are hover tooltips
+        that a touch device never triggers - the mark is the thing people
+        actually reach for, and it is a much larger target. It doesn't link to
+        /content any more; the Content item directly below it already does.
       */}
-      <Box
-        component={Link}
-        to="/content"
-        onClick={onItemSelected}
-        sx={{
-          display: "flex",
-          alignItems: "center",
-          gap: 1.25,
-          height: 64,
-          paddingX: collapsed ? 0 : 2,
-          justifyContent: collapsed ? "center" : "flex-start",
-          textDecoration: "none",
-          color: "text.primary",
-          flexShrink: 0,
-        }}
-      >
-        <DfLogoIcon sx={{ color: "primary.main", fontSize: 26 }} />
-        {!collapsed && (
-          <Typography sx={{ fontWeight: 700, fontSize: "0.9375rem", letterSpacing: "-0.01em", lineHeight: 1.1 }}>
-            Content Manager
-            {devMode && (
-              <Typography component="span" variant="caption" sx={{ display: "block", color: "warning.main" }}>
-                dev mode
-              </Typography>
-            )}
-          </Typography>
-        )}
-      </Box>
+      <Tooltip title={onToggleRail ? (collapsed ? "Expand sidebar  [" : "Collapse sidebar  [") : ""} placement="right">
+        <Box
+          component="button"
+          onClick={onToggleRail ?? onItemSelected}
+          aria-label={onToggleRail ? (collapsed ? "Expand sidebar" : "Collapse sidebar") : "Close menu"}
+          sx={{
+            display: "flex",
+            alignItems: "center",
+            gap: 1.25,
+            width: "100%",
+            height: 64,
+            paddingX: collapsed ? 0 : 2,
+            justifyContent: collapsed ? "center" : "flex-start",
+            border: "none",
+            background: "none",
+            font: "inherit",
+            textAlign: "left",
+            color: "text.primary",
+            cursor: "pointer",
+            flexShrink: 0,
+            "&:hover": { backgroundColor: "action.hover" },
+          }}
+        >
+          <DfLogoIcon sx={{ color: "primary.main", fontSize: 26, flexShrink: 0 }} />
+          {!collapsed && (
+            <Typography sx={{ fontWeight: 700, fontSize: "0.9375rem", letterSpacing: "-0.01em", lineHeight: 1.1 }}>
+              Content Manager
+              {devMode && (
+                <Typography component="span" variant="caption" sx={{ display: "block", color: "warning.main" }}>
+                  dev mode
+                </Typography>
+              )}
+            </Typography>
+          )}
+        </Box>
+      </Tooltip>
       <Divider />
 
       <List sx={{ flex: "1 1 auto", overflowY: "auto", overflowX: "hidden", paddingX: collapsed ? 0.5 : 1 }}>
@@ -192,16 +208,6 @@ const RailContents = ({ collapsed, onOpenChangelog, onItemSelected, onToggleRail
           />
         ))}
       </List>
-
-      {onToggleRail && (
-        <Box sx={{ display: "flex", justifyContent: collapsed ? "center" : "flex-end", paddingX: 1 }}>
-          <Tooltip title={`${collapsed ? "Expand" : "Collapse"} sidebar  [`} placement="right">
-            <IconButton size="small" onClick={onToggleRail}>
-              {collapsed ? <MenuIcon fontSize="small" /> : <MenuOpenIcon fontSize="small" />}
-            </IconButton>
-          </Tooltip>
-        </Box>
-      )}
 
       <RailFoot collapsed={collapsed} onOpenChangelog={onOpenChangelog} />
     </Box>
@@ -314,8 +320,17 @@ const AppTopBar = ({ railWidth, showMenuButton, onMenuClick }: AppTopBarProps) =
     >
       <Toolbar id="toolbar" sx={{ display: "flex", gap: 2 }}>
         {showMenuButton && (
-          <IconButton id="drawer-open-button" edge="start" onClick={onMenuClick}>
-            <MenuIcon />
+          // The same control as the rail lockup, in the one place the rail
+          // isn't - which also puts the DF mark on mobile, where it otherwise
+          // never appeared at all.
+          <IconButton
+            id="drawer-open-button"
+            edge="start"
+            onClick={onMenuClick}
+            aria-label="Open menu"
+            sx={{ width: 44, height: 44 }}
+          >
+            <DfLogoIcon sx={{ color: "primary.main", fontSize: 24 }} />
           </IconButton>
         )}
         <Typography variant="h6" noWrap sx={{ flex: "1 1 auto", minWidth: 0 }}>

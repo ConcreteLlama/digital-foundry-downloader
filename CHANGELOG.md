@@ -72,6 +72,15 @@ Subtitles can now be generated locally on your own machine instead of being pull
   - The bottom of the sidebar now shows the version and whether the app is signed in to Digital Foundry - including the brief period at startup while it is still checking, which previously showed nothing at all. Clicking the status takes you straight to the Digital Foundry settings, since nothing can download while it is out
   - Clicking the version opens the release notes. Previously they appeared once after an upgrade and could never be opened again
 - On a phone the five sections now sit in a bar along the bottom, so getting between them is one tap rather than opening a menu first. The button for adding a download sits above that bar instead of covering the last item in the list
+- The Digital Foundry mark now opens and closes the sidebar, replacing the separate menu button
+  - It is the thing people reach for, and it is a far bigger target than a small icon tucked at the bottom of the sidebar - which mattered on a touchscreen, where the collapsed sidebar's icon labels only appear on hover and so never appear at all
+  - It also means the mark is now visible on a phone, where it previously only existed inside the menu once you had opened it
+- Foldables and tablets now get the full layout instead of the phone one
+  - The switch to the phone layout happened at 900px wide, which caught an unfolded foldable at 833px - a screen wider than plenty of laptops was being given a layout designed for a phone. It now switches at 720px
+  - Between 720px and 900px the sidebar shows as icons only, which leaves the extra width for the content rather than the menu
+  - Fold the device and it switches back to the phone layout on its own
+  - A tablet held in portrait benefits from the same change
+- Fixed the Reorganize Files table never collapsing to a single column on a narrow screen - the rule that was meant to do it could never match
 - Thumbnails are now requested at the size they are actually shown at, rather than always at full width - a phone was downloading images roughly five times larger than it displayed them. They also load only as you scroll to them
 - 'Downloads' in the sidebar is now called 'Activity'. The page lists scheduled items, running jobs, post-processing and completed runs, most of which are not downloads - and 'Downloads' already meant something different as a settings section. Existing links still work
 - Finished files are written directly to their destination rather than being assembled elsewhere and copied across

@@ -20,7 +20,12 @@ export const GridTableContent = styled(Box)<{ columnSizes: string[] }>(({ theme,
   display: 'grid',
   gridTemplateColumns: columnSizes.join(' '),
   gap: theme.spacing(2),
-  [theme.breakpoints.down('xs')]: {
+  // Was down('xs'). xs is 0 in MUI v5, so that compiled to
+  // `max-width: -0.05px` and could never match - the single-column fallback
+  // had never once applied. sm is the narrowest breakpoint that means
+  // anything, and a phone is where the Reorganize Files columns actually
+  // stop fitting.
+  [theme.breakpoints.down('sm')]: {
     gridTemplateColumns: '1fr',
   },
 }));

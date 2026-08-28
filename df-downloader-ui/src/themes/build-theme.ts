@@ -59,6 +59,28 @@ export const buildTheme = (p: UiPalette): Theme =>
       },
     },
 
+    /*
+     * MUI's defaults everywhere except md, which drops 900 -> 720.
+     *
+     * "Mobile" across this app means breakpoints.down("md"), and an unfolded
+     * foldable reports innerWidth 833 (measured: Pixel-class device, dpr 2.71,
+     * screen.width 834, no desktop-site override) - just under 900, so it was
+     * getting the phone layout on a screen wider than many laptops.
+     *
+     * 720 rather than something closer to 833: a folded phone, and every phone
+     * in portrait, tops out around 430, so 720 clears them with ~290px to
+     * spare, while leaving 113px of headroom below 833 for browser chrome and
+     * page zoom - both of which move innerWidth. Picking 800 would have worked
+     * today and broken on the first zoom step.
+     *
+     * Deliberate side effect: a 768px tablet in portrait now gets the desktop
+     * layout too. It has more width than the foldable does and was previously
+     * being handed a layout designed for a 400px phone.
+     */
+    breakpoints: {
+      values: { xs: 0, sm: 600, md: 720, lg: 1200, xl: 1536 },
+    },
+
     shape: {
       borderRadius: 6,
     },
