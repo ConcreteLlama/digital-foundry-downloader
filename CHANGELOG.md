@@ -146,6 +146,15 @@ Subtitles can now be generated locally on your own machine instead of being pull
   - Where a setting is a trade-off rather than a preference, the text says what you are trading. Opening more connections per download is faster but harder on the server; a shorter gap between checks finds new videos sooner but asks more of Digital Foundry
   - Explanations that previously only existed as comments in the code, and were never shown to anyone, now appear next to the setting they describe
   - The Whisper GPU note has moved from a paragraph underneath the checkbox to the checkbox itself, so it reads as part of the setting rather than as a footnote
+- The 'can't reach the service' screen now works out what is actually wrong instead of guessing
+  - For a new installation with the wrong address configured, this screen is the only thing you ever see - so it now tries to be enough on its own, without sending you to the README
+  - It used to say a CORS problem was likely no matter what had happened. A service that isn't running, a service that is running but refusing the page, a service that answered with an error, and something else entirely sitting on that port are four different faults with four different fixes, and they now each get their own explanation
+  - It tells the two commonest ones apart by asking the address a second question the browser will actually answer, so 'nothing is listening there' and 'it is listening and rejecting you' are no longer the same message
+  - The most frequent mistake - leaving PUBLIC_ADDRESS unset, so every browser is told to look for the service on its own machine - is now named outright, with the exact line to set, filled in with the address you are already using
+  - It shows what it checked and what came back, so if it has guessed wrong you can still see the addresses involved and work it out yourself, and there is something worth pasting into a bug report
+  - Where the browser genuinely cannot tell two causes apart it says so, rather than picking one and sounding certain
+  - The configuration examples are still there, now correct for your setup and copyable in one click, but they sit below the diagnosis rather than being the first thing you read
+  - A 'Retry now' button, instead of waiting out a thirty-second timer - and the timer itself now counts down properly rather than sticking at zero, and the page no longer blanks out and rebuilds itself on every attempt
 ### Bug Fixes
 - Fixed being signed out of the app every time it restarts
   - The key used to sign your login was thrown away and made again on every start, so every browser that was signed in was quietly logged out - including on an unattended restart or an automatic image update
