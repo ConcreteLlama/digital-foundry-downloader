@@ -100,6 +100,12 @@ versions:
           - "The bottom of the sidebar now shows the version and whether the app is signed in to Digital Foundry - including the brief period at startup while it is still checking, which previously showed nothing at all. Clicking the status takes you straight to the Digital Foundry settings, since nothing can download while it is out"
           - "Clicking the version opens the release notes. Previously they appeared once after an upgrade and could never be opened again"
         - "On a phone the five sections now sit in a bar along the bottom, so getting between them is one tap rather than opening a menu first. The button for adding a download sits above that bar instead of covering the last item in the list"
+        - "Pop-up messages have been brought in line with the rest of the interface":
+          - "They no longer appear in the bottom-left corner, where they landed on top of the button for adding a download and, on a phone, the bar along the bottom. They now sit under the title bar in the top right, which is the one edge of the screen with nothing else on it"
+          - "They follow whichever theme you have chosen. They were the last part of the app left out of the theming work, so on the light theme they still arrived as a dark bar"
+          - "A failure now stays on screen until you dismiss it. Everything cleared itself after five seconds, so a download that failed while you were away from the machine left no sign that anything had gone wrong"
+          - "Confirmations of something you just did clear a little faster, and the 'Dismiss' button that used to appear on every message is gone - anything that clears itself can simply be clicked away, and the ones that stay have a close control instead"
+          - "Each kind of message has its own icon as well as its own colour, so what one is telling you never depends on being able to tell colours apart"
         - "The Digital Foundry mark now opens and closes the sidebar, replacing the separate menu button":
           - "It is the thing people reach for, and it is a far bigger target than a small icon tucked at the bottom of the sidebar - which mattered on a touchscreen, where the collapsed sidebar's icon labels only appear on hover and so never appear at all"
           - "It also means the mark is now visible on a phone, where it previously only existed inside the menu once you had opened it"

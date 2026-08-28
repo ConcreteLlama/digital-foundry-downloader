@@ -29,11 +29,19 @@ import { BranchCheckDialog } from "./components/general/branch-check.component.t
 import { ChangelogDialog } from "./components/general/changelog.component.tsx";
 import { ManualDownloadFloatingButton } from "./components/df-content/manual-download-fab.component.tsx";
 import { dfDownloaderBranch } from "df-downloader-common";
+import { AppSnackbarProvider } from "./utils/snackbar.tsx";
 
 function App() {
   return (
+    // The snackbar provider has to sit *inside* AppThemeProvider: it used to be
+    // a self-closing sibling up in main.tsx, wrapping nothing and living outside
+    // any MUI theme, so toasts rendered with default MUI colours and ignored the
+    // selected palette entirely. Being a real ancestor of the app also makes
+    // useSnackbar() work, rather than only notistack's global enqueueSnackbar.
     <AppThemeProvider>
-      <MainContainer />
+      <AppSnackbarProvider>
+        <MainContainer />
+      </AppSnackbarProvider>
     </AppThemeProvider>
   );
 }
