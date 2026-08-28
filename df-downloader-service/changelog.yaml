@@ -116,6 +116,10 @@ versions:
           - "A failure now stays on screen until you dismiss it. Everything cleared itself after five seconds, so a download that failed while you were away from the machine left no sign that anything had gone wrong"
           - "Confirmations of something you just did clear a little faster, and the 'Dismiss' button that used to appear on every message is gone - anything that clears itself can simply be clicked away, and the ones that stay have a close control instead"
           - "Each kind of message has its own icon as well as its own colour, so what one is telling you never depends on being able to tell colours apart"
+        - "The bottom of the sidebar no longer says the same thing twice":
+          - "Whether the app is signed in to Digital Foundry was shown both as a dot on your avatar and as a labelled dot just below it. The dot on the avatar now only appears when the sidebar is collapsed, which is the one time the label is not there to say it"
+          - "Dev mode was announced twice as well - once next to your username and again by replacing your avatar with a code icon. It now appears once, next to the version, which is where it belongs: it describes the build rather than you"
+          - "Your avatar is your initial rather than a generic silhouette, which at that size told you nothing"
         - "The Digital Foundry mark now opens and closes the sidebar, replacing the separate menu button":
           - "It is the thing people reach for, and it is a far bigger target than a small icon tucked at the bottom of the sidebar - which mattered on a touchscreen, where the collapsed sidebar's icon labels only appear on hover and so never appear at all"
           - "It also means the mark is now visible on a phone, where it previously only existed inside the menu once you had opened it"
