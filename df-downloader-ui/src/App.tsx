@@ -2,7 +2,6 @@ import { Box, Stack, ThemeProvider, Toolbar } from "@mui/material";
 import { useEffect } from "react";
 import { useSelector } from "react-redux";
 import { Route, Routes } from "react-router-dom";
-import "./App.css";
 import { AppNotReadyPage } from "./AppNotReadyPage.tsx";
 import { AuthPage } from "./components/auth/auth-page.component";
 import { DownloadsPage } from "./routes/downloads/downloads.component";

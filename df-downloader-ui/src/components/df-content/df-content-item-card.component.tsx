@@ -17,8 +17,10 @@ export const DfContentInfoItemCard = ({ dfContentName, onClick }: DfContentInfoI
   return (
     <HoverOverCard
       sx={{
+        // Bottom edge only - cards are outlined by default now, so setting the
+        // shorthand borderColor here would tint all four sides.
         borderBottom: "1px solid",
-        borderColor: "secondary.main",
+        borderBottomColor: "secondary.main",
         display: "flex",
         flexDirection: "column",
         alignItems: "center",

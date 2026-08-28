@@ -37,6 +37,13 @@ versions:
         - "New 'Scan now' button to check for newly published videos immediately, rather than waiting for the next scheduled check"
         - "The request queue indicator now lists what is actually queued and what each request is doing, instead of only showing counts"
       enhancements:
+        - "The interface has had its foundations reworked, and now looks like a considered piece of software rather than a default one":
+          - "The app finally ships the typefaces it was designed with. It had been asking for fonts that were never included, so on most machines everything fell back to plain Helvetica or Arial - text is now noticeably clearer and more consistent, and it looks the same on every machine because nothing is downloaded from elsewhere"
+          - "Panels are now separated by fine lines rather than by being progressively lighter. A card inside a dialog inside a page used to come out as three competing shades of grey, which made dense screens harder to read than they needed to be"
+          - "Headings, buttons, labels and input fields have all been resized and restyled for a screen with a lot on it, instead of using the stock sizes the underlying toolkit ships with - a heading was previously set at six times the body size and had to be overridden everywhere it was used"
+          - "Leftover styling from the project template the app was first created from has been removed. It had been quietly fighting the app's own theme, giving buttons and links a look that belonged to nothing in particular"
+          - "Greyed-out text - 'No downloaded content yet', 'No download tasks' and the like - now uses the theme's own muted colour rather than a flat grey picked at random, so it stays legible and consistent"
+          - "The browser tab now shows the Digital Foundry mark instead of the placeholder logo it had been shipping with"
         - "Finished files are written directly to their destination rather than being assembled elsewhere and copied across":
           - "Embedding metadata rewrites the whole file, so doing that somewhere else and then copying the result meant reading and writing a multi-gigabyte file twice over. This halves it"
           - "The same applies to files already in your library - refreshing metadata or adding subtitles no longer copies them back and forth"
@@ -94,6 +101,7 @@ versions:
           - "Other awkward characters in titles were already handled - only the slash slipped through, because it's also how you separate folders in your own filename template, so it couldn't simply be stripped out"
           - "Titles and the other details are now cleaned before your template is applied, so a slash in a title becomes an underscore while the ones you wrote in the template still create folders as intended"
           - "Anything already filed in the wrong place can be put right with Reorganize Files under Tools, followed by Remove Empty Directories to clear the leftovers"
+        - "Turning to the next page of the content list now takes you back to the top of it. Previously it left you wherever you had scrolled to, so you landed part-way down a page you hadn't seen the start of"
       maintenance:
         - "Removed YouTube subtitle extraction. YouTube no longer serves captions to anything that isn't a web browser, so this had silently stopped working - an empty response is indistinguishable from 'this video has no captions', which is why it went unnoticed. Existing configurations are updated automatically on startup"
     known_issues:

@@ -29,7 +29,7 @@ const ScheduledDownloadRow = ({ title, scheduledFor }: ScheduledDownloadRowProps
       <Typography noWrap sx={{ flex: 1, marginRight: "1rem" }}>
         {title}
       </Typography>
-      <Typography color="gray">Downloading in {secondsToHHMMSS(remainingSeconds)}</Typography>
+      <Typography color="text.disabled">Downloading in {secondsToHHMMSS(remainingSeconds)}</Typography>
     </Box>
   );
 };

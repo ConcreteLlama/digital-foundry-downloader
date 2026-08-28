@@ -3,6 +3,8 @@ import ReactDOM from "react-dom/client";
 import App from "./App.tsx";
 import { Provider } from "react-redux";
 import { BrowserRouter } from "react-router-dom";
+import "@fontsource-variable/archivo";
+import "@fontsource-variable/jetbrains-mono";
 import "./index.css";
 import { store } from "./store/store.ts";
 import { SnackbarProvider } from "notistack";
