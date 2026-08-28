@@ -3,6 +3,7 @@ import { dfDownloaderVersion } from "df-downloader-common";
 import { useSelector } from "react-redux";
 import { useNavigate } from "react-router-dom";
 import { AuthUserInfo } from "../../components/auth/auth-user-info.component";
+import { selectConfigSectionField } from "../../store/config/config.selector.ts";
 import { selectDfUserInfo, selectDfUserInfoInitialized } from "../../store/df-user/df-user.selector";
 import { selectIsLoading } from "../../store/general.selector";
 import { monoFontFamily } from "../../themes/build-theme";
@@ -40,15 +41,17 @@ export type RailFootProps = {
 };
 
 /**
- * Two rows: who you are, then what the app is. Both halves of the lower strip
- * are live values that are otherwise expressed nowhere - the version is the
- * only way back into the changelog dialog, and the connection state is the one
- * thing worth interrupting for, since nothing can download while it is out.
+ * Two rows: who you are, then what the app is. The lower strip carries the
+ * build metadata (version, and dev mode when it is on - that is a property of
+ * the build, not of the person above it) and the connection state, which is
+ * the one thing here worth interrupting for since nothing can download while
+ * it is out. The version is also the only way back into the changelog dialog.
  */
 export const RailFoot = ({ collapsed, onOpenChangelog }: RailFootProps) => {
   const navigate = useNavigate();
   const connection = useDfConnectionState();
   const dfUserInfo = useSelector(selectDfUserInfo);
+  const devModeEnabled = useSelector(selectConfigSectionField("dev", "devModeEnabled"));
 
   const connectionTooltip = dfUserInfo
     ? `Signed in to Digital Foundry as ${dfUserInfo.username}${dfUserInfo.tier ? ` (${dfUserInfo.tier})` : ""}`
@@ -56,19 +59,23 @@ export const RailFoot = ({ collapsed, onOpenChangelog }: RailFootProps) => {
     ? "Checking the Digital Foundry session…"
     : "Not signed in to Digital Foundry - nothing can download. Click to fix.";
 
+  const buildLabel = `v${dfDownloaderVersion}${devModeEnabled ? " · dev" : ""}`;
+
   return (
     <Box sx={{ borderTop: "1px solid", borderColor: "divider", padding: collapsed ? 1 : 1.5 }}>
       <Box sx={{ display: "flex", justifyContent: collapsed ? "center" : "flex-start" }}>
         <AuthUserInfo
           mode={collapsed ? "minimal" : "full"}
-          statusColour={connectionColour(connection)}
-          statusTooltip={connectionTooltip}
+          // Only when collapsed: expanded, the strip below already says this.
+          statusColour={collapsed ? connectionColour(connection) : undefined}
+          statusTooltip={collapsed ? connectionTooltip : undefined}
+          statusHollow={collapsed && connection === "checking"}
           menuHeader={
             collapsed ? (
               // At 54px the strip below is gone, so the version has to live
               // somewhere reachable.
               <Typography variant="caption" sx={{ fontFamily: monoFontFamily }}>
-                v{dfDownloaderVersion} · {connectionLabel[connection]}
+                {buildLabel} · {connectionLabel[connection]}
               </Typography>
             ) : undefined
           }
@@ -100,7 +107,7 @@ export const RailFoot = ({ collapsed, onOpenChangelog }: RailFootProps) => {
                 "&:hover": { color: "text.primary" },
               }}
             >
-              v{dfDownloaderVersion}
+              {buildLabel}
             </Typography>
           </Tooltip>
           <Tooltip title={connectionTooltip}>
