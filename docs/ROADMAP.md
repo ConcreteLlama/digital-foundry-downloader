@@ -319,8 +319,53 @@ behalf of whoever picks each one up; do the same if you're extending this list.
   project owner's call on how far to go before implementation starts.
 - [ ] **3. AI-generated content summaries.** See Phase 3 item 4 above for the up-to-date
   scope (no longer blocked - Whisper's transcript is the summarization input, not a new
-  problem to solve). Not yet written up as a full plan doc the way #1/#2 above are -
-  worth doing if this is picked up next.
+  problem to solve; a follow-up consolidation pass also added transcript-path tracking
+  and a `keepTranscript` option, so a readable transcript file is now something this can
+  actually depend on rather than needing to build itself). Not yet written up as a full
+  plan doc the way #1/#2 above are - worth doing if this is picked up next.
+  - **Added 2026-08-28, project owner**: the same AI pass could also auto-tag content,
+    not just summarize it - `DfContentInfo.tags` already exists and drives real
+    filtering (`ContentInfoFilter`'s AND/OR tag mode, exclusion filters), so this isn't
+    a new concept, just a new *source* for it. **Tagging doesn't have to depend on a
+    transcript the way summarization does** - title + description alone (available for
+    essentially all scanned content, not just downloaded/transcribed content) are
+    already enough to infer at least some tags, which gives tagging independent value
+    and a much wider applicability than the summarization feature it was originally
+    proposed alongside. Worth designing as its own input tier (title/description always
+    available → transcript when there is one, for better/more specific tags) rather than
+    strictly gating it on the same prerequisite summarization needs. Open design
+    question, not resolved:
+    auto-apply the suggested tags directly, or surface them for the user to
+    accept/reject first? Auto-apply is more convenient but risks polluting a filtering
+    mechanism the user actively relies on with noisy/wrong tags from a model that
+    doesn't know the user's own tagging conventions; a suggest-and-confirm step is
+    safer but is real additional UI work. Whoever writes the full plan for this item
+    should treat tagging as a second, related output of the same analysis pass (same
+    transcript input, same API call point) rather than a separate feature/config
+    surface.
+  - **Added 2026-08-28, project owner, explicitly speculative ("maybe... not quite sure
+    how accurate it would be")**: a third possible output of the same analysis pass -
+    structured, queryable data extracted from the transcript, not just prose. Two
+    examples raised: console-comparison videos (e.g. per-platform resolution/frame-rate/
+    performance-mode findings) and PC-focused videos (optimised settings
+    recommendations). Unlike tagging, this doesn't have an existing field/filtering
+    mechanism to slot into - "queryable" implies some structured storage and a way to
+    query it, which is a bigger lift than a prose summary or a tag list, and DF content
+    is heterogeneous enough (console comparisons vs. PC settings guides vs. retrospectives
+    vs. interviews, etc.) that a single fixed schema probably doesn't fit everything.
+    Treat this as an experiment to try once the core summarization pipeline exists and
+    prove out on real content, not a committed feature - the project owner's own
+    uncertainty about extraction accuracy is the main open risk, separate from the schema
+    question. Worth noting if/when the DB migration (item #6 below) is pursued: a real
+    indexed store makes "queryable" mean something a lot more cheaply than continuing to
+    bolt fields onto the flat JSON DB.
+  - **Added 2026-08-28, project owner**: user-configurable custom prompts - let the
+    (self-hosting) user define their own "extract this" prompt/output shape rather than
+    the app only ever offering fixed summarize/tag/structured-data modes. This is really
+    a generalization of the same mechanism rather than a fourth distinct feature - once
+    the "send context, get structured output back" plumbing exists for summaries, a
+    custom-prompt mode may make the structured-data idea above almost free to expose (a
+    good default custom prompt) instead of needing bespoke code for it.
 - [ ] **4. UI styling/UX pass.** The project owner's first-ever UI project, largely
   written pre-LLM-assisted-coding - wants a fresh pass at the look/feel now. **No
   investigation done yet** - surface-level review of current theming/component patterns
