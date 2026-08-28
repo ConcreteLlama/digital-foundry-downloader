@@ -62,9 +62,15 @@ export type StartDownloadButtonProps = {
   mediaFormat?: string;
   label?: string;
   disabled?: boolean;
+  /**
+   * Render this as the control instead of the built-in label/icon, keeping the
+   * availability rules, tooltip and confirm dialog. The library row uses it so
+   * its state block stays the state block and simply becomes clickable.
+   */
+  trigger?: React.ReactNode;
 };
 
-export const StartDownloadingButton = ({ contentEntry, mediaFormat, label, disabled }: StartDownloadButtonProps) => {
+export const StartDownloadingButton = ({ contentEntry, mediaFormat, label, disabled, trigger }: StartDownloadButtonProps) => {
   const [dialogOpen, setDialogOpen] = useState(false);
   const activePipeline = useSelector(selectActivePipelineIdsForMediaFormat(contentEntry.key, mediaFormat || ""));
   const downloadContentInfo = DfContentEntryUtils.getDownloadForFormat(contentEntry, mediaFormat || "");
@@ -121,7 +127,17 @@ export const StartDownloadingButton = ({ contentEntry, mediaFormat, label, disab
         onClose={() => setDialogOpen(false)}
       />
       <Tooltip title={tooltip}>
-        {label ? (
+        {trigger ? (
+          <Box
+            onClick={buttonDisabled ? undefined : () => setDialogOpen(true)}
+            sx={{
+              cursor: buttonDisabled ? undefined : "pointer",
+              opacity: buttonDisabled ? 0.6 : 1,
+            }}
+          >
+            {trigger}
+          </Box>
+        ) : label ? (
           <Box
             sx={{
               display: "flex",

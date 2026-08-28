@@ -1,7 +1,8 @@
-import { Box, List, ListItemButton, ListItemIcon, ListItemText, Typography } from "@mui/material";
+import { Box, List, ListItemButton, ListItemIcon, ListItemText, Tooltip, Typography } from "@mui/material";
 import { useSelector } from "react-redux";
 import { Link, useLocation } from "react-router-dom";
 import { selectDevConfigEnabled } from "../../store/config/config.selector";
+import { useDirtySections } from "../../components/settings/dirty-sections";
 import { findDestination, flattenSectionRoutes } from "./nav-destinations";
 
 /**
@@ -9,8 +10,15 @@ import { findDestination, flattenSectionRoutes } from "./nav-destinations";
  * nested accordion in the nav rail. Same route data as before - this is a new
  * renderer over `NestedSubRoute.routes`, not a new route shape.
  */
+/**
+ * /settings/subtitles -> the "subtitles" config section. Only settings routes
+ * map to a section; tools and system pages have nothing to be dirty.
+ */
+const sectionKeyFor = (path: string) => path.split("/")[2];
+
 export const SectionNav = () => {
   const { pathname } = useLocation();
+  const dirtySections = useDirtySections();
   const devModeEnabled = useSelector(selectDevConfigEnabled);
   const destination = findDestination(pathname);
   if (!destination?.section) {
@@ -62,6 +70,21 @@ export const SectionNav = () => {
                   color: selected ? "text.primary" : "text.secondary",
                 }}
               />
+              {/* A section holding unsaved edits keeps a dot, so navigating
+                  away and forgetting is visible rather than silent. */}
+              {dirtySections.includes(sectionKeyFor(route.path) as never) && (
+                <Tooltip title="Unsaved changes">
+                  <Box
+                    sx={{
+                      width: 7,
+                      height: 7,
+                      borderRadius: "50%",
+                      backgroundColor: "warning.main",
+                      flexShrink: 0,
+                    }}
+                  />
+                </Tooltip>
+              )}
             </ListItemButton>
           );
         })}

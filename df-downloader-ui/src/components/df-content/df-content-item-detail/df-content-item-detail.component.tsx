@@ -1,5 +1,4 @@
-import { Box, Button, Stack, Typography, useMediaQuery,
-  useTheme } from "@mui/material";
+import { Box, Button, Stack, Typography } from "@mui/material";
 import { DfContentInfoUtils, secondsToHHMMSS } from "df-downloader-common";
 import { useEffect } from "react";
 import { useSelector } from "react-redux";
@@ -9,11 +8,12 @@ import { fetchYtVideoMeta, refreshDfContentMeta } from "../../../store/df-conten
 import { selectQueryPipelineIds } from "../../../store/df-tasks/tasks.selector.ts";
 import { store } from "../../../store/store.ts";
 import { formatDate } from "../../../utils/date.ts";
+import { monoFontFamily } from "../../../themes/build-theme.ts";
 import { Thumb } from "../../general/thumb.component.tsx";
 import { YouTubeEmbed } from "../../general/youtube-embed.tsx";
 import { DfTagList } from "../df-tag-list.component.tsx";
-import { DownloadedInfoList } from "../downloaded-info/downloaded-info-list.component.tsx";
-import { MediaInfoList } from "../media-info/media-info-list.component.tsx";
+import { OnDiskRows } from "../downloaded-info/on-disk-rows.component.tsx";
+import { FormatRows } from "../media-info/format-rows.component.tsx";
 import { PipelineInfoSummaryDetail } from "../queued-task-info.tsx";
 import { ContentItemDetailContainer } from "./df-content-item-detail.styles.tsx";
 
@@ -22,8 +22,6 @@ export type DfContentInfoItemDetailProps = {
 };
 
 export const DfContentInfoItemDetail = ({ dfContentName }: DfContentInfoItemDetailProps) => {
-  const theme = useTheme();
-  const belowMd = useMediaQuery(theme.breakpoints.down("md"));
   const dfContentEntry = useDfContentEntry(dfContentName);
   useEffect(() => {
     store.dispatch(refreshDfContentMeta.start(dfContentName));
@@ -66,78 +64,109 @@ export const DfContentInfoItemDetail = ({ dfContentName }: DfContentInfoItemDeta
   const queuedContentAvailability = statusInfo.availability;
   return dfContentEntry ? (
     <ContentItemDetailContainer>
-      <Typography variant="h4" align="center">
+      <Typography variant="h5" sx={{ marginBottom: 0.5 }}>
         {contentInfo.title}
       </Typography>
-      <Box sx={{ display: "flex", justifyContent: "center", paddingY: belowMd ? "10px" : "30px" }}>
-        {contentInfo.youtubeVideoId ? (
-          <YouTubeEmbed videoId={contentInfo.youtubeVideoId} width={belowMd ? "90%" : "70%"} />
-        ) : (
-          <Thumb
-            src={DfContentInfoUtils.getThumbnailUrl(contentInfo, 1200, 600)}
-            alt={contentInfo.title}
-            width={belowMd ? "90%" : "70%"}
-          />
-        )}
-      </Box>
-      <DfTagList tags={contentInfo.tags || []} sx={{ alignSelf: "center" }} />
+      {/* One tabular identity line rather than three scattered captions. */}
+      <Typography
+        sx={{ fontFamily: monoFontFamily, fontSize: "0.6875rem", color: "text.disabled", marginBottom: 2 }}
+      >
+        {[
+          formatDate(contentInfo.publishedDate),
+          DfContentInfoUtils.getDurationSeconds(contentInfo) > 0
+            ? secondsToHHMMSS(DfContentInfoUtils.getDurationSeconds(contentInfo))
+            : undefined,
+          contentInfo.youtubeVideoId ? `youtube: ${contentInfo.youtubeVideoId}` : undefined,
+          `key: ${dfContentEntry.key}`,
+        ]
+          .filter(Boolean)
+          .join("  ·  ")}
+      </Typography>
+
+      {/*
+        Two columns: the media and its prose on the left, everything you can
+        act on - what exists on disk, what can still be fetched - on the right
+        and permanently in view. It used to be one centred column that put the
+        formats below the description, so on a long YouTube description the
+        actionable half was off-screen.
+      */}
       <Box
         sx={{
-          display: "flex",
-          flexDirection: "row",
-          justifyContent: "space-between",
-          alignItems: "center",
-          marginY: "16px",
+          display: "grid",
+          gridTemplateColumns: { xs: "1fr", md: "minmax(0, 1.15fr) minmax(0, 1fr)" },
+          gap: 4,
+          alignItems: "start",
         }}
       >
-        {DfContentInfoUtils.getDurationSeconds(contentInfo) > 0 && (
-          <Typography variant="caption">
-            Duration: {secondsToHHMMSS(DfContentInfoUtils.getDurationSeconds(contentInfo))}
+        <Box sx={{ minWidth: 0 }}>
+          {contentInfo.youtubeVideoId ? (
+            <YouTubeEmbed videoId={contentInfo.youtubeVideoId} width="100%" />
+          ) : (
+            <Thumb
+              src={DfContentInfoUtils.getThumbnailUrl(contentInfo, 1200, 600)}
+              alt={contentInfo.title}
+              width="100%"
+            />
+          )}
+          <DfTagList tags={contentInfo.tags || []} sx={{ justifyContent: "flex-start", marginTop: 2 }} />
+          {/* Descriptions are prose with real paragraph breaks (YouTube-sourced
+              ones especially - blurb, links, then a chapter list). HTML collapses
+              those newlines by default, running it all into one block. */}
+          <Typography variant="body2" sx={{ whiteSpace: "pre-line", marginTop: 2, color: "text.secondary" }}>
+            {contentInfo.description}
           </Typography>
-        )}
-        <Typography variant="body2" color="text.secondary">
-          Published on {formatDate(contentInfo.publishedDate)}
-        </Typography>{" "}
-      </Box>
-      {/* Descriptions are prose with real paragraph breaks (YouTube-sourced
-          ones especially - blurb, links, then a chapter list). HTML collapses
-          those newlines by default, running it all into one block. */}
-      <Typography sx={{ whiteSpace: "pre-line" }}>{contentInfo.description}</Typography>
-      <Stack spacing={4} sx={{ marginTop: "16px" }}>
-        {Boolean(pipelineIds?.length) && (
-          <Stack spacing={2}>
-            <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-              <Typography variant="h6">Tasks</Typography>
-              <Button variant="outlined" onClick={clearCompletedPipelines} disabled={!completedPipelineIds.length}>
-                Clear Completed
-              </Button>
-            </Box>
-            {pipelineIds.map((pipelineId) => (
-              <PipelineInfoSummaryDetail
-                key={`cid-pipeline-info-summary-detail${pipelineId}`}
-                pipelineId={pipelineId}
-              />
-            ))}
-          </Stack>
-        )}
-        {queuedContentAvailability === "PAYWALLED" && <Typography>Content is paywalled</Typography>}
-        {dfContentEntry.downloads.length > 0 ? (
-          <Box>
-            <Typography variant="h6" sx={{ paddingBottom: 2 }}>
-              Downloaded Content
-            </Typography>
-            <DownloadedInfoList contentEntry={dfContentEntry} />
-          </Box>
-        ) : (
-          <Typography color="text.disabled">No downloaded content yet</Typography>
-        )}
-        <Box>
-          <Typography variant="h6" sx={{ paddingBottom: 2 }}>
-            Available Downloads
-          </Typography>
-          <MediaInfoList contentEntry={dfContentEntry} />
         </Box>
-      </Stack>
+
+        <Stack spacing={3} sx={{ minWidth: 0 }}>
+          {Boolean(pipelineIds?.length) && (
+            <Box>
+              <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 1 }}>
+                <Typography variant="overline">Tasks</Typography>
+                <Button
+                  size="small"
+                  variant="outlined"
+                  onClick={clearCompletedPipelines}
+                  disabled={!completedPipelineIds.length}
+                >
+                  Clear completed
+                </Button>
+              </Box>
+              <Stack spacing={1}>
+                {pipelineIds.map((pipelineId) => (
+                  <PipelineInfoSummaryDetail
+                    key={`cid-pipeline-info-summary-detail${pipelineId}`}
+                    pipelineId={pipelineId}
+                  />
+                ))}
+              </Stack>
+            </Box>
+          )}
+
+          <Box>
+            <Typography variant="overline">
+              On disk
+              {dfContentEntry.downloads.length > 0 ? ` · ${dfContentEntry.downloads.length} file${dfContentEntry.downloads.length === 1 ? "" : "s"}` : ""}
+            </Typography>
+            {dfContentEntry.downloads.length > 0 ? (
+              <OnDiskRows contentEntry={dfContentEntry} />
+            ) : (
+              <Typography variant="body2" color="text.disabled" sx={{ marginTop: 1 }}>
+                Nothing downloaded yet
+              </Typography>
+            )}
+          </Box>
+
+          <Box>
+            <Typography variant="overline">Available formats</Typography>
+            {queuedContentAvailability === "PAYWALLED" && (
+              <Typography variant="body2" color="text.disabled" sx={{ marginTop: 1 }}>
+                Paywalled - not in your tier
+              </Typography>
+            )}
+            <FormatRows contentEntry={dfContentEntry} />
+          </Box>
+        </Stack>
+      </Box>
     </ContentItemDetailContainer>
   ) : (
     <Typography>ERROR</Typography>

@@ -31,6 +31,7 @@ export const triggerSnackbar = (message: string, snackbarProps: TriggerSnackbarO
         action: (key) => (
             snackbarActionButtons.map((actionButton) => (
                 <SnackbarActionButton
+                    key={actionButton.text}
                     snackbarKey={key}
                     text={actionButton.text}
                     onClick={() => {
