@@ -16,7 +16,16 @@ export const BatchMoveFilesTask = BatchOperationTaskBuilder(async (moveFileInfo:
             clobber: taskOpts.overwrite,
             mkdirp: true,
         })
-        await taskOpts.db.moveDownload(moveFileInfo.contentName, moveFileInfo.oldFilename, moveFileInfo.newFilename);
+        const { missingFiles } = await taskOpts.db.moveDownload(moveFileInfo.contentName, moveFileInfo.oldFilename, moveFileInfo.newFilename);
+        if (missingFiles.length) {
+            // The file is already on disk at its new home, but nothing in the DB
+            // matched it, so the record still points at the old path. That is a
+            // failure of the operation as a whole - report it rather than
+            // returning "moved", which is how this went unnoticed before.
+            throw new Error(
+                `Moved ${moveFileInfo.oldFilename} to ${moveFileInfo.newFilename}, but found no matching download record for content ${moveFileInfo.contentName} to update - the database still points at the old location`
+            );
+        }
         return "moved";
     } catch (e: any) {
         if (e.code === 'ENOENT') {
