@@ -133,6 +133,15 @@ type StepFixture = {
   /** Downloads report this instead: bytes, speed, retries. */
   download?: Partial<DownloadProgressInfo>;
   startedSecondsAgo?: number;
+  /**
+   * Working time so far, in seconds - what the Active readout divides by.
+   *
+   * Deliberately settable apart from startedSecondsAgo, because the whole
+   * point of the two numbers is that they diverge: a step started five minutes
+   * ago and paused after two has Elapsed 5m and Active 2m. A fixture that let
+   * them stay equal could not exercise the split at all.
+   */
+  activeSecondsSoFar?: number;
   position?: number;
 };
 
@@ -169,6 +178,12 @@ const makeStatus = (fixture: StepFixture): TaskStatus => ({
   pauseTrigger: fixture.pauseTrigger,
   forceStarted: fixture.forceStarted,
   progress: fixture.progress,
+  // The two-scalar stopwatch the real service keeps - see
+  // TaskStatus.accumulatedActiveMs. lastResumedAt is set only while running,
+  // which is what stops Active ticking on a paused row.
+  accumulatedActiveMs:
+    fixture.activeSecondsSoFar !== undefined ? fixture.activeSecondsSoFar * 1000 : undefined,
+  lastResumedAt: fixture.state === "running" && fixture.activeSecondsSoFar !== undefined ? new Date() : null,
 });
 
 const makeStepTask = (pipelineId: string, index: number, fixture: StepFixture): TaskInfo => {
@@ -205,6 +220,11 @@ const makeStepTask = (pipelineId: string, index: number, fixture: StepFixture): 
 };
 
 type PipelineFixture = {
+  /**
+   * Reasons, by step index, that a step is known not to run. Mirrors what the
+   * service stamps onto StepDetails from live config.
+   */
+  notApplicable?: Partial<Record<number, string>>;
   id: string;
   content: DfContentInfo;
   mediaFormat?: string;
@@ -230,7 +250,14 @@ const makePipeline = (fixture: PipelineFixture): TaskPipelineInfo => {
       destinationPath: `/fixtures/${content.name}.mp4`,
       stepOrder: DOWNLOAD_PIPELINE_STEPS.map((_step, index) => stepId(id, index)),
       steps: DOWNLOAD_PIPELINE_STEPS.reduce((acc, step, index) => {
-        acc[stepId(id, index)] = { id: stepId(id, index), name: step.name };
+        acc[stepId(id, index)] = {
+          id: stepId(id, index),
+          name: step.name,
+          // Steps the service knows in advance will not run, from config
+          // alone - shown dimmed with the reason in the details dialog and
+          // hidden from the card. See getDownloadStepNotApplicableReasons.
+          notApplicableReason: fixture.notApplicable?.[index],
+        };
         return acc;
       }, {} as TaskPipelineInfo["pipelineDetails"]["steps"]),
     },
@@ -428,6 +455,42 @@ const scenarios: FixtureScenario[] = [
     }),
   },
   {
+    id: "not-applicable-steps",
+    label: "Steps that will not run",
+    description:
+      "Default settings: subtitles are embedded, so Write Subtitles never runs. Dimmed with its reason in the details dialog, absent from the card.",
+    animated: false,
+    build: () => ({
+      taskPipelines: [
+        makePipeline({
+          id: "fixture-not-applicable",
+          content: CONTENT.stutters,
+          currentStep: STEP.download,
+          statusMessage: "Downloading",
+          // Exactly what getDownloadStepNotApplicableReasons returns for the
+          // default configuration - auto output, during_download, no keep
+          // transcript.
+          notApplicable: {
+            [STEP.writeSubtitles]:
+              'Subtitles are embedded in the video rather than written alongside it - turn on "keep transcript" to get both',
+          },
+          steps: {
+            [STEP.download]: {
+              state: "running",
+              message: "Downloading",
+              position: 0,
+              startedSecondsAgo: 140,
+              activeSecondsSoFar: 140,
+              download: { percentComplete: 41.8, totalBytesDownloaded: 0.418 * 6 * GIB },
+            },
+          },
+        }),
+      ],
+      tasks: [],
+      scheduledDownloads: [],
+    }),
+  },
+  {
     id: "paused-and-retrying",
     label: "Paused + awaiting retry",
     description: "One download paused by hand, one backing off between retries, one force-started.",
@@ -445,10 +508,18 @@ const scenarios: FixtureScenario[] = [
               message: "Paused",
               pauseTrigger: "manual",
               position: 0,
+              // Elapsed 5m, Active 2m14s - deliberately divergent, so the
+              // paused row shows both numbers and the difference explains
+              // itself. Equal values would render only Elapsed.
               startedSecondsAgo: 300,
+              activeSecondsSoFar: 134,
               download: {
                 percentComplete: 63.2,
                 totalBytesDownloaded: 0.632 * 6 * GIB,
+                // Zero, as the real thing reports within a few seconds of a
+                // pause - samples older than 3s are ignored. This is the exact
+                // input that used to produce "about 641286h remaining", so the
+                // fixture reproduces that bug rather than just describing it.
                 currentBytesPerSecond: 0,
               },
             },
