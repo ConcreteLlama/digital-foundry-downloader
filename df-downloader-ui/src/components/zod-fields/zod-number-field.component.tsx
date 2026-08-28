@@ -1,27 +1,30 @@
 import { TextFieldElement } from "react-hook-form-mui";
 import { ZodNumber } from "zod";
+import { ZodNumberLike, getZodDescription, unwrapZodSchema } from "./zod-schema-utils";
 
 export type ZodNumberFieldProps = {
   name: string;
   label: string;
+  /** Overrides the schema's own `.describe()` text, for the rare field that needs context the schema can't know. */
   helperText?: string;
-  zodNumber: ZodNumber;
+  zodNumber: ZodNumberLike;
   step?: number;
 };
 
 export const ZodNumberField = ({ name, label, zodNumber, helperText, step }: ZodNumberFieldProps) => {
+  const zodNumberActual = unwrapZodSchema<ZodNumber>(zodNumber);
   return (
     <TextFieldElement
       name={name}
       label={label}
-      helperText={helperText}
+      helperText={helperText ?? getZodDescription(zodNumber)}
       type="number"
       inputProps={{
-        min: zodNumber.minValue,
-        max: zodNumber.maxValue,
+        min: zodNumberActual.minValue,
+        max: zodNumberActual.maxValue,
         step,
       }}
-      value={zodNumber.default}
+      value={zodNumberActual.default}
     />
   );
 };

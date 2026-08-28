@@ -155,7 +155,11 @@ export const UiConfig = z.object({
    * shape as the YouTube subtitles service that needed a config patch to keep
    * existing installs starting.
    */
-  theme: z.enum(uiThemeNames).default(DefaultUiThemeName).catch(DefaultUiThemeName),
+  theme: z
+    .enum(uiThemeNames)
+    .default(DefaultUiThemeName)
+    .catch(DefaultUiThemeName)
+    .describe("Applies straight away so you can see it. Save to keep it on other browsers too."),
 });
 export type UiConfig = z.infer<typeof UiConfig>;
 export const UiConfigKey = "ui";

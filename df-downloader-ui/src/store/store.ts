@@ -28,5 +28,12 @@ export const store = configureStore({
       .prepend(tasksMiddleware),
 });
 
+// Dev builds only - `import.meta.env.DEV` is folded to false when building for
+// production, so this whole block goes away. Lets you poke at state from the
+// console, and pairs with __DF_FIXTURES__ (see src/dev/task-fixtures.ts).
+if (import.meta.env.DEV) {
+  (window as unknown as Record<string, unknown>).__DF_STORE__ = store;
+}
+
 export type RootState = ReturnType<typeof store.getState>;
 export type AppDispatch = typeof store.dispatch;

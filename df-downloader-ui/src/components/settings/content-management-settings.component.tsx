@@ -1,9 +1,10 @@
 import { ContentManagementConfig } from "df-downloader-common/config/content-management-config";
-import { CheckboxElement } from "react-hook-form-mui";
 import { useSelector } from "react-redux";
 import { selectServiceInfo } from "../../store/service-info/service-info.selector";
+import { ZodCheckboxField } from "../zod-fields/zod-checkbox-field.component.tsx";
 import { ZodNumberField } from "../zod-fields/zod-number-field.component.tsx";
 import { ZodTextField } from "../zod-fields/zod-text-field.component";
+import { getZodDescription } from "../zod-fields/zod-schema-utils.ts";
 import { DfSettingsSectionForm } from "./df-settings-section-form.component";
 import { TemplateBuilderField } from "./template/template-builder-field.tsx";
 
@@ -18,33 +19,32 @@ const ContentManagement = () => {
   const serviceInfo = useSelector(selectServiceInfo);
   const isContainer = serviceInfo ? serviceInfo.isContainer : true;
   return (<>
-    <CheckboxElement
+    <ZodCheckboxField
       name="scanForExistingFiles"
       label="Scan for existing files"
-      helperText="Enable to scan for existing files on startup"
+      zodBoolean={ContentManagementConfig.shape.scanForExistingFiles}
     />
     <ZodNumberField
       name="maxScanDepth"
       label="Maximum Scan Depth"
-      helperText="The maximum depth to scan for files in the destination directory"
-      zodNumber={ContentManagementConfig.shape.maxScanDepth._def.innerType}
+      zodNumber={ContentManagementConfig.shape.maxScanDepth}
     />
     <ZodTextField
       name="destinationDir"
       label="Destination Directory"
-      helperText={`The directory where downloaded content will be saved${isContainer ? " (disabled when running in container; map the /destination_dir container path)" : ""
+      helperText={`${getZodDescription(ContentManagementConfig.shape.destinationDir) ?? ""}${isContainer ? " Disabled when running in a container - map the /destination_dir container path instead." : ""
         }`}
       disabled={isContainer}
-      zodString={ContentManagementConfig.shape.destinationDir._def.innerType}
+      zodString={ContentManagementConfig.shape.destinationDir}
     />
     <TemplateBuilderField/>
     <ZodTextField
       name="workDir"
       label="Work Directory"
-      helperText={`The directory where content is processed e.g. downloaded, injected with metadata, etc.${isContainer ? " (disabled when running in container; map the /work_dir container path)" : ""
+      helperText={`${getZodDescription(ContentManagementConfig.shape.workDir) ?? ""}${isContainer ? " Disabled when running in a container - map the /work_dir container path instead." : ""
         }`}
       disabled={isContainer}
-      zodString={ContentManagementConfig.shape.workDir._def.innerType}
+      zodString={ContentManagementConfig.shape.workDir}
     />
   </ >
   );

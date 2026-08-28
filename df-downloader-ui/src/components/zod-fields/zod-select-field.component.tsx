@@ -1,6 +1,6 @@
 import { z } from "zod";
-import { ZodOptional } from "zod";
 import { SelectField } from "../general/select-field";
+import { ZodEnumLike, getZodDescription, unwrapZodSchema } from "./zod-schema-utils";
 
 // zod v4 reworked ZodEnum's type param from a string tuple ([string, ...string[]])
 // to an object map (Readonly<Record<string, string>>, matching the new
@@ -9,8 +9,9 @@ import { SelectField } from "../general/select-field";
 export type ZodSelectFieldProps<T extends Readonly<Record<string, string>>> = {
   name: string;
   label: string;
+  /** Overrides the schema's own `.describe()` text, for the rare field that needs context the schema can't know. */
   helperText?: string;
-  zodEnum: z.ZodEnum<T> | ZodOptional<z.ZodEnum<T>>;
+  zodEnum: ZodEnumLike<T>;
   onChange?: (value: T[keyof T] | null) => void;
   nullable?: boolean;
 };
@@ -23,8 +24,7 @@ export const ZodSelectField = <T extends Readonly<Record<string, string>>>({
   onChange,
   nullable = false,
 }: ZodSelectFieldProps<T>) => {
-  // This is a little hacky, probably better way to do it
-  const zodEnumActual = zodEnum instanceof ZodOptional ? zodEnum._def.innerType : zodEnum;
+  const zodEnumActual = unwrapZodSchema<z.ZodEnum<T>>(zodEnum);
   const opts = Object.entries(zodEnumActual.enum).map(([key, value]) => ({
     id: value as T[keyof T],
     label: key,
@@ -33,7 +33,7 @@ export const ZodSelectField = <T extends Readonly<Record<string, string>>>({
     <SelectField
       name={name}
       label={label}
-      helperText={helperText}
+      helperText={helperText ?? getZodDescription(zodEnum)}
       opts={opts}
       onChange={onChange as ((value: string | null) => void) | undefined}
       nullable={nullable}

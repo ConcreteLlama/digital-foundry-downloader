@@ -2,13 +2,15 @@ import AddIcon from "@mui/icons-material/Add";
 import RemoveIcon from "@mui/icons-material/Remove";
 import { Box, Divider, FormHelperText, IconButton, Stack, Typography } from "@mui/material";
 import {
+  AutomaticSubtitlesMode,
   DeepgramConfig,
+  GoogleSttConfig,
   SubtitlesConfig,
+  SubtitlesOutputMode,
   SubtitlesService,
   SubtitlesServicesConfig,
   MaxConcurrentSubtitles,
   WhisperConfig,
-  WhisperModel,
 } from "df-downloader-common/config/subtitles-config";
 import { Fragment, useState } from "react";
 import { useFieldArray, useFormContext } from "react-hook-form";
@@ -16,7 +18,9 @@ import { CheckboxElement, TextFieldElement } from "react-hook-form-mui";
 import { SelectField } from "../general/select-field";
 import { OrderableListFormField } from "../general/ordered-list-form-field.component";
 import { ZodNumberField } from "../zod-fields/zod-number-field.component";
+import { ZodCheckboxField } from "../zod-fields/zod-checkbox-field.component";
 import { ZodSelectField } from "../zod-fields/zod-select-field.component";
+import { getZodDescription } from "../zod-fields/zod-schema-utils";
 import { ZodTextField } from "../zod-fields/zod-text-field.component";
 import { DfSettingsSectionForm } from "./df-settings-section-form.component";
 
@@ -92,7 +96,7 @@ const SubtitlesSettings = () => {
         <SelectField
           name="automaticGeneration"
           label="Automatic subtitle generation"
-          helperText="Generating subtitles locally can take a while for long videos, so you may prefer the download to finish first - or to only ever trigger it yourself, per item."
+          helperText={getZodDescription(AutomaticSubtitlesMode)}
           opts={[
             { id: "off", label: "Never - only when I ask" },
             { id: "during_download", label: "During download - the download isn't finished until subtitles are" },
@@ -102,7 +106,7 @@ const SubtitlesSettings = () => {
         <SelectField
           name="output"
           label="Subtitle output"
-          helperText="Embedding puts subtitles inside the video so they travel with it, but rewrites the whole file. A separate .srt is instant and doesn't touch a file your media server may be playing, but is left behind if you move the video without it. Note that with 'After download' selected above, Automatic always means a separate file - the video is already in your library by the time subtitles are made."
+          helperText={getZodDescription(SubtitlesOutputMode)}
           opts={[
             { id: "auto", label: "Automatic - embed during download, separate file otherwise" },
             { id: "embed", label: "Always embed in the video file" },
@@ -112,7 +116,6 @@ const SubtitlesSettings = () => {
         <ZodNumberField
           name="maxConcurrent"
           label="Maximum simultaneous subtitle jobs"
-          helperText="Transcribing locally already uses most of this machine's cores, so running several at once makes everything slower rather than finishing sooner. Worth raising only if you use a paid service, where the work happens elsewhere."
           zodNumber={MaxConcurrentSubtitles}
         />
         {/* Deliberately not hidden when automatic generation is off. This list
@@ -170,7 +173,6 @@ const SubtitleServiceConfigComponents: Record<SubtitlesService, React.FC> = {
     <ZodTextField
       name="services.deepgram.apiKey"
       label="Deepgram API Key"
-      helperText="The Deepgram API Key"
       isPassword={true}
       zodString={DeepgramConfig.shape.apiKey}
     />
@@ -179,9 +181,8 @@ const SubtitleServiceConfigComponents: Record<SubtitlesService, React.FC> = {
     <ZodTextField
       name="services.google_stt.apiKey"
       label="Google API Key"
-      helperText="The Google API Key"
       isPassword={true}
-      zodString={DeepgramConfig.shape.apiKey}
+      zodString={GoogleSttConfig.shape.apiKey}
     />
   ),
   whisper: () => <WhisperServiceConfig />,
@@ -237,41 +238,28 @@ const WhisperServiceConfig = () => (
     <ZodSelectField
       name="services.whisper.model"
       label="Model"
-      helperText="Larger models are more accurate but considerably slower. base.en is a reasonable balance; small.en matches YouTube's own captions on proper nouns but takes around three times as long; tiny.en is fast but misses names entirely."
-      zodEnum={WhisperModel}
+      zodEnum={WhisperConfig.shape.model}
     />
     <ZodTextField
       name="services.whisper.language"
       label="Language"
-      helperText='Spoken language, or "auto" to detect it.'
-      zodString={WhisperConfig.shape.language.unwrap()}
+      zodString={WhisperConfig.shape.language}
     />
     <ZodNumberField
       name="services.whisper.threads"
       label="Threads"
-      helperText="How many CPU threads to transcribe with. Defaults to two fewer than this machine has cores, so transcription doesn't starve everything else running on it."
-      zodNumber={WhisperConfig.shape.threads.unwrap()}
+      zodNumber={WhisperConfig.shape.threads}
     />
-    <CheckboxElement
-      name="services.whisper.useGpu"
-      label="Use GPU if available"
-    />
-    <FormHelperText>
-      The Whisper build bundled in the Docker image is CPU-only, so this has no effect unless you've pointed
-      "Whisper Binary Path" at your own GPU-enabled build. Worth turning off even then if the GPU is already busy
-      transcoding for your media server - competing for it can be slower than staying on the CPU.
-    </FormHelperText>
+    <ZodCheckboxField name="services.whisper.useGpu" label="Use GPU if available" zodBoolean={WhisperConfig.shape.useGpu} />
     <ZodTextField
       name="services.whisper.modelDir"
       label="Model Directory"
-      helperText="Where model files are downloaded and cached. Defaults to a folder alongside your config. Models are downloaded on first use and range from 75MB to around 3GB."
-      zodString={WhisperConfig.shape.modelDir.unwrap()}
+      zodString={WhisperConfig.shape.modelDir}
     />
     <ZodTextField
       name="services.whisper.binaryPath"
       label="Whisper Binary Path"
-      helperText="Path to the whisper.cpp 'whisper-cli' binary. Leave blank to use the one bundled in the Docker image."
-      zodString={WhisperConfig.shape.binaryPath.unwrap()}
+      zodString={WhisperConfig.shape.binaryPath}
     />
     <WhisperTermCorrectionsField />
   </Stack>

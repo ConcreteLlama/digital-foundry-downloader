@@ -1,6 +1,7 @@
 import { Box, Stack, Typography } from "@mui/material";
-import { UiThemeName } from "df-downloader-common/config/ui-config";
+import { UiConfig, UiThemeName } from "df-downloader-common/config/ui-config";
 import { SelectField } from "../general/select-field";
+import { getZodDescription } from "../zod-fields/zod-schema-utils";
 import { palettes, uiThemeNames } from "../../themes/palettes";
 import { useThemeChoice } from "../../themes/theme-provider";
 import { DfSettingsSectionForm } from "./df-settings-section-form.component.tsx";
@@ -22,7 +23,7 @@ const AppearanceSettings = () => {
           name="theme"
           label="Theme"
           opts={uiThemeNames.map((name) => ({ id: name, label: palettes[name].label }))}
-          helperText="Applies straight away so you can see it. Save to keep it on other browsers too."
+          helperText={getZodDescription(UiConfig.shape.theme)}
           // Applied on selection rather than on save - a theme you can't see
           // until you commit to it is not a choice you can make.
           onChange={(value) => value && setThemeName(value as UiThemeName)}

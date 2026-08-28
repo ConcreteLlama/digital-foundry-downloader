@@ -9,61 +9,52 @@ export const DownloadsSettingsForm = () => {
       <ZodNumberField
         name="maxSimultaneousDownloads"
         label="Max Simultaneous Downloads"
-        helperText="Maximum number of downloads to run at once"
-        zodNumber={DownloadsConfig.shape.maxSimultaneousDownloads._def.innerType}
+        zodNumber={DownloadsConfig.shape.maxSimultaneousDownloads}
       />
 
       <ZodNumberField
         name="maxConnectionsPerDownload"
         label="Max Connections Per Download"
-        helperText="Maximum number of connections to use per download"
-        zodNumber={DownloadsConfig.shape.maxConnectionsPerDownload._def.innerType}
+        zodNumber={DownloadsConfig.shape.maxConnectionsPerDownload}
       />
       <ZodNumberField
         name="failureRetryIntervalBase"
         label="Failure Retry Interval Base"
-        helperText="Base interval to use when retrying a failed download (in milliseconds)"
-        zodNumber={DownloadsConfig.shape.failureRetryIntervalBase._def.innerType}
+        zodNumber={DownloadsConfig.shape.failureRetryIntervalBase}
         step={1000}
       />
       <ZodNumberField
         name="maxRetries"
         label="Max Retries"
-        helperText="Maximum number of times to retry a failed download"
-        zodNumber={DownloadsConfig.shape.maxRetries._def.innerType}
+        zodNumber={DownloadsConfig.shape.maxRetries}
       />
       <ZodNumberField
         name="maxRetryDelay"
         label="Max Retry Delay"
-        helperText="Maximum delay between retries (in milliseconds)"
-        zodNumber={DownloadsConfig.shape.maxRetryDelay._def.innerType}
+        zodNumber={DownloadsConfig.shape.maxRetryDelay}
         step={1000}
       />
       <Divider>Connection options</Divider>
       <ZodNumberField
         name="connectionMaxRetries"
         label="Connection Max Retries"
-        helperText="Maximum number of times to retry a failed connection"
-        zodNumber={DownloadsConfig.shape.connectionMaxRetries._def.innerType}
+        zodNumber={DownloadsConfig.shape.connectionMaxRetries}
       />
       <ZodNumberField
         name="connectionRetryDelayBase"
         label="Connection Retry Delay Base"
-        helperText="Base interval to use when retrying a failed connection (in milliseconds)"
-        zodNumber={DownloadsConfig.shape.connectionRetryDelayBase._def.innerType}
+        zodNumber={DownloadsConfig.shape.connectionRetryDelayBase}
         step={1000}
       />
       <ZodNumberField
         name="connectionRetryDelayMultiplier"
         label="Connection Retry Delay Multiplier"
-        helperText="Multiplier to apply to the retry delay when retrying a failed connection"
-        zodNumber={DownloadsConfig.shape.connectionRetryDelayMultiplier._def.innerType}
+        zodNumber={DownloadsConfig.shape.connectionRetryDelayMultiplier}
       />
       <ZodNumberField
         name="connectionMaxRetryDelay"
         label="Connection Max Retry Delay"
-        helperText="Maximum delay between retries for a connection (in milliseconds)"
-        zodNumber={DownloadsConfig.shape.connectionMaxRetryDelay._def.innerType}
+        zodNumber={DownloadsConfig.shape.connectionMaxRetryDelay}
         step={1000}
       />
     </DfSettingsSectionForm>

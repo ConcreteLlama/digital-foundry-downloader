@@ -216,6 +216,16 @@ writing a new one:
   `maintenance`, `security`, `misc`, `internal`) plus optional `known_issues` - most
   entries only use one or two of these, not all of them.
 
+## Looking at task/download UI states without a real download
+
+`df-downloader-ui/src/dev/` holds dev-only fixtures that inject fake pipeline state into
+the store — downloading with live progress, post-processing part-way, failed-at-step-N
+with a skipped step, cancelled, a long queue, empty. Reach them from **Settings → Dev →
+Task fixtures**, or `__DF_FIXTURES__.play("failed")` in the console. They exist only in a
+dev build (`import.meta.env.DEV`), never in a shipped bundle. Use these rather than
+hand-building Redux state or firing real downloads at digitalfoundry.net to check a
+layout — see `df-downloader-ui/src/dev/README.md`.
+
 ## Things that are currently known-broken or intentionally disabled
 
 - `DigitalFoundryContentManager.start_reinstate_when_new_site()` — dead code, the

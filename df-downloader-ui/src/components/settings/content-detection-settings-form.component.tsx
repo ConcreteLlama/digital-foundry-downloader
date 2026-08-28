@@ -8,14 +8,12 @@ export const ContentDetectionSettingsForm = () => {
       <ZodNumberField
         name="contentCheckInterval"
         label="Content Check Interval"
-        helperText="How frequently to check for new content (in milliseconds)"
-        zodNumber={ContentDetectionConfig.shape.contentCheckInterval._def.innerType}
+        zodNumber={ContentDetectionConfig.shape.contentCheckInterval}
       />
       <ZodNumberField
         name="maxArchivePage"
         label="Max Archive Page"
-        helperText="Maximum number of pages to scan on the DF site. Infinite if unset"
-        zodNumber={ContentDetectionConfig.shape.maxArchivePage._def.innerType}
+        zodNumber={ContentDetectionConfig.shape.maxArchivePage}
       />
     </DfSettingsSectionForm>
   );

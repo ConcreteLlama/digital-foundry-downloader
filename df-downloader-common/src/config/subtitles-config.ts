@@ -2,12 +2,15 @@ import { z } from "zod";
 
 export const DeepgramConfig = z.object({
   /** Deepgram API key */
-  apiKey: z.string().min(30),
+  apiKey: z.string().min(30).describe("Your Deepgram API key, created in the Deepgram console."),
 });
 export type DeepgramConfig = z.infer<typeof DeepgramConfig>;
 
 export const GoogleSttConfig = z.object({
-  apiKey: z.string().min(30),
+  apiKey: z
+    .string()
+    .min(30)
+    .describe("Your Google Cloud API key, with the Speech-to-Text API enabled on the project it belongs to."),
 });
 export type GoogleSttConfig = z.infer<typeof GoogleSttConfig>;
 
@@ -52,23 +55,35 @@ export type WhisperModel = z.infer<typeof WhisperModel>;
  */
 export const WhisperTermCorrection = z.object({
   /** Text as Whisper transcribes it, e.g. "UA5". */
-  from: z.string().min(1),
+  from: z.string().min(1).describe('The word as Whisper writes it down, e.g. "UA5".'),
   /** What it should say, e.g. "UE5". */
-  to: z.string(),
+  to: z.string().describe('What it should have said, e.g. "UE5".'),
   /** Match regardless of case. Defaults to whole-word, case-sensitive. */
-  caseInsensitive: z.boolean().default(false),
+  caseInsensitive: z
+    .boolean()
+    .default(false)
+    .describe("Match the word however it happens to be capitalised. Whole-word and case-sensitive otherwise."),
 });
 export type WhisperTermCorrection = z.infer<typeof WhisperTermCorrection>;
 
 export const WhisperConfig = z.object({
   /** Which model to transcribe with - see WhisperModel for speed/accuracy notes. */
-  model: WhisperModel.default("base.en"),
+  model: WhisperModel.default("base.en").describe(
+    "Larger models are more accurate but considerably slower. base.en is a reasonable balance; small.en matches YouTube's own captions on proper nouns but takes around three times as long; tiny.en is fast but misses names entirely."
+  ),
   /**
    * Threads for whisper.cpp. Defaults to two below the CPU's core count so
    * a transcription doesn't starve everything else on the box (this
    * typically runs on a NAS that's also serving media).
    */
-  threads: z.number().int().min(1).optional(),
+  threads: z
+    .number()
+    .int()
+    .min(1)
+    .optional()
+    .describe(
+      "How many CPU threads to transcribe with. Defaults to two fewer than this machine has cores, so transcribing does not starve everything else running on it."
+    ),
   /**
    * Whether whisper.cpp may use a GPU when one is available.
    *
@@ -80,23 +95,41 @@ export const WhisperConfig = z.object({
    * for it can be slower than staying on the CPU as well as making playback
    * stutter.
    */
-  useGpu: z.boolean().default(true),
+  useGpu: z
+    .boolean()
+    .default(true)
+    .describe(
+      "Let Whisper use a GPU when one is available. The build bundled in the Docker image is CPU-only, so this only matters once the binary path points at your own GPU-enabled build - and it is worth leaving off even then if that GPU is already busy transcoding for a media server."
+    ),
   /**
    * Path to the whisper.cpp `whisper-cli` binary. The Docker image builds
    * one and points this at it; set it explicitly to run against your own
    * build (e.g. for local development outside the container).
    */
-  binaryPath: z.string().optional(),
+  binaryPath: z
+    .string()
+    .optional()
+    .describe("Path to the whisper.cpp 'whisper-cli' binary. Leave blank to use the one bundled in the Docker image."),
   /**
    * Where model files are downloaded and cached. Defaults to a `whisper`
    * directory alongside the app's other data. Models are fetched on first
    * use rather than baked into the image - they range from 75MB to ~3GB.
    */
-  modelDir: z.string().optional(),
+  modelDir: z
+    .string()
+    .optional()
+    .describe(
+      "Where model files are downloaded and cached. Defaults to a folder alongside your config. Models are fetched the first time they are used and range from 75MB to around 3GB."
+    ),
   /** Spoken language, or "auto" to let Whisper detect it. */
-  language: z.string().default("en"),
+  language: z.string().default("en").describe('The spoken language of the audio, or "auto" to let Whisper work it out.'),
   /** See WhisperTermCorrection - fixes jargon that speech-to-text reliably mangles. */
-  termCorrections: z.array(WhisperTermCorrection).default([]),
+  termCorrections: z
+    .array(WhisperTermCorrection)
+    .default([])
+    .describe(
+      'Fixes words Whisper consistently mishears. Matches whole words only - for example, replacing "UA5" with "UE5".'
+    ),
 });
 export type WhisperConfig = z.infer<typeof WhisperConfig>;
 
@@ -139,7 +172,11 @@ export type SubtitlesService = z.infer<typeof SubtitlesService>;
  * should know they're asking for a full rewrite of a file already in their
  * library.
  */
-export const SubtitlesOutputMode = z.enum(["auto", "embed", "sidecar"]);
+export const SubtitlesOutputMode = z
+  .enum(["auto", "embed", "sidecar"])
+  .describe(
+    "Embedding puts subtitles inside the video so they travel with it, but rewrites the whole file. A separate .srt is instant and does not touch a file your media server may be playing, but is left behind if you move the video without it. Note that with 'After download' selected above, Automatic always means a separate file - the video is already in your library by the time subtitles are made."
+  );
 export type SubtitlesOutputMode = z.infer<typeof SubtitlesOutputMode>;
 
 /**
@@ -159,7 +196,11 @@ export type SubtitlesOutputMode = z.infer<typeof SubtitlesOutputMode>;
  * db/pipeline-db-model.ts), so a restart part-way through picks up where it
  * left off rather than re-downloading.
  */
-export const AutomaticSubtitlesMode = z.enum(["off", "during_download", "after_download"]);
+export const AutomaticSubtitlesMode = z
+  .enum(["off", "during_download", "after_download"])
+  .describe(
+    "Generating subtitles locally can take a while for long videos, so you may prefer the download to finish first - or to only ever trigger it yourself, per item."
+  );
 export type AutomaticSubtitlesMode = z.infer<typeof AutomaticSubtitlesMode>;
 
 export const SubtitlesServicesConfig = z.object({
@@ -177,7 +218,13 @@ export type SubtitlesServicesConfig = z.infer<typeof SubtitlesServicesConfig>;
  * rather than restating them. SubtitlesConfig itself carries a superRefine,
  * which leaves it without a `.shape` to reach into.
  */
-export const MaxConcurrentSubtitles = z.number().int().min(1);
+export const MaxConcurrentSubtitles = z
+  .number()
+  .int()
+  .min(1)
+  .describe(
+    "How many subtitle jobs may run at once. Transcribing locally already uses most of this machine's cores, so running several at a time makes everything slower rather than finishing sooner. Worth raising only if you use a paid service, where the work happens elsewhere."
+  );
 
 export const SubtitlesConfig = z
   .object({
@@ -199,7 +246,11 @@ export const SubtitlesConfig = z
      */
     maxConcurrent: MaxConcurrentSubtitles.default(1),
     /** The subtitles service to use */
-    servicePriorities: SubtitlesService.array().default([]),
+    servicePriorities: SubtitlesService.array()
+      .default([])
+      .describe(
+        "Services are tried in this order, for both automatic and manual generation. If one fails the next is used, and with none enabled subtitles cannot be generated at all."
+      ),
     /** The configuration for each subtitles service */
     services: SubtitlesServicesConfig.optional(),
   })

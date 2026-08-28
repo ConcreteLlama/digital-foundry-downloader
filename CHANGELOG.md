@@ -132,6 +132,11 @@ Subtitles can now be generated locally on your own machine instead of being pull
   - It previously re-requested the last few pages of a completed pass on every restart, which could never turn up anything - those pages hold the oldest content, and newly published videos are found by the separate check that looks at the newest end
   - This means a slightly faster startup, and fewer requests to Digital Foundry from every installation on every restart
   - Deleting db/archive-scan-checkpoint.json still forces a fresh pass through the whole archive if you need one
+- Settings now explain themselves
+  - Every setting that had no explanation now has one - retry and connection behaviour under Downloads, the archive scan depth, the Pushbullet fields, the log level, and more besides
+  - Where a setting is a trade-off rather than a preference, the text says what you are trading. Opening more connections per download is faster but harder on the server; a shorter gap between checks finds new videos sooner but asks more of Digital Foundry
+  - Explanations that previously only existed as comments in the code, and were never shown to anyone, now appear next to the setting they describe
+  - The Whisper GPU note has moved from a paragraph underneath the checkbox to the checkbox itself, so it reads as part of the setting rather than as a footnote
 ### Bug Fixes
 - Fixed being signed out of the app every time it restarts
   - The key used to sign your login was thrown away and made again on every start, so every browser that was signed in was quietly logged out - including on an unattended restart or an automatic image update
