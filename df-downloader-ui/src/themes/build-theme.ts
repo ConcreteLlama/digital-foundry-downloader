@@ -33,6 +33,12 @@ const uiFontFamily = "'Archivo Variable', 'Helvetica Neue', Arial, sans-serif";
  */
 export const NARROW_RAIL_MAX_WIDTH = 900;
 
+/**
+ * Width of the snackbar stack from sm up. Wide enough for a content title plus
+ * its format, narrow enough to still read as a toast rather than a panel.
+ */
+const SNACKBAR_WIDTH = 440;
+
 /** Exposed so components rendering figures can opt into tabular numerals. */
 export const monoFontFamily = "'JetBrains Mono Variable', 'SFMono-Regular', Consolas, monospace";
 
@@ -154,6 +160,26 @@ export const buildTheme = (p: UiPalette): Theme =>
           },
           body: {
             backgroundColor: p.bg,
+          },
+          /*
+           * Snackbars anchor top-right (see AppSnackbarProvider in
+           * utils/snackbar.tsx). Notistack's own rule puts the stack 14px from
+           * the top, which is underneath the fixed app bar - so it is pushed
+           * down past the Toolbar, which is 56px tall on a phone and 64px from
+           * sm up. Selector is `div.` rather than a bare class so it outranks
+           * notistack's own single-class rule regardless of injection order.
+           */
+          "div.notistack-SnackbarContainer": {
+            top: "68px",
+            "@media (min-width:600px)": {
+              top: "76px",
+              // One width for the whole stack rather than each toast sizing to
+              // its own message: a column of ragged right edges reads as
+              // clutter next to panels that all line up. `stretch` overrides
+              // notistack's own flex-end, which is what leaves them ragged.
+              width: `${SNACKBAR_WIDTH}px`,
+              alignItems: "stretch",
+            },
           },
         },
       },
