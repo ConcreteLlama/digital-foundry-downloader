@@ -18,8 +18,8 @@ const progressBarColours = {
     barColour2: theme.palette.primary.light,
   },
   paused: {
-    barColour1: "darkgrey",
-    barColour2: "grey",
+    barColour1: theme.palette.text.disabled,
+    barColour2: theme.palette.text.secondary,
   },
   forceStarted: {
     barColour1: theme.palette.warning.main,

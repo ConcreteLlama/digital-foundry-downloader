@@ -1,5 +1,5 @@
 import { AppBar, Box, List, Stack, Typography, useMediaQuery } from "@mui/material";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useSelector } from "react-redux";
 import { queryConfigSection } from "../../../store/config/config.action.ts";
 import { selectConfigLoading } from "../../../store/config/config.selector.ts";
@@ -34,21 +34,25 @@ export const DfContentInfoDirectory = () => {
   const totalItems = useSelector(selectTotalContentItems);
   const resultsInTop = useMediaQuery(theme.breakpoints.up("md"));
   const { currentPage, numPages, limit } = useSelector(selectPageInfo);
-  const [prevPage, setPrevPage] = useState(currentPage);
   const [selectedItem, setSelectedItem] = useState<string | null>(null);
   const onModalClose = () => setSelectedItem(null);
+  // The document itself never scrolls - this Box is the scroll container (it's
+  // height:100% inside #main-app-stack, which is height:100vh;overflow:auto).
+  // The old window.scrollTo(0, 0) here therefore did nothing on a page change,
+  // leaving you halfway down the new page.
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
     return () => {
       store.dispatch(resetState());
     };
   }, []);
-  if (prevPage !== currentPage) {
-    setPrevPage(currentPage);
-    window.scrollTo(0, 0);
-  }
+  useEffect(() => {
+    scrollContainerRef.current?.scrollTo({ top: 0 });
+  }, [currentPage]);
   return (
     <Box
       id="df-content-directory"
+      ref={scrollContainerRef}
       sx={{
         display: "flex",
         flexDirection: "column",

@@ -69,7 +69,7 @@ const TaskInfoSet = ({ pipelineIds, name, noTasksMessage, header, draggable }: T
           )}
         </Fragment>
       ) : (
-        <Typography color={"gray"}>{noTasksMessage || `No ${name} tasks`}</Typography>
+        <Typography color="text.disabled">{noTasksMessage || `No ${name} tasks`}</Typography>
       )}
     </Fragment>
   );

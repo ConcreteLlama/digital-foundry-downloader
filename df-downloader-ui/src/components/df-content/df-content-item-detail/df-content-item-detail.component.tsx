@@ -127,7 +127,7 @@ export const DfContentInfoItemDetail = ({ dfContentName }: DfContentInfoItemDeta
             <DownloadedInfoList contentEntry={dfContentEntry} />
           </Box>
         ) : (
-          <Typography color="grey">No downloaded content yet</Typography>
+          <Typography color="text.disabled">No downloaded content yet</Typography>
         )}
         <Box>
           <Typography variant="h6" sx={{ paddingBottom: 2 }}>

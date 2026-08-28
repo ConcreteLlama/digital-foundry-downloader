@@ -18,6 +18,8 @@
     "@dnd-kit/sortable": "^7.0.2",
     "@dnd-kit/utilities": "^3.2.2",
     "@emotion/styled": "^11.14.1",
+    "@fontsource-variable/archivo": "^5.3.0",
+    "@fontsource-variable/jetbrains-mono": "^5.3.0",
     "@hookform/resolvers": "^3.0.1",
     "@mui/icons-material": "^5.11.16",
     "@mui/material": "^5.11.13",
