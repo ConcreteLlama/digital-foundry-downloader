@@ -7,6 +7,7 @@ import { AppNotReadyPage } from "./AppNotReadyPage.tsx";
 import { AuthPage } from "./components/auth/auth-page.component";
 import { DownloadsPage } from "./routes/downloads/downloads.component";
 import { DfContentPage } from "./routes/home/home.component";
+import { MOBILE_TAB_BAR_HEIGHT } from "./routes/nav/mobile-tab-bar.component";
 import { Nav, NavPage } from "./routes/nav/nav.components";
 import { isNestedRoute, NestedRouteElement } from "./routes/nav/nested-routes.tsx";
 import { settingsRouteDefinitions } from "./routes/settings/settings.routes";
@@ -158,6 +159,9 @@ const MainApp = () => {
           flex: "1 1 auto",
           height: "100vh",
           overflow: "auto",
+          // Room for the mobile tab bar, which is fixed and would otherwise
+          // sit on top of the last item in whatever list is on screen.
+          paddingBottom: { xs: `${MOBILE_TAB_BAR_HEIGHT}px`, md: 0 },
           "::-webkit-scrollbar": {
             display: "none",
           },

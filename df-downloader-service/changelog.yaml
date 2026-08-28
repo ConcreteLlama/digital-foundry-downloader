@@ -34,6 +34,19 @@ versions:
           - "Subtitle generation reports how far through it is - previously a two-hour episode could spend half an hour with no sign anything was happening"
           - "Embedding metadata does the same while it rewrites the file"
           - "An estimated time remaining is shown alongside, so a long transcription tells you how much longer it needs and not just how far along it is - downloads already did this, everything else now does too"
+        - "The content list has been rebuilt for an archive of thousands":
+          - "Two to three times as many videos fit on screen - about seven at the default size and eleven set to compact, against four before. The old layout gave each one a large thumbnail and most of a row of empty space, for a library of over three thousand items"
+          - "Each row now carries what you actually scan for on one line - date, format, size and how many files - in a fixed-width typeface so the columns line up down the page instead of wandering"
+          - "A coloured strip down the left edge of each row tells you its state at a glance, without reading anything"
+          - "State is never signalled by colour alone. Every state also has its own icon and its own edge pattern - solid, dashed, dotted or none - so it stays readable whichever theme you use, and if you cannot easily tell colours apart"
+          - "A downloading item shows its progress along the row's own bottom edge, so it does not grow taller and shove everything below it down the page as it starts"
+          - "Choose comfortable or compact rows, or switch to a thumbnail grid. Your choice is remembered"
+        - "Filters you have applied are now visible":
+          - "Running an advanced search used to close the dialog and leave no sign anything had been filtered - the only clue was that the Clear button had stopped being greyed out"
+          - "Each active filter now appears as a chip under the search box, and can be removed on its own rather than forcing you to clear everything and start again"
+        - "Moving through pages is quicker":
+          - "Page numbers replace the Previous/Next buttons that took up a whole bar at the bottom of the screen - going from page 1 to page 28 was 27 clicks"
+          - "The sidebar shows how many videos are in the library and how many jobs are running"
         - "Choose how the app looks":
           - "Three themes to pick from under Settings > Appearance: Signal, the dark teal look the app now ships with; Foundry, a warmer dark amber; and Paper, a proper light theme for anyone who does not want a dark interface"
           - "The choice applies the moment you pick it, so you can see what you are choosing rather than having to save first"
@@ -55,6 +68,8 @@ versions:
           - "The bar along the top tells you where you are instead of repeating the app name. It also used to lose the name entirely on a narrow window, leaving just a menu button"
           - "The bottom of the sidebar now shows the version and whether the app is signed in to Digital Foundry - including the brief period at startup while it is still checking, which previously showed nothing at all. Clicking the status takes you straight to the Digital Foundry settings, since nothing can download while it is out"
           - "Clicking the version opens the release notes. Previously they appeared once after an upgrade and could never be opened again"
+        - "On a phone the five sections now sit in a bar along the bottom, so getting between them is one tap rather than opening a menu first. The button for adding a download sits above that bar instead of covering the last item in the list"
+        - "Thumbnails are now requested at the size they are actually shown at, rather than always at full width - a phone was downloading images roughly five times larger than it displayed them. They also load only as you scroll to them"
         - "'Downloads' in the sidebar is now called 'Activity'. The page lists scheduled items, running jobs, post-processing and completed runs, most of which are not downloads - and 'Downloads' already meant something different as a settings section. Existing links still work"
         - "Finished files are written directly to their destination rather than being assembled elsewhere and copied across":
           - "Embedding metadata rewrites the whole file, so doing that somewhere else and then copying the result meant reading and writing a multi-gigabyte file twice over. This halves it"

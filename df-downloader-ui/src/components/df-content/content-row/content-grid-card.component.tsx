@@ -1,0 +1,128 @@
+import { Box, Stack, Typography } from "@mui/material";
+import { DfContentInfoUtils, secondsToHHMMSS } from "df-downloader-common";
+import { useDfContentEntry } from "../../../hooks/use-df-content-entry.ts";
+import { monoFontFamily } from "../../../themes/build-theme.ts";
+import { DfThumbnailImage } from "../../general/df-thumbnail-image.component.tsx";
+import { contentRowStateSpecs, spineStyles } from "./content-row-state.ts";
+import { useContentRowStatus } from "./use-content-row-status.ts";
+
+export type ContentGridCardProps = {
+  dfContentName: string;
+  onClick: () => void;
+};
+
+/**
+ * The grid alternative to a row. Same state model, same non-colour channels -
+ * the spine runs along the card's top edge instead of its left, and the
+ * progress meter is still the card's own bottom edge.
+ */
+export const ContentGridCard = ({ dfContentName, onClick }: ContentGridCardProps) => {
+  const entry = useDfContentEntry(dfContentName);
+  const status = useContentRowStatus(entry);
+  if (!entry) {
+    return null;
+  }
+  const { contentInfo } = entry;
+  const spec = contentRowStateSpecs[status.state];
+  const StateIcon = spec.icon;
+  const durationSeconds = DfContentInfoUtils.getDurationSeconds(contentInfo);
+  const spine = spineStyles(spec);
+
+  return (
+    <Box
+      onClick={onClick}
+      sx={{
+        position: "relative",
+        display: "flex",
+        flexDirection: "column",
+        border: "1px solid",
+        borderColor: "divider",
+        borderRadius: 1,
+        overflow: "hidden",
+        cursor: "pointer",
+        backgroundColor: "background.paper",
+        "&:hover": { borderColor: "text.disabled" },
+      }}
+    >
+      {/* Spine along the top edge - same patterns, rotated 90 degrees. */}
+      <Box
+        sx={{
+          height: "2px",
+          flexShrink: 0,
+          ...spine,
+          ...(spec.spine === "dashed" || spec.spine === "dotted"
+            ? {
+                backgroundImage: (spine.backgroundImage as string).replace("to bottom", "to right"),
+              }
+            : {}),
+        }}
+      />
+      <Box sx={{ position: "relative" }}>
+        <DfThumbnailImage contentInfo={contentInfo} width={320} displayWidth="100%" />
+        {durationSeconds > 0 && (
+          <Typography
+            sx={{
+              position: "absolute",
+              right: 4,
+              bottom: 4,
+              paddingX: 0.5,
+              borderRadius: 0.5,
+              backgroundColor: "rgba(0, 0, 0, 0.72)",
+              color: "#fff",
+              fontFamily: monoFontFamily,
+              fontSize: "0.625rem",
+            }}
+          >
+            {secondsToHHMMSS(durationSeconds)}
+          </Typography>
+        )}
+      </Box>
+      <Stack sx={{ padding: 1, gap: 0.5, flex: "1 1 auto" }}>
+        <Typography
+          sx={{
+            fontWeight: 600,
+            fontSize: "0.8125rem",
+            lineHeight: 1.3,
+            display: "-webkit-box",
+            WebkitLineClamp: 2,
+            WebkitBoxOrient: "vertical",
+            overflow: "hidden",
+          }}
+        >
+          {contentInfo.title}
+        </Typography>
+        <Typography sx={{ fontFamily: monoFontFamily, fontSize: "0.625rem", color: "text.secondary" }}>
+          {contentInfo.publishedDate.toISOString().slice(0, 10)}
+        </Typography>
+        <Stack direction="row" spacing={0.5} sx={{ alignItems: "center", marginTop: "auto" }}>
+          <Box
+            sx={{
+              width: 7,
+              height: 7,
+              borderRadius: "50%",
+              flexShrink: 0,
+              backgroundColor: spec.dot === "filled" ? spec.colour : "transparent",
+              border: spec.dot === "hollow" ? "1.5px solid" : "none",
+              borderColor: spec.colour,
+            }}
+          />
+          <StateIcon sx={{ fontSize: 13, color: spec.colour }} />
+          <Typography sx={{ fontSize: "0.625rem", fontWeight: 600, color: spec.colour }}>{spec.label}</Typography>
+        </Stack>
+      </Stack>
+      {typeof status.percent === "number" && (
+        <Box
+          sx={{
+            position: "absolute",
+            left: 0,
+            bottom: 0,
+            height: "2px",
+            width: `${Math.min(Math.max(status.percent, 0), 100)}%`,
+            backgroundColor: spec.colour,
+            transition: "width 400ms linear",
+          }}
+        />
+      )}
+    </Box>
+  );
+};

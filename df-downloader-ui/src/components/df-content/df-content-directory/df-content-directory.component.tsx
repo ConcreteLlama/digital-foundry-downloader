@@ -1,5 +1,8 @@
-import { AppBar, Box, List, Stack, Typography, useMediaQuery,
-  useTheme } from "@mui/material";
+import GridViewIcon from "@mui/icons-material/GridView";
+import ViewListIcon from "@mui/icons-material/ViewList";
+import DensitySmallIcon from "@mui/icons-material/DensitySmall";
+import DensityMediumIcon from "@mui/icons-material/DensityMedium";
+import { Box, Stack, ToggleButton, ToggleButtonGroup, Tooltip, Typography, useMediaQuery, useTheme } from "@mui/material";
 import { useEffect, useRef, useState } from "react";
 import { useSelector } from "react-redux";
 import { queryConfigSection } from "../../../store/config/config.action.ts";
@@ -12,30 +15,43 @@ import {
 } from "../../../store/df-content/df-content.selector.ts";
 import { selectIsLoading } from "../../../store/general.selector.ts";
 import { store } from "../../../store/store.ts";
+import { monoFontFamily } from "../../../themes/build-theme.ts";
+import {
+  ContentView,
+  getStoredDensity,
+  getStoredView,
+  RowDensity,
+  storeDensity,
+  storeView,
+} from "../../../themes/ui-preferences.ts";
 import { Loading } from "../../general/loading.component.tsx";
 import { MiddleModal } from "../../general/middle-modal.component.tsx";
-import { PageSelector } from "../../general/page-selector.component.tsx";
+import { NumericPagination } from "../../general/numeric-pagination.component.tsx";
 import { DfSessionCheckDialog } from "../../settings/df-session-check-dialog.component.tsx";
-import { DfContentInfoItemCard } from "../df-content-item-card.component.tsx";
+import { ActiveFilterChips } from "../active-filter-chips.component.tsx";
+import { ContentGridCard } from "../content-row/content-grid-card.component.tsx";
+import { ContentRow } from "../content-row/content-row.component.tsx";
 import { DfContentInfoItemDetail } from "../df-content-item-detail/df-content-item-detail.component.tsx";
 import { DfQuickSearch } from "../df-search-input.component.tsx";
 import { ClearDfSearchButton, DfAdvancedSearchButton } from "../df-search.component.tsx";
-import { ContentDirectoryListItem } from "./df-content-directory.styles.ts";
 
 export const DfContentInfoDirectory = () => {
   useEffect(() => {
     store.dispatch(queryConfigSection.start("mediaFormats"));
   }, []);
+  const theme = useTheme();
+  const belowMd = useMediaQuery(theme.breakpoints.down("md"));
   const contentKeys = useSelector(selectDfContentEntryCurrentKeys);
   const contentLoading = useSelector(selectIsLoading("dfContent"));
   const configLoading = useSelector(selectConfigLoading);
   const loading = contentLoading || configLoading;
   const totalItems = useSelector(selectTotalContentItems);
-  const theme = useTheme();
-  const resultsInTop = useMediaQuery(theme.breakpoints.up("md"));
   const { currentPage, numPages, limit } = useSelector(selectPageInfo);
   const [selectedItem, setSelectedItem] = useState<string | null>(null);
   const onModalClose = () => setSelectedItem(null);
+  const [density, setDensity] = useState<RowDensity>(() => getStoredDensity());
+  const [view, setView] = useState<ContentView>(() => getStoredView());
+
   // The document itself never scrolls - this Box is the scroll container (it's
   // height:100% inside #main-app-stack, which is height:100vh;overflow:auto).
   // The old window.scrollTo(0, 0) here therefore did nothing on a page change,
@@ -49,6 +65,16 @@ export const DfContentInfoDirectory = () => {
   useEffect(() => {
     scrollContainerRef.current?.scrollTo({ top: 0 });
   }, [currentPage]);
+
+  const applyDensity = (next: RowDensity) => {
+    storeDensity(next);
+    setDensity(next);
+  };
+  const applyView = (next: ContentView) => {
+    storeView(next);
+    setView(next);
+  };
+
   return (
     <Box
       id="df-content-directory"
@@ -65,96 +91,151 @@ export const DfContentInfoDirectory = () => {
     >
       <DfSessionCheckDialog />
       <Stack
-        sx={{ position: "sticky", top: 0, zIndex: 1, backgroundColor: "background.default", gap: 1, paddingBottom: 1 }}
-      >
-        <TopBar />
-        {resultsInTop && <SearchResultCounts totalItems={totalItems} currentPage={currentPage} limit={limit} />}
-      </Stack>
-      <Box
         sx={{
-          flexGrow: 1,
+          position: "sticky",
+          top: 0,
+          zIndex: 1,
+          backgroundColor: "background.default",
+          gap: 0.5,
+          paddingBottom: 1,
+          borderBottom: "1px solid",
+          borderColor: "divider",
         }}
       >
-        <Stack sx={{ justifyItems: "center" }}>
-          {!resultsInTop && <SearchResultCounts totalItems={totalItems} currentPage={currentPage} limit={limit} />}
-          {contentKeys.length === 0 ? (
-            loading ? (
-              <Loading />
-            ) : (
-              <Typography
-                sx={{
-                  textAlign: "center",
-                }}
-              >
-                No results found
-              </Typography>
-            )
+        <TopBar density={density} onDensity={applyDensity} view={view} onView={applyView} compact={belowMd} />
+        <ActiveFilterChips />
+        <ResultCount totalItems={totalItems} currentPage={currentPage} limit={limit} />
+      </Stack>
+
+      <Box sx={{ flexGrow: 1 }}>
+        {contentKeys.length === 0 ? (
+          loading ? (
+            <Loading />
           ) : (
-            <List sx={{ display: "flex", flexDirection: "column", justifyContent: "center" }}>
-              {contentKeys.map((contentKey) => (
-                <ContentDirectoryListItem key={`df-content-list-item-${contentKey}`}>
-                  <DfContentInfoItemCard
-                    dfContentName={contentKey}
-                    key={`df-content-card-${contentKey}`}
-                    onClick={() => setSelectedItem(contentKey)}
-                  />
-                </ContentDirectoryListItem>
-              ))}
-            </List>
-          )}
-          <MiddleModal open={Boolean(selectedItem)} onClose={onModalClose} id="df-content-item-detail-modal">
-            <Box>
-              <DfContentInfoItemDetail dfContentName={selectedItem || ""} />
-            </Box>
-          </MiddleModal>
-        </Stack>
+            <Typography sx={{ textAlign: "center", paddingY: 6, color: "text.secondary" }}>No results found</Typography>
+          )
+        ) : view === "grid" ? (
+          <Box
+            sx={{
+              display: "grid",
+              gridTemplateColumns: "repeat(auto-fill, minmax(190px, 1fr))",
+              gap: 1.5,
+              padding: { xs: 1, md: 2 },
+            }}
+          >
+            {contentKeys.map((contentKey) => (
+              <ContentGridCard
+                key={`df-content-card-${contentKey}`}
+                dfContentName={contentKey}
+                onClick={() => setSelectedItem(contentKey)}
+              />
+            ))}
+          </Box>
+        ) : (
+          <Box>
+            {contentKeys.map((contentKey) => (
+              <ContentRow
+                key={`df-content-row-${contentKey}`}
+                dfContentName={contentKey}
+                density={density}
+                onClick={() => setSelectedItem(contentKey)}
+              />
+            ))}
+          </Box>
+        )}
+        <MiddleModal open={Boolean(selectedItem)} onClose={onModalClose} id="df-content-item-detail-modal">
+          <Box>
+            <DfContentInfoItemDetail dfContentName={selectedItem || ""} />
+          </Box>
+        </MiddleModal>
       </Box>
-      <AppBar position="sticky" sx={{ top: "auto", bottom: 0 }}>
-        <PageSelector
-          currentPage={currentPage}
-          numPages={numPages}
-          onUpdatePage={(page) => store.dispatch(updateDfContentQuery({ page }))}
-          buttonProps={{
-            variant: "contained",
-          }}
-        />
-      </AppBar>
+
+      <NumericPagination
+        currentPage={currentPage}
+        numPages={numPages}
+        onUpdatePage={(page) => store.dispatch(updateDfContentQuery({ page }))}
+      />
     </Box>
   );
 };
 
-const TopBar = () => {
+type TopBarProps = {
+  density: RowDensity;
+  onDensity: (density: RowDensity) => void;
+  view: ContentView;
+  onView: (view: ContentView) => void;
+  compact: boolean;
+};
+
+const TopBar = ({ density, onDensity, view, onView, compact }: TopBarProps) => {
   const [quickSearchClear, setQuickSearchClear] = useState(false);
   return (
     <Box
       sx={{
         display: "flex",
-        justifyContent: "space-between",
-        paddingX: {
-          xs: 1,
-          md: 4,
-        },
-        gap: 2,
+        alignItems: "center",
+        paddingX: { xs: 1, md: 2 },
+        paddingTop: 1,
+        gap: 1,
       }}
     >
       <DfQuickSearch clear={quickSearchClear} setClear={setQuickSearchClear} />
       <DfAdvancedSearchButton onClick={() => setQuickSearchClear(true)} />
       <ClearDfSearchButton onClick={() => setQuickSearchClear(true)} />
+      {!compact && (
+        <>
+          <ToggleButtonGroup
+            size="small"
+            exclusive
+            value={density}
+            onChange={(_, next) => next && onDensity(next)}
+            sx={{ marginLeft: 1 }}
+          >
+            <ToggleButton value="comfortable" sx={{ paddingY: 0.25 }}>
+              <Tooltip title="Comfortable rows">
+                <DensityMediumIcon fontSize="small" />
+              </Tooltip>
+            </ToggleButton>
+            <ToggleButton value="compact" sx={{ paddingY: 0.25 }}>
+              <Tooltip title="Compact rows">
+                <DensitySmallIcon fontSize="small" />
+              </Tooltip>
+            </ToggleButton>
+          </ToggleButtonGroup>
+          <ToggleButtonGroup size="small" exclusive value={view} onChange={(_, next) => next && onView(next)}>
+            <ToggleButton value="list" sx={{ paddingY: 0.25 }}>
+              <Tooltip title="List">
+                <ViewListIcon fontSize="small" />
+              </Tooltip>
+            </ToggleButton>
+            <ToggleButton value="grid" sx={{ paddingY: 0.25 }}>
+              <Tooltip title="Grid">
+                <GridViewIcon fontSize="small" />
+              </Tooltip>
+            </ToggleButton>
+          </ToggleButtonGroup>
+        </>
+      )}
     </Box>
   );
 };
 
-type SearchResultCountsProps = {
+type ResultCountProps = {
   totalItems: number;
   currentPage: number;
   limit: number;
 };
-const SearchResultCounts = ({ totalItems, currentPage, limit }: SearchResultCountsProps) => (
+const ResultCount = ({ totalItems, currentPage, limit }: ResultCountProps) => (
   <Typography
     sx={{
-      textAlign: "center",
+      paddingX: { xs: 1, md: 2 },
+      fontFamily: monoFontFamily,
+      fontSize: "0.6875rem",
+      color: "text.disabled",
     }}
   >
-    Showing {limit * (currentPage - 1) + 1} to {Math.min(limit * currentPage, totalItems)} of {totalItems}
+    {totalItems === 0
+      ? "no results"
+      : `${limit * (currentPage - 1) + 1}–${Math.min(limit * currentPage, totalItems)} of ${totalItems}`}
   </Typography>
 );
