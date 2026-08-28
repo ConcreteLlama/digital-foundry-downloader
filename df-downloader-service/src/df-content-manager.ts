@@ -435,6 +435,20 @@ export class DigitalFoundryContentManager {
       const contentDetectionConfig = configService.config.contentDetection;
       const checkpoint = await getArchiveScanCheckpoint();
       const { legacyTitleMap, unresolvedLegacyCount } = await this.buildScanState();
+      if (checkpoint.walkComplete && !checkpoint.legacyResolutionInProgress && unresolvedLegacyCount === 0) {
+        // A previous walk ran off the true end of the archive, so there is
+        // nothing left to backfill. Without this the safety-margin rewind
+        // meant every startup re-requested the final few listing pages of a
+        // finished walk - pages whose content is, by definition, already
+        // known. Recently-published content never came from here anyway (the
+        // checkpoint sits at the oldest end of a newest-first listing);
+        // checkForNewContents() walks the newest end for that.
+        logger.log(
+          "info",
+          "Skipping archive walk - a previous walk already reached the end of the archive. New content is picked up by the new-content check; delete db/archive-scan-checkpoint.json to force a fresh full walk."
+        );
+        return;
+      }
       let startOffset: number;
       if (checkpoint.legacyResolutionInProgress) {
         // An earlier full walk got interrupted (crash/restart) - resume it
@@ -457,7 +471,7 @@ export class DigitalFoundryContentManager {
         resolvingLegacy = true;
         startOffset = 0;
         logger.log("info", `${unresolvedLegacyCount} entries still need their data confirmed against the live site - doing a full archive walk from the start instead of the usual tail-only resume`);
-        await setArchiveScanCheckpoint({ offset: 0, legacyResolutionInProgress: true });
+        await setArchiveScanCheckpoint({ offset: 0, legacyResolutionInProgress: true, walkComplete: false });
       } else {
         startOffset = Math.max(0, checkpoint.offset - DigitalFoundryContentManager.ARCHIVE_SCAN_RESUME_SAFETY_MARGIN_ITEMS);
       }
@@ -530,7 +544,11 @@ export class DigitalFoundryContentManager {
           // the checkpoint would point past content that was never
           // actually saved.
           finalCheckpointOffset = offset + DigitalFoundryContentManager.ARCHIVE_SCAN_PAGE_LIMIT;
-          await setArchiveScanCheckpoint({ offset: finalCheckpointOffset, legacyResolutionInProgress: resolvingLegacy });
+          await setArchiveScanCheckpoint({
+            offset: finalCheckpointOffset,
+            legacyResolutionInProgress: resolvingLegacy,
+            walkComplete: false,
+          });
           const shouldContinue = pageIdx < contentDetectionConfig.maxArchivePage;
           if (!shouldContinue) {
             hitPageCap = true;
@@ -564,7 +582,23 @@ export class DigitalFoundryContentManager {
         } else {
           logger.log("info", "Full archive walk complete - all previously-legacy entries were confirmed against the live site");
         }
-        await setArchiveScanCheckpoint({ offset: finalCheckpointOffset, legacyResolutionInProgress: false });
+        await setArchiveScanCheckpoint({
+          offset: finalCheckpointOffset,
+          legacyResolutionInProgress: false,
+          walkComplete: true,
+        });
+      }
+      if (!resolvingLegacy && !hitPageCap) {
+        // The ordinary walk ran off the true end of the archive rather than
+        // being cut off by the maxArchivePage cap, so the backfill is
+        // genuinely finished. Recording that lets later startups skip it
+        // instead of re-walking the safety margin forever.
+        await setArchiveScanCheckpoint({
+          offset: finalCheckpointOffset,
+          legacyResolutionInProgress: false,
+          walkComplete: true,
+        });
+        logger.log("info", "Archive walk reached the end of the archive - later startups will skip it");
       }
     } finally {
       this.metaFetchesInProgress--;

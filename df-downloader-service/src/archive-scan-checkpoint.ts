@@ -25,6 +25,17 @@ import { ensureEnvString } from "./utils/env-utils.js";
  * crash/restart too - resuming from `offset` directly (not the normal
  * safety-margin rewind) instead of restarting the whole walk from 0 again.
  * See docs/DF_SITE_MIGRATION.md.
+ *
+ * `walkComplete` records that a walk ran off the true end of the archive
+ * rather than being cut short by the maxArchivePage cap. Without it the
+ * ordinary (non-legacy) path had no notion of being finished: `offset` only
+ * ever moves forward, so every restart re-walked the final safety margin of
+ * an already-complete backfill - a few listing pages of requests against
+ * digitalfoundry.net, on every install, on every container restart, that could
+ * never find anything. New content never came from here anyway; it comes from
+ * checkForNewContents() walking the newest end. The legacy path already had
+ * this notion via `legacyResolutionInProgress`; this is the same idea for the
+ * normal case. Deleting this file remains the way to force a fresh full walk.
  */
 
 const checkpointPath = () => path.join(ensureEnvString("DB_DIR", "db"), "archive-scan-checkpoint.json");
@@ -32,10 +43,16 @@ const checkpointPath = () => path.join(ensureEnvString("DB_DIR", "db"), "archive
 type ArchiveScanCheckpoint = {
   offset: number;
   legacyResolutionInProgress: boolean;
+  walkComplete: boolean;
   updatedAt: string;
 };
 
-export async function getArchiveScanCheckpoint(): Promise<Pick<ArchiveScanCheckpoint, "offset" | "legacyResolutionInProgress">> {
+type ArchiveScanCheckpointState = Pick<
+  ArchiveScanCheckpoint,
+  "offset" | "legacyResolutionInProgress" | "walkComplete"
+>;
+
+export async function getArchiveScanCheckpoint(): Promise<ArchiveScanCheckpointState> {
   try {
     const raw = await fs.promises.readFile(checkpointPath(), "utf-8");
     // A leading UTF-8 BOM (e.g. from a file hand-edited/created via
@@ -48,13 +65,17 @@ export async function getArchiveScanCheckpoint(): Promise<Pick<ArchiveScanCheckp
     return {
       offset: typeof parsed.offset === "number" && parsed.offset >= 0 ? parsed.offset : 0,
       legacyResolutionInProgress: parsed.legacyResolutionInProgress === true,
+      // Absent in checkpoints written before this field existed, which is
+      // exactly right: those installs get one more walk, which then completes
+      // and records itself.
+      walkComplete: parsed.walkComplete === true,
     };
   } catch {
-    return { offset: 0, legacyResolutionInProgress: false };
+    return { offset: 0, legacyResolutionInProgress: false, walkComplete: false };
   }
 }
 
-export async function setArchiveScanCheckpoint(checkpoint: Pick<ArchiveScanCheckpoint, "offset" | "legacyResolutionInProgress">): Promise<void> {
+export async function setArchiveScanCheckpoint(checkpoint: ArchiveScanCheckpointState): Promise<void> {
   const data: ArchiveScanCheckpoint = { ...checkpoint, updatedAt: new Date().toISOString() };
   try {
     await fs.promises.writeFile(checkpointPath(), JSON.stringify(data, null, 2));
