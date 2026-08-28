@@ -5,7 +5,7 @@
  * - CssBaseline is currently mounted inside <Nav />, so it isn't present on
  *   the auth / not-ready screens. The html/body rules below therefore have to
  *   stand on their own. (Lifting CssBaseline to the app root is Phase B.)
- * - The app scrolls in inner containers sized to the viewport (#main-app-stack
+ * - The app scrolls in inner containers sized to the viewport (#main-app-scroll
  *   and friends), which manage their own overflow and hide their own
  *   scrollbars. The document itself must never scroll, or it double-scrolls
  *   behind them.

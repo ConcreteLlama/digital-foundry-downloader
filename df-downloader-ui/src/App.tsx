@@ -166,31 +166,47 @@ const MainApp = () => {
         sx={{
           flex: "1 1 auto",
           height: "100vh",
-          overflow: "auto",
-          // Room for the mobile tab bar, which is fixed and would otherwise
-          // sit on top of the last item in whatever list is on screen.
-          paddingBottom: { xs: `${MOBILE_TAB_BAR_HEIGHT}px`, md: 0 },
-          "::-webkit-scrollbar": {
-            display: "none",
-          },
+          // Deliberately NOT a scroller. It is exactly viewport-height and its
+          // two children partition that height, so anything it could scroll
+          // would be scrolling the fixed AppBar's spacer off the top and
+          // sliding the page underneath the bar. Scrolling belongs to the
+          // region below, or to a list's own container.
+          overflow: "hidden",
         }}
       >
         <Toolbar id="toolbar-spacer" />
-        <Routes>
-          <Route key="route-index" id="route-index" index element={<DfContentPage />} />
-          <Route key="route-df-content" id="route-df-content" path="content" element={<DfContentPage />} />
-          <Route key="route-downloads" id="route-downloads" path="downloads" element={<DownloadsPage />} />
-          <Route key="route-auth" id="route-auth" path="auth" element={<AuthPage />} />
-          <Route key="route-settings" id="route-settings" element={<NavPage />}>
-            {settingsRoutes}
-          </Route>
-          <Route key="route-tools" id="route-tools" element={<NavPage />}>
-            {toolsRoutes}
-          </Route>
-          <Route key="route-system" id="route-system" element={<NavPage />}>
-            {systemRoutes}
-          </Route>
-        </Routes>
+        <Box
+          id="main-app-scroll"
+          sx={{
+            // minHeight:0 is load-bearing: without it this floors at its
+            // content height and pushes the stack past 100vh again.
+            flex: "1 1 auto",
+            minHeight: 0,
+            overflow: "auto",
+            // Room for the mobile tab bar, which is fixed and would otherwise
+            // sit on top of the last item in whatever list is on screen.
+            paddingBottom: { xs: `${MOBILE_TAB_BAR_HEIGHT}px`, md: 0 },
+            "::-webkit-scrollbar": {
+              display: "none",
+            },
+          }}
+        >
+          <Routes>
+            <Route key="route-index" id="route-index" index element={<DfContentPage />} />
+            <Route key="route-df-content" id="route-df-content" path="content" element={<DfContentPage />} />
+            <Route key="route-downloads" id="route-downloads" path="downloads" element={<DownloadsPage />} />
+            <Route key="route-auth" id="route-auth" path="auth" element={<AuthPage />} />
+            <Route key="route-settings" id="route-settings" element={<NavPage />}>
+              {settingsRoutes}
+            </Route>
+            <Route key="route-tools" id="route-tools" element={<NavPage />}>
+              {toolsRoutes}
+            </Route>
+            <Route key="route-system" id="route-system" element={<NavPage />}>
+              {systemRoutes}
+            </Route>
+          </Routes>
+        </Box>
       </Stack>
       <ChangelogDialog open={changelogOpen || undefined} onClose={() => setChangelogOpen(false)} />
       <ManualDownloadFloatingButton />

@@ -53,7 +53,7 @@ export const DfContentInfoDirectory = () => {
   const [view, setView] = useState<ContentView>(() => getStoredView());
 
   // The document itself never scrolls - this Box is the scroll container (it's
-  // height:100% inside #main-app-stack, which is height:100vh;overflow:auto).
+  // height:100% of #main-app-scroll, which is the viewport minus the AppBar).
   // The old window.scrollTo(0, 0) here therefore did nothing on a page change,
   // leaving you halfway down the new page.
   const scrollContainerRef = useRef<HTMLDivElement>(null);
