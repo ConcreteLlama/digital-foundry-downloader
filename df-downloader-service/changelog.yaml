@@ -43,7 +43,7 @@ versions:
           - "After a restart, the history of finished jobs shows which steps were skipped rather than marking them all as never reached"
         - "The content list is usable from the keyboard again - rows can be tabbed to and opened with Enter or Space, as they could before the list was rebuilt"
         - "Every job and content state is now told apart by its outline pattern as well as its icon and colour, so the two never rely on colour alone. Measured across the themes, colour by itself was separating some states by as little as one shade of grey"
-        - "Fixed the app icon showing as a blank page in the released build - the file was never actually served, so this has never worked in a real installation"
+        - "Fixed the app icon showing as a blank page in the released build - the file was never actually served, so this has never worked in a real installation. The first attempt at this broke the app entirely on a real install, by serving the main script before the server had filled in the address of its own API; both are fixed together"
         - "The list and grid buttons are now available on a phone. Switching to grid on a phone previously left no way back"
         - "Changing how many downloads run at once now responds to every click, and saves once when you have finished rather than on each press"
         - "The Activity page is now a rack rather than a stack of cards":
