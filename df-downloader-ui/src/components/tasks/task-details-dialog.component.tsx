@@ -23,7 +23,9 @@ import {
 import { useSelector } from "react-redux";
 import { selectPipeline } from "../../store/df-tasks/tasks.selector.ts";
 import { LinearProgressWithLabel } from "../general/linear-progress-with-label.component.tsx";
-import { Fragment } from "react";
+import { MiddleModal } from "../general/middle-modal.component.tsx";
+import { DfContentInfoItemDetail } from "../df-content/df-content-item-detail/df-content-item-detail.component.tsx";
+import { Fragment, useState } from "react";
 
 /**
  * Renders a span of milliseconds the way someone reading a task list wants to
@@ -133,6 +135,9 @@ export type TaskDetailsDialogProps = {
  */
 export const TaskDetailsDialog = ({ pipelineId, open, onClose }: TaskDetailsDialogProps) => {
   const pipeline = useSelector(selectPipeline(pipelineId));
+  // Stacked over this dialog rather than replacing it, so closing the content
+  // returns you to the run you were looking at.
+  const [contentOpen, setContentOpen] = useState(false);
   if (!pipeline) {
     return null;
   }
@@ -159,7 +164,21 @@ export const TaskDetailsDialog = ({ pipelineId, open, onClose }: TaskDetailsDial
   return (
     <Dialog open={open} onClose={onClose} maxWidth="md" fullWidth>
       <DialogTitle sx={{ pb: 1 }}>
-        <Typography variant="h6" sx={{ wordBreak: "break-word" }}>
+        {/* The title doubles as the way into the content itself - a task is
+            nearly always looked at because of the video behind it, and there
+            was previously no route from one to the other. */}
+        <Typography
+          variant="h6"
+          onClick={dfContent ? () => setContentOpen(true) : undefined}
+          sx={{
+            wordBreak: "break-word",
+            ...(dfContent && {
+              cursor: "pointer",
+              "&:hover": { textDecoration: "underline" },
+            }),
+          }}
+          title={dfContent ? "View content details" : undefined}
+        >
           {dfContent?.title || "Unknown content"}
         </Typography>
         <Stack direction="row" spacing={1} sx={{ mt: 1 }} flexWrap="wrap" useFlexGap>
@@ -300,6 +319,19 @@ export const TaskDetailsDialog = ({ pipelineId, open, onClose }: TaskDetailsDial
           </>
         )}
       </DialogContent>
+      {dfContent && (
+        <MiddleModal
+          open={contentOpen}
+          onClose={() => setContentOpen(false)}
+          id="task-details-content-detail-modal"
+        >
+          <Box>
+            {/* Keyed by `key`, not `name` - name is a cosmetic slug. The prop
+                name predates that split. */}
+            <DfContentInfoItemDetail dfContentName={dfContent.key} />
+          </Box>
+        </MiddleModal>
+      )}
     </Dialog>
   );
 };

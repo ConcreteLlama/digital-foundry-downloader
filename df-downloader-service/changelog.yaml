@@ -29,6 +29,7 @@ versions:
           - "Steps that were skipped are shown as skipped rather than left blank"
           - "Failures show which step failed and why, instead of just a status line"
           - "A step that is still running shows its progress and how much longer it is likely to need, rather than only how long it has been going"
+          - "Clicking the title opens the video's own details, so you can get from a task to the content it is for without going and finding it"
         - "Long-running steps now show a progress bar rather than just a spinner":
           - "Subtitle generation reports how far through it is - previously a two-hour episode could spend half an hour with no sign anything was happening"
           - "Embedding metadata does the same while it rewrites the file"
