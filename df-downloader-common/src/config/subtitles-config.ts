@@ -162,6 +162,13 @@ export const SubtitlesServicesConfig = z.object({
 });
 export type SubtitlesServicesConfig = z.infer<typeof SubtitlesServicesConfig>;
 
+/**
+ * Exported separately so the settings form can take its bounds from here
+ * rather than restating them. SubtitlesConfig itself carries a superRefine,
+ * which leaves it without a `.shape` to reach into.
+ */
+export const MaxConcurrentSubtitles = z.number().int().min(1);
+
 export const SubtitlesConfig = z
   .object({
     /** See AutomaticSubtitlesMode. */
@@ -180,7 +187,7 @@ export const SubtitlesConfig = z
      * over and makes everything - including anything else running on the same
      * box - crawl. Raise it only if your subtitles service is a remote API.
      */
-    maxConcurrent: z.number().int().min(1).default(1),
+    maxConcurrent: MaxConcurrentSubtitles.default(1),
     /** The subtitles service to use */
     servicePriorities: SubtitlesService.array().default([]),
     /** The configuration for each subtitles service */

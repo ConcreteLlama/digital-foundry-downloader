@@ -1,11 +1,12 @@
 import AddIcon from "@mui/icons-material/Add";
 import RemoveIcon from "@mui/icons-material/Remove";
-import { Box, FormHelperText, IconButton, Stack, Typography } from "@mui/material";
+import { Box, Divider, FormHelperText, IconButton, Stack, Typography } from "@mui/material";
 import {
   DeepgramConfig,
   SubtitlesConfig,
   SubtitlesService,
   SubtitlesServicesConfig,
+  MaxConcurrentSubtitles,
   WhisperConfig,
   WhisperModel,
 } from "df-downloader-common/config/subtitles-config";
@@ -26,6 +27,31 @@ export const SubtitlesSettingsForm = () => {
     </DfSettingsSectionForm>
   );
 };
+
+/**
+ * A titled, ruled block of related settings.
+ *
+ * The section previously ran general options and per-service options together
+ * as one flat list, with the service blocks first - so the settings that
+ * apply to everything sat underneath the settings for one particular service,
+ * and nothing indicated which was which.
+ */
+const SettingsGroup = ({
+  title,
+  description,
+  children,
+}: {
+  title: string;
+  description?: string;
+  children: React.ReactNode;
+}) => (
+  <Stack sx={{ mb: 4 }}>
+    <Typography variant="h6">{title}</Typography>
+    {description && <FormHelperText sx={{ mx: 0, mb: 1 }}>{description}</FormHelperText>}
+    <Divider sx={{ mb: 2 }} />
+    <Stack spacing={2}>{children}</Stack>
+  </Stack>
+);
 
 const SubtitlesSettings = () => {
   const context = useFormContext<SubtitlesConfig>();
@@ -59,50 +85,73 @@ const SubtitlesSettings = () => {
 
   return (
     <Fragment>
-      {SubtitlesService.options.map((serviceName) => (
-        <SubtitleServiceConfig
-          serviceName={serviceName}
-          key={serviceName}
-          onEnable={onServiceEnable}
-          onDisable={onServiceDisable}
+      <SettingsGroup
+        title="General"
+        description="How and when subtitles are made, whichever service ends up producing them."
+      >
+        <SelectField
+          name="automaticGeneration"
+          label="Automatic subtitle generation"
+          helperText="Generating subtitles locally can take a while for long videos, so you may prefer the download to finish first - or to only ever trigger it yourself, per item."
+          opts={[
+            { id: "off", label: "Never - only when I ask" },
+            { id: "during_download", label: "During download - the download isn't finished until subtitles are" },
+            { id: "after_download", label: "After download - the video is available straight away" },
+          ]}
         />
-      ))}
-      <SelectField
-        name="automaticGeneration"
-        label="Automatic subtitle generation"
-        helperText="Generating subtitles locally can take a while for long videos, so you may prefer the download to finish first - or to only ever trigger it yourself, per item."
-        opts={[
-          { id: "off", label: "Never - only when I ask" },
-          { id: "during_download", label: "During download - the download isn't finished until subtitles are" },
-          { id: "after_download", label: "After download - the video is available straight away" },
-        ]}
-      />
-      <SelectField
-        name="output"
-        label="Subtitle output"
-        helperText="Embedding puts subtitles inside the video so they travel with it, but rewrites the whole file. A separate .srt is instant and doesn't touch a file your media server may be playing, but is left behind if you move the video without it. Note that with 'After download' selected above, Automatic always means a separate file - the video is already in your library by the time subtitles are made."
-        opts={[
-          { id: "auto", label: "Automatic - embed during download, separate file otherwise" },
-          { id: "embed", label: "Always embed in the video file" },
-          { id: "sidecar", label: "Always write a separate .srt file" },
-        ]}
-      />
-      {/* Deliberately not hidden when automatic generation is off. This list is
-          also what the manual "Generate Subtitles" action offers, so hiding it
-          previously made manual-only impossible to set up: you could turn
-          automatic off, but then never configure which service to use. */}
-      {enabledServices.length > 0 && (
-        <Fragment>
-          <FormHelperText>
-            The order of the services below is the order they'll be tried in, for both automatic and manual
-            generation. If a service fails, the next one is used. If no services are enabled, subtitles can't be
-            generated at all.
-          </FormHelperText>
-          <OrderableListFormField name="servicePriorities" label="Service Priorities" />
-        </Fragment>
-      )}
+        <SelectField
+          name="output"
+          label="Subtitle output"
+          helperText="Embedding puts subtitles inside the video so they travel with it, but rewrites the whole file. A separate .srt is instant and doesn't touch a file your media server may be playing, but is left behind if you move the video without it. Note that with 'After download' selected above, Automatic always means a separate file - the video is already in your library by the time subtitles are made."
+          opts={[
+            { id: "auto", label: "Automatic - embed during download, separate file otherwise" },
+            { id: "embed", label: "Always embed in the video file" },
+            { id: "sidecar", label: "Always write a separate .srt file" },
+          ]}
+        />
+        <ZodNumberField
+          name="maxConcurrent"
+          label="Maximum simultaneous subtitle jobs"
+          helperText="Transcribing locally already uses most of this machine's cores, so running several at once makes everything slower rather than finishing sooner. Worth raising only if you use a paid service, where the work happens elsewhere."
+          zodNumber={MaxConcurrentSubtitles}
+        />
+        {/* Deliberately not hidden when automatic generation is off. This list
+            is also what the manual "Generate Subtitles" action offers, so
+            hiding it previously made manual-only impossible to set up: you
+            could turn automatic off, but then never configure which service to
+            use. */}
+        {enabledServices.length > 0 && (
+          <Fragment>
+            <FormHelperText sx={{ mx: 0 }}>
+              Services are tried in this order, for both automatic and manual generation. If one fails the next is
+              used, and with none enabled subtitles can't be generated at all.
+            </FormHelperText>
+            <OrderableListFormField name="servicePriorities" label="Service Priorities" />
+          </Fragment>
+        )}
+      </SettingsGroup>
+      <SettingsGroup
+        title="Services"
+        description="Where transcription actually happens. Each is enabled and configured independently - the settings below belong to that service alone."
+      >
+        {SubtitlesService.options.map((serviceName) => (
+          <SubtitleServiceConfig
+            serviceName={serviceName}
+            key={serviceName}
+            onEnable={onServiceEnable}
+            onDisable={onServiceDisable}
+          />
+        ))}
+      </SettingsGroup>
     </Fragment>
   );
+};
+
+/** "google_stt" is an identifier, not something to show someone. */
+const SubtitlesServiceLabels: Record<SubtitlesService, string> = {
+  deepgram: "Deepgram",
+  google_stt: "Google Speech-to-Text",
+  whisper: "Whisper",
 };
 
 const SubtitlesServiceDescriptions: Record<SubtitlesService, string> = {
@@ -249,10 +298,12 @@ const SubtitleServiceConfig = (props: {
   const serviceConfig = services[serviceName];
   const ConfigComponent = SubtitleServiceConfigComponents[props.serviceName];
   return (
-    <Stack>
+    // Boxed rather than run together: with three services stacked, there was
+    // nothing to show where one service's settings ended and the next began.
+    <Stack sx={{ border: 1, borderColor: "divider", borderRadius: 1, p: 2 }}>
       <Box display="flex" flexDirection="row" alignItems="center" justifyContent="space-between">
-        <Typography variant="h6">
-          {props.serviceName} ({serviceConfig ? "Enabled" : "Disabled"})
+        <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
+          {SubtitlesServiceLabels[props.serviceName]} ({serviceConfig ? "Enabled" : "Disabled"})
         </Typography>
         {serviceConfig ? (
           <IconButton onClick={() => onDisable(serviceName)}>
