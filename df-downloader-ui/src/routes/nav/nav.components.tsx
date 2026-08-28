@@ -22,7 +22,7 @@ import { useSelector } from "react-redux";
 import { Link, Outlet, useLocation } from "react-router-dom";
 import { LiveStatusStrip } from "../../components/general/live-status-strip.component";
 import { DfLogoIcon } from "../../icons/df-logo.component";
-import { selectConfigSectionField, selectDevConfigEnabled } from "../../store/config/config.selector.ts";
+import { selectDevConfigEnabled } from "../../store/config/config.selector.ts";
 import { monoFontFamily, NARROW_RAIL_MAX_WIDTH } from "../../themes/build-theme";
 import { getStoredRailState, RailState, storeRailState } from "../../themes/ui-preferences";
 import { MobileTabBar } from "./mobile-tab-bar.component";
@@ -146,7 +146,6 @@ type RailContentsProps = {
 const RailContents = ({ collapsed, onOpenChangelog, onItemSelected, onToggleRail }: RailContentsProps) => {
   const { pathname } = useLocation();
   const devModeEnabled = useSelector(selectDevConfigEnabled);
-  const devMode = useSelector(selectConfigSectionField("dev", "devModeEnabled"));
   const active = findDestination(pathname);
 
   return (
@@ -190,11 +189,6 @@ const RailContents = ({ collapsed, onOpenChangelog, onItemSelected, onToggleRail
           {!collapsed && (
             <Typography sx={{ fontWeight: 700, fontSize: "0.9375rem", letterSpacing: "-0.01em", lineHeight: 1.1 }}>
               Content Manager
-              {devMode && (
-                <Typography component="span" variant="caption" sx={{ display: "block", color: "warning.main" }}>
-                  dev mode
-                </Typography>
-              )}
             </Typography>
           )}
         </Box>
