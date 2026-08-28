@@ -12,6 +12,7 @@ import { AutomaticDownloadsConfig, AutomaticDownloadsConfigKey } from "./automat
 import { AuthenticationConfig, AuthenticationConfigKey, DefaultAuthenticationConfig } from "./auth-config.js";
 import { DevConfig, DevConfigKey } from "./dev-config.js";
 import { MediaFormatsConfigKey, MediaFormatsConfig } from "./media-formats-config.js";
+import { UiConfig, UiConfigKey } from "./ui-config.js";
 
 // prefault(), not default() - these sections are {} with every field having
 // its own nested default, so the empty object is only valid as *input* (gets
@@ -33,6 +34,9 @@ export const DfDownloaderConfig = z.object({
   [SubtitlesConfigKey]: SubtitlesConfig.optional(),
   [NotificationsConfigKey]: NotificationsConfig.optional(),
   [LoggingConfigKey]: LoggingConfig.default(DefaultLoggingConfig),
+  // prefault, not default - `theme` has its own default, so {} is valid input
+  // but not an output-shaped value (see the note above).
+  [UiConfigKey]: UiConfig.prefault({}),
   [DevConfigKey]: DevConfig.optional(),
 });
 export type DfDownloaderConfig = z.infer<typeof DfDownloaderConfig>;

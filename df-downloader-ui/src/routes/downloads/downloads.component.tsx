@@ -1,21 +1,21 @@
 import DownloadIcon from "@mui/icons-material/Download";
-import { Box, MenuItem, Select, SelectChangeEvent, useMediaQuery } from "@mui/material";
+import { Box, MenuItem, Select, SelectChangeEvent, useMediaQuery, useTheme } from "@mui/material";
 import { useEffect } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import { TaskList } from "../../components/tasks/task-list.component.tsx";
 import { queryConfigSection, updateConfigSection } from "../../store/config/config.action.ts";
 import { selectConfigSection } from "../../store/config/config.selector.ts";
-import { theme } from "../../themes/theme.ts";
 import { DownloadsPageContainer } from "./downloads.styles";
 
 export const DownloadsPage = () => {
+  const theme = useTheme();
   const belowMd = useMediaQuery(theme.breakpoints.down("md"));
 
   return (
     <DownloadsPageContainer
       id="download-page-container"
-      style={{
-        background: theme.palette.background.default,
+      sx={{
+        background: "background.default",
         maxWidth: belowMd ? "100vw" : "65vw",
       }}
     >

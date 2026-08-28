@@ -1,94 +1,295 @@
-import DownloadIcon from "@mui/icons-material/Download";
 import MenuIcon from "@mui/icons-material/Menu";
-import VideoCameraIcon from "@mui/icons-material/VideoCameraBack";
+import MenuOpenIcon from "@mui/icons-material/MenuOpen";
 import {
   AppBar,
   Box,
-  CssBaseline,
+  Divider,
+  Drawer,
   IconButton,
   List,
+  ListItemButton,
+  ListItemIcon,
+  ListItemText,
   SwipeableDrawer,
   Toolbar,
+  Tooltip,
   Typography,
-  useMediaQuery
+  useMediaQuery,
+  useTheme,
 } from "@mui/material";
-import { useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useSelector } from "react-redux";
-import { Outlet } from "react-router-dom";
-import { AuthUserInfo } from "../../components/auth/auth-user-info.component";
-import { DfUserInfo } from "../../components/df-user-info/df-user-info.component";
-import { CumulativeDownloadInfo } from "../../components/tasks/cumulative-download-info.component";
+import { Link, Outlet, useLocation } from "react-router-dom";
 import { QueueStatusIndicator } from "../../components/general/queue-status-indicator.component";
-import { selectConfigSectionField } from "../../store/config/config.selector.ts";
-import { theme } from "../../themes/theme";
-import { SettingsNav } from "../settings/settings-nav.component";
-import { ToolsNav } from "../tools/tools-nav.component.tsx";
-import { NavItem } from "./nav-item.component";
-import { SystemNav } from "../system/system-nav.component.tsx";
+import { CumulativeDownloadInfo } from "../../components/tasks/cumulative-download-info.component";
+import { DfLogoIcon } from "../../icons/df-logo.component";
+import { selectConfigSectionField, selectDevConfigEnabled } from "../../store/config/config.selector.ts";
+import { getStoredRailState, RailState, storeRailState } from "../../themes/ui-preferences";
+import { findDestination, getDestinationPath, getPageTitle, navDestinations } from "./nav-destinations";
+import { RailFoot } from "./rail-foot.component";
+import { SectionNav, SectionNavCompact } from "./section-nav.component";
 
-export const Nav = () => {
+const EXPANDED_WIDTH = 212;
+const ICON_WIDTH = 54;
+
+export type NavProps = {
+  onOpenChangelog: () => void;
+};
+
+export const Nav = ({ onOpenChangelog }: NavProps) => {
+  const theme = useTheme();
   const useMobileLayout = useMediaQuery(theme.breakpoints.down("md"));
-  const useSmallLayout = useMediaQuery(theme.breakpoints.down("sm"));
-  const devModeEnabled = useSelector(selectConfigSectionField("dev", "devModeEnabled"));
-  const title = `Digital Foundry Content Manager${devModeEnabled ? " (dev mode)" : ""}`;
-  const [drawerOpen, setDrawerOpenState] = useState(false);
-  const onItemSelected = () => {
-    setDrawerOpenState(false);
-  };
+  const [railState, setRailState] = useState<RailState>(() => getStoredRailState());
+  const [overlayOpen, setOverlayOpen] = useState(false);
+
+  const toggleRail = useCallback(() => {
+    setRailState((current) => {
+      const next: RailState = current === "expanded" ? "icon" : "expanded";
+      storeRailState(next);
+      return next;
+    });
+  }, []);
+
+  // "[" toggles the rail, but only when you aren't typing into something -
+  // the content search is a bare input on the busiest page in the app.
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== "[" || event.metaKey || event.ctrlKey || event.altKey) {
+        return;
+      }
+      const target = event.target as HTMLElement | null;
+      if (target?.isContentEditable || ["INPUT", "TEXTAREA", "SELECT"].includes(target?.tagName ?? "")) {
+        return;
+      }
+      event.preventDefault();
+      toggleRail();
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [toggleRail]);
+
+  const collapsed = !useMobileLayout && railState === "icon";
+  const width = collapsed ? ICON_WIDTH : EXPANDED_WIDTH;
+
+  const railContent = (
+    <RailContents
+      collapsed={collapsed}
+      onOpenChangelog={onOpenChangelog}
+      onItemSelected={() => setOverlayOpen(false)}
+      onToggleRail={useMobileLayout ? undefined : toggleRail}
+    />
+  );
+
   return (
-    <Box>
-      <CssBaseline />
-      <AppBar id="app-bar" component="nav" position="fixed" sx={{ zIndex: (theme) => theme.zIndex.drawer + 1 }}>
-        <Toolbar id="toolbar" sx={{ display: "flex", justifyContent: "space-between" }}>
-          {useMobileLayout ? (
-            <IconButton id="drawer-open-button" onClick={() => setDrawerOpenState(!drawerOpen)}>
-              <MenuIcon />
-            </IconButton>
-          ) : (
-            <Typography variant="h6" sx={{ textAlign: "center" }}>
-              {title}
-            </Typography>
-          )}
-          <CumulativeDownloadInfo />
-          <QueueStatusIndicator />
-          <DfUserInfo mode={useSmallLayout ? "minimal" : "full"} />
-          <AuthUserInfo mode={useSmallLayout ? "minimal" : "full"} />
-        </Toolbar>
-      </AppBar>
-      <SwipeableDrawer
-        variant={useMobileLayout ? "temporary" : "permanent"}
-        open={drawerOpen}
+    <>
+      <AppTopBar
+        railWidth={useMobileLayout ? 0 : width}
+        showMenuButton={useMobileLayout}
+        onMenuClick={() => setOverlayOpen(true)}
+      />
+      {useMobileLayout ? (
+        <SwipeableDrawer
+          variant="temporary"
+          open={overlayOpen}
+          onClose={() => setOverlayOpen(false)}
+          onOpen={() => setOverlayOpen(true)}
+          ModalProps={{ keepMounted: true }}
+          PaperProps={{ sx: { width: EXPANDED_WIDTH, boxSizing: "border-box" } }}
+        >
+          {railContent}
+        </SwipeableDrawer>
+      ) : (
+        <Drawer
+          variant="permanent"
+          sx={{ width, flexShrink: 0 }}
+          // Set on the paper directly rather than through a `& .MuiDrawer-paper`
+          // descendant selector in the root's sx - that rule loses to the
+          // paper's own generated class, so the rail root would collapse while
+          // the panel inside it stayed full width.
+          PaperProps={{
+            sx: {
+              width,
+              boxSizing: "border-box",
+              overflowX: "hidden",
+              transition: theme.transitions.create("width", { duration: theme.transitions.duration.shorter }),
+            },
+          }}
+        >
+          {railContent}
+        </Drawer>
+      )}
+    </>
+  );
+};
+
+type RailContentsProps = {
+  collapsed: boolean;
+  onOpenChangelog: () => void;
+  onItemSelected: () => void;
+  /** Absent on mobile, where the rail is an overlay and has nothing to collapse to. */
+  onToggleRail?: () => void;
+};
+
+const RailContents = ({ collapsed, onOpenChangelog, onItemSelected, onToggleRail }: RailContentsProps) => {
+  const { pathname } = useLocation();
+  const devModeEnabled = useSelector(selectDevConfigEnabled);
+  const devMode = useSelector(selectConfigSectionField("dev", "devModeEnabled"));
+  const active = findDestination(pathname);
+
+  return (
+    <Box sx={{ display: "flex", flexDirection: "column", height: "100%" }}>
+      {/*
+        The lockup: the DF glyph carries the "DF" so the words don't have to,
+        and "Content Manager" says what the app does now that downloading is
+        one pipeline step among several. No tagline - a second line only earns
+        its place if it carries data, which is what the foot strip is for.
+      */}
+      <Box
+        component={Link}
+        to="/content"
+        onClick={onItemSelected}
         sx={{
-          width: 240,
+          display: "flex",
+          alignItems: "center",
+          gap: 1.25,
+          height: 64,
+          paddingX: collapsed ? 0 : 2,
+          justifyContent: collapsed ? "center" : "flex-start",
+          textDecoration: "none",
+          color: "text.primary",
           flexShrink: 0,
-          [`& .MuiDrawer-paper`]: { width: 240, boxSizing: "border-box" },
-        }}
-        onClose={function (): void {
-          setDrawerOpenState(false);
-        }}
-        onOpen={function (): void {
-          setDrawerOpenState(true);
         }}
       >
-        <Toolbar />
-        <Box sx={{ overflow: "auto" }} id="sidebar">
-          <List>
-            <NavItem to="/content" text="Content" icon={VideoCameraIcon} onItemSelected={onItemSelected} />
-            <NavItem to="/downloads" text="Downloads" icon={DownloadIcon} onItemSelected={onItemSelected} />
-            <ToolsNav onItemSelected={onItemSelected} />
-            <SettingsNav onItemSelected={onItemSelected} />
-            <SystemNav onItemSelected={onItemSelected} />
-          </List>
+        <DfLogoIcon sx={{ color: "primary.main", fontSize: 26 }} />
+        {!collapsed && (
+          <Typography sx={{ fontWeight: 700, fontSize: "0.9375rem", letterSpacing: "-0.01em", lineHeight: 1.1 }}>
+            Content Manager
+            {devMode && (
+              <Typography component="span" variant="caption" sx={{ display: "block", color: "warning.main" }}>
+                dev mode
+              </Typography>
+            )}
+          </Typography>
+        )}
+      </Box>
+      <Divider />
+
+      <List sx={{ flex: "1 1 auto", overflowY: "auto", overflowX: "hidden", paddingX: collapsed ? 0.5 : 1 }}>
+        {navDestinations.map((destination) => {
+          const selected = active?.prefix === destination.prefix;
+          const DestinationIcon = destination.icon;
+          const item = (
+            <ListItemButton
+              key={destination.prefix}
+              component={Link}
+              to={getDestinationPath(destination, devModeEnabled)}
+              selected={selected}
+              onClick={onItemSelected}
+              sx={{
+                borderRadius: 1,
+                marginBottom: 0.25,
+                minHeight: 40,
+                justifyContent: collapsed ? "center" : "flex-start",
+                paddingX: collapsed ? 1 : 1.5,
+              }}
+            >
+              <ListItemIcon
+                sx={{
+                  minWidth: collapsed ? 0 : 34,
+                  justifyContent: "center",
+                  color: selected ? "primary.main" : "text.secondary",
+                }}
+              >
+                <DestinationIcon fontSize="small" />
+              </ListItemIcon>
+              {!collapsed && (
+                <ListItemText
+                  primary={destination.label}
+                  primaryTypographyProps={{
+                    variant: "body2",
+                    fontWeight: selected ? 600 : 400,
+                    color: selected ? "text.primary" : "text.secondary",
+                  }}
+                />
+              )}
+            </ListItemButton>
+          );
+          return collapsed ? (
+            <Tooltip key={destination.prefix} title={destination.label} placement="right">
+              <Box>{item}</Box>
+            </Tooltip>
+          ) : (
+            item
+          );
+        })}
+      </List>
+
+      {onToggleRail && (
+        <Box sx={{ display: "flex", justifyContent: collapsed ? "center" : "flex-end", paddingX: 1 }}>
+          <Tooltip title={`${collapsed ? "Expand" : "Collapse"} sidebar  [`} placement="right">
+            <IconButton size="small" onClick={onToggleRail}>
+              {collapsed ? <MenuIcon fontSize="small" /> : <MenuOpenIcon fontSize="small" />}
+            </IconButton>
+          </Tooltip>
         </Box>
-      </SwipeableDrawer>
+      )}
+
+      <RailFoot collapsed={collapsed} onOpenChangelog={onOpenChangelog} />
     </Box>
   );
 };
 
+type AppTopBarProps = {
+  railWidth: number;
+  showMenuButton: boolean;
+  onMenuClick: () => void;
+};
+
+/**
+ * Contextual, rather than an app title that vanished below md and left a bare
+ * hamburger. The name of where you are on the left, live state on the right.
+ */
+const AppTopBar = ({ railWidth, showMenuButton, onMenuClick }: AppTopBarProps) => {
+  const { pathname } = useLocation();
+  return (
+    <AppBar
+      id="app-bar"
+      component="nav"
+      position="fixed"
+      sx={{
+        width: railWidth ? `calc(100% - ${railWidth}px)` : "100%",
+        marginLeft: `${railWidth}px`,
+        zIndex: (theme) => theme.zIndex.drawer - 1,
+      }}
+    >
+      <Toolbar id="toolbar" sx={{ display: "flex", gap: 2 }}>
+        {showMenuButton && (
+          <IconButton id="drawer-open-button" edge="start" onClick={onMenuClick}>
+            <MenuIcon />
+          </IconButton>
+        )}
+        <Typography variant="h6" noWrap sx={{ flex: "1 1 auto", minWidth: 0 }}>
+          {getPageTitle(pathname)}
+        </Typography>
+        <CumulativeDownloadInfo />
+        <QueueStatusIndicator />
+      </Toolbar>
+    </AppBar>
+  );
+};
+
+/**
+ * Wrapper for the sectioned routes (Settings/Tools/System). The section's own
+ * pages are chosen from a column in here now, not from an accordion in the rail.
+ */
 export const NavPage = () => {
   return (
-    <Box sx={{ display: "flex", padding: 4 }}>
-      <Outlet />
+    <Box sx={{ display: "flex", padding: 4, width: "100%", minWidth: 0 }}>
+      <SectionNav />
+      <Box sx={{ flex: "1 1 auto", minWidth: 0 }}>
+        <SectionNavCompact />
+        <Outlet />
+      </Box>
     </Box>
   );
 };

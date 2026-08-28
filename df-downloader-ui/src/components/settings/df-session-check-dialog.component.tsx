@@ -1,9 +1,9 @@
-import { Box, Button, Dialog, DialogActions, DialogContent, DialogTitle, useMediaQuery } from "@mui/material";
+import { Box, Button, Dialog, DialogActions, DialogContent, DialogTitle, useMediaQuery,
+  useTheme } from "@mui/material";
 import { useState } from "react";
 import { useSelector } from "react-redux";
 import { selectDfUserInfo, selectDfUserInfoInitialized } from "../../store/df-user/df-user.selector";
 import { selectIsLoading } from "../../store/general.selector.ts";
-import { theme } from "../../themes/theme";
 import { Loading } from "../general/loading.component.tsx";
 import { DfSettingsForm } from "./df-settings.component";
 
@@ -19,6 +19,7 @@ export const DfSessionCheckDialog = () => {
   // to the spinner mid-typing, wiping out whatever the user had just typed
   // into the settings form below (confirmed live 2026-08-18).
   const showChecking = userInfoLoading && !userInfoInitialized;
+  const theme = useTheme();
   const fullScreen = useMediaQuery(theme.breakpoints.down("md"));
   const [ignoreDfSessionCheck, setIgnoreDfSessionCheck] = useState(
     window.sessionStorage.getItem("ignoreDfSessionCheck") === "true"

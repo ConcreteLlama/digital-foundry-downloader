@@ -1,8 +1,9 @@
-import { Box, Card, CardActions, CardContent, CardHeader, useMediaQuery } from "@mui/material";
-import { theme } from "../../../themes/theme";
+import { Box, Card, CardActions, CardContent, CardHeader, useMediaQuery,
+  useTheme } from "@mui/material";
 import { MaintenanceTools } from "./maintenance-tools";
 
 export const MaintenanceToolsPage = () => {
+  const theme = useTheme();
   const isBelowMd = useMediaQuery(theme.breakpoints.down('md'));
 
   return (

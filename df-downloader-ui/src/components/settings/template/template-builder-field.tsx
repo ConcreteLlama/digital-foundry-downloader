@@ -3,7 +3,6 @@ import { DfContentInfo, filterAndMap, MediaInfo, randomDummyContentInfo } from "
 import { DfFilenameTemplateVarDefinitions, helperVars, testTemplate, TestTemplateError } from "df-downloader-common/utils/filename-template-utils";
 import { useEffect, useRef, useState } from "react";
 import { useFormContext, useFormState, useWatch } from "react-hook-form";
-import { generalScrollbarProps } from "../../../utils/webkit-scrollbar-props.ts";
 
 type TemplateExample = {
   value: string;
@@ -164,8 +163,7 @@ export const TemplateBuilderField = ({alwaysExpand = false}: TemplateBuilderFiel
       <Collapse in={showVariableList}>
         <Box mt={2} sx={{
           maxHeight: "50vh",
-          overflow: 'auto',
-          ...generalScrollbarProps}}>
+          overflow: 'auto'}}>
           <Typography variant="h6">Variables</Typography>
           <List>
             {validTags.map((tag) => (

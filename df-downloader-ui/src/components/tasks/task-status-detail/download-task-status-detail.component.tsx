@@ -1,4 +1,4 @@
-import { Grid, GridProps, useMediaQuery } from "@mui/material";
+import { Grid, GridProps, Theme, useMediaQuery, useTheme } from "@mui/material";
 import { bytesToHumanReadable, calculateTimeRemainingSeconds, capitalizeFirstLetter } from "df-downloader-common";
 import prettyMilliseconds from "pretty-ms";
 import { useSelector } from "react-redux";
@@ -8,11 +8,13 @@ import {
   selectTaskState,
   selectTaskStatusField,
 } from "../../../store/df-tasks/tasks.selector.ts";
-import { theme } from "../../../themes/theme.ts";
 import { EllipsisTooltipText } from "../../general/ellipsis-tooltip-text.component.tsx";
 import { TaskControls } from "../task-controls.component.tsx";
 
-const progressBarColours = {
+// Built per render from the active theme rather than captured once at module
+// load - baking the palette in here was what froze these bars to whichever
+// theme happened to be loaded first.
+const getProgressBarColours = (theme: Theme) => ({
   running: {
     barColour1: theme.palette.primary.main,
     barColour2: theme.palette.primary.light,
@@ -25,20 +27,21 @@ const progressBarColours = {
     barColour1: theme.palette.warning.main,
     barColour2: theme.palette.warning.light,
   },
-};
+});
 
 type DownloadTaskInfoProps = {
   pipelineId: string;
   stepId: string;
 };
 export const DownloadTaskStatusDetail = ({ pipelineId, stepId }: DownloadTaskInfoProps) => {
+  const theme = useTheme();
   const percentComplete = useSelector(selectDownoadingProgressField(pipelineId, stepId, "percentComplete"));
   const belowMd = useMediaQuery(theme.breakpoints.down("md"));
   const belowSm = useMediaQuery(theme.breakpoints.down("sm"));
   const taskState = useSelector(selectTaskState(pipelineId, stepId));
   const forceStarted = useSelector(selectTaskStatusField(pipelineId, stepId, "forceStarted"));
   const { barColour1, barColour2 } =
-    progressBarColours[taskState === "paused" ? "paused" : forceStarted ? "forceStarted" : "running"];
+    getProgressBarColours(theme)[taskState === "paused" ? "paused" : forceStarted ? "forceStarted" : "running"];
   const background = `linear-gradient(to right, ${barColour1} ${
     percentComplete / 2
   }%, ${barColour2} ${percentComplete}%, rgba(255, 255, 255, 0.0) ${percentComplete}%)`;

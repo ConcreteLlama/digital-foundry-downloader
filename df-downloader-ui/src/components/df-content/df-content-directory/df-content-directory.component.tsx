@@ -1,4 +1,5 @@
-import { AppBar, Box, List, Stack, Typography, useMediaQuery } from "@mui/material";
+import { AppBar, Box, List, Stack, Typography, useMediaQuery,
+  useTheme } from "@mui/material";
 import { useEffect, useRef, useState } from "react";
 import { useSelector } from "react-redux";
 import { queryConfigSection } from "../../../store/config/config.action.ts";
@@ -11,8 +12,6 @@ import {
 } from "../../../store/df-content/df-content.selector.ts";
 import { selectIsLoading } from "../../../store/general.selector.ts";
 import { store } from "../../../store/store.ts";
-import { theme } from "../../../themes/theme.ts";
-import { ChangelogDialog } from "../../general/changelog.component.tsx";
 import { Loading } from "../../general/loading.component.tsx";
 import { MiddleModal } from "../../general/middle-modal.component.tsx";
 import { PageSelector } from "../../general/page-selector.component.tsx";
@@ -32,6 +31,7 @@ export const DfContentInfoDirectory = () => {
   const configLoading = useSelector(selectConfigLoading);
   const loading = contentLoading || configLoading;
   const totalItems = useSelector(selectTotalContentItems);
+  const theme = useTheme();
   const resultsInTop = useMediaQuery(theme.breakpoints.up("md"));
   const { currentPage, numPages, limit } = useSelector(selectPageInfo);
   const [selectedItem, setSelectedItem] = useState<string | null>(null);
@@ -64,7 +64,6 @@ export const DfContentInfoDirectory = () => {
       }}
     >
       <DfSessionCheckDialog />
-      <ChangelogDialog />
       <Stack
         sx={{ position: "sticky", top: 0, zIndex: 1, backgroundColor: "background.default", gap: 1, paddingBottom: 1 }}
       >

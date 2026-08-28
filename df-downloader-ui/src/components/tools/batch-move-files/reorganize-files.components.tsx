@@ -1,7 +1,6 @@
-import { Box, BoxProps, Button, ButtonGroup, ButtonProps, Checkbox, Dialog, DialogActions, DialogContent, DialogTitle, Paper, styled, Typography, useMediaQuery } from "@mui/material";
+import { Box, BoxProps, Button, ButtonGroup, ButtonProps, Checkbox, Dialog, DialogActions, DialogContent, DialogTitle, Paper, styled, Typography, useMediaQuery, useTheme } from "@mui/material";
 import { ContentMoveFileInfo } from "df-downloader-common";
 import { useState } from "react";
-import { theme } from "../../../themes/theme.ts";
 import { ColumnInfo, GridCell, GridContainer, GridRow, GridTable, GridTextCell } from "../../general/grid-table.tsx";
 
 export const makeRecordKey = (info: ContentMoveFileInfo) => `${info.contentName}:${info.oldFilename}:${info.newFilename}`;
@@ -38,11 +37,12 @@ type BatchMoveFilesHeaderProps = {
     template: string;
 }
 export const BatchMoveFilesHeader = (props: BatchMoveFilesHeaderProps) => {
+    const theme = useTheme();
     const belowMd = useMediaQuery(theme.breakpoints.down("md"));
     return (
         <Paper sx={{ display: "flex", justifyContent: "center", alignItems: "center", padding: "8px", marginBottom: "8px", flexDirection: belowMd ? "column" : "row" }}>
             <Typography variant="body1" sx={{ marginRight: '12px' }}>Files to move based on the following template:</Typography>
-            <Typography variant="body2" component="pre" sx={{ padding: '4px', borderRadius: '4px', border: `1px solid ${theme.palette.divider}` }}>
+            <Typography variant="body2" component="pre" sx={{ padding: '4px', borderRadius: '4px', border: "1px solid", borderColor: "divider" }}>
                 {props.template}
             </Typography>
         </Paper>

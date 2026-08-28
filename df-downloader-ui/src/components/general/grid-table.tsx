@@ -1,5 +1,4 @@
 import { Box, BoxProps, styled, Typography, TypographyProps } from "@mui/material";
-import { generalScrollbarProps } from "../../utils/webkit-scrollbar-props.ts";
 
 // A scrollable grid container
 export const GridContainer = styled(Box)(({ theme }) => ({
@@ -8,7 +7,6 @@ export const GridContainer = styled(Box)(({ theme }) => ({
   padding: theme.spacing(2),
   overflow: 'auto',
   maxHeight: '100%',
-  ...generalScrollbarProps,
 }));
 
 export const GridHeader = styled(Box)(({ theme }) => ({

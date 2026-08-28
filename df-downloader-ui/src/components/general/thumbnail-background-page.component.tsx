@@ -1,10 +1,10 @@
-import { ImageList, ImageListItem, Paper, useMediaQuery } from "@mui/material";
+import { ImageList, ImageListItem, Paper, useMediaQuery,
+  useTheme } from "@mui/material";
 import { DfContentInfoUtils, PreviewThumbnailResponse, logger, parseResponseBody } from "df-downloader-common";
 import Image from "mui-image";
 import { Fragment, useEffect, useState } from "react";
 import { API_URL } from "../../config";
 import { fetchJson } from "../../utils/fetch";
-import { theme } from "../../themes/theme";
 
 const getThumbs = (setThumbs: (thumbs: string[]) => void) => {
   logger.log("info", "getting thumbs");
@@ -82,6 +82,7 @@ export type ThumbnailBackgroundPageProps = {
   children?: React.ReactNode;
 };
 export const ThumbnailBackgroundPage = ({ children }: ThumbnailBackgroundPageProps) => {
+  const theme = useTheme();
   const useGallery = useMediaQuery(theme.breakpoints.up("md"));
   return (
     <Paper sx={{ width: "100vw", height: "100vh" }} id="thumbnail-background-page">

@@ -11,7 +11,6 @@ import { queryConfigSection } from "../../../store/config/config.action.ts";
 import { selectConfigSectionField } from "../../../store/config/config.selector.ts";
 import { selectBatchMoveFilesTasks } from "../../../store/df-tasks/tasks.selector.ts";
 import { store } from "../../../store/store.ts";
-import { theme } from "../../../themes/theme.ts";
 import { postJson } from "../../../utils/fetch.ts";
 import { Loading } from "../../general/loading.component.tsx";
 import { InlineDfSettingsSection } from "../../settings/df-settings-section-form.component.tsx";
@@ -144,7 +143,7 @@ export const ReorgnaizeFilesPage = () => {
         flexDirection: "column",
         alignItems: "center",
         justifyContent: "center",
-        gap: theme.spacing(2),
+        gap: 2,
       }}>
         {
           batchMoveFilesTasks.map((task) => <BatchMoveFilesProgress {...task} />)
