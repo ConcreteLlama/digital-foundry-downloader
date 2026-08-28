@@ -353,9 +353,14 @@ export const getMediaUrl = async (contentInfo: DfContentInfo, desiredMediaFormat
 };
 
 export const makeDfDownloadParams = (dfContent: DfContentInfo, mediaInfo: MediaInfo) => {
-  const filename =
+  // sanitizeFilename (not sanitizeFilePath) on both branches deliberately -
+  // this is a single flat filename in workDir, so a separator inside
+  // mediaFilename (which is URL-derived, and therefore percent-decoded) must
+  // collapse to "_" rather than being honoured as a directory.
+  const filename = sanitizeFilename(
     mediaInfo.mediaFilename ||
-    sanitizeFilename(`${dfContent.name}_${mediaInfo.formatString}.${MediaInfoUtils.getExtension(mediaInfo)}`);
+      `${dfContent.name}_${mediaInfo.formatString}.${MediaInfoUtils.getExtension(mediaInfo)}`
+  );
   const downloadDestination = `${configService.config.contentManagement.workDir}/${filename}`;
   const headers = {
     ...makeAuthHeaders(),

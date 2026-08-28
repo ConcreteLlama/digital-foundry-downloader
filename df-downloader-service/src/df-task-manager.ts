@@ -215,7 +215,10 @@ export class DfTaskManager {
       // landing on /login - confirmed live 2026-08-15 as the actual root
       // cause of every "download does nothing" report this session, not a
       // cookie/header/blacklist issue as originally suspected.
-      const filename = mediaInfo.mediaFilename || sanitizeFilename(`${dfContentInfo.name}_${mediaInfo.formatString}.${MediaInfoUtils.getExtension(mediaInfo)}`);
+      const filename = sanitizeFilename(
+        mediaInfo.mediaFilename ||
+          `${dfContentInfo.name}_${mediaInfo.formatString}.${MediaInfoUtils.getExtension(mediaInfo)}`
+      );
       url = async () => directUrl;
       destination = `${configService.config.contentManagement.workDir}/${filename}`;
       headers = {

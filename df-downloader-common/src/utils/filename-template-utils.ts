@@ -2,7 +2,7 @@ import { format } from "date-fns";
 import Handlebars from 'handlebars';
 import { DfContentInfo } from "../models/df-content-info.js";
 import { MediaInfo, MediaInfoUtils } from "../models/media-info/media-info.js";
-import { bytesToHumanReadable, commonReplacements, sanitizeFilePath, testFilePath } from "./file-utils.js";
+import { bytesToHumanReadable, commonReplacements, sanitizeFilename, sanitizeFilePath, testFilePath } from "./file-utils.js";
 import { errorToString } from "./error.js";
 import { audioPropertiesToString, bitrateToString, getFrameRateAbbrev, getResolutionAbbrev, resolutionToString, videoPropertiesToString } from "../models/index.js";
 
@@ -28,6 +28,13 @@ type DfTemplateVarDefinition = {
     description: string;
     valueExtractor: (contentInfo: DfContentInfo, mediaInfo: MediaInfo) => any;
     hidden?: boolean;
+    /**
+     * Skip the per-value sanitization applied before substitution into the
+     * template. Only for vars that exist purely as helper input (i.e. are
+     * never rendered into the path themselves) - see
+     * generateFilenameTemplateVarMap.
+     */
+    rawValue?: boolean;
 }
 
 export enum DfFilenameTemplateVar {
@@ -95,6 +102,10 @@ export const DfFilenameTemplateVarDefinitions: Record<DfFilenameTemplateVarName,
         description: "The tags of the content as an array",
         valueExtractor: (contentInfo) => contentInfo.tags,
         hidden: true,
+        // Consumed by the ifTag/ifIn helpers for comparison only, never
+        // rendered - sanitizing it would break matching against tags the
+        // user wrote verbatim in their template.
+        rawValue: true,
     },
     "audio-properties": {
         description: "The audio properties of the media",
@@ -204,8 +215,24 @@ export const helperVars: Record<string, HelperVarDefinition> = {
     }
 };
 
-const generateFilenameTemplateVarMap = (contentInfo: DfContentInfo, mediaInfo: MediaInfo) => Object.entries(DfFilenameTemplateVarDefinitions).reduce((acc, [key, { valueExtractor }]) => {
-    acc[key] = valueExtractor(contentInfo, mediaInfo);
+/**
+ * Sanitize a single interpolated value before it goes into the template.
+ *
+ * This has to happen per-value rather than on the rendered output, because
+ * the template legitimately uses "/" as a path separator between segments
+ * (e.g. "{{YYYY}}/{{title}}") - so we can't tell a user-authored separator
+ * apart from one that happened to be inside a title once they're rendered
+ * into the same string. A title like "PS5/Series X Tech Review" would
+ * otherwise silently become two nested directories.
+ */
+const sanitizeTemplateValue = (value: any) =>
+    typeof value === "string"
+        ? sanitizeFilename(value, { additionalReplacemenets: commonReplacements })
+        : value;
+
+const generateFilenameTemplateVarMap = (contentInfo: DfContentInfo, mediaInfo: MediaInfo) => Object.entries(DfFilenameTemplateVarDefinitions).reduce((acc, [key, { valueExtractor, rawValue }]) => {
+    const value = valueExtractor(contentInfo, mediaInfo);
+    acc[key] = rawValue ? value : sanitizeTemplateValue(value);
     return acc;
 }, {} as Record<string, (() => (string | string[]))>);
 
