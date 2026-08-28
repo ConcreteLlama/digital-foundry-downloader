@@ -1,13 +1,14 @@
-import { CheckboxElement } from "react-hook-form-mui";
+import { MetadataConfig } from "df-downloader-common/config/metadata-config";
+import { ZodCheckboxField } from "../zod-fields/zod-checkbox-field.component";
 import { DfSettingsSectionForm } from "./df-settings-section-form.component";
 
 export const MetadataSettingsForm = () => {
   return (
     <DfSettingsSectionForm sectionName="metadata" title="Metadata">
-      <CheckboxElement
+      <ZodCheckboxField
         name="injectMetadata"
         label="Inject Metadata After Downloading"
-        helperText="Set this to inject metadata into the file after downloading content - this includes title, description, and tags (as genre tags)"
+        zodBoolean={MetadataConfig.shape.injectMetadata}
       />
     </DfSettingsSectionForm>
   );

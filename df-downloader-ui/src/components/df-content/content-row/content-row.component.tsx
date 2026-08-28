@@ -83,8 +83,21 @@ export const ContentRow = ({ dfContentName, density, onClick }: ContentRowProps)
   return (
     <Box
       onClick={onClick}
+      // Not a real <button> because the row contains its own buttons (the
+      // download trigger), and nesting those is invalid. role+tabIndex+key
+      // handling is the standard substitute.
+      role="button"
+      tabIndex={0}
+      aria-label={contentInfo.title}
+      onKeyDown={(event) => {
+        if (event.key === "Enter" || event.key === " ") {
+          event.preventDefault();
+          onClick();
+        }
+      }}
       sx={{
         position: "relative",
+        "&:focus-visible": { outline: "2px solid", outlineColor: "primary.main", outlineOffset: "-2px" },
         display: "grid",
         gridTemplateColumns: belowMd ? "2px auto 1fr" : `2px auto 1fr ${STATE_BLOCK_WIDTH}px`,
         columnGap: belowMd ? 1.5 : 2,

@@ -38,20 +38,17 @@ export const TaskControls = ({ pipelineId }: TaskControlsProps) => {
       <ResumeButton pipelineId={pipelineId} disabled={buttonsDisabled} />
     );
   const cancelEnabled = capabilities?.includes("cancel") && taskState !== "cancelling";
+  // The isComplete branch that used to live here rendered a per-pipeline Clear
+  // button, but it was unreachable: TaskStatusDetail returns
+  // CompletedTaskStatusDetail before TaskControls is ever rendered for a
+  // finished pipeline. Per-pipeline clearing is now offered by
+  // CompletedTaskControls, which the completed row actually renders.
   return (
     <ButtonGroup>
-      {isComplete ? (
-        <IconButton onClick={() => clearPipeline(pipelineId)}>
-          <ClearIcon />
-        </IconButton>
-      ) : (
-        <Fragment>
-          {startButton}
-          <IconButton disabled={!cancelEnabled} onClick={() => controlPipeline(pipelineId, "cancel")}>
-            <StopButton />
-          </IconButton>{" "}
-        </Fragment>
-      )}
+      {startButton}
+      <IconButton disabled={!cancelEnabled} onClick={() => controlPipeline(pipelineId, "cancel")}>
+        <StopButton />
+      </IconButton>
     </ButtonGroup>
   );
 };
@@ -111,3 +108,22 @@ const ForceStartButton = ({ pipelineId, disabled }: ActionButtonProps) => {
     </Fragment>
   );
 };
+
+/**
+ * Clear one finished pipeline. Restores an action that existed in the code but
+ * could never be reached - only the bulk "Clear all" worked.
+ */
+export const CompletedTaskControls = ({ pipelineId }: TaskControlsProps) => (
+  <Tooltip title="Clear from history">
+    <IconButton
+      size="small"
+      aria-label="Clear this task from history"
+      onClick={(event) => {
+        event.stopPropagation();
+        clearPipeline(pipelineId);
+      }}
+    >
+      <ClearIcon fontSize="small" />
+    </IconButton>
+  </Tooltip>
+);

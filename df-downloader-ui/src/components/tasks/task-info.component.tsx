@@ -7,6 +7,7 @@ import { selectBasicTaskField, selectCurrentStep, selectIsComplete, selectPipeli
 import { EllipsisTooltipText } from "../general/ellipsis-tooltip-text.component.tsx";
 import { TaskDetailsDialog } from "./task-details-dialog.component.tsx";
 import { CompletedTaskRow, TaskInfoCard } from "./task-info.styles.tsx";
+import { CompletedTaskControls } from "./task-controls.component.tsx";
 import { TaskStatusDetail } from "./task-status-detail/task-status-detail.component.tsx";
 import { getTaskTypeIcon } from "./task-type-icon.ts";
 
@@ -30,6 +31,7 @@ export const TaskInfo = ({ pipelineId }: TaskInfoProps) => {
           <CompletedTaskRow onClick={() => setDetailsOpen(true)}>
             <TaskHeaderItem pipelineId={pipelineId} compact />
             <TaskStatusDetail pipelineId={pipelineId} />
+            <CompletedTaskControls pipelineId={pipelineId} />
           </CompletedTaskRow>
         ) : (
           <TaskInfoCard onClick={() => setDetailsOpen(true)} sx={{ cursor: "pointer" }}>

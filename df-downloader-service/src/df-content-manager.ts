@@ -257,7 +257,11 @@ export class DigitalFoundryContentManager {
         "info",
         `Scan complete - refreshing metadata for ${stillPending.length} of ${pending.length} deferred entries (the rest were already resolved by the scan)`
       );
-      await this.refreshMeta(stillPending);
+      // force: these were deferred because their availability under the
+      // current tier is unknown, which metadata age says nothing about -
+      // filterStillNeedingMetaRefresh has already dropped anything the scan
+      // resolved, so what's left genuinely needs asking DF.
+      await this.refreshMeta(stillPending, { force: true });
     }
   }
 
@@ -668,7 +672,15 @@ export class DigitalFoundryContentManager {
     await this.refreshMeta(requiringUpdate.map((contentEntry) => contentEntry.key));
   }
 
-  async refreshMeta(contentNames: string[], opts: { priority?: number } = {}) {
+  /**
+   * `force` skips the freshness check below and always re-fetches - for
+   * callers asking a question that metadata age doesn't answer (the
+   * tier-change paths, which need to know entitlement under a tier they
+   * have no record for). The default path is the opposite: the content
+   * detail dialog refreshes on every open, and most of those opens are
+   * asking about data that was confirmed minutes ago.
+   */
+  async refreshMeta(contentNames: string[], opts: { priority?: number; force?: boolean } = {}) {
     // Same reasoning as scanWholeArchive's guard - refreshMeta is reachable
     // from several places (patchMetas, userTierChanged, flushPendingMetaRefresh)
     // that don't all independently check sign-in state, so enforce it here
@@ -677,24 +689,50 @@ export class DigitalFoundryContentManager {
       logger.log("info", `Skipping metadata refresh for ${contentNames.length} entries - not signed in to Digital Foundry`);
       return [];
     }
+    // Keys whose entry should be returned to the caller - both the ones we
+    // actually re-fetched and the ones that were already fresh. The UI's
+    // reducer writes these straight into its store, so returning the fresh
+    // ones too means skipping the fetch is invisible to it.
     const refreshedMetaKeys = new Set<string>();
     const userTier = this.dfUserManager.getCurrentTier() || "NONE";
-    // Copy - about to splice() this locally, and some callers pass an array
-    // they still hold a reference to.
-    const remaining = [...contentNames];
+    // The detail dialog refreshes on every open, so without this an idle
+    // browse of the library is one DF request per item viewed, each behind
+    // the 5-15s spacing gate (see df-request-queue.ts). Reading the entry
+    // here also gets us the title hint the fetch needs anyway, so this
+    // costs no extra DB work.
+    const remaining: { key: string; titleHint?: string }[] = [];
+    let alreadyFresh = 0;
+    for (const contentName of contentNames) {
+      const existingEntry = await this.db.getContentEntry(contentName).catch(() => undefined);
+      const existingInfo = existingEntry?.contentInfo;
+      if (!opts.force && existingInfo && DfContentInfoUtils.isMetaFresh(existingInfo)) {
+        refreshedMetaKeys.add(existingEntry!.key);
+        alreadyFresh++;
+        continue;
+      }
+      remaining.push({ key: contentName, titleHint: existingInfo?.title });
+    }
+    if (alreadyFresh > 0) {
+      logger.log(
+        "info",
+        `Skipping metadata refresh for ${alreadyFresh} of ${contentNames.length} entries - confirmed against the live site recently enough`
+      );
+    }
+    if (remaining.length === 0) {
+      return filterEmpty(await this.db.getContentEntryList([...refreshedMetaKeys]));
+    }
     try {
       this.metaFetchesInProgress++;
       while (remaining.length > 0) {
         const entryBatch = remaining.splice(0, 10);
         const contentInfoResults = await Promise.allSettled(
-          entryBatch.map((contentName) =>
+          entryBatch.map(({ key, titleHint }) =>
             dfFetchWorkerQueue.addWork(async () => {
               // The new site has no per-item lookup endpoint - fetchContentInfo
               // does a best-effort title search, so give it whatever title we
               // already have on record for this entry.
-              const existingEntry = await this.db.getContentEntry(contentName).catch(() => undefined);
-              logger.log("info", `${contentName} has out of date meta; fetching info and patching`);
-              return fetchContentInfo(contentName, existingEntry?.contentInfo?.title, { priority: opts.priority });
+              logger.log("info", `${key} has out of date meta; fetching info and patching`);
+              return fetchContentInfo(key, titleHint, { priority: opts.priority });
             })
           )
         );
@@ -702,11 +740,12 @@ export class DigitalFoundryContentManager {
         const unresolvable: string[] = [];
         contentInfoResults.forEach((result, idx) => {
           if (result.status === "rejected") {
-            logger.log("error", `Failed to fetch meta for ${entryBatch[idx]} ${result.reason}`);
-            unresolvable.push(entryBatch[idx]);
+            logger.log("error", `Failed to fetch meta for ${entryBatch[idx].key} ${result.reason}`);
+            unresolvable.push(entryBatch[idx].key);
           } else {
             logger.log("info", `Successfully fetched meta for ${result.value.contentInfo.key}`);
             const { contentInfo, availability} = result.value;
+            refreshedMetaKeys.add(contentInfo.key);
             toUpdate.push({
               contentInfo,
               availability,
@@ -1259,7 +1298,9 @@ export class DigitalFoundryContentManager {
           downloadDate: new Date(),
           downloadLocation: downloadLocation,
           size: size ? bytesToHumanReadable(size) : undefined,
-          subtitles: subtitles ? [{ service: subtitles.service, language: subtitles.language }] : undefined,
+          subtitles: subtitles
+            ? [{ service: subtitles.service, language: subtitles.language, path: subtitles.path }]
+            : undefined,
         });
         this.queueDeferredSubtitles(dfContentInfo, mediaInfo, downloadLocation);
       }
@@ -1455,7 +1496,10 @@ export class DigitalFoundryContentManager {
       return;
     }
     if (this.startupScanComplete && this.metaFetchesInProgress === 0) {
-      await this.refreshMeta(toRefresh);
+      // force: these entries have no availability record for the *new* tier,
+      // which is a question about entitlement, not about how recently the
+      // metadata was confirmed - the freshness check would wrongly skip them.
+      await this.refreshMeta(toRefresh, { force: true });
     } else {
       // Either the startup sequence hasn't finished yet, or a scan (initial
       // or re-triggered by configUpdated:digitalFoundry) is currently using

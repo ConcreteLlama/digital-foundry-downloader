@@ -31,7 +31,10 @@ export const selectPipelinesInCompletionState = (completionState: "complete" | "
 export const selectPipelineErrors = (pipelineId: string) =>
   createDeepEqualSelector(selectPipelines, (pipelines) => {
     const pipeline = pipelines[pipelineId];
-    const tasks = Object.entries(pipeline.stepTasks);
+    // Guarded because this is no longer only called for failed pipelines -
+    // CompletedTaskStatusDetail asks every completed one, including ids that
+    // have just been cleared out from under it.
+    const tasks = Object.entries(pipeline?.stepTasks ?? {});
     const errors = mapFilterEmpty(tasks, ([, task]) => task.status?.error);
     return errors;
   });

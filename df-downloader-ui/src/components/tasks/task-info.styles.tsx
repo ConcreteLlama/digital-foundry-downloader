@@ -19,7 +19,7 @@ export const CompletedTaskRow = styled(Box)(({ theme }) => ({
   // Fixed columns, not space-between: the format and status have to line up
   // down the list, and with a flexible title between them their position
   // otherwise moved with the length of each title.
-  gridTemplateColumns: "auto minmax(0, 1fr) 7rem 6rem",
+  gridTemplateColumns: "auto minmax(0, 1fr) 7rem 6rem auto",
   alignItems: "center",
   gap: theme.spacing(1),
   width: "100%",
@@ -28,6 +28,6 @@ export const CompletedTaskRow = styled(Box)(({ theme }) => ({
   cursor: "pointer",
   "&:hover": { backgroundColor: theme.palette.action.hover },
   [theme.breakpoints.down("sm")]: {
-    gridTemplateColumns: "auto minmax(0, 1fr) 5rem",
+    gridTemplateColumns: "auto minmax(0, 1fr) 5rem auto",
   },
 }));

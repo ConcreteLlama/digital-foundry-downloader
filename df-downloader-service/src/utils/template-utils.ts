@@ -26,7 +26,13 @@ export const getFileMoveList = (contentEntires: DfContentEntry[], template: stri
         const newFilename = path.normalize(makeFilePathWithTemplate(contentInfo, mediaInfo, template));
         if (!pathIsEqual(oldFilename, newFilename)) {
             acc.push({
-                contentName: contentInfo.name,
+                // `key`, not `name` - the content-status DB (which is what the
+                // move actually has to update) is keyed by `key`, and post
+                // identity-split `name` is a cosmetic title slug that in general
+                // matches nothing there. Passing `name` here meant every move
+                // found no record to update: the file moved, the DB kept pointing
+                // at the old path, and the task still reported success.
+                contentName: contentInfo.key,
                 oldFilename: oldFilename,
                 newFilename: newFilename,
             });

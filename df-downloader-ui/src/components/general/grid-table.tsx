@@ -20,14 +20,14 @@ export const GridTableContent = styled(Box)<{ columnSizes: string[] }>(({ theme,
   display: 'grid',
   gridTemplateColumns: columnSizes.join(' '),
   gap: theme.spacing(2),
-  // Was down('xs'). xs is 0 in MUI v5, so that compiled to
-  // `max-width: -0.05px` and could never match - the single-column fallback
-  // had never once applied. sm is the narrowest breakpoint that means
-  // anything, and a phone is where the Reorganize Files columns actually
-  // stop fitting.
-  [theme.breakpoints.down('sm')]: {
-    gridTemplateColumns: '1fr',
-  },
+  // Deliberately NOT collapsing to a single column on narrow screens. The rows
+  // are display:contents, so their cells are grid items of THIS element -
+  // one column would interleave every row's cells with the headers into one
+  // undifferentiated stack. The original rule was down('xs') (i.e. -0.05px,
+  // never matched); changing it to sm would have shipped that broken layout
+  // instead of a dead rule. The table keeps its columns and scrolls inside
+  // GridContainer instead, which is the honest fit for a low-priority tool.
+  minWidth: 'max-content',
 }));
 
 export type ColumnInfo = {
@@ -55,18 +55,17 @@ export const GridTable = ({ columns, children }: GridTableProps & BoxProps) => {
   );
 }
 
-export const GridRow = styled(Box)(({ theme }) => ({
+/**
+ * display:contents dissolves this element so its cells become grid items of
+ * GridTableContent - that is what keeps columns aligned across rows.
+ *
+ * It also means alignItems, padding, borderBottom and gridTemplateColumns are
+ * all inert on it; they were being set here and had never rendered. They are
+ * gone rather than left to imply row separators that do not exist.
+ */
+export const GridRow = styled(Box)({
   display: 'contents',
-  alignItems: 'center',
-  padding: `${theme.spacing(1)} 0`,
-  borderBottom: `1px solid ${theme.palette.divider}`,
-  [theme.breakpoints.down('xl')]: {
-    gridTemplateColumns: '1fr',
-    '& > *': {
-      marginBottom: theme.spacing(1),
-    },
-  },
-}));
+});
 
 export const GridCell = styled(Box)(({  }) => ({
   alignItems: 'center',

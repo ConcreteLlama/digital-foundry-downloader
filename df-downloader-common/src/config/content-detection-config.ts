@@ -18,9 +18,21 @@ export const ContentDetectionConfig = z.object({
    * new installs (or ones that never touched this setting) get the safer
    * default; existing explicit configs are left alone.
    */
-  contentCheckInterval: z.number().min(30000).default(30 * 60 * 1000),
+  contentCheckInterval: z
+    .number()
+    .min(30000)
+    .default(30 * 60 * 1000)
+    .describe(
+      "How often to look for newly published videos. Digital Foundry publish a few times a day at most and run their own modest infrastructure, so checking far more often than the default mostly adds load without finding anything sooner."
+    ),
   /** The maximum number of pages to check for new content */
-  maxArchivePage: z.number().min(1).default(1000000),
+  maxArchivePage: z
+    .number()
+    .min(1)
+    .default(1000000)
+    .describe(
+      "How far back through the archive a full scan will walk, in pages. The default is effectively unlimited - lower it if you only want recent content catalogued."
+    ),
 });
 export type ContentDetectionConfig = z.infer<typeof ContentDetectionConfig>;
 export const ContentDetectionConfigKey = "contentDetection";

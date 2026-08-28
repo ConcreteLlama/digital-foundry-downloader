@@ -27,6 +27,18 @@ Subtitles can now be generated locally on your own machine instead of being pull
   - Previously nothing recorded that a download had happened until everything after it finished too, so restarting during subtitle generation threw the download away and started over
   - The step a pipeline reached is remembered, so it picks up from there instead of re-downloading. The step that was actually running restarts, but everything before it is kept
   - If the downloaded file has since gone missing, it starts over rather than continuing with a file that isn't there
+- Fixed several things a job could do without telling you anything
+  - A paused download kept its progress bar - pausing at 60% used to empty the bar completely, which looked like the transfer had been thrown away
+  - A queued, paused or waiting job now says so in words. It could previously show a title, an empty bar and two buttons with no explanation anywhere - which mattered most for exactly the case the app pauses deliberately, when it is spacing out its requests to Digital Foundry
+  - A step that cannot report a percentage - most of the steps after the download - now shows moving activity rather than an empty bar indistinguishable from one that has not started
+  - Pause, resume and cancel no longer open the job's details window as well as doing what you asked
+  - Finished jobs can be cleared individually again, not only all at once
+  - After a restart, the history of finished jobs shows which steps were skipped rather than marking them all as never reached
+- The content list is usable from the keyboard again - rows can be tabbed to and opened with Enter or Space, as they could before the list was rebuilt
+- Every job and content state is now told apart by its outline pattern as well as its icon and colour, so the two never rely on colour alone. Measured across the themes, colour by itself was separating some states by as little as one shade of grey
+- Fixed the app icon showing as a blank page in the released build - the file was never actually served, so this has never worked in a real installation
+- The list and grid buttons are now available on a phone. Switching to grid on a phone previously left no way back
+- Changing how many downloads run at once now responds to every click, and saves once when you have finished rather than on each press
 - The Activity page is now a rack rather than a stack of cards
   - Each job shows its pipeline as a row of segments, one per step, with the step that is actually running filling up as it goes - so you can see how far through a step is, not just which step it is on
   - Underneath, the numbers that matter - progress, rate, transferred, time remaining - in a fixed-width typeface so they stop jittering as they change
@@ -72,6 +84,10 @@ Subtitles can now be generated locally on your own machine instead of being pull
   - The page is painted in your theme before the app finishes loading, so there is no flash of the wrong colours on the way in
 - New 'Scan now' button to check for newly published videos immediately, rather than waiting for the next scheduled check
 - The request queue indicator now lists what is actually queued and what each request is doing, instead of only showing counts
+- Opening a video's details no longer asks Digital Foundry about it every single time
+  - The details window refreshed a video's information on every open, and each of those requests waits its turn behind a deliberate gap - so browsing the library felt like everything was being held up, and it put one request on Digital Foundry per item you looked at
+  - Information confirmed against the live site within the last six hours is now reused instead. Anything older, anything never confirmed since the site move, and the check made immediately before a download still ask properly
+  - The queue indicator now also shows requests that have just finished, and whether they succeeded. Quick requests used to vanish before they could be seen, which made the queue look like it only ever delays things
 ### Enhancements
 - The interface has had its foundations reworked, and now looks like a considered piece of software rather than a default one
   - The app finally ships the typefaces it was designed with. It had been asking for fonts that were never included, so on most machines everything fell back to plain Helvetica or Arial - text is now noticeably clearer and more consistent, and it looks the same on every machine because nothing is downloaded from elsewhere
@@ -120,6 +136,16 @@ Subtitles can now be generated locally on your own machine instead of being pull
   - It previously re-requested the last few pages of a completed pass on every restart, which could never turn up anything - those pages hold the oldest content, and newly published videos are found by the separate check that looks at the newest end
   - This means a slightly faster startup, and fewer requests to Digital Foundry from every installation on every restart
   - Deleting db/archive-scan-checkpoint.json still forces a fresh pass through the whole archive if you need one
+- The app now records where a transcript is, and can keep one for you
+  - When subtitles are saved as a separate .srt, the app remembers where it put it, and the file is listed against the download in the content details
+  - New 'keep transcript' option: also save the .srt next to the video even when the subtitles are being embedded in it. Embedding alone leaves nothing you can open, search or read on its own
+  - Off by default - turning it on starts writing new files into a library you already have, so it is your call rather than ours
+  - Existing downloads get their transcript found automatically the first time you open their details, but only if the file is really there. Nothing is guessed and recorded blind, because files move and filenames are yours to configure
+- Settings now explain themselves
+  - Every setting that had no explanation now has one - retry and connection behaviour under Downloads, the archive scan depth, the Pushbullet fields, the log level, and more besides
+  - Where a setting is a trade-off rather than a preference, the text says what you are trading. Opening more connections per download is faster but harder on the server; a shorter gap between checks finds new videos sooner but asks more of Digital Foundry
+  - Explanations that previously only existed as comments in the code, and were never shown to anyone, now appear next to the setting they describe
+  - The Whisper GPU note has moved from a paragraph underneath the checkbox to the checkbox itself, so it reads as part of the setting rather than as a footnote
 ### Bug Fixes
 - Fixed being signed out of the app every time it restarts
   - The key used to sign your login was thrown away and made again on every start, so every browser that was signed in was quietly logged out - including on an unattended restart or an automatic image update
@@ -162,6 +188,12 @@ Subtitles can now be generated locally on your own machine instead of being pull
   - Other awkward characters in titles were already handled - only the slash slipped through, because it's also how you separate folders in your own filename template, so it couldn't simply be stripped out
   - Titles and the other details are now cleaned before your template is applied, so a slash in a title becomes an underscore while the ones you wrote in the template still create folders as intended
   - Anything already filed in the wrong place can be put right with Reorganize Files under Tools, followed by Remove Empty Directories to clear the leftovers
+- Fixed Reorganize Files moving your files without recording where it moved them to
+  - The files themselves were moved correctly, and the tool reported success - but the app carried on believing every one of them was still at its old location
+  - That left it thinking files were missing when they weren't: they no longer appeared as downloaded, and refreshing metadata or generating subtitles on them had nothing to work on
+  - This only affected content added since the move to the new Digital Foundry site - the tool was looking each file up by its title rather than by its actual identity, which happened to be the same thing for older entries carried over from the old site
+  - If you have already run Reorganize Files and hit this, do not run it again - it would now try to move files from the old locations it still has recorded and, if you have 'remove record if missing' turned on, discard those records instead. Run Clear Missing Files under Tools followed by Scan For Existing Content, which finds the files where they actually are and reattaches them
+  - Should this ever fail again, it now reports the affected files as failed rather than as moved
 - Turning to the next page of the content list now takes you back to the top of it. Previously it left you wherever you had scrolled to, so you landed part-way down a page you hadn't seen the start of
 ### Maintenance
 - Removed YouTube subtitle extraction. YouTube no longer serves captions to anything that isn't a web browser, so this had silently stopped working - an empty response is indistinguishable from 'this video has no captions', which is why it went unnoticed. Existing configurations are updated automatically on startup

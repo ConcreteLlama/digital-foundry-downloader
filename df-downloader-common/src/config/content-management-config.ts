@@ -11,15 +11,33 @@ export const ContentManagementConfig = z.object({
     } catch (e) {
       return ctx.addIssue({ code: z.ZodIssueCode.custom, message: makeErrorMessage(e) });
     }
-  }),
+  }).describe(
+    "Names downloaded files and the folders they're filed into. Anything outside a placeholder is used literally, so you can sort content into folders by year, series and so on."
+  ),
   /** If set, the service will scan the destination directory for existing files and add them to the database as downloaded */
-  scanForExistingFiles: z.boolean().default(true),
+  scanForExistingFiles: z
+    .boolean()
+    .default(true)
+    .describe(
+      "Check the destination folder on startup and treat anything already there as downloaded, so files you moved in yourself aren't fetched all over again."
+    ),
   /** Maximum depth to scan for files in the destination directory */
-  maxScanDepth: z.number().min(0).default(3),
+  maxScanDepth: z
+    .number()
+    .min(0)
+    .default(3)
+    .describe(
+      "How many folders deep to look when scanning for existing files. Raise it if your downloads are sorted into nested folders."
+    ),
   /** The directory where downloaded files are stored */
-  destinationDir: z.string().default("df_downloads"),
+  destinationDir: z.string().default("df_downloads").describe("Where finished downloads are filed once they are complete."),
   /** The directory where temporary working files are stored (partial downloads etc) */
-  workDir: z.string().default("work_dir"),
+  workDir: z
+    .string()
+    .default("work_dir")
+    .describe(
+      "Where files are assembled while they are being downloaded and processed, so nothing watching your library ever sees a half-finished file."
+    ),
   /**
    * Write the finished file straight to its destination instead of building
    * it in the work directory and then copying it across.
@@ -56,7 +74,12 @@ export const ContentManagementConfig = z.object({
    * off and no subtitles or chapters, there's no remux to redirect, so the
    * file is simply moved as before.
    */
-  writeDirectToDestination: z.boolean().default(true),
+  writeDirectToDestination: z
+    .boolean()
+    .default(true)
+    .describe(
+      "Assemble the finished file in the destination folder instead of building it in the work directory and copying it across. Roughly halves the disk work after a download, which is worth having on a parity-protected array. The file is only renamed into place once complete, so a media server never sees a partial one. Turn it off if you would rather the rebuild happened on faster scratch storage."
+    ),
 });
 export type ContentManagementConfig = z.infer<typeof ContentManagementConfig>;
 export const ContentManagementConfigKey = "contentManagement";

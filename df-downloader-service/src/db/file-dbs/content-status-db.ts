@@ -169,19 +169,32 @@ export class DfContentAvailabilityDb {
         this.updateDb();
     }
     removeDownloads(downloads: RemoveDownloadOpts[]) {
-        const contentStatuses = this.getContentStatusEntries(downloads.map((d) => d.contentName), true);
+        // createIfNotExists=false: removing/moving a download for a content name
+        // that has no status entry has nothing to do, and creating an empty one
+        // just persists junk keyed by a name that will never be looked up again
+        // (which is exactly what the name-vs-key move bug used to do).
+        const contentStatuses = this.getContentStatusEntries(downloads.map((d) => d.contentName), false);
         downloads.forEach((download) => {
+            // Undefined now that entries are not created on demand - a name with
+            // no status entry simply has nothing to remove.
             const curStatus = contentStatuses[download.contentName];
+            if (!curStatus) {
+                return;
+            }
             curStatus.downloads = curStatus.downloads.filter((d) => !pathIsEqual(d.downloadLocation, download.downloadLocation));
         });
         this.updateDb();
     }
     moveDownloads(moves: MoveDownloadOpts[]) {
-        const contentStatuses = this.getContentStatusEntries(moves.map((m) => m.contentName), true);
+        const contentStatuses = this.getContentStatusEntries(moves.map((m) => m.contentName), false);
         const missingFiles: MoveDownloadOpts[] = [];
         moves.forEach((move) => {
             const curStatus = contentStatuses[move.contentName];
-            const download = curStatus.downloads.find((d) => pathIsEqual(d.downloadLocation, move.oldLocation));
+            // No status entry at all is the same failure as no matching download
+            // within one - the file has moved and nothing recorded it - so it is
+            // reported rather than skipped silently. Without this guard the
+            // dereference below throws part-way through a batch.
+            const download = curStatus?.downloads.find((d) => pathIsEqual(d.downloadLocation, move.oldLocation));
             if (!download) {
                 missingFiles.push(move);
                 return;

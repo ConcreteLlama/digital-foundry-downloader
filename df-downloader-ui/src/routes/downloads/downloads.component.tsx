@@ -1,7 +1,7 @@
 import AddIcon from "@mui/icons-material/Add";
 import RemoveIcon from "@mui/icons-material/Remove";
 import { Box, IconButton, Stack, Tooltip, Typography, useMediaQuery, useTheme } from "@mui/material";
-import { useEffect } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import { TaskList } from "../../components/tasks/task-list.component.tsx";
 import { queryConfigSection, updateConfigSection } from "../../store/config/config.action.ts";
@@ -20,7 +20,7 @@ export const DownloadsPage = () => {
     <DownloadsPageContainer
       id="download-page-container"
       sx={{
-        background: "background.default",
+        bgcolor: "background.default",
         maxWidth: belowMd ? "100vw" : "65vw",
       }}
     >
@@ -36,17 +36,41 @@ const DownloadsPageHeader = () => {
     dispatch(queryConfigSection.start("downloads"));
   }, []);
   const downloadsConfig = useSelector(selectConfigSection("downloads"))!;
-  const maxConcurrentDownloads = downloadsConfig?.maxSimultaneousDownloads;
+  const savedValue = downloadsConfig?.maxSimultaneousDownloads;
+
+  // Clicking + three times used to drop increments: each click read the value
+  // from the last round-trip, so all three computed the same "current + 1".
+  // A local pending value makes the stepper responsive and correct, and the
+  // write is debounced so a burst of clicks rewrites config.yaml once.
+  const [pending, setPending] = useState<number | undefined>(undefined);
+  const configRef = useRef(downloadsConfig);
+  configRef.current = downloadsConfig;
+  const writeTimer = useRef<ReturnType<typeof setTimeout>>();
+  const maxConcurrentDownloads = pending ?? savedValue;
+
+  useEffect(() => {
+    // Once the server echoes the value back, stop overriding it locally.
+    if (pending !== undefined && savedValue === pending) {
+      setPending(undefined);
+    }
+  }, [savedValue, pending]);
+
+  useEffect(() => () => clearTimeout(writeTimer.current), []);
+
   const setMaxConcurrentDownloads = (newVal: number) => {
-    dispatch(
-      updateConfigSection.start({
-        section: "downloads",
-        value: {
-          ...downloadsConfig,
-          maxSimultaneousDownloads: newVal,
-        },
-      })
-    );
+    setPending(newVal);
+    clearTimeout(writeTimer.current);
+    writeTimer.current = setTimeout(() => {
+      dispatch(
+        updateConfigSection.start({
+          section: "downloads",
+          value: {
+            ...configRef.current,
+            maxSimultaneousDownloads: newVal,
+          },
+        })
+      );
+    }, 500);
   };
   return (
     <Box

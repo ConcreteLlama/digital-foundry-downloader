@@ -32,8 +32,18 @@ export const ContentGridCard = ({ dfContentName, onClick }: ContentGridCardProps
   return (
     <Box
       onClick={onClick}
+      role="button"
+      tabIndex={0}
+      aria-label={contentInfo.title}
+      onKeyDown={(event) => {
+        if (event.key === "Enter" || event.key === " ") {
+          event.preventDefault();
+          onClick();
+        }
+      }}
       sx={{
         position: "relative",
+        "&:focus-visible": { outline: "2px solid", outlineColor: "primary.main", outlineOffset: "-2px" },
         display: "flex",
         flexDirection: "column",
         border: "1px solid",

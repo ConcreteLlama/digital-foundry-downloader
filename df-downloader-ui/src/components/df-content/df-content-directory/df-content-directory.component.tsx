@@ -182,8 +182,11 @@ const TopBar = ({ density, onDensity, view, onView, compact }: TopBarProps) => {
       <DfQuickSearch clear={quickSearchClear} setClear={setQuickSearchClear} />
       <DfAdvancedSearchButton onClick={() => setQuickSearchClear(true)} />
       <ClearDfSearchButton onClick={() => setQuickSearchClear(true)} />
-      {!compact && (
-        <>
+      {/* Shown at every width: hiding these below md meant a phone that
+          landed in grid view had no way back out of it. Density is desktop-only
+          because the mobile row has a single density. */}
+      <>
+        {!compact && (
           <ToggleButtonGroup
             size="small"
             exclusive
@@ -202,20 +205,20 @@ const TopBar = ({ density, onDensity, view, onView, compact }: TopBarProps) => {
               </Tooltip>
             </ToggleButton>
           </ToggleButtonGroup>
-          <ToggleButtonGroup size="small" exclusive value={view} onChange={(_, next) => next && onView(next)}>
+        )}
+        <ToggleButtonGroup size="small" exclusive value={view} onChange={(_, next) => next && onView(next)}>
             <ToggleButton value="list" sx={{ paddingY: 0.25 }}>
               <Tooltip title="List">
                 <ViewListIcon fontSize="small" />
               </Tooltip>
             </ToggleButton>
-            <ToggleButton value="grid" sx={{ paddingY: 0.25 }}>
-              <Tooltip title="Grid">
-                <GridViewIcon fontSize="small" />
-              </Tooltip>
-            </ToggleButton>
-          </ToggleButtonGroup>
-        </>
-      )}
+          <ToggleButton value="grid" sx={{ paddingY: 0.25 }}>
+            <Tooltip title="Grid">
+              <GridViewIcon fontSize="small" />
+            </Tooltip>
+          </ToggleButton>
+        </ToggleButtonGroup>
+      </>
     </Box>
   );
 };

@@ -130,18 +130,28 @@ const TrackSegment = ({
   const spec = STEP_SPECS[visual];
   const StepIcon = spec.icon;
 
-  // Only the running segment shows partial fill; everything else is all or
-  // nothing, which is what makes the partial one legible at a glance.
+  // Paused counts as in-progress here: pausing a download at 60% used to empty
+  // its bar completely, which read as "lost everything" rather than "stopped".
+  const holdsProgress = visual === "running" || visual === "paused";
+  const hasPercent = typeof activePercent === "number";
   const fillPercent =
-    visual === "running" && typeof activePercent === "number"
+    holdsProgress && hasPercent
       ? Math.min(Math.max(activePercent, 0), 100)
       : visual === "done" || visual === "failed" || visual === "cancelled"
       ? 100
       : 0;
+  // A running step that cannot report a percentage (most non-download steps)
+  // would otherwise render as an empty bar, indistinguishable from pending.
+  const indeterminate = visual === "running" && !hasPercent;
 
   return (
     <Tooltip title={message ? `${name} - ${message}` : name}>
-      <Box sx={{ flex: 1, minWidth: 0 }}>
+      <Box
+        tabIndex={0}
+        role="img"
+        aria-label={message ? `${name} - ${message}` : `${name} - ${visual}`}
+        sx={{ flex: 1, minWidth: 0, "&:focus-visible": { outline: "2px solid", outlineColor: "primary.main" } }}
+      >
         <Box
           sx={{
             height: 4,
@@ -152,23 +162,46 @@ const TrackSegment = ({
           }}
         >
           <Box
-            sx={{
-              height: "100%",
-              width: `${fillPercent}%`,
-              backgroundColor: spec.fill,
-              transition: "width 400ms linear",
-            }}
+            sx={
+              indeterminate
+                ? {
+                    height: "100%",
+                    width: "100%",
+                    backgroundImage: `linear-gradient(90deg, transparent 0%, ${"currentColor"} 50%, transparent 100%)`,
+                    color: spec.fill,
+                    backgroundSize: "40% 100%",
+                    backgroundRepeat: "no-repeat",
+                    animation: "df-track-indeterminate 1200ms ease-in-out infinite",
+                    "@keyframes df-track-indeterminate": {
+                      from: { backgroundPosition: "-40% 0" },
+                      to: { backgroundPosition: "140% 0" },
+                    },
+                    "@media (prefers-reduced-motion: reduce)": {
+                      animation: "none",
+                      backgroundSize: "100% 100%",
+                      opacity: 0.5,
+                    },
+                  }
+                : {
+                    height: "100%",
+                    width: `${fillPercent}%`,
+                    backgroundColor: spec.fill,
+                    transition: "width 400ms linear",
+                  }
+            }
           />
           {/* Skipped reads as a hatched segment rather than an empty one, so
               "never ran" is distinguishable from "not yet". */}
-          {visual === "skipped" && (
+          {(visual === "skipped" || visual === "paused") && (
             <Box
               sx={{
                 position: "absolute",
                 inset: 0,
                 backgroundImage:
-                  "repeating-linear-gradient(45deg, currentColor 0 2px, transparent 2px 5px)",
-                color: "text.disabled",
+                  visual === "paused"
+                    ? "repeating-linear-gradient(90deg, currentColor 0 2px, transparent 2px 6px)"
+                    : "repeating-linear-gradient(45deg, currentColor 0 2px, transparent 2px 5px)",
+                color: visual === "paused" ? spec.colour : "text.disabled",
                 opacity: 0.6,
               }}
             />

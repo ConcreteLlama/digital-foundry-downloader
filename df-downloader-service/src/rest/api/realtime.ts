@@ -1,7 +1,7 @@
 import { QueueStatusResponse } from "df-downloader-common";
 import express, { Request, Response } from "express";
 import { DigitalFoundryContentManager } from "../../df-content-manager.js";
-import { getDfRequestQueueStatus } from "../../df-request-queue.js";
+import { dfRequestQueueBusy, dfRequestQueueEvents, getDfRequestQueueStatus } from "../../df-request-queue.js";
 import { StreamBroadcaster, StreamChannel } from "../realtime/stream-broadcaster.js";
 import { makeBuildTasksResponse } from "./tasks-response.js";
 
@@ -37,19 +37,27 @@ export const makeRealtimeRouter = (contentManager: DigitalFoundryContentManager)
         newContentCheckInProgress: contentManager.newContentCheckRunning,
         signedInToDf: contentManager.signedInToDf,
       }),
-      // Deliberately always "active" rather than gated on the queue being
-      // non-empty. df-request-queue.ts has no event emitter at all, and the
-      // fields outside the queue itself (sign-in state, scan flags) can change
-      // with the queue completely idle - gating on queue depth would let those
-      // go stale exactly as they never did under the old 5s poll.
-      //
-      // This costs nothing on the wire: the payload is small and entirely
-      // in-memory to build (no DB, no IO), and the broadcaster's per-channel
-      // dedupe means an unchanged status is never actually sent. The queue's
-      // countdowns are absolute timestamps the client renders locally, so a
-      // waiting queue serializes identically every tick and stays silent too.
-      // Net effect is push-like latency with less traffic than the 5s poll.
-      hasActiveWork: () => true,
+      // The queue pushes its own changes now, so transitions arrive
+      // immediately instead of on the next sample - which is what made a
+      // request that skipped the spacing gate observable at all, since one
+      // could previously start and finish entirely between two 1s samples.
+      subscribe: (onChange) => {
+        dfRequestQueueEvents.on("changed", onChange);
+        return () => dfRequestQueueEvents.off("changed", onChange);
+      },
+      // Sampling stays on as a safety net for the parts of this snapshot the
+      // queue can't announce: scanInProgress/newContentCheckInProgress/
+      // signedInToDf are getters derived from mutable state with no single
+      // mutation point, so there's nothing to subscribe to without scattering
+      // emits across the content manager and risking a permanently stale flag
+      // when one is missed. Narrowed from the previous unconditional `true`
+      // to "something is actually happening": while a scan or check runs, and
+      // while any request is tracked - which, thanks to the post-completion
+      // linger, extends a few seconds past the last request and so covers
+      // sign-in state, which flips just after the DF request that determined
+      // it has already finished. Fully idle now samples nothing at all.
+      hasActiveWork: () =>
+        dfRequestQueueBusy() || contentManager.scanInProgress || contentManager.newContentCheckRunning,
     },
   ];
 

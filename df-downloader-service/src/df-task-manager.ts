@@ -737,6 +737,12 @@ export const makeTaskPipelineInfoFromPersisted = (
       }, {}),
     },
     pipelineStatus: {
+      // The last step that actually produced a result. Without this the UI's
+      // pipeline track has no reference point, so every step lacking a result
+      // renders as "pending" (never reached) rather than "skipped" (passed
+      // over) - which is exactly the distinction the track exists to draw, and
+      // it was wrong for all restored history after a restart.
+      currentStep: [...record.stepOrder].reverse().find((stepId) => record.stepResults[stepId]),
       statusMessage:
         record.result === "success"
           ? "Completed"

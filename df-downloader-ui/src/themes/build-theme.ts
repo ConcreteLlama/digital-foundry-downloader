@@ -22,6 +22,17 @@ import { UiPalette } from "df-downloader-common/config/ui-config";
 
 const uiFontFamily = "'Archivo Variable', 'Helvetica Neue', Arial, sans-serif";
 
+/**
+ * The width below which the nav rail defaults to icon-only.
+ *
+ * Deliberately NOT a global breakpoint: md (720) is the desktop/mobile switch,
+ * and this is a different question - "is there room for a 212px rail as well as
+ * the content". Exported so the default and the media query that follows it
+ * cannot drift apart, which is exactly what happened when it was a literal 900
+ * left behind after md moved from 900 to 720.
+ */
+export const NARROW_RAIL_MAX_WIDTH = 900;
+
 /** Exposed so components rendering figures can opt into tabular numerals. */
 export const monoFontFamily = "'JetBrains Mono Variable', 'SFMono-Regular', Consolas, monospace";
 

@@ -62,8 +62,32 @@ export const DfContentInfo = z
      * A manual "refresh metadata" retry is unaffected by this flag.
      */
     unpatchable: z.boolean().default(false),
+    /**
+     * When this record's data was last confirmed against the live Digital
+     * Foundry site - stamped by parseListingItem, so it covers every path
+     * that produces live data (archive scan, refreshMeta, the link refresh
+     * before a download). Absent on entries written before this field
+     * existed and on manually-added content, both of which count as "not
+     * fresh". See isMetaFresh.
+     */
+    metaRefreshedAt: z.coerce.date().optional(),
   })
   .strict();
+
+/**
+ * How long a live-confirmed record stays good enough to reuse without
+ * re-asking Digital Foundry. The content detail dialog fires a metadata
+ * refresh every time it opens, so without a TTL, browsing the library costs
+ * one DF request per item viewed - each queued behind the randomized 5-15s
+ * spacing gate (see df-request-queue.ts), which is what made the queue look
+ * like it was delaying everything.
+ *
+ * Deliberately a constant rather than config: what the refresh actually
+ * catches (a newly-added format, an item becoming available) is already
+ * covered within this window by the recurring content check, and
+ * downloadContent() re-fetches the download link live regardless of this.
+ */
+export const META_FRESHNESS_TTL_MS = 6 * 60 * 60 * 1000;
 
 export type DfContentInfo = z.infer<typeof DfContentInfo>;
 
@@ -98,6 +122,20 @@ export const DfContentInfoUtils = {
     legacy: legacy || false,
     unpatchable: unpatchable || false,
   }),
+  /**
+   * Whether this record's data was confirmed against the live site recently
+   * enough to serve without re-fetching. `legacy` entries are never fresh
+   * regardless of the timestamp: their data has never been confirmed against
+   * the post-relaunch site at all, and the detail dialog's automatic refresh
+   * is the only recovery path the UI offers for them (see the legacy tooltip
+   * in start-download-dialog.component.tsx).
+   */
+  isMetaFresh: (contentInfo: DfContentInfo, ttlMs: number = META_FRESHNESS_TTL_MS): boolean => {
+    if (contentInfo.legacy || !contentInfo.metaRefreshedAt) {
+      return false;
+    }
+    return Date.now() - contentInfo.metaRefreshedAt.getTime() < ttlMs;
+  },
   extractDateFromName(name: string) {
     const dateStr = name.substring(0, "0000-00-00".length);
     return new Date(Date.parse(dateStr));

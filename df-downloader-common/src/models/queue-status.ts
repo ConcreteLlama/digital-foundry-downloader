@@ -8,8 +8,15 @@ import { z } from "zod";
  * randomized 5-15s spacing gate rather than actually talking to DF (see
  * df-request-queue.ts), and reporting that as "in flight" described a
  * request that hadn't been sent yet.
+ *
+ * `done` is a finished request deliberately kept in the list for a few
+ * seconds (see DONE_LINGER_MS in df-request-queue.ts). Without it the queue
+ * popover structurally could only ever show delayed requests: the status
+ * stream samples once a second, so a request that skipped the spacing gate
+ * entirely was usually gone before it was ever sampled - which made every
+ * request look like it had been delayed, including the first one.
  */
-export const DfRequestPhase = z.enum(["queued", "waiting", "in_flight", "backing_off"]);
+export const DfRequestPhase = z.enum(["queued", "waiting", "in_flight", "backing_off", "done"]);
 export type DfRequestPhase = z.infer<typeof DfRequestPhase>;
 
 export const DfRequestEntry = z.object({
@@ -25,6 +32,12 @@ export const DfRequestEntry = z.object({
   waitingUntil: z.number().nullable(),
   /** Backoff retries so far - 0 until DF actually rate-limits this request. */
   attempt: z.number(),
+  /**
+   * Only meaningful while phase is `done`: whether the request ended in an
+   * error rather than a response. Reporting every finished request as "sent"
+   * would quietly hide failures.
+   */
+  failed: z.boolean().default(false),
 });
 export type DfRequestEntry = z.infer<typeof DfRequestEntry>;
 

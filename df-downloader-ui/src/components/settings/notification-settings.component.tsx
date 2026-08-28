@@ -1,7 +1,7 @@
 import { DfSettingsSectionForm } from "./df-settings-section-form.component";
 import { Fragment, useState } from "react";
 import { Box, Button, IconButton, Typography, Select, MenuItem, InputLabel } from "@mui/material";
-import { CheckboxElement, MultiSelectElement, useFormContext, useWatch } from "react-hook-form-mui";
+import { MultiSelectElement, useFormContext, useWatch } from "react-hook-form-mui";
 import {
   AllNotificationServiceKeys,
   NotificationsConfig,
@@ -10,6 +10,7 @@ import {
 } from "df-downloader-common/config/notifications-config";
 import { DfNotificationType } from "df-downloader-common";
 import DeleteIcon from "@mui/icons-material/Delete";
+import { ZodCheckboxField } from "../zod-fields/zod-checkbox-field.component";
 import { ZodTextField } from "../zod-fields/zod-text-field.component";
 
 export const NotificationSettingsForm = () => {
@@ -78,7 +79,11 @@ const PushbulletSettings = ({ remove }: PushbulletSettingsProps) => {
           <DeleteIcon fontSize="small" />
         </IconButton>
       </Box>
-      <CheckboxElement name={`${PUSHBULLET_KEY}.enabled`} label="Enabled" />
+      <ZodCheckboxField
+        name={`${PUSHBULLET_KEY}.enabled`}
+        label="Enabled"
+        zodBoolean={PushbulletNotificationsConfig.shape.enabled}
+      />
       <PushbulletApiKeyField />
       <MultiSelectElement
         variant="outlined"

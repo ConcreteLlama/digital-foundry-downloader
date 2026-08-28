@@ -129,22 +129,43 @@ export const StartDownloadingButton = ({ contentEntry, mediaFormat, label, disab
       <Tooltip title={tooltip}>
         {trigger ? (
           <Box
+            component="button"
+            type="button"
+            disabled={buttonDisabled}
             onClick={buttonDisabled ? undefined : () => setDialogOpen(true)}
+            aria-label={tooltip}
             sx={{
-              cursor: buttonDisabled ? undefined : "pointer",
+              background: "none",
+              border: "none",
+              padding: 0,
+              font: "inherit",
+              color: "inherit",
+              textAlign: "inherit",
+              cursor: buttonDisabled ? "default" : "pointer",
               opacity: buttonDisabled ? 0.6 : 1,
+              "&:focus-visible": { outline: "2px solid", outlineColor: "primary.main", outlineOffset: 2 },
             }}
           >
             {trigger}
           </Box>
         ) : label ? (
           <Box
+            component="button"
+            type="button"
+            disabled={buttonDisabled}
+            aria-label={tooltip}
             sx={{
               display: "flex",
-              alignItems: "center", 
+              alignItems: "center",
               gap: 1,
-              cursor: buttonDisabled ? undefined : "pointer", "&:hover": buttonDisabled ? undefined : { color: "primary.main" },
+              background: "none",
+              border: "none",
+              padding: 0,
+              font: "inherit",
+              cursor: buttonDisabled ? "default" : "pointer",
+              "&:hover": buttonDisabled ? undefined : { color: "primary.main" },
               color: buttonDisabled ? "text.disabled" : "text.primary",
+              "&:focus-visible": { outline: "2px solid", outlineColor: "primary.main", outlineOffset: 2 },
             }}
             onClick={buttonDisabled ? undefined : () => setDialogOpen(true)}
           >

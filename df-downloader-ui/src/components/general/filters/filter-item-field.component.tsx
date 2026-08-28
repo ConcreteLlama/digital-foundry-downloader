@@ -47,12 +47,12 @@ const StringFilterField = ({ fieldName, label }: StringFilterFieldProps) => {
           <ZodTextField
             name={`${fieldName}.value`}
             label="Value"
-            zodString={StringFilter.shape.value._def.innerType}
+            zodString={StringFilter.shape.value}
             sx={{ width: "100%" }}
           />
         </Grid>
         <Grid item xs={6} md={2}>
-          <ZodSelectField name={`${fieldName}.mode`} label="Mode" zodEnum={StringFilter.shape.mode._def.innerType} />
+          <ZodSelectField name={`${fieldName}.mode`} label="Mode" zodEnum={StringFilter.shape.mode} />
         </Grid>
         <Grid item xs={6} md={2}>
           <CheckboxElement name={`${fieldName}.caseSensitive`} label="Case Sensitive" />

@@ -1,6 +1,7 @@
 import { logger, randomIntInRange } from "df-downloader-common";
 import { configService } from "./config/config.js";
 import { WorkerQueue } from "./utils/queue-utils.js";
+import { TypedEventEmitter } from "./utils/event-emitter.js";
 
 /**
  * Single gate for every HTTP request this app makes to digitalfoundry.net
@@ -63,7 +64,43 @@ let backingOffUntil = 0;
  * the spacing gate (5-15s) rather than actually talking to DF, so a bare
  * "request in flight: yes" was reporting a request that hadn't been sent.
  */
-export type DfRequestPhase = "queued" | "waiting" | "in_flight" | "backing_off";
+export type DfRequestPhase = "queued" | "waiting" | "in_flight" | "backing_off" | "done";
+
+/**
+ * How long a finished request stays in the tracked list before being dropped.
+ *
+ * A request that skips the spacing gate can be over in a few hundred
+ * milliseconds. Dropping it the instant it finished meant the queue popover
+ * could realistically only ever show requests that had been *delayed* - which
+ * is what made the queue look like it delays everything, including the first
+ * request, when in fact an idle-queue request is sent immediately. The
+ * emitter below means the finish is now pushed rather than waited for, but a
+ * row still has to stay on screen long enough to read. Long enough to be
+ * seen, short enough not to leave stale rows behind.
+ */
+const DONE_LINGER_MS = 5000;
+
+/**
+ * Fires whenever anything in the tracked-request list changes - a request
+ * queued, entering the spacing gate, sent, backing off, finished, or dropped
+ * after its linger. Lets the realtime stream push queue updates the moment
+ * they happen instead of noticing them on its next sample, which mattered
+ * most for the transitions that are over in well under the 1s sample
+ * interval (see stream-broadcaster.ts).
+ */
+export const dfRequestQueueEvents = new TypedEventEmitter<{ changed: undefined }>();
+const emitChanged = () => dfRequestQueueEvents.emit("changed", undefined);
+
+/**
+ * Whether the queue has anything worth watching - including requests still in
+ * their post-completion linger. The realtime stream uses this to decide
+ * whether to keep sampling: the status snapshot also carries flags derived
+ * from the content manager (scan/check/sign-in state) that no event here
+ * announces, and sign-in state in particular flips just *after* the DF request
+ * that determined it has already finished. Staying "busy" through the linger
+ * covers that without sampling around the clock.
+ */
+export const dfRequestQueueBusy = () => trackedRequests.size > 0;
 
 export type DfRequestEntry = {
   id: number;
@@ -78,6 +115,12 @@ export type DfRequestEntry = {
   waitingUntil: number | null;
   /** Backoff retries so far - 0 until DF actually rate-limits this request. */
   attempt: number;
+  /**
+   * Only meaningful while phase is `done`: whether the request ended in an
+   * error rather than a response. Reporting every finished request as "sent"
+   * would quietly hide failures.
+   */
+  failed: boolean;
 };
 
 let nextRequestId = 1;
@@ -113,9 +156,27 @@ const trackRequest = (label: string, priority: number, bypassedQueue: boolean): 
     startedWaitingAt: Date.now(),
     waitingUntil: null,
     attempt: 0,
+    failed: false,
   };
   trackedRequests.set(entry.id, entry);
+  emitChanged();
   return entry;
+};
+
+/**
+ * Mark a request finished and drop it after DONE_LINGER_MS rather than
+ * immediately - see DONE_LINGER_MS. unref()'d so a pending linger never holds
+ * the process open during shutdown.
+ */
+const finishRequest = (entry: DfRequestEntry, failed: boolean) => {
+  entry.phase = "done";
+  entry.waitingUntil = null;
+  entry.failed = failed;
+  emitChanged();
+  setTimeout(() => {
+    trackedRequests.delete(entry.id);
+    emitChanged();
+  }, DONE_LINGER_MS).unref?.();
 };
 
 const waitForSpacing = async (entry?: DfRequestEntry) => {
@@ -127,12 +188,14 @@ const waitForSpacing = async (entry?: DfRequestEntry) => {
     if (entry) {
       entry.phase = "waiting";
       entry.waitingUntil = Date.now() + waitMs;
+      emitChanged();
     }
     await sleep(waitMs);
   }
   if (entry) {
     entry.phase = "in_flight";
     entry.waitingUntil = null;
+    emitChanged();
   }
   lastRequestStartedAt = Date.now();
 };
@@ -160,6 +223,7 @@ const runWithBackoff = async (input: string, init?: RequestInit, entry?: DfReque
     if (entry) {
       entry.phase = "in_flight";
       entry.waitingUntil = null;
+      emitChanged();
     }
     const response = await fetch(input, init);
     if (!THROTTLE_STATUS_CODES.has(response.status)) {
@@ -185,6 +249,7 @@ const runWithBackoff = async (input: string, init?: RequestInit, entry?: DfReque
       entry.waitingUntil = backingOffUntil;
       entry.attempt = attempt;
     }
+    emitChanged();
     await sleep(backoffMs);
     backingOffUntil = 0;
   }
@@ -211,7 +276,10 @@ export const getDfRequestQueueStatus = () => ({
     // will be serviced: higher priority first, then oldest first (matching
     // WorkerQueue's priority comparator).
     .sort((a, b) => {
-      const phaseRank = (entry: DfRequestEntry) => (entry.phase === "queued" ? 1 : 0);
+      // Whatever is happening now, then what's still to come, then what has
+      // just finished - reading top-to-bottom as present, future, past.
+      const phaseRank = (entry: DfRequestEntry) =>
+        entry.phase === "done" ? 2 : entry.phase === "queued" ? 1 : 0;
       return (
         phaseRank(a) - phaseRank(b) || b.priority - a.priority || a.startedWaitingAt - b.startedWaitingAt
       );
@@ -246,16 +314,21 @@ export const dfFetch = async (
   try {
     if (opts.bypassQueue) {
       lastRequestStartedAt = Date.now();
-      return await runWithBackoff(input, init, entry);
+      const response = await runWithBackoff(input, init, entry);
+      finishRequest(entry, false);
+      return response;
     }
-    return await dfSiteRequestQueue.addWork(
+    const response = await dfSiteRequestQueue.addWork(
       async () => {
         await waitForSpacing(entry);
         return runWithBackoff(input, init, entry);
       },
       { priority: opts.priority }
     );
-  } finally {
-    trackedRequests.delete(entry.id);
+    finishRequest(entry, false);
+    return response;
+  } catch (e) {
+    finishRequest(entry, true);
+    throw e;
   }
 };

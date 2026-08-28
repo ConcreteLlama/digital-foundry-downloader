@@ -102,8 +102,7 @@ const DfSessionIdField = () => {
           name="sessionId"
           label="Autologin Cookie"
           isPassword={true}
-          zodString={DfConfig.shape.sessionId._def.innerType}
-          helperText="Paste the value of the 'autologin' cookie from your browser after signing in to digitalfoundry.net"
+          zodString={DfConfig.shape.sessionId}
           onChange={() => setTestState({ status: "idle" })}
         />
         <Button
