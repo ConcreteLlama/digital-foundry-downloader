@@ -92,6 +92,11 @@ Subtitles can now be generated locally on your own machine instead of being pull
 - Sponsor messages in descriptions are moved to the end so a video's description starts with what the video is actually about. Nothing is deleted
 - Fixed descriptions displaying as one unbroken block of text, both in the web UI and in the downloaded files' own metadata (so also in Plex, Jellyfin and similar)
 - Fixed subtitle files being read as a single subtitle containing the entire file, which affected refreshing metadata on already-downloaded content
+- Fixed video titles containing a slash creating stray folders
+  - A title like 'Resonance: A Plague Tale Legacy - PS5/PS5 Pro/Series X/S Tech Review' was filed three folders deeper than it should have been, scattered under directories that shouldn't exist
+  - Other awkward characters in titles were already handled - only the slash slipped through, because it's also how you separate folders in your own filename template, so it couldn't simply be stripped out
+  - Titles and the other details are now cleaned before your template is applied, so a slash in a title becomes an underscore while the ones you wrote in the template still create folders as intended
+  - Anything already filed in the wrong place can be put right with Reorganize Files under Tools, followed by Remove Empty Directories to clear the leftovers
 ### Maintenance
 - Removed YouTube subtitle extraction. YouTube no longer serves captions to anything that isn't a web browser, so this had silently stopped working - an empty response is indistinguishable from 'this video has no captions', which is why it went unnoticed. Existing configurations are updated automatically on startup
 ### Known Issues

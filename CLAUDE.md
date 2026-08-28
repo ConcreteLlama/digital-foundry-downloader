@@ -90,6 +90,27 @@ real Unraid deployment, on top of the Phase 1 work above:
   upgrading (pasting a fresh cookie into an already-running app raced the scan it
   triggers), and hardened scan/refresh/download paths to hard no-op while signed out.
 
+**Filename template path-separator fix (2026-08-28)**: a "/" (or "\\") inside an
+interpolated value — most commonly `{{title}}`, e.g. "PS5/PS5 Pro/Series X/S Tech
+Review" — used to survive into the rendered path and be honoured as a real separator,
+silently creating spurious nested directories under `destinationDir`. Sanitization was
+running, but only on the *rendered* output (`sanitizeFilePath`), which by design splits
+on separators and sanitizes each part — so ":" was correctly replaced while "/" was not.
+Values are now sanitized individually in `generateFilenameTemplateVarMap`
+(`filename-template-utils.ts`) *before* substitution, which is the only point where a
+user-authored separator in the template ("{{YYYY}}/{{title}}") is still distinguishable
+from one that came out of the content. `tagsArray` is exempt (`rawValue: true`) since it
+is only ever helper input for `ifTag`/`ifIn`, never rendered. The URL-derived
+`mediaInfo.mediaFilename` is now sanitized on the workDir paths too
+(`makeDfDownloadParams`, `DfTaskManager.downloadContent`) — it is percent-decoded, so it
+could carry a separator as well.
+
+  *Already-downloaded files sitting under the wrong nested paths need no bespoke
+  migration*: the existing batch-move tooling now computes correct destinations, so
+  Tools → Reorganize Files (`POST /api/content/preview-move` then `/move-files`) with the
+  unchanged template will list and relocate them, and `POST /api/content/remove-empty-dirs`
+  clears the leftover spurious directories.
+
 ## Repo layout
 
 Three-package monorepo, linked via **npm workspaces** (root `package.json`'s
