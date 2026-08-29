@@ -21,7 +21,7 @@ import { useEffect, useMemo, useState } from "react";
 import { fetchGameIndex } from "../../api/ai-analysis.ts";
 import { MiddleModal } from "../general/middle-modal.component.tsx";
 import { DfContentInfoItemDetail } from "../df-content/df-content-item-detail/df-content-item-detail.component.tsx";
-import { formatDate } from "../../utils/date.ts";
+import { conciseFormatDate } from "../../utils/date.ts";
 import { monoFontFamily } from "../../themes/build-theme.ts";
 
 /**
@@ -42,41 +42,56 @@ import { monoFontFamily } from "../../themes/build-theme.ts";
  * construction, not merely incomplete.
  */
 const CoverageNote = ({ data }: { data: GameIndexResponse }) => (
-  <Alert severity="info" variant="outlined" sx={{ mb: 2 }}>
-    Drawn from {data.analysedCount} analysed{" "}
-    {data.analysedCount === 1 ? "item" : "items"} of {data.libraryCount.toLocaleString()} in your library
-    {data.ungroupedCount > 0 && (
-      <>
-        {" "}
-        · {data.ungroupedCount} carried no game name (discussions and hands-on previews do not)
-      </>
-    )}
-    . This is not a view of everything Digital Foundry have covered.
+  <Alert
+    severity="info"
+    variant="outlined"
+    sx={{ py: 0.25, "& .MuiAlert-message": { py: 0.5 }, "& .MuiAlert-icon": { py: 0.75 } }}
+  >
+    <Typography variant="caption" sx={{ color: "text.secondary" }}>
+      {data.analysedCount} of {data.libraryCount.toLocaleString()} analysed
+      {data.ungroupedCount > 0 && ` · ${data.ungroupedCount} without a game name`} · not a view of your whole library
+    </Typography>
   </Alert>
 );
 
 const GroupRow = ({ group, onOpen }: { group: GameGroup; onOpen: (contentKey: string) => void }) => {
-  const platforms = [...new Set(group.items.flatMap((item) => item.platforms))];
+  const allPlatforms = [...new Set(group.items.flatMap((item) => item.platforms))];
+  // Capped rather than wrapped: the full set pushed the header onto three
+  // lines on a phone, which made a list of games unscannable.
+  const platforms = allPlatforms.slice(0, 3);
+  const extraPlatforms = allPlatforms.length - platforms.length;
   return (
     <Accordion disableGutters variant="outlined" defaultExpanded={group.items.length > 1}>
       <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-        <Stack direction="row" spacing={1.5} alignItems="center" flexWrap="wrap" useFlexGap sx={{ width: "100%" }}>
-          <Typography sx={{ fontWeight: 600 }}>{group.name}</Typography>
+        <Stack direction="row" spacing={0.75} alignItems="center" flexWrap="wrap" useFlexGap sx={{ width: "100%" }}>
+          <Typography variant="body2" sx={{ fontWeight: 600 }}>
+            {group.name}
+          </Typography>
           <Chip
             size="small"
             variant="outlined"
-            label={`${group.items.length} ${group.items.length === 1 ? "video" : "videos"}`}
-            sx={{ height: 20, fontSize: "0.7rem" }}
+            label={group.items.length === 1 ? "1 video" : `${group.items.length} videos`}
+            sx={{ height: 18, fontSize: "0.65rem" }}
           />
-          {platforms.slice(0, 4).map((platform) => (
+          {platforms.map((platform) => (
             <Chip
               key={platform}
               size="small"
               variant="outlined"
               label={platform}
-              sx={{ height: 20, fontSize: "0.7rem", color: "text.disabled" }}
+              sx={{ height: 18, fontSize: "0.65rem", color: "text.disabled" }}
             />
           ))}
+          {extraPlatforms > 0 && (
+            <Tooltip title={allPlatforms.join(" · ")}>
+              <Chip
+                size="small"
+                variant="outlined"
+                label={`+${extraPlatforms}`}
+                sx={{ height: 18, fontSize: "0.65rem", color: "text.disabled" }}
+              />
+            </Tooltip>
+          )}
           {/* More than one spelling reached this group, so say so rather
               than presenting a tidy heading as if the data were tidy. */}
           {group.variants.length > 1 && (
@@ -119,7 +134,7 @@ const GroupRow = ({ group, onOpen }: { group: GameGroup; onOpen: (contentKey: st
               // replacement for it - every row leads to the full panel
               // rather than restating a trimmed version of it here.
               sx={{
-                py: 1.25,
+                py: 1,
                 px: 1,
                 mx: -1,
                 borderRadius: 1,
@@ -136,7 +151,7 @@ const GroupRow = ({ group, onOpen }: { group: GameGroup; onOpen: (contentKey: st
                   variant="caption"
                   sx={{ color: "text.disabled", fontFamily: monoFontFamily, whiteSpace: "nowrap" }}
                 >
-                  {formatDate(item.publishedDate)}
+                  {conciseFormatDate(item.publishedDate)}
                 </Typography>
               </Stack>
               <Stack direction="row" spacing={0.75} alignItems="center" flexWrap="wrap" useFlexGap sx={{ mt: 0.5 }}>
@@ -145,7 +160,7 @@ const GroupRow = ({ group, onOpen }: { group: GameGroup; onOpen: (contentKey: st
                   variant="outlined"
                   color="primary"
                   label={AiContentTypeLabels[item.contentType]}
-                  sx={{ height: 20, fontSize: "0.7rem" }}
+                  sx={{ height: 18, fontSize: "0.65rem" }}
                 />
                 {item.engine && (
                   <Typography variant="caption" sx={{ color: "text.secondary" }}>
@@ -170,7 +185,18 @@ const GroupRow = ({ group, onOpen }: { group: GameGroup; onOpen: (contentKey: st
               {item.conclusion && (
                 // Quoted, and attributed to DF. This is their judgement,
                 // not one computed from their numbers.
-                <Typography variant="body2" sx={{ color: "text.secondary", mt: 0.75, fontStyle: "italic" }}>
+                <Typography
+                  variant="caption"
+                  sx={{
+                    color: "text.secondary",
+                    mt: 0.5,
+                    fontStyle: "italic",
+                    display: "-webkit-box",
+                    WebkitLineClamp: 3,
+                    WebkitBoxOrient: "vertical",
+                    overflow: "hidden",
+                  }}
+                >
                   “{item.conclusion}”
                 </Typography>
               )}
@@ -232,13 +258,13 @@ export const GameIndexPage = () => {
   }
 
   return (
-    <Stack sx={{ p: 3, gap: 2, height: "100%", minHeight: 0 }}>
+    <Stack sx={{ p: { xs: 1.5, sm: 3 }, gap: 1.5, height: "100%", minHeight: 0 }}>
       <Box>
-        <Typography variant="h5" sx={{ fontWeight: 700 }}>
+        <Typography variant="h6" sx={{ fontWeight: 700 }}>
           Games
         </Typography>
-        <Typography variant="body2" sx={{ color: "text.secondary" }}>
-          What Digital Foundry covered, grouped by game, drawn from your analysed content.
+        <Typography variant="caption" sx={{ color: "text.secondary" }}>
+          What Digital Foundry covered, grouped by game.
         </Typography>
       </Box>
 

@@ -22,7 +22,7 @@ import { PlatformComparisonResponse, PlatformComparisonRow, PlatformMode, normal
 import { useEffect, useMemo, useState } from "react";
 import { fetchPlatformComparison } from "../../api/ai-analysis.ts";
 import { monoFontFamily } from "../../themes/build-theme.ts";
-import { formatDate } from "../../utils/date.ts";
+import { conciseFormatDate } from "../../utils/date.ts";
 import { MiddleModal } from "../general/middle-modal.component.tsx";
 import { DfContentInfoItemDetail } from "../df-content/df-content-item-detail/df-content-item-detail.component.tsx";
 
@@ -114,13 +114,23 @@ const CoverageNote = ({ data }: { data: PlatformComparisonResponse }) => {
   const { coverage } = data;
   const pct = (n: number) => (coverage.totalModes ? Math.round((n / coverage.totalModes) * 100) : 0);
   return (
-    <Alert severity="info" variant="outlined" icon={<WarningAmberIcon fontSize="small" />}>
-      {data.comparisonCount} console {data.comparisonCount === 1 ? "comparison" : "comparisons"} from{" "}
-      {data.analysedCount} analysed items ({data.libraryCount.toLocaleString()} in your library). Across{" "}
-      {coverage.totalModes} modes, Digital Foundry stated a resolution for {pct(coverage.withResolution)}%, a target
-      frame rate for {pct(coverage.withFpsTarget)}%, and a measured average for only{" "}
-      <strong>{pct(coverage.withMeasuredAvg)}%</strong>. There is no ranking column because that last figure is the one
-      it would need, and it is usually absent — and absent more often where platforms performed similarly.
+    <Alert
+      severity="info"
+      variant="outlined"
+      icon={<WarningAmberIcon fontSize="small" />}
+      sx={{ py: 0.25, "& .MuiAlert-message": { py: 0.5 }, "& .MuiAlert-icon": { py: 0.75 } }}
+    >
+      <Typography variant="caption" sx={{ color: "text.secondary", display: "block" }}>
+        {data.comparisonCount} comparisons · {coverage.totalModes} modes · resolution {pct(coverage.withResolution)}% ·
+        target fps {pct(coverage.withFpsTarget)}% · measured avg{" "}
+        <Box component="strong" sx={{ color: "warning.main" }}>
+          {pct(coverage.withMeasuredAvg)}%
+        </Box>
+      </Typography>
+      <Typography variant="caption" sx={{ color: "text.disabled", display: "block" }}>
+        No ranking column: that last figure is the one it would need, and it is missing more often where platforms
+        performed similarly.
+      </Typography>
     </Alert>
   );
 };
@@ -144,7 +154,7 @@ const ComparisonRow = ({
         {row.game || row.title}
       </Typography>
       <Typography variant="caption" sx={{ color: "text.disabled", display: "block" }}>
-        {formatDate(row.publishedDate)}
+        {conciseFormatDate(row.publishedDate)}
         {row.developer ? ` · ${row.developer}` : ""}
       </Typography>
       <Stack direction="row" spacing={0.5} sx={{ mt: 0.5 }}>
@@ -181,7 +191,17 @@ const ComparisonRow = ({
     ))}
     <TableCell sx={{ minWidth: 240 }}>
       {row.recommendation ? (
-        <Typography variant="caption" sx={{ color: "text.secondary", fontStyle: "italic" }}>
+        <Typography
+          variant="caption"
+          sx={{
+            color: "text.secondary",
+            fontStyle: "italic",
+            display: "-webkit-box",
+            WebkitLineClamp: 4,
+            WebkitBoxOrient: "vertical",
+            overflow: "hidden",
+          }}
+        >
           “{row.recommendation}”
         </Typography>
       ) : (
@@ -249,14 +269,13 @@ export const PlatformComparisonPage = () => {
   }
 
   return (
-    <Stack sx={{ p: 3, gap: 2, height: "100%", minHeight: 0 }}>
+    <Stack sx={{ p: { xs: 1.5, sm: 3 }, gap: 1.5, height: "100%", minHeight: 0 }}>
       <Box>
-        <Typography variant="h5" sx={{ fontWeight: 700 }}>
+        <Typography variant="h6" sx={{ fontWeight: 700 }}>
           Platform comparisons
         </Typography>
-        <Typography variant="body2" sx={{ color: "text.secondary" }}>
-          Every analysed console comparison, side by side. Digital Foundry's own figures — nothing here is averaged or
-          ranked.
+        <Typography variant="caption" sx={{ color: "text.secondary" }}>
+          Digital Foundry's own figures, side by side. Nothing here is averaged or ranked.
         </Typography>
       </Box>
 
