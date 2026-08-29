@@ -16,6 +16,9 @@ import {
 import { DfContentInfoUtils, secondsToHHMMSS } from "df-downloader-common";
 import { useEffect, useState } from "react";
 import { useSelector } from "react-redux";
+import { AiAnalysisConfigUtils } from "df-downloader-common/config/ai-analysis-config";
+import { selectConfigSection } from "../../../store/config/config.selector.ts";
+import { queryConfigSection } from "../../../store/config/config.action.ts";
 import { clearPipeline } from "../../../api/tasks.ts";
 import { useDfContentEntry } from "../../../hooks/use-df-content-entry.ts";
 import { fetchYtVideoMeta, refreshDfContentMeta } from "../../../store/df-content/df-content.action.ts";
@@ -30,6 +33,8 @@ import {
 } from "../../../themes/ui-preferences.ts";
 import { Thumb } from "../../general/thumb.component.tsx";
 import { YouTubeEmbed } from "../../general/youtube-embed.tsx";
+import { AiAnalysisPanel } from "../ai-analysis/ai-analysis-panel.component.tsx";
+import { DfArticleLink } from "../ai-analysis/df-article-link.component.tsx";
 import { DfTagList } from "../df-tag-list.component.tsx";
 import { OnDiskRows } from "../downloaded-info/on-disk-rows.component.tsx";
 import { FormatRows } from "../media-info/format-rows.component.tsx";
@@ -62,6 +67,21 @@ export const DfContentInfoItemDetail = ({ dfContentName, onClose }: DfContentInf
     // scans, and only once per entry (the service caches the result).
     store.dispatch(fetchYtVideoMeta.start(dfContentName));
   }, [dfContentName]);
+  // Config sections are fetched per-consumer rather than all at once, so a
+  // component that reads one has to ask for it - otherwise the selector
+  // returns undefined for anyone who has not happened to open that
+  // section's settings page, and the panel below reports the feature as
+  // switched off when it is not.
+  useEffect(() => {
+    store.dispatch(queryConfigSection.start("aiAnalysis"));
+  }, []);
+
+  // Gates the panel on the feature actually being usable, so it explains
+  // itself rather than offering an Analyse button that would fail on the
+  // first request for want of a key.
+  const aiAnalysisConfig = useSelector(selectConfigSection("aiAnalysis"));
+  const aiAnalysisEnabled = AiAnalysisConfigUtils.isUsable(aiAnalysisConfig ?? undefined);
+
   const downloadingPipelineIds = useSelector(
     selectQueryPipelineIds({
       filter: {
@@ -235,6 +255,20 @@ export const DfContentInfoItemDetail = ({ dfContentName, onClose }: DfContentInf
                 Nothing downloaded yet
               </Typography>
             )}
+          </Box>
+
+          <Box>
+            <Typography variant="overline">Digital Foundry article</Typography>
+            <Box sx={{ marginTop: 1 }}>
+              <DfArticleLink contentKey={dfContentEntry.key} />
+            </Box>
+          </Box>
+
+          <Box>
+            <Typography variant="overline">Analysis</Typography>
+            <Box sx={{ marginTop: 1 }}>
+              <AiAnalysisPanel contentKey={dfContentEntry.key} enabled={aiAnalysisEnabled} />
+            </Box>
           </Box>
 
           <Box>

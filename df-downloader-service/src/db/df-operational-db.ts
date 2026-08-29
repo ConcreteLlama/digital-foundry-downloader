@@ -1,6 +1,9 @@
 import {
   DfContentAvailability,
   DfContentAvailabilityInfo,
+  AiAnalysisIndexEntry,
+  AiAnalysisResult,
+  DfArticleLookupState,
   DfContentEntry,
   DfContentInfo,
   DfContentInfoQueryParams,
@@ -87,6 +90,17 @@ export abstract class DfDownloaderOperationalDb {
     missingFiles: MoveDownloadOpts[];
   }>;
   abstract subsGenerated(dfContentName: string, downloadLocation: string, subsInfo: DfContentSubtitleInfo): Promise<void>;
+  abstract setAiAnalysis(contentName: string, aiAnalysis: AiAnalysisResult | undefined): Promise<void>;
+  abstract getAiAnalysis(contentName: string): Promise<AiAnalysisResult | undefined>;
+  /** Synchronous: the index is held in memory precisely so list views can ask per row. */
+  abstract getAiAnalysisIndex(): Record<string, AiAnalysisIndexEntry>;
+  abstract getAiAnalysisIndexEntry(contentName: string): AiAnalysisIndexEntry | undefined;
+  /** Every stored analysis, for cross-content views. Cached in the store - see AiAnalysisStore. */
+  abstract getAllAiAnalysisResults(): Promise<{ contentKey: string; result: AiAnalysisResult }[]>;
+  abstract setDfArticleLookup(state: DfArticleLookupState): Promise<void>;
+  abstract getDfArticleLookup(contentName: string): Promise<DfArticleLookupState | undefined>;
+  /** Synchronous: the retry decision runs on every content-panel open. */
+  abstract getDfArticleIndexEntry(contentName: string): { lastAttemptedAt: Date; missCount: number; hasArticle: boolean; url?: string; title?: string } | undefined;
   protected abstract doQuery(params: DfContentInfoQueryParams): Promise<DfDbQueryResult>;
 
   async setContentInfosWithAvailability(contentInfosWithStatuses: ContentInfoWithAvailability[], userTier: string) {

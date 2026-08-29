@@ -20,7 +20,7 @@ export const DfStepName = z.enum([
 ]);
 export type DfStepName = z.infer<typeof DfStepName>;
 
-export const DfPipelineType = z.enum(["download", "subtitles", "update_download_meta"]);
+export const DfPipelineType = z.enum(["download", "subtitles", "update_download_meta", "ai_analysis"]);
 export type DfPipelineType = z.infer<typeof DfPipelineType>;
 
 const StepDetails = z.object({

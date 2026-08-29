@@ -349,7 +349,7 @@ const AppTopBar = ({ railWidth, showMenuButton, onMenuClick }: AppTopBarProps) =
  */
 export const NavPage = () => {
   return (
-    <Box sx={{ display: "flex", padding: 4, width: "100%", minWidth: 0 }}>
+    <Box sx={{ display: "flex", padding: { xs: 1.5, md: 4 }, width: "100%", minWidth: 0 }}>
       <SectionNav />
       <Box sx={{ flex: "1 1 auto", minWidth: 0 }}>
         <SectionNavCompact />

@@ -26,3 +26,7 @@ export * from './df-content-update-download-meta.js';
 export * from './media-file-meta.js';
 export * from './chapter.js';
 export * from './queue-status.js';
+export * from './ai-analysis.js';
+export * from './df-article.js';
+export * from './game-index.js';
+export * from './platform-comparison.js';
