@@ -1,4 +1,5 @@
 import {
+  DfPipelineType,
   DfTaskType,
   DownloadProgressInfo,
   TaskInfo,
@@ -98,6 +99,8 @@ export const selectBasicTaskField = <K extends keyof TaskInfo, V = TaskInfo[K]>(
 type PipelineFilter = {
   contentName?: string;
   mediaFormat?: string;
+  /** Narrows to one kind of pipeline, for a view that only cares about its own work. */
+  pipelineType?: DfPipelineType;
   state?: "downloading" | "post-processing" | "complete" | "incomplete" | "all";
 };
 
@@ -115,6 +118,7 @@ const applyFilter = (pipeline: TaskPipelineInfo, filter?: PipelineFilter) => {
   if (!filter) return true;
   if (filter.contentName && pipeline.pipelineDetails.dfContent.key !== filter.contentName) return false;
   if (filter.mediaFormat && pipeline.pipelineDetails.mediaFormat !== filter.mediaFormat) return false;
+  if (filter.pipelineType && pipeline.pipelineDetails.type !== filter.pipelineType) return false;
   if (filter.state === "downloading") return pipelineIsDownloading(pipeline);
   if (filter.state === "post-processing") return pipelineIsPostProcessing(pipeline);
   if (filter.state === "complete") return pipeline.pipelineStatus.isComplete;

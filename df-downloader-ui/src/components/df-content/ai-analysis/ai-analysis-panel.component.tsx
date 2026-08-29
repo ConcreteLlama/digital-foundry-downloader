@@ -23,7 +23,9 @@ import {
   AiEvidenceSourceLabels,
   AiTagStatus,
 } from "df-downloader-common";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { useSelector } from "react-redux";
+import { selectQueryPipelineIds } from "../../../store/df-tasks/tasks.selector.ts";
 import { decideAiTag, estimateAiAnalysisCost, fetchAiAnalysis, startAiAnalysis } from "../../../api/ai-analysis.ts";
 import { monoFontFamily } from "../../../themes/build-theme.ts";
 import { AnalysisStructuredData, SectionLabel } from "./analysis-structured-data.component.tsx";
@@ -218,6 +220,34 @@ export const AiAnalysisPanel = ({ contentKey, enabled }: AiAnalysisPanelProps) =
     void load();
   }, [load]);
 
+  /**
+   * Reloads when this content's analysis pipeline finishes.
+   *
+   * The result is fetched over REST rather than living in the store, so
+   * nothing would otherwise tell this panel that the run it started has
+   * produced anything - it sat showing "not analysed yet" until the page
+   * was reloaded by hand. Pipeline state is already pushed to the store
+   * over the existing event stream, so watching for this content's own
+   * analysis pipeline to disappear from the in-flight set is enough, and
+   * costs no polling.
+   */
+  const runningAnalysisIds = useSelector(
+    selectQueryPipelineIds({
+      filter: { contentName: contentKey, pipelineType: "ai_analysis", state: "incomplete" },
+    })
+  );
+  const analysisRunning = runningAnalysisIds.length > 0;
+  const wasRunning = useRef(false);
+
+  useEffect(() => {
+    // Only on the falling edge - reloading while it is still running would
+    // just re-fetch the absence of a result.
+    if (wasRunning.current && !analysisRunning) {
+      void load();
+    }
+    wasRunning.current = analysisRunning;
+  }, [analysisRunning, load]);
+
   const runAnalysis = async (force: boolean) => {
     setStarting(true);
     try {
@@ -260,6 +290,20 @@ export const AiAnalysisPanel = ({ contentKey, enabled }: AiAnalysisPanelProps) =
         </Alert>
       );
     }
+    // A run already in flight, with nothing stored yet. Saying "not
+    // analysed yet" next to a live Analyse button here invites a second
+    // run of something already being paid for.
+    if (analysisRunning) {
+      return (
+        <Stack direction="row" spacing={1} alignItems="center" sx={{ py: 1 }}>
+          <CircularProgress size={16} />
+          <Typography variant="body2" sx={{ color: "text.secondary" }}>
+            Analysing… this will appear here when it finishes.
+          </Typography>
+        </Stack>
+      );
+    }
+
     return (
       <Stack spacing={1.5}>
         <Typography variant="body2" sx={{ color: "text.secondary" }}>
@@ -306,7 +350,7 @@ export const AiAnalysisPanel = ({ contentKey, enabled }: AiAnalysisPanelProps) =
           Analysis failed: {result.error}
         </Alert>
         <Box>
-          <Button size="small" variant="outlined" disabled={starting || !enabled} onClick={() => runAnalysis(true)}>
+          <Button size="small" variant="outlined" disabled={starting || !enabled || analysisRunning} onClick={() => runAnalysis(true)}>
             Try again
           </Button>
         </Box>
@@ -330,7 +374,7 @@ export const AiAnalysisPanel = ({ contentKey, enabled }: AiAnalysisPanelProps) =
           }
         >
           <span>
-            <Button size="small" disabled={starting || !enabled} onClick={() => runAnalysis(true)}>
+            <Button size="small" disabled={starting || !enabled || analysisRunning} onClick={() => runAnalysis(true)}>
               Re-analyse
             </Button>
           </span>
