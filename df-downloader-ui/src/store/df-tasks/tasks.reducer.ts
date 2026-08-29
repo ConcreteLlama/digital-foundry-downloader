@@ -78,7 +78,13 @@ export const taskPipelinesReducer = createReducer(INITIAL_STATE, (builder) => {
         const pipelneExec = state.taskPipelines[payload.pipelineExecutionId];
         const pipelineStepId = payload.stepId || pipelneExec.pipelineStatus.currentStep;
         if (!pipelineStepId) return;
-        pipelneExec.stepTasks[pipelineStepId].position = payload.action.position;
+        // A step marked "not needed" (skipped) rather than actually running
+        // has no task object at all - same underlying gap as
+        // pipelinePriorityComparator in tasks.selector.ts, just a write
+        // instead of a read. Nothing to reposition if there's no task.
+        const task = pipelneExec.stepTasks[pipelineStepId];
+        if (!task) return;
+        task.position = payload.action.position;
       }
     },
   });

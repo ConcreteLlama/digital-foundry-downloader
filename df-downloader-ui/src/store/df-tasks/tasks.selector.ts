@@ -154,12 +154,26 @@ const pipelineIsPostProcessing = (pipeline?: TaskPipelineInfo) => {
   const currentStep = pipeline?.pipelineStatus.currentStep;
   if (!currentStep) return;
   const task = pipeline?.stepTasks[currentStep];
+  // A step marked "not needed" (skipped) has no task object at all -
+  // `!isDownloadTaskInfo(undefined)` is `true`, which used to misclassify
+  // "nothing is actually happening on this step" as "post-processing".
+  // Same underlying gap as pipelinePriorityComparator below.
+  if (!task) return false;
   return !isDownloadTaskInfo(task);
 };
 
 const pipelinePriorityComparator = (a: TaskPipelineInfo, b: TaskPipelineInfo) => {
   const aTask = a.stepTasks[a.pipelineStatus.currentStep!];
   const bTask = b.stepTasks[b.pipelineStatus.currentStep!];
+  // A pipeline whose current step is marked "not needed" (skipped) rather
+  // than actually running has no task object for that step at all - treat
+  // that as no priority ordering between the two sides rather than
+  // crashing. Confirmed live: this blanked the whole app (no error
+  // boundary exists anywhere to catch a render-time throw) when opening a
+  // content item whose active pipeline was sitting on a skipped step.
+  if (!aTask || !bTask) {
+    return 0;
+  }
   return aTask.position - bTask.position;
 };
 
