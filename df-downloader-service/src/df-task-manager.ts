@@ -380,13 +380,15 @@ export class DfTaskManager {
    * run with settings that differ from the saved ones - which is what the
    * "analyse with a different model" path in the UI needs.
    */
-  analyseContent(entry: DfContentEntry, config: AiAnalysisConfig, opts: { chapters?: Chapter[]; articleText?: string } = {}) {
+  analyseContent(entry: DfContentEntry, config: AiAnalysisConfig, opts: { chapters?: Chapter[]; articleText?: string; articleUrl?: string; articleTitle?: string } = {}) {
     const analysisExecution = this.aiAnalysisTaskPipeline.start({
       dfContentInfo: entry.contentInfo,
       entry,
       config,
       chapters: opts.chapters,
       articleText: opts.articleText,
+      articleUrl: opts.articleUrl,
+      articleTitle: opts.articleTitle,
     });
     this.addTaskPipelineExecution(analysisExecution);
     return analysisExecution;

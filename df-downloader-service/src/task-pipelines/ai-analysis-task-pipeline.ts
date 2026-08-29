@@ -70,6 +70,8 @@ export const createAiAnalysisTaskPipeline = (opts: AiAnalysisTaskPipelineCreator
       config: AiAnalysisConfig;
       chapters?: Chapter[];
       articleText?: string;
+      articleUrl?: string;
+      articleTitle?: string;
     },
     "ai_analysis"
   >("ai_analysis")
@@ -81,6 +83,8 @@ export const createAiAnalysisTaskPipeline = (opts: AiAnalysisTaskPipelineCreator
           config: context.config,
           chapters: context.chapters,
           articleText: context.articleText,
+          articleUrl: context.articleUrl,
+          articleTitle: context.articleTitle,
         }),
       taskManager: aiAnalysisTaskManager,
     })

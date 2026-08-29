@@ -9,6 +9,7 @@ import {
   CircularProgress,
   Collapse,
   Divider,
+  Link,
   Paper,
   Stack,
   Tooltip,
@@ -329,6 +330,20 @@ export const AiAnalysisPanel = ({ contentKey, enabled }: AiAnalysisPanelProps) =
       </Stack>
 
       <EvidenceStrip evidence={result.evidence} />
+
+      {/* Credits the written source when one was matched. Worth naming
+          rather than leaving as a generic "article" chip: for a review, the
+          article is human-written and human-checked where the transcript is
+          machine-heard, so knowing the analysis had it is the difference
+          between a figure that was read and one that was misheard. */}
+      {result.articleUrl && (
+        <Typography variant="caption" sx={{ color: "text.secondary" }}>
+          Grounded in Digital Foundry's article{" "}
+          <Link href={result.articleUrl} target="_blank" rel="noopener noreferrer" underline="hover">
+            {result.articleTitle || result.articleUrl}
+          </Link>
+        </Typography>
+      )}
 
       {/* "Not yet" rather than "failed" - a transcript may simply not exist
           for this item at the moment, and the fix is a concrete next step

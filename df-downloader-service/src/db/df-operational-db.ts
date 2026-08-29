@@ -3,6 +3,7 @@ import {
   DfContentAvailabilityInfo,
   AiAnalysisIndexEntry,
   AiAnalysisResult,
+  DfArticleLookupState,
   DfContentEntry,
   DfContentInfo,
   DfContentInfoQueryParams,
@@ -94,6 +95,10 @@ export abstract class DfDownloaderOperationalDb {
   /** Synchronous: the index is held in memory precisely so list views can ask per row. */
   abstract getAiAnalysisIndex(): Record<string, AiAnalysisIndexEntry>;
   abstract getAiAnalysisIndexEntry(contentName: string): AiAnalysisIndexEntry | undefined;
+  abstract setDfArticleLookup(state: DfArticleLookupState): Promise<void>;
+  abstract getDfArticleLookup(contentName: string): Promise<DfArticleLookupState | undefined>;
+  /** Synchronous: the retry decision runs on every content-panel open. */
+  abstract getDfArticleIndexEntry(contentName: string): { lastAttemptedAt: Date; missCount: number; hasArticle: boolean; url?: string; title?: string } | undefined;
   protected abstract doQuery(params: DfContentInfoQueryParams): Promise<DfDbQueryResult>;
 
   async setContentInfosWithAvailability(contentInfosWithStatuses: ContentInfoWithAvailability[], userTier: string) {

@@ -218,6 +218,16 @@ export const AiAnalysisResult = z.object({
    * a given result is, so it is required rather than optional.
    */
   evidence: z.array(AiEvidenceSource).default([]),
+  /**
+   * The Digital Foundry article used as grounding, when one was matched.
+   *
+   * Stored on the result rather than looked up separately so the UI can
+   * credit the source without a second request - and so the record stays
+   * truthful if the article is later re-matched or moves: this is what
+   * *this* run actually read.
+   */
+  articleUrl: z.string().optional(),
+  articleTitle: z.string().optional(),
   usage: AiAnalysisUsage.optional(),
   /**
    * Set when the run produced nothing usable. Kept alongside the result

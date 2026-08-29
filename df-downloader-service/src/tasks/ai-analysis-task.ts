@@ -11,16 +11,18 @@ type AiAnalysisTaskContext = {
   config: AiAnalysisConfig;
   chapters?: Chapter[];
   articleText?: string;
+  articleUrl?: string;
+  articleTitle?: string;
   /** Set as the run progresses, purely so the UI can say what it is doing. */
   stage?: string;
 };
 
 const aiAnalysisTaskControls: TaskControls<AiAnalysisResult, AiAnalysisTaskContext> = {
   start: async (context: AiAnalysisTaskContext) => {
-    const { entry, config, chapters, articleText } = context;
+    const { entry, config, chapters, articleText, articleUrl, articleTitle } = context;
     context.stage = "Analysing";
     logger.log("info", `Analysing ${entry.key} with ${config.model}`);
-    const result = await analyseContent(config, { entry, chapters, articleText });
+    const result = await analyseContent(config, { entry, chapters, articleText, articleUrl, articleTitle });
     // analyseContent reports an ordinary failure inside the result rather
     // than throwing, so the task has to promote it - otherwise a run that
     // failed would be recorded as a successful task holding an error.

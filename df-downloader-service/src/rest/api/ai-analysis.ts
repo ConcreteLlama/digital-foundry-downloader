@@ -2,6 +2,7 @@ import {
   AiAnalysisResult,
   AnalyseContentRequest,
   AiTagDecisionRequest,
+  DfArticleUtils,
   DfContentEntry,
   logger,
 } from "df-downloader-common";
@@ -10,6 +11,8 @@ import express from "express";
 import { configService } from "../../config/config.js";
 import { DigitalFoundryContentManager } from "../../df-content-manager.js";
 import { estimateAnalysisCost } from "../../utils/ai/analyse.js";
+import { ensureArticleForContent } from "../../utils/df-articles/ensure-article.js";
+import { DfFetchPriority } from "../../df-request-queue.js";
 import { sanitizeContentName } from "../../utils/df-utils.js";
 import { sendError, sendErrorAsResponse, sendResponse, zodParseHttp } from "../utils/utils.js";
 
@@ -112,8 +115,21 @@ export const makeAiAnalysisRouter = (contentManager: DigitalFoundryContentManage
       }
 
       try {
-        contentManager.taskManager.analyseContent(entry, config);
-        return sendResponse(res, { message: "Analysis started", contentKey: entry.key });
+        // Looked up before the run rather than during it, and awaited:
+        // a matched article is grounding the analysis should have, not a
+        // display extra. It is written text, so its product names and
+        // figures are correct by construction where a transcript's may
+        // not be - which is exactly what the extraction needs most.
+        // Interactive priority because a person is waiting on this.
+        const article = await ensureArticleForContent(contentManager.db, entry.contentInfo, {
+          priority: DfFetchPriority.INTERACTIVE,
+        });
+        contentManager.taskManager.analyseContent(entry, config, {
+          articleText: article?.text,
+          articleUrl: article?.url,
+          articleTitle: article?.title,
+        });
+        return sendResponse(res, { message: "Analysis started", contentKey: entry.key, articleMatched: Boolean(article) });
       } catch (e) {
         return sendErrorAsResponse(res, e);
       }
@@ -162,6 +178,42 @@ export const makeAiAnalysisRouter = (contentManager: DigitalFoundryContentManage
         return sendErrorAsResponse(res, e);
       }
     });
+  });
+
+  /**
+   * The matched article for one item, looking for one if a search is due.
+   *
+   * Triggered by a person opening a content panel, never by the scan or
+   * poll loop. `DfArticleUtils.shouldRetry` decides whether this actually
+   * costs a request: a match is permanent and never re-searched, and a
+   * miss backs off rather than re-running on every open - but a miss is
+   * never final, because the article may simply not be written yet.
+   */
+  router.get("/article/:contentKey", async (req, res) => {
+    try {
+      const contentKey = sanitizeContentName(req.params.contentKey);
+      const entry = await contentManager.db.getContentEntry(contentKey);
+      if (!entry) {
+        return sendError(res, "Content not found", 404);
+      }
+      const force = req.query.force === "true";
+      const article = await ensureArticleForContent(contentManager.db, entry.contentInfo, {
+        priority: DfFetchPriority.INTERACTIVE,
+        force,
+      });
+      const state = await contentManager.db.getDfArticleLookup(contentKey);
+      return sendResponse(res, {
+        article: article ?? null,
+        lastAttemptedAt: state?.lastAttemptedAt ?? null,
+        missCount: state?.missCount ?? 0,
+        // "not yet" rather than "never" - surfaced so the UI can say when
+        // it will look again instead of implying no article exists.
+        nextRetryAt: state ? DfArticleUtils.nextRetryAt(state) ?? null : null,
+        lastError: state?.lastError ?? null,
+      });
+    } catch (e) {
+      return sendErrorAsResponse(res, e);
+    }
   });
 
   return router;

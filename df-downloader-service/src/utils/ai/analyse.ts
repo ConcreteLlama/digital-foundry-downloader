@@ -52,6 +52,8 @@ export type AnalysisInputs = {
   entry: DfContentEntry;
   chapters?: Chapter[];
   articleText?: string;
+  articleUrl?: string;
+  articleTitle?: string;
 };
 
 type PreparedCall = {
@@ -335,6 +337,8 @@ export const analyseContent = async (config: AiAnalysisConfig, inputs: AnalysisI
       ...base,
       contentType: overview.contentType,
       contentTypeConfidence: overview.contentTypeConfidence,
+      articleUrl: inputs.articleUrl,
+      articleTitle: inputs.articleTitle,
       summary: config.features.summary ? overview.summary : undefined,
       conclusion: config.features.summary ? overview.conclusion : undefined,
       structuredData,
