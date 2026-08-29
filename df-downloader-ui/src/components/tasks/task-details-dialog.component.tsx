@@ -181,6 +181,12 @@ export type TaskDetailsDialogProps = {
   pipelineId: string;
   open: boolean;
   onClose: () => void;
+  /**
+   * Suppresses the title's link through to the content. Set when this dialog
+   * was opened FROM the content detail - otherwise the link stacks a second
+   * copy of the content you are already looking at on top of itself.
+   */
+  hideContentLink?: boolean;
 };
 
 /**
@@ -191,7 +197,12 @@ export type TaskDetailsDialogProps = {
  * which is fine while something is running but leaves no way to see where
  * time actually went - or, for a failure, which step failed and why.
  */
-export const TaskDetailsDialog = ({ pipelineId, open, onClose }: TaskDetailsDialogProps) => {
+export const TaskDetailsDialog = ({
+  pipelineId,
+  open,
+  onClose,
+  hideContentLink,
+}: TaskDetailsDialogProps) => {
   const pipeline = useSelector(selectPipeline(pipelineId));
   // Stacked over this dialog rather than replacing it, so closing the content
   // returns you to the run you were looking at.
@@ -216,6 +227,7 @@ export const TaskDetailsDialog = ({ pipelineId, open, onClose }: TaskDetailsDial
   // pipeline's - the steps after it are typically seconds (writing a sidecar,
   // moving a file) against minutes or hours for this one.
   const stepViews = derivePipelineStepViews(pipeline);
+  const showContentLink = Boolean(dfContent) && !hideContentLink;
   const timeRemaining = stepOrder
     .map((stepId) => stepProgress(stepTasks[stepId])?.remainingMs)
     .find((remaining) => remaining !== undefined);
@@ -228,15 +240,15 @@ export const TaskDetailsDialog = ({ pipelineId, open, onClose }: TaskDetailsDial
             was previously no route from one to the other. */}
         <Typography
           variant="h6"
-          onClick={dfContent ? () => setContentOpen(true) : undefined}
+          onClick={showContentLink ? () => setContentOpen(true) : undefined}
           sx={{
             wordBreak: "break-word",
-            ...(dfContent && {
+            ...(showContentLink && {
               cursor: "pointer",
               "&:hover": { textDecoration: "underline" },
             }),
           }}
-          title={dfContent ? "View content details" : undefined}
+          title={showContentLink ? "View content details" : undefined}
         >
           {dfContent?.title || "Unknown content"}
         </Typography>
@@ -385,7 +397,7 @@ export const TaskDetailsDialog = ({ pipelineId, open, onClose }: TaskDetailsDial
           </>
         )}
       </DialogContent>
-      {dfContent && (
+      {showContentLink && (
         <MiddleModal
           open={contentOpen}
           onClose={() => setContentOpen(false)}

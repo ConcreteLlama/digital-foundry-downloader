@@ -20,8 +20,15 @@ import { controlPipeline, clearPipeline } from "../../api/tasks.ts";
 
 type TaskControlsProps = {
   pipelineId: string;
+  /**
+   * Shrinks the buttons from 40px to 30px. The default is right on the
+   * Activity page, which is wide; in the content dialog's side column two
+   * 40px buttons sit next to a 4px progress track and set the height of the
+   * whole card, which reads as cramped and oversized at the same time.
+   */
+  size?: "small" | "medium";
 };
-export const TaskControls = ({ pipelineId }: TaskControlsProps) => {
+export const TaskControls = ({ pipelineId, size = "medium" }: TaskControlsProps) => {
   const currentStep = useSelector(selectCurrentStep(pipelineId));
   const taskState = useSelector(selectTaskState(pipelineId, currentStep || ""));
   const capabilities = useSelector(selectBasicTaskField(pipelineId, currentStep || "", "capabilities"));
@@ -31,11 +38,11 @@ export const TaskControls = ({ pipelineId }: TaskControlsProps) => {
   const buttonsDisabled = isComplete || isPausingOrCancelling;
   const startButton =
     pauseTrigger === "auto" || taskState === "idle" ? (
-      <ForceStartButton pipelineId={pipelineId} disabled={buttonsDisabled} />
+      <ForceStartButton pipelineId={pipelineId} disabled={buttonsDisabled} size={size} />
     ) : taskState === "running" ? (
-      <PauseButton pipelineId={pipelineId} disabled={buttonsDisabled} />
+      <PauseButton pipelineId={pipelineId} disabled={buttonsDisabled} size={size} />
     ) : (
-      <ResumeButton pipelineId={pipelineId} disabled={buttonsDisabled} />
+      <ResumeButton pipelineId={pipelineId} disabled={buttonsDisabled} size={size} />
     );
   const cancelEnabled = capabilities?.includes("cancel") && taskState !== "cancelling";
   // The isComplete branch that used to live here rendered a per-pipeline Clear
@@ -46,8 +53,8 @@ export const TaskControls = ({ pipelineId }: TaskControlsProps) => {
   return (
     <ButtonGroup>
       {startButton}
-      <IconButton disabled={!cancelEnabled} onClick={() => controlPipeline(pipelineId, "cancel")}>
-        <StopButton />
+      <IconButton size={size} disabled={!cancelEnabled} onClick={() => controlPipeline(pipelineId, "cancel")}>
+        <StopButton fontSize={size} />
       </IconButton>
     </ButtonGroup>
   );
@@ -56,28 +63,29 @@ export const TaskControls = ({ pipelineId }: TaskControlsProps) => {
 type ActionButtonProps = {
   pipelineId: string;
   disabled: boolean;
+  size?: "small" | "medium";
 };
-const ResumeButton = ({ pipelineId, disabled }: ActionButtonProps) => {
+const ResumeButton = ({ pipelineId, disabled, size = "medium" }: ActionButtonProps) => {
   return (
     <Tooltip title="Resume">
-      <IconButton disabled={disabled} onClick={() => controlPipeline(pipelineId, "resume")}>
-        <ResumeIcon />
+      <IconButton size={size} disabled={disabled} onClick={() => controlPipeline(pipelineId, "resume")}>
+        <ResumeIcon fontSize={size} />
       </IconButton>
     </Tooltip>
   );
 };
 
-const PauseButton = ({ pipelineId, disabled }: ActionButtonProps) => {
+const PauseButton = ({ pipelineId, disabled, size = "medium" }: ActionButtonProps) => {
   return (
     <Tooltip title="Pause">
-      <IconButton disabled={disabled} onClick={() => controlPipeline(pipelineId, "pause")}>
-        <PauseButtonIcon />
+      <IconButton size={size} disabled={disabled} onClick={() => controlPipeline(pipelineId, "pause")}>
+        <PauseButtonIcon fontSize={size} />
       </IconButton>
     </Tooltip>
   );
 };
 
-const ForceStartButton = ({ pipelineId, disabled }: ActionButtonProps) => {
+const ForceStartButton = ({ pipelineId, disabled, size = "medium" }: ActionButtonProps) => {
   const [confirmDialogOpen, setConfirmDialogOpen] = useState(false);
   const openConfirmDialog = () => {
     setConfirmDialogOpen(true);
@@ -101,8 +109,8 @@ const ForceStartButton = ({ pipelineId, disabled }: ActionButtonProps) => {
         onConfirm={onConfirm}
       />
       <Tooltip title="Force Start">
-        <IconButton disabled={disabled} onClick={openConfirmDialog}>
-          <StartButtonIcon />
+        <IconButton size={size} disabled={disabled} onClick={openConfirmDialog}>
+          <StartButtonIcon fontSize={size} />
         </IconButton>
       </Tooltip>
     </Fragment>

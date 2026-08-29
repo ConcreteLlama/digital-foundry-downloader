@@ -22,7 +22,14 @@ import { TaskControls } from "../task-controls.component.tsx";
  * the stepper and maybe a bar - which meant the same pipeline looked like two
  * different things depending on which step it happened to be on.
  */
-export const TaskStatusDetail = ({ pipelineId }: { pipelineId: string }) => {
+export const TaskStatusDetail = ({
+  pipelineId,
+  compact,
+}: {
+  pipelineId: string;
+  /** Narrow-column presentation - see TaskControls' size prop. */
+  compact?: boolean;
+}) => {
   const currentStep = useSelector(selectCurrentStep(pipelineId)) ?? "";
   const isComplete = useSelector(selectIsComplete(pipelineId));
   const downloadPercent = useSelector(selectDownoadingProgressField(pipelineId, currentStep, "percentComplete"));
@@ -48,7 +55,7 @@ export const TaskStatusDetail = ({ pipelineId }: { pipelineId: string }) => {
             not also do that. Stopped here rather than at each call site so
             every consumer of TaskStatusDetail is covered. */}
         <Box onClick={(event) => event.stopPropagation()} sx={{ flexShrink: 0 }}>
-          <TaskControls pipelineId={pipelineId} />
+          <TaskControls pipelineId={pipelineId} size={compact ? "small" : "medium"} />
         </Box>
       </Box>
       {isRunning ? (

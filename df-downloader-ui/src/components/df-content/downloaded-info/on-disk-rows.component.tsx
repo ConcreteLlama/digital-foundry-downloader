@@ -1,7 +1,9 @@
 import { Box, Stack, Tooltip, Typography } from "@mui/material";
 import { DfContentEntry } from "df-downloader-common";
 import { DfContentDownloadInfo } from "df-downloader-common/models/df-content-download-info";
+import { useState } from "react";
 import { monoFontFamily } from "../../../themes/build-theme";
+import { DownloadDetailsDialog } from "./download-details-dialog.component.tsx";
 import { DownloadedInfoListProps } from "./downloaded-info-list.component.tsx";
 import { DownloadedItemActions } from "./downloaded-item-actions.component.tsx";
 
@@ -11,7 +13,8 @@ import { DownloadedItemActions } from "./downloaded-item-actions.component.tsx";
  * Replaces a five-column table whose Location cell held a full absolute path -
  * unbounded content in a fixed column, which forced the whole detail modal to
  * scroll sideways once it became two columns. The path is the least-scanned
- * value here, so it wraps under the filename and lives in a tooltip.
+ * value here, so it is truncated to the filename and the row opens the file's
+ * own dialog where the whole thing is legible.
  */
 export const OnDiskRows = ({ contentEntry }: DownloadedInfoListProps) => (
   <Stack sx={{ marginTop: 1 }}>
@@ -31,59 +34,67 @@ type OnDiskRowProps = {
 };
 
 const OnDiskRow = ({ contentEntry, download }: OnDiskRowProps) => {
+  const [detailsOpen, setDetailsOpen] = useState(false);
   const subtitles = download.subtitles || [];
-  const fileName = download.downloadLocation.split(/[\\/]/).pop() || download.downloadLocation;
+  const fileName = download.downloadLocation.split(/[\/]/).pop() || download.downloadLocation;
   return (
-    <Box
-      sx={{
-        display: "grid",
-        gridTemplateColumns: "minmax(0, 1fr) auto",
-        alignItems: "start",
-        columnGap: 1,
-        paddingY: 1,
-        borderBottom: "1px solid",
-        borderColor: "divider",
-      }}
-    >
-      <Box sx={{ minWidth: 0 }}>
-        <Stack direction="row" spacing={1} sx={{ alignItems: "baseline", minWidth: 0 }}>
-          <Typography sx={{ fontSize: "0.8125rem", fontWeight: 600 }} noWrap>
-            {download.mediaInfo.formatString}
-          </Typography>
-          <Typography sx={{ fontFamily: monoFontFamily, fontSize: "0.6875rem", color: "text.secondary" }} noWrap>
-            {download.size}
-          </Typography>
-        </Stack>
-        <Tooltip title={download.downloadLocation}>
-          <Typography
-            sx={{ fontFamily: monoFontFamily, fontSize: "0.625rem", color: "text.disabled" }}
-            noWrap
-          >
-            {fileName}
-          </Typography>
-        </Tooltip>
-        {subtitles.map((subtitle, index) => (
-          <Tooltip
-            key={`${subtitle.language}-${index}`}
-            title={
-              subtitle.path
-                ? subtitle.path
-                : "Embedded in the video - no separate transcript file. Turn on \"keep transcript\" in Subtitles settings to get one."
+    <>
+      <Tooltip title="File details" enterDelay={700}>
+        <Box
+          onClick={() => setDetailsOpen(true)}
+          role="button"
+          tabIndex={0}
+          onKeyDown={(event) => {
+            if (event.key === "Enter" || event.key === " ") {
+              event.preventDefault();
+              setDetailsOpen(true);
             }
-          >
-            <Typography
-              sx={{ fontFamily: monoFontFamily, fontSize: "0.625rem", color: "text.disabled" }}
-              noWrap
-            >
-              {/* A transcript that exists as a file is a different thing from
-                  one that only exists inside the container - you can open,
-                  search and feed the first to something else. Say which. */}
-              {subtitle.path ? "srt" : "embedded"} · {subtitle.service} · {subtitle.language}
+          }}
+          sx={{
+            display: "grid",
+            gridTemplateColumns: "minmax(0, 1fr) auto",
+            alignItems: "center",
+            columnGap: 1,
+            paddingY: 1,
+            borderBottom: "1px solid",
+            borderColor: "divider",
+            cursor: "pointer",
+            "&:hover": { backgroundColor: "action.hover" },
+            "&:focus-visible": { outline: "2px solid", outlineColor: "primary.main", outlineOffset: -2 },
+          }}
+        >
+          <Box sx={{ minWidth: 0 }}>
+            <Stack direction="row" spacing={1} sx={{ alignItems: "baseline", minWidth: 0 }}>
+              <Typography sx={{ fontSize: "0.8125rem", fontWeight: 600 }} noWrap>
+                {download.mediaInfo.formatString}
+              </Typography>
+              <Typography sx={{ fontFamily: monoFontFamily, fontSize: "0.6875rem", color: "text.secondary" }} noWrap>
+                {download.size}
+              </Typography>
+            </Stack>
+            <Typography sx={{ fontFamily: monoFontFamily, fontSize: "0.625rem", color: "text.disabled" }} noWrap>
+              {fileName}
             </Typography>
-          </Tooltip>
-        ))}
-      </Box>
-      <DownloadedItemActions contentEntry={contentEntry} download={download} />
-    </Box>
+            {/* Subtitles collapse to a count here. Listing each one put three
+                more truncated mono lines in the narrowest column on the page,
+                to say something the dialog says properly. */}
+            {subtitles.length > 0 && (
+              <Typography sx={{ fontFamily: monoFontFamily, fontSize: "0.625rem", color: "text.disabled" }} noWrap>
+                {`${subtitles.length} subtitle${subtitles.length === 1 ? "" : "s"} · ${
+                  subtitles.some((subtitle) => subtitle.path) ? "srt" : "embedded"
+                }`}
+              </Typography>
+            )}
+          </Box>
+          <DownloadedItemActions contentEntry={contentEntry} download={download} />
+        </Box>
+      </Tooltip>
+      <DownloadDetailsDialog
+        contentEntry={contentEntry}
+        download={download}
+        open={detailsOpen}
+        onClose={() => setDetailsOpen(false)}
+      />
+    </>
   );
 };
