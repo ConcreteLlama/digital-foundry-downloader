@@ -37,42 +37,61 @@ export const NumericPagination = ({ currentPage, numPages, onUpdatePage }: Numer
   }
   const pages = buildPageList(currentPage, numPages);
   return (
-    <Box sx={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 0.25, paddingY: 1 }}>
-      <IconButton size="small" disabled={currentPage === 1} onClick={() => onUpdatePage(currentPage - 1)}>
+    // grid, not flex+justifyContent:center: the page-number cluster's own
+    // width varies with how many are shown ("1 2 3 4 5" vs "1 … 15 … 31"),
+    // which under a single centered flex row drags the arrows around with it
+    // - clicking "next" repeatedly meant re-finding it each time rather than
+    // clicking the same spot. Fixed outer columns pin the arrows in place;
+    // the middle column centers the cluster independently within whatever
+    // space is left.
+    <Box sx={{ display: "grid", gridTemplateColumns: "auto 1fr auto", alignItems: "center", paddingY: 1 }}>
+      <IconButton
+        size="small"
+        disabled={currentPage === 1}
+        onClick={() => onUpdatePage(currentPage - 1)}
+        sx={{ justifySelf: "start" }}
+      >
         <ChevronLeftIcon fontSize="small" />
       </IconButton>
-      {pages.map((page, i) =>
-        page === "gap" ? (
-          <Typography key={`gap-${i}`} sx={{ paddingX: 0.5, color: "text.disabled", fontFamily: monoFontFamily }}>
-            …
-          </Typography>
-        ) : (
-          <Box
-            key={page}
-            component="button"
-            onClick={() => onUpdatePage(page)}
-            aria-current={page === currentPage ? "page" : undefined}
-            sx={{
-              minWidth: 28,
-              height: 28,
-              paddingX: 0.75,
-              borderRadius: 1,
-              cursor: "pointer",
-              fontFamily: monoFontFamily,
-              fontSize: "0.75rem",
-              border: "1px solid",
-              borderColor: page === currentPage ? "primary.main" : "transparent",
-              backgroundColor: "transparent",
-              color: page === currentPage ? "primary.main" : "text.secondary",
-              fontWeight: page === currentPage ? 700 : 400,
-              "&:hover": { backgroundColor: "action.hover", color: "text.primary" },
-            }}
-          >
-            {page}
-          </Box>
-        )
-      )}
-      <IconButton size="small" disabled={currentPage === numPages} onClick={() => onUpdatePage(currentPage + 1)}>
+      <Box sx={{ display: "flex", justifyContent: "center", gap: 0.25 }}>
+        {pages.map((page, i) =>
+          page === "gap" ? (
+            <Typography key={`gap-${i}`} sx={{ paddingX: 0.5, color: "text.disabled", fontFamily: monoFontFamily }}>
+              …
+            </Typography>
+          ) : (
+            <Box
+              key={page}
+              component="button"
+              onClick={() => onUpdatePage(page)}
+              aria-current={page === currentPage ? "page" : undefined}
+              sx={{
+                minWidth: 28,
+                height: 28,
+                paddingX: 0.75,
+                borderRadius: 1,
+                cursor: "pointer",
+                fontFamily: monoFontFamily,
+                fontSize: "0.75rem",
+                border: "1px solid",
+                borderColor: page === currentPage ? "primary.main" : "transparent",
+                backgroundColor: "transparent",
+                color: page === currentPage ? "primary.main" : "text.secondary",
+                fontWeight: page === currentPage ? 700 : 400,
+                "&:hover": { backgroundColor: "action.hover", color: "text.primary" },
+              }}
+            >
+              {page}
+            </Box>
+          )
+        )}
+      </Box>
+      <IconButton
+        size="small"
+        disabled={currentPage === numPages}
+        onClick={() => onUpdatePage(currentPage + 1)}
+        sx={{ justifySelf: "end" }}
+      >
         <ChevronRightIcon fontSize="small" />
       </IconButton>
     </Box>

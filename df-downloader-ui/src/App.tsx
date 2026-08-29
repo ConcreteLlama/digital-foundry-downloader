@@ -27,7 +27,6 @@ import { AppThemeProvider } from "./themes/theme-provider.tsx";
 import registerTaskSnackbarTriggers from "./components/tasks/task-snackbar-triggers.tsx";
 import { BranchCheckDialog } from "./components/general/branch-check.component.tsx";
 import { ChangelogDialog } from "./components/general/changelog.component.tsx";
-import { ManualDownloadFloatingButton } from "./components/df-content/manual-download-fab.component.tsx";
 import { dfDownloaderBranch } from "df-downloader-common";
 import { AppSnackbarProvider } from "./utils/snackbar.tsx";
 
@@ -220,7 +219,6 @@ const MainApp = () => {
         </Box>
       </Stack>
       <ChangelogDialog open={changelogOpen || undefined} onClose={() => setChangelogOpen(false)} />
-      <ManualDownloadFloatingButton />
     </Box>
   );
 };
