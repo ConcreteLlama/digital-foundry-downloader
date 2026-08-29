@@ -162,12 +162,16 @@ export class DfTaskManager {
       subtitlesTaskManager: subtitlesTaskManager,
       mediaProcessingTaskManager: mediaProcessingTaskManager,
     });
+    // One manager shared by both pipelines, so the concurrency cap covers
+    // every analysis in flight rather than being applied twice over.
+    const aiAnalysisTaskManager = new AiAnalysisTaskManager();
     this.downloadTaskPipeline = createDownloadTaskPipeline({
       downloadTaskManager: downloadTaskManager,
       subtitlesTaskManager: subtitlesTaskManager,
       fileTaskManager: fileTaskManager,
       mediaProcessingTaskManager: mediaProcessingTaskManager,
       youtubeFetchTaskManager: youtubeFetchTaskManager,
+      aiAnalysisTaskManager,
     });
     this.updateDownloadMetadataTaskPipeline = createUpdateDownloadMetadataTaskPipeline({
       fileTaskManager,
@@ -179,7 +183,7 @@ export class DfTaskManager {
       concurrentTasks: 1,
     });
     this.aiAnalysisTaskPipeline = createAiAnalysisTaskPipeline({
-      aiAnalysisTaskManager: new AiAnalysisTaskManager(),
+      aiAnalysisTaskManager,
       storageTaskManager: this.maintenanceOperationsTaskManager,
       db: serviceLocator.db,
     });

@@ -13,16 +13,18 @@ type AiAnalysisTaskContext = {
   articleText?: string;
   articleUrl?: string;
   articleTitle?: string;
+  /** Supplied by the during-download path, where the transcript exists but the download is not filed yet. */
+  transcriptText?: string;
   /** Set as the run progresses, purely so the UI can say what it is doing. */
   stage?: string;
 };
 
 const aiAnalysisTaskControls: TaskControls<AiAnalysisResult, AiAnalysisTaskContext> = {
   start: async (context: AiAnalysisTaskContext) => {
-    const { entry, config, chapters, articleText, articleUrl, articleTitle } = context;
+    const { entry, config, chapters, articleText, articleUrl, articleTitle, transcriptText } = context;
     context.stage = "Analysing";
     logger.log("info", `Analysing ${entry.key} with ${config.model}`);
-    const result = await analyseContent(config, { entry, chapters, articleText, articleUrl, articleTitle });
+    const result = await analyseContent(config, { entry, chapters, articleText, articleUrl, articleTitle, transcriptText });
     // analyseContent reports an ordinary failure inside the result rather
     // than throwing, so the task has to promote it - otherwise a run that
     // failed would be recorded as a successful task holding an error.

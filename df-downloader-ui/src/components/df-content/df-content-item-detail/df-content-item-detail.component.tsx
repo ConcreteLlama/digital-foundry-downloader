@@ -33,6 +33,7 @@ import {
 import { Thumb } from "../../general/thumb.component.tsx";
 import { YouTubeEmbed } from "../../general/youtube-embed.tsx";
 import { AiAnalysisPanel } from "../ai-analysis/ai-analysis-panel.component.tsx";
+import { DfArticleLink } from "../ai-analysis/df-article-link.component.tsx";
 import { DfTagList } from "../df-tag-list.component.tsx";
 import { OnDiskRows } from "../downloaded-info/on-disk-rows.component.tsx";
 import { FormatRows } from "../media-info/format-rows.component.tsx";
@@ -244,6 +245,13 @@ export const DfContentInfoItemDetail = ({ dfContentName, onClose }: DfContentInf
                 Nothing downloaded yet
               </Typography>
             )}
+          </Box>
+
+          <Box>
+            <Typography variant="overline">Digital Foundry article</Typography>
+            <Box sx={{ marginTop: 1 }}>
+              <DfArticleLink contentKey={dfContentEntry.key} />
+            </Box>
           </Box>
 
           <Box>

@@ -23,6 +23,9 @@ import {
 } from "df-downloader-common";
 import { getArchiveScanCheckpoint, setArchiveScanCheckpoint } from "./archive-scan-checkpoint.js";
 import { configService } from "./config/config.js";
+import { AiAnalysisConfig, AiAnalysisConfigUtils } from "df-downloader-common/config/ai-analysis-config.js";
+import { SubtitlesTaskPipelineExecution } from "./task-pipelines/subtitles-task-pipeline.js";
+import { ensureArticleForContent } from "./utils/df-articles/ensure-article.js";
 import { ContentInfoWithAvailability, DfDownloaderOperationalDb, DownloadInfoWithName } from "./db/df-operational-db.js";
 import { forEachListingPage, fetchContentInfo, DfFetchOpts } from "./df-fetcher.js";
 import { DfFetchPriority } from "./df-request-queue.js";
@@ -1302,7 +1305,8 @@ export class DigitalFoundryContentManager {
             ? [{ service: subtitles.service, language: subtitles.language, path: subtitles.path }]
             : undefined,
         });
-        this.queueDeferredSubtitles(dfContentInfo, mediaInfo, downloadLocation);
+        const subtitlesExecution = this.queueDeferredSubtitles(dfContentInfo, mediaInfo, downloadLocation);
+        this.queueDeferredAnalysis(dfContentInfo, subtitlesExecution);
       }
     });
   }
@@ -1332,7 +1336,66 @@ export class DigitalFoundryContentManager {
       return;
     }
     logger.log("info", `Queueing subtitle generation for ${dfContentInfo.name} now its download is filed`);
-    this.taskManager.generateSubs(dfContentInfo, mediaInfo, fileLocation, "en", generators);
+    return this.taskManager.generateSubs(dfContentInfo, mediaInfo, fileLocation, "en", generators);
+  }
+
+  /**
+   * Starts AI analysis once a download has been filed.
+   *
+   * Waits for deferred subtitle generation when there is any, which is the
+   * whole subtlety of this method: analysis wants a transcript, and if
+   * subtitles are also set to run after the download then firing on the
+   * download alone would analyse an item whose transcript is still minutes
+   * or hours away. That would not fail loudly - it would quietly produce
+   * the weaker title-and-description-only result and store it as if it
+   * were the real thing.
+   *
+   * Fires regardless if subtitles are not deferred: either they were made
+   * inline and a transcript already exists, or none is coming and the
+   * tags-only path is the correct outcome rather than a degraded one.
+   */
+  private queueDeferredAnalysis(dfContentInfo: DfContentInfo, subtitlesExecution?: SubtitlesTaskPipelineExecution) {
+    const aiConfig = configService.config.aiAnalysis;
+    if (aiConfig?.automaticGeneration !== "after_download" || !AiAnalysisConfigUtils.isUsable(aiConfig)) {
+      return;
+    }
+    const start = () => {
+      this.startAnalysisForContent(dfContentInfo.key, aiConfig).catch((e) =>
+        logger.log("error", `Failed to start analysis for ${dfContentInfo.name}`, e)
+      );
+    };
+    if (subtitlesExecution) {
+      logger.log("info", `Analysis for ${dfContentInfo.name} will start once subtitles finish`);
+      // Runs on failure too: subtitles failing is not a reason to skip
+      // analysis entirely, it just means the run falls back to whatever
+      // evidence does exist, which the result records honestly.
+      subtitlesExecution.on("completed", start);
+      return;
+    }
+    start();
+  }
+
+  /**
+   * Loads the entry, finds any matching article, and queues the analysis.
+   *
+   * The article lookup is awaited rather than fired alongside: a matched
+   * article is written text, so its product names and figures are correct
+   * where a machine transcript's may not be, and it is worth a few seconds
+   * to have it in hand before spending money on the analysis rather than
+   * after.
+   */
+  private async startAnalysisForContent(contentKey: string, aiConfig: AiAnalysisConfig) {
+    const entry = await this.db.getContentEntry(contentKey);
+    if (!entry) {
+      return;
+    }
+    const article = await ensureArticleForContent(this.db, entry.contentInfo).catch(() => undefined);
+    logger.log("info", `Queueing analysis for ${entry.contentInfo.name}${article ? " with a matched DF article" : ""}`);
+    this.taskManager.analyseContent(entry, aiConfig, {
+      articleText: article?.text,
+      articleUrl: article?.url,
+      articleTitle: article?.title,
+    });
   }
 
   /**

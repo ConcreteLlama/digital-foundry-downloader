@@ -196,11 +196,22 @@ export const makeAiAnalysisRouter = (contentManager: DigitalFoundryContentManage
       if (!entry) {
         return sendError(res, "Content not found", 404);
       }
-      const force = req.query.force === "true";
-      const article = await ensureArticleForContent(contentManager.db, entry.contentInfo, {
-        priority: DfFetchPriority.INTERACTIVE,
-        force,
-      });
+      // Reading this does NOT search Digital Foundry by default.
+      //
+      // The notes doc suggested searching on every content-panel open, but
+      // that turns idle browsing into site traffic - open twenty items and
+      // that is twenty lookups against a site asking for a five-second
+      // crawl delay. Merely looking at content is not a request for it, so
+      // a plain read returns what is already known and searching is an
+      // explicit act. An analysis run still searches on its own, because
+      // there the article materially improves the result being paid for.
+      const shouldSearch = req.query.search === "true" || req.query.force === "true";
+      const article = shouldSearch
+        ? await ensureArticleForContent(contentManager.db, entry.contentInfo, {
+            priority: DfFetchPriority.INTERACTIVE,
+            force: req.query.force === "true",
+          })
+        : (await contentManager.db.getDfArticleLookup(contentKey))?.article;
       const state = await contentManager.db.getDfArticleLookup(contentKey);
       return sendResponse(res, {
         article: article ?? null,
@@ -210,6 +221,8 @@ export const makeAiAnalysisRouter = (contentManager: DigitalFoundryContentManage
         // it will look again instead of implying no article exists.
         nextRetryAt: state ? DfArticleUtils.nextRetryAt(state) ?? null : null,
         lastError: state?.lastError ?? null,
+        /** Whether a search would happen if asked - drives the UI's affordance. */
+        searchDue: DfArticleUtils.shouldRetry(state),
       });
     } catch (e) {
       return sendErrorAsResponse(res, e);

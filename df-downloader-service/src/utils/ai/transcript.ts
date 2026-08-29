@@ -21,7 +21,7 @@ export type ResolvedTranscript = {
  * because subtitle tracks repeat a line across cues when it stays on
  * screen, and the repetition is noise that costs input tokens.
  */
-const srtLinesToText = (lines: SrtLine[]): string => {
+export const srtLinesToText = (lines: SrtLine[]): string => {
   const parts: string[] = [];
   let previous = "";
   for (const line of lines) {

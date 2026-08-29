@@ -8,6 +8,10 @@ import { TaskPipelineExecution, makeTaskPipeline } from "../task-manager/task-pi
 import { DownloadTask, DownloadTaskManager } from "../tasks/download-task.js";
 import { InjectMetadataTask } from "../tasks/inject-metadata-task.js";
 import { MoveFileSetDateTask } from "../tasks/move-file-set-date-task.js";
+import { DfContentAvailability } from "df-downloader-common";
+import { AiAnalysisTaskBuilder, AiAnalysisTaskManager } from "../tasks/ai-analysis-task.js";
+import { AiAnalysisConfigUtils } from "df-downloader-common/config/ai-analysis-config.js";
+import { srtLinesToText } from "../utils/ai/transcript.js";
 import { SubtitlesTaskBuilder, SubtitlesTaskManager } from "../tasks/subtitles-task.js";
 import { makeFilePathWithTemplate } from "../utils/template-utils.js";
 import { pathIsEqual } from "../utils/file-utils.js";
@@ -27,11 +31,19 @@ type DownloadTaskPipelineOpts = {
   mediaProcessingTaskManager: TaskManager;
   /** Serialized YouTube page fetches. */
   youtubeFetchTaskManager: TaskManager;
+  /** Remote API calls - see tasks/ai-analysis-task.ts for why concurrency is kept low. */
+  aiAnalysisTaskManager: AiAnalysisTaskManager;
 };
 
 export const createDownloadTaskPipeline = (opts: DownloadTaskPipelineOpts) => {
-  const { downloadTaskManager, subtitlesTaskManager, fileTaskManager, mediaProcessingTaskManager, youtubeFetchTaskManager } =
-    opts;
+  const {
+    downloadTaskManager,
+    subtitlesTaskManager,
+    fileTaskManager,
+    mediaProcessingTaskManager,
+    youtubeFetchTaskManager,
+    aiAnalysisTaskManager,
+  } = opts;
   return makeTaskPipeline<
     {
       dfContentInfo: DfContentInfo;
@@ -147,6 +159,43 @@ export const createDownloadTaskPipeline = (opts: DownloadTaskPipelineOpts) => {
       },
       continueOnFail: true,
       taskManager: subtitlesTaskManager,
+    })
+    .next({
+      stepName: "Analyse Content",
+      /**
+       * Inline analysis, for the during_download mode only.
+       *
+       * Placed after subtitle generation so an inline-generated transcript
+       * is available to it, and given that transcript directly: the
+       * download is not recorded in the DB until this whole pipeline
+       * succeeds, so there is no download entry yet for the usual sidecar
+       * lookup to find.
+       *
+       * continueOnFail, like the steps around it - an API outage or a
+       * spent quota must not cost the user a completed download.
+       */
+      taskCreator: ({ context, allResults }) => {
+        const aiConfig = configService.config.aiAnalysis;
+        if (aiConfig?.automaticGeneration !== "during_download" || !AiAnalysisConfigUtils.isUsable(aiConfig)) {
+          return null;
+        }
+        const { dfContentInfo } = context;
+        const [, , , subtitlesTaskResult] = allResults;
+        const generatedSubtitles = subtitlesTaskResult?.status === "success" ? subtitlesTaskResult.result : null;
+        const transcriptText = generatedSubtitles ? srtLinesToText(generatedSubtitles.lines) : undefined;
+        return AiAnalysisTaskBuilder({
+          entry: {
+            key: dfContentInfo.key,
+            contentInfo: dfContentInfo,
+            statusInfo: { availability: DfContentAvailability.AVAILABLE, availabilityInTiers: {} },
+            downloads: [],
+          },
+          config: aiConfig,
+          transcriptText,
+        });
+      },
+      continueOnFail: true,
+      taskManager: aiAnalysisTaskManager,
     })
     .next({
       stepName: "Inject Metadata",

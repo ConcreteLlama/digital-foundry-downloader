@@ -54,6 +54,17 @@ export type AnalysisInputs = {
   articleText?: string;
   articleUrl?: string;
   articleTitle?: string;
+  /**
+   * Transcript text supplied directly, bypassing the usual lookup.
+   *
+   * Needed by the during-download path: the transcript has just been
+   * generated in the same pipeline, but the download is not recorded in the
+   * DB until the whole pipeline succeeds, so there is no download entry for
+   * resolveTranscript to find a sidecar against. The caller has the text in
+   * hand, so it hands it over rather than the resolver going looking for
+   * something that is not filed yet.
+   */
+  transcriptText?: string;
 };
 
 type PreparedCall = {
@@ -83,9 +94,9 @@ export const prepareAnalysis = async (config: AiAnalysisConfig, inputs: Analysis
 
   const wantsTranscript =
     config.features.summary || config.features.structuredData || config.features.tagging.useTranscriptWhenAvailable;
-  const resolved = wantsTranscript ? await resolveTranscript(entry) : undefined;
+  const resolved = wantsTranscript && !inputs.transcriptText ? await resolveTranscript(entry) : undefined;
 
-  let transcript = resolved?.text;
+  let transcript = inputs.transcriptText || resolved?.text;
   if (transcript && transcript.length > config.maxTranscriptChars) {
     // Refuse rather than truncate. A transcript cut off part-way produces
     // an analysis that looks complete but silently omits whatever was in

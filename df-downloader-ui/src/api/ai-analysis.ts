@@ -3,6 +3,7 @@ import {
   AiAnalysisIndexEntry,
   AiAnalysisResult,
   AiTagStatus,
+  DfArticle,
   parseResponseBody,
 } from "df-downloader-common";
 import { z } from "zod";
@@ -67,4 +68,35 @@ export const startAiAnalysis = async (contentKey: string, force = false) =>
 export const decideAiTag = async (contentKey: string, tag: string, status: AiTagStatus): Promise<AiAnalysisResult> => {
   const response = await postJson(`${API_URL}/ai-analysis/tag-decision`, { contentKey, tag, status });
   return unwrap(response, AiAnalysisResult);
+};
+
+/**
+ * What is known about a matching Digital Foundry article.
+ *
+ * `search` is opt-in on purpose: reading this on a panel open must not
+ * generate site traffic, so a plain read returns only what is already
+ * stored and searching is something the person asks for.
+ */
+export const DfArticleLookupResponse = z.object({
+  article: DfArticle.nullable(),
+  lastAttemptedAt: z.coerce.date().nullable(),
+  missCount: z.number().default(0),
+  nextRetryAt: z.coerce.date().nullable(),
+  lastError: z.string().nullable(),
+  searchDue: z.boolean().default(true),
+});
+export type DfArticleLookupResponse = z.infer<typeof DfArticleLookupResponse>;
+
+export const fetchDfArticle = async (
+  contentKey: string,
+  opts: { search?: boolean; force?: boolean } = {}
+): Promise<DfArticleLookupResponse> => {
+  const params = new URLSearchParams();
+  if (opts.search) params.set("search", "true");
+  if (opts.force) params.set("force", "true");
+  const query = params.toString();
+  const response = await fetchJson(
+    `${API_URL}/ai-analysis/article/${encodeURIComponent(contentKey)}${query ? `?${query}` : ""}`
+  );
+  return unwrap(response, DfArticleLookupResponse);
 };
