@@ -77,6 +77,19 @@ const keyToFilename = (key: string): string => {
 
 export class AiAnalysisStore {
   private index: AiAnalysisIndexFile;
+  /**
+   * Every stored result, held once a cross-content view has asked for them.
+   *
+   * Aggregate views (the game index) need the full results, which the
+   * per-item split deliberately keeps off the startup path. Reading the
+   * whole directory is a few hundred small files at most - tens of
+   * milliseconds - and is only paid when such a view is actually opened,
+   * so it is cached rather than made cheap.
+   *
+   * Invalidated on every write, which is sound precisely because `set` and
+   * `remove` are the only two paths that change anything.
+   */
+  private allResultsCache: { contentKey: string; result: AiAnalysisResult }[] | undefined;
 
   private constructor(private readonly dir: string, index: AiAnalysisIndexFile) {
     this.index = index;
@@ -154,6 +167,7 @@ export class AiAnalysisStore {
     const payload = { contentKey, result };
     await writeFileAtomic(filePath, JSON.stringify(payload, null, 2));
     this.index.entries[contentKey] = makeAiAnalysisIndexEntry(result);
+    this.allResultsCache = undefined;
     await this.writeIndex();
   }
 
@@ -176,8 +190,31 @@ export class AiAnalysisStore {
 
   async remove(contentKey: string): Promise<void> {
     delete this.index.entries[contentKey];
+    this.allResultsCache = undefined;
     await fs.promises.rm(path.join(this.dir, keyToFilename(contentKey)), { force: true });
     await this.writeIndex();
+  }
+
+  /**
+   * Every stored result, for the cross-content views.
+   *
+   * Driven from the index rather than a directory listing, so a result
+   * file left behind by a removed entry is ignored rather than
+   * resurrected.
+   */
+  async getAllResults(): Promise<{ contentKey: string; result: AiAnalysisResult }[]> {
+    if (this.allResultsCache) {
+      return this.allResultsCache;
+    }
+    const results: { contentKey: string; result: AiAnalysisResult }[] = [];
+    for (const contentKey of Object.keys(this.index.entries)) {
+      const result = await this.get(contentKey);
+      if (result) {
+        results.push({ contentKey, result });
+      }
+    }
+    this.allResultsCache = results;
+    return results;
   }
 
   /** Synchronous and in-memory - safe to call per row while rendering a list. */

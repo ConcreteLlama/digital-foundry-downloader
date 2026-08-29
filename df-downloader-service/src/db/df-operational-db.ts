@@ -95,6 +95,8 @@ export abstract class DfDownloaderOperationalDb {
   /** Synchronous: the index is held in memory precisely so list views can ask per row. */
   abstract getAiAnalysisIndex(): Record<string, AiAnalysisIndexEntry>;
   abstract getAiAnalysisIndexEntry(contentName: string): AiAnalysisIndexEntry | undefined;
+  /** Every stored analysis, for cross-content views. Cached in the store - see AiAnalysisStore. */
+  abstract getAllAiAnalysisResults(): Promise<{ contentKey: string; result: AiAnalysisResult }[]>;
   abstract setDfArticleLookup(state: DfArticleLookupState): Promise<void>;
   abstract getDfArticleLookup(contentName: string): Promise<DfArticleLookupState | undefined>;
   /** Synchronous: the retry decision runs on every content-panel open. */

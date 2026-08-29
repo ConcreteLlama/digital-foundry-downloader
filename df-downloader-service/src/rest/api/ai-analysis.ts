@@ -11,6 +11,7 @@ import express from "express";
 import { configService } from "../../config/config.js";
 import { DigitalFoundryContentManager } from "../../df-content-manager.js";
 import { estimateAnalysisCost } from "../../utils/ai/analyse.js";
+import { buildGameIndex } from "../../utils/ai/game-index.js";
 import { ensureArticleForContent } from "../../utils/df-articles/ensure-article.js";
 import { DfFetchPriority } from "../../df-request-queue.js";
 import { sanitizeContentName } from "../../utils/df-utils.js";
@@ -73,6 +74,21 @@ export const makeAiAnalysisRouter = (contentManager: DigitalFoundryContentManage
   router.get("/index", async (_req, res) => {
     try {
       return sendResponse(res, { entries: contentManager.db.getAiAnalysisIndex() });
+    } catch (e) {
+      return sendErrorAsResponse(res, e);
+    }
+  });
+
+  /**
+   * Analysed content grouped by the game it covers.
+   *
+   * Aggregated server-side rather than by shipping every result to the
+   * browser: results are per-file and several kilobytes each, so the
+   * client has no business reading them all to draw a list.
+   */
+  router.get("/game-index", async (_req, res) => {
+    try {
+      return sendResponse(res, await buildGameIndex(contentManager.db));
     } catch (e) {
       return sendErrorAsResponse(res, e);
     }

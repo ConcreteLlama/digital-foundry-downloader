@@ -12,6 +12,7 @@ import { Nav, NavPage } from "./routes/nav/nav.components";
 import { isNestedRoute, NestedRouteElement } from "./routes/nav/nested-routes.tsx";
 import { settingsRouteDefinitions } from "./routes/settings/settings.routes";
 import { systemRouteDefinitions } from "./routes/system/system.routes.tsx";
+import { analysisRouteDefinitions } from "./routes/analysis/analysis.routes.tsx";
 import { toolsRouteDefinitions } from "./routes/tools/tools.routes.tsx";
 import { queryCurrentUser } from "./store/auth-user/auth-user.actions";
 import { selectAuthUser } from "./store/auth-user/auth-user.selector";
@@ -138,6 +139,7 @@ const makeRoutes = (routes: NestedRouteElement[]) => {
 };
 const settingsRoutes = makeRoutes(settingsRouteDefinitions.routes);
 const toolsRoutes = makeRoutes(toolsRouteDefinitions.routes);
+const analysisRoutes = makeRoutes(analysisRouteDefinitions.routes);
 const systemRoutes = makeRoutes(systemRouteDefinitions.routes);
 
 const MainApp = () => {
@@ -198,6 +200,9 @@ const MainApp = () => {
             <Route key="route-auth" id="route-auth" path="auth" element={<AuthPage />} />
             <Route key="route-settings" id="route-settings" element={<NavPage />}>
               {settingsRoutes}
+            </Route>
+            <Route key="route-analysis" id="route-analysis" element={<NavPage />}>
+              {analysisRoutes}
             </Route>
             <Route key="route-tools" id="route-tools" element={<NavPage />}>
               {toolsRoutes}

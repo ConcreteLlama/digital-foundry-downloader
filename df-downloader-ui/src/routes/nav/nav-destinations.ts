@@ -1,16 +1,18 @@
 import ComputerIcon from "@mui/icons-material/Computer";
+import InsightsIcon from "@mui/icons-material/Insights";
 import DownloadIcon from "@mui/icons-material/Download";
 import HandymanIcon from "@mui/icons-material/Handyman";
 import SettingsIcon from "@mui/icons-material/Settings";
 import VideoCameraIcon from "@mui/icons-material/VideoCameraBack";
 import { SvgIconProps } from "@mui/material";
+import { analysisRouteDefinitions } from "../analysis/analysis.routes";
 import { settingsRouteDefinitions } from "../settings/settings.routes";
 import { systemRouteDefinitions } from "../system/system.routes";
 import { toolsRouteDefinitions } from "../tools/tools.routes";
 import { isNestedRoute, NestedRoute, NestedSubRoute } from "./nested-routes";
 
 /**
- * The five top-level places you can be. The rail holds exactly these - the
+ * The six top-level places you can be. The rail holds exactly these - the
  * sections' own pages are reached from a sub-nav inside the page, not from a
  * nested accordion in a 240px column.
  */
@@ -34,6 +36,7 @@ export const navDestinations: NavDestination[] = [
   // downloads - and "Downloads" already means a different thing as a settings
   // section. The path is left alone so existing links and bookmarks still work.
   { prefix: "/downloads", label: "Activity", icon: DownloadIcon, path: "/downloads", badge: "activity" },
+  { prefix: "/analysis", label: "Analysis", icon: InsightsIcon, section: analysisRouteDefinitions },
   { prefix: "/tools", label: "Tools", icon: HandymanIcon, section: toolsRouteDefinitions },
   { prefix: "/settings", label: "Settings", icon: SettingsIcon, section: settingsRouteDefinitions },
   { prefix: "/system", label: "System", icon: ComputerIcon, section: systemRouteDefinitions },

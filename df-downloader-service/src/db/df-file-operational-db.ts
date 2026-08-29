@@ -152,6 +152,9 @@ export class DfFileOperationalDb extends DfDownloaderOperationalDb {
     getAiAnalysisIndexEntry(contentName: string) {
         return this.aiAnalysisStore.getIndexEntry(contentName);
     }
+    async getAllAiAnalysisResults() {
+        return this.aiAnalysisStore.getAllResults();
+    }
     async setDfArticleLookup(state: DfArticleLookupState) {
         return this.dfArticleStore.set(state);
     }

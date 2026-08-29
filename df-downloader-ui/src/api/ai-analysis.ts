@@ -4,6 +4,7 @@ import {
   AiAnalysisResult,
   AiTagStatus,
   DfArticle,
+  GameIndexResponse,
   parseResponseBody,
 } from "df-downloader-common";
 import { z } from "zod";
@@ -99,4 +100,15 @@ export const fetchDfArticle = async (
     `${API_URL}/ai-analysis/article/${encodeURIComponent(contentKey)}${query ? `?${query}` : ""}`
   );
   return unwrap(response, DfArticleLookupResponse);
+};
+
+/**
+ * Analysed content grouped by game.
+ *
+ * Aggregated server-side - results are per-file and several kilobytes
+ * each, so the browser has no business reading them all to draw a list.
+ */
+export const fetchGameIndex = async (): Promise<GameIndexResponse> => {
+  const response = await fetchJson(`${API_URL}/ai-analysis/game-index`);
+  return unwrap(response, GameIndexResponse);
 };

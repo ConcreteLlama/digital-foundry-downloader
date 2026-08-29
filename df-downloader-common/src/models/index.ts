@@ -28,3 +28,4 @@ export * from './chapter.js';
 export * from './queue-status.js';
 export * from './ai-analysis.js';
 export * from './df-article.js';
+export * from './game-index.js';
