@@ -239,6 +239,7 @@ export const PlatformComparisonPage = () => {
   const [data, setData] = useState<PlatformComparisonResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
+  const [selectedPlatforms, setSelectedPlatforms] = useState<string[]>([]);
   const [analysisKey, setAnalysisKey] = useState<string | null>(null);
   const [contentKey, setContentKey] = useState<string | null>(null);
 
@@ -253,14 +254,32 @@ export const PlatformComparisonPage = () => {
     };
   }, []);
 
+  /**
+   * Columns follow the filter: picking two platforms is asking to compare
+   * those two, and leaving the other six columns on screen would defeat
+   * the point of narrowing.
+   */
+  const columns = selectedPlatforms.length ? selectedPlatforms : (data?.platformsPresent ?? []);
+
   const rows = useMemo(() => {
     if (!data) return [];
     const needle = normaliseName(search);
-    if (!needle) return data.rows;
-    return data.rows.filter(
-      (row) => normaliseName(row.game ?? "").includes(needle) || normaliseName(row.title).includes(needle)
+    return data.rows.filter((row) => {
+      if (needle && !normaliseName(row.game ?? "").includes(needle) && !normaliseName(row.title).includes(needle)) {
+        return false;
+      }
+      // Every selected platform, not any of them: selecting PS5 and Series
+      // X means "where were these two compared against each other", and a
+      // row covering only one of them does not answer that. With a single
+      // platform selected the two readings coincide anyway.
+      return selectedPlatforms.every((platform) => row.platforms[platform]?.length);
+    });
+  }, [data, search, selectedPlatforms]);
+
+  const togglePlatform = (platform: string) =>
+    setSelectedPlatforms((current) =>
+      current.includes(platform) ? current.filter((p) => p !== platform) : [...current, platform]
     );
-  }, [data, search]);
 
   if (loading) {
     return (
@@ -304,13 +323,51 @@ export const PlatformComparisonPage = () => {
         </Paper>
       ) : (
         <>
-          <TextField
-            size="small"
-            label="Search"
-            value={search}
-            onChange={(event) => setSearch(event.target.value)}
-            sx={{ maxWidth: 360 }}
-          />
+          <Stack direction="row" spacing={1.5} alignItems="center" flexWrap="wrap" useFlexGap>
+            <TextField
+              size="small"
+              label="Search"
+              value={search}
+              onChange={(event) => setSearch(event.target.value)}
+              sx={{ maxWidth: 280, flex: "1 1 200px" }}
+            />
+          </Stack>
+          <Stack direction="row" spacing={0.75} alignItems="center" flexWrap="wrap" useFlexGap>
+            <Typography variant="caption" sx={{ color: "text.disabled" }}>
+              Platforms:
+            </Typography>
+            {data.platformsPresent.map((platform) => {
+              const selected = selectedPlatforms.includes(platform);
+              return (
+                <Chip
+                  key={platform}
+                  size="small"
+                  clickable
+                  variant={selected ? "filled" : "outlined"}
+                  color={selected ? "primary" : "default"}
+                  label={platform}
+                  onClick={() => togglePlatform(platform)}
+                  sx={{ height: 22, fontSize: "0.7rem" }}
+                />
+              );
+            })}
+            {selectedPlatforms.length > 0 && (
+              <Chip
+                size="small"
+                variant="outlined"
+                clickable
+                label="Clear"
+                onClick={() => setSelectedPlatforms([])}
+                sx={{ height: 22, fontSize: "0.7rem", color: "text.disabled" }}
+              />
+            )}
+          </Stack>
+          {selectedPlatforms.length > 0 && (
+            <Typography variant="caption" sx={{ color: "text.secondary" }}>
+              {rows.length} of {data.rows.length} comparisons cover{" "}
+              {selectedPlatforms.length === 1 ? selectedPlatforms[0] : `all of ${selectedPlatforms.join(", ")}`}.
+            </Typography>
+          )}
           {/* The table scrolls inside its own container - with a column per
               platform it is wider than the page, and the page itself must
               never scroll sideways. */}
@@ -319,7 +376,7 @@ export const PlatformComparisonPage = () => {
               <TableHead>
                 <TableRow>
                   <TableCell>Game</TableCell>
-                  {data.platformsPresent.map((platform) => (
+                  {columns.map((platform) => (
                     <TableCell key={platform}>{platform}</TableCell>
                   ))}
                   <TableCell>DF's recommendation</TableCell>
@@ -330,7 +387,7 @@ export const PlatformComparisonPage = () => {
                   <ComparisonRow
                     key={row.contentKey}
                     row={row}
-                    platforms={data.platformsPresent}
+                    platforms={columns}
                     onOpen={setAnalysisKey}
                   />
                 ))}
@@ -339,7 +396,11 @@ export const PlatformComparisonPage = () => {
           </TableContainer>
           {rows.length === 0 && (
             <Typography variant="body2" sx={{ color: "text.disabled" }}>
-              Nothing matches “{search}”.
+              {selectedPlatforms.length > 1
+                ? `No analysed comparison covers all of ${selectedPlatforms.join(", ")} together.`
+                : search
+                  ? `Nothing matches “${search}”.`
+                  : "Nothing to show."}
             </Typography>
           )}
         </>
