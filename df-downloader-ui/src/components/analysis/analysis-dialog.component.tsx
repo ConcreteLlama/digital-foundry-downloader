@@ -26,8 +26,10 @@ const AnalysisDialogSurface = styled(Paper)(({ theme }) => ({
   display: "flex",
   flexDirection: "column",
   maxWidth: "100%",
-  overflowX: "hidden",
-  overflowY: "auto",
+  // The surface itself never scrolls - its middle section does. A sticky
+  // header inside a scrolling padded box only paints its own bounds, so
+  // content passed through the padding strip above it.
+  overflow: "hidden",
   maxHeight: "85vh",
   [theme.breakpoints.down("md")]: {
     padding: theme.spacing(2),
@@ -71,12 +73,7 @@ export const AnalysisDialog = ({ contentKey, title, onClose, onOpenContent }: An
   return (
     <MiddleModal open={Boolean(contentKey)} onClose={onClose} id="analysis-dialog" hideCloseButton>
       <AnalysisDialogSurface elevation={8}>
-        <Stack
-          direction="row"
-          spacing={1}
-          alignItems="flex-start"
-          sx={{ mb: 1, position: "sticky", top: 0, bgcolor: "background.paper", zIndex: 1, pt: 0.5 }}
-        >
+        <Stack direction="row" spacing={1} alignItems="flex-start" sx={{ mb: 1, flex: "0 0 auto" }}>
           <Box sx={{ flex: "1 1 auto", minWidth: 0 }}>
             <Typography variant="overline" sx={{ color: "text.disabled" }}>
               Analysis
@@ -92,13 +89,18 @@ export const AnalysisDialog = ({ contentKey, title, onClose, onOpenContent }: An
           </IconButton>
         </Stack>
 
-        <Divider sx={{ mb: 2 }} />
+        <Divider sx={{ flex: "0 0 auto" }} />
 
-        {contentKey && <AiAnalysisPanel contentKey={contentKey} enabled={enabled} />}
+        {/* The only scrolling region. Keeping the header and the way out
+            of the dialog fixed means neither is lost part-way down a long
+            analysis. */}
+        <Box sx={{ flex: "1 1 auto", minHeight: 0, overflowY: "auto", overflowX: "hidden", py: 2 }}>
+          {contentKey && <AiAnalysisPanel contentKey={contentKey} enabled={enabled} />}
+        </Box>
 
-        <Divider sx={{ mt: 2, mb: 1.5 }} />
+        <Divider sx={{ flex: "0 0 auto" }} />
 
-        <Box>
+        <Box sx={{ flex: "0 0 auto", pt: 1 }}>
           <Button
             size="small"
             startIcon={<OpenInNewIcon fontSize="small" />}
