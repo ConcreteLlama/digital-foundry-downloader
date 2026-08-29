@@ -1,6 +1,7 @@
 import CheckCircleIcon from "@mui/icons-material/CheckCircle";
 import { Box, Stack, Typography } from "@mui/material";
 import {
+  DfContentEntry,
   audioPropertiesToString,
   bytesToHumanReadable,
   DfContentEntryUtils,
@@ -8,7 +9,6 @@ import {
 } from "df-downloader-common";
 import { monoFontFamily } from "../../../themes/build-theme";
 import { StartDownloadingButton } from "../start-download-dialog.component";
-import { MediaInfoListProps } from "./media-info-list.component";
 
 /**
  * Available formats as rows rather than a five-column table.
@@ -18,7 +18,11 @@ import { MediaInfoListProps } from "./media-info-list.component";
  * half is a side column - it simply scrolled sideways. A row wraps its
  * specifics onto a second line instead, so nothing is ever off to the right.
  */
-export const FormatRows = ({ contentEntry }: MediaInfoListProps) => {
+export type FormatRowsProps = {
+  contentEntry: DfContentEntry;
+};
+
+export const FormatRows = ({ contentEntry }: FormatRowsProps) => {
   const { contentInfo } = contentEntry;
   return (
     <Stack sx={{ marginTop: 1 }}>

@@ -4,7 +4,6 @@ import { DfContentDownloadInfo } from "df-downloader-common/models/df-content-do
 import { useState } from "react";
 import { monoFontFamily } from "../../../themes/build-theme";
 import { DownloadDetailsDialog } from "./download-details-dialog.component.tsx";
-import { DownloadedInfoListProps } from "./downloaded-info-list.component.tsx";
 import { DownloadedItemActions } from "./downloaded-item-actions.component.tsx";
 
 /**
@@ -16,7 +15,11 @@ import { DownloadedItemActions } from "./downloaded-item-actions.component.tsx";
  * value here, so it is truncated to the filename and the row opens the file's
  * own dialog where the whole thing is legible.
  */
-export const OnDiskRows = ({ contentEntry }: DownloadedInfoListProps) => (
+export type OnDiskRowsProps = {
+  contentEntry: DfContentEntry;
+};
+
+export const OnDiskRows = ({ contentEntry }: OnDiskRowsProps) => (
   <Stack sx={{ marginTop: 1 }}>
     {contentEntry.downloads.map((download) => (
       <OnDiskRow
