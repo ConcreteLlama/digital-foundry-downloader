@@ -1,6 +1,5 @@
 import ArticleIcon from "@mui/icons-material/Article";
 import SubtitlesIcon from "@mui/icons-material/Subtitles";
-import WarningAmberIcon from "@mui/icons-material/WarningAmber";
 import {
   Alert,
   Box,
@@ -102,47 +101,6 @@ const PlatformCell = ({ modes }: { modes: PlatformMode[] | undefined }) => {
         </Box>
       ))}
     </Stack>
-  );
-};
-
-/**
- * How complete the table actually is, stated up front.
- *
- * A reader looking at a table full of "not stated" deserves to know that
- * this is the normal condition of the source material and not a fault -
- * and that the one field a scoreboard would need is the one that is almost
- * never there.
- */
-const CoverageNote = ({ data }: { data: PlatformComparisonResponse }) => {
-  const { coverage } = data;
-  return (
-    <Alert
-      severity="info"
-      variant="outlined"
-      icon={<WarningAmberIcon fontSize="small" />}
-      sx={{ py: 0.25, "& .MuiAlert-message": { py: 0.5 }, "& .MuiAlert-icon": { py: 0.75 } }}
-    >
-      {/* Both frame-rate figures are defined where they are used. "Target"
-          and "measured average" are the schema's words, not words a reader
-          arrives already knowing, and the difference between them is the
-          whole reason this table has no best-platform column. */}
-      <Typography variant="caption" sx={{ color: "text.secondary", display: "block" }}>
-        {data.comparisonCount} comparisons covering {coverage.totalModes} platform modes. A blank cell means Digital
-        Foundry did not give that figure — not that something is missing here.
-      </Typography>
-      <Typography variant="caption" sx={{ color: "text.secondary", display: "block", mt: 0.25 }}>
-        They gave the resolution for <strong>{coverage.withResolution}</strong> modes, and the frame rate the mode aims
-        for in <strong>{coverage.withFpsTarget}</strong> — but only{" "}
-        <Box component="strong" sx={{ color: "warning.main" }}>
-          {coverage.withMeasuredAvg}
-        </Box>{" "}
-        say what it <em>actually</em> ran at when they tested it.
-      </Typography>
-      <Typography variant="caption" sx={{ color: "text.disabled", display: "block", mt: 0.25 }}>
-        That last figure is the only one that could rank platforms, and it is missing most often when they performed
-        about the same — so there is no "best platform" column.
-      </Typography>
-    </Alert>
   );
 };
 
@@ -309,11 +267,9 @@ export const PlatformComparisonPage = () => {
           Platform comparisons
         </Typography>
         <Typography variant="caption" sx={{ color: "text.secondary" }}>
-          Digital Foundry's own figures, side by side. Nothing here is averaged or ranked.
+          Digital Foundry's own figures, side by side · {data.comparisonCount} of {data.analysedCount} analysed items
         </Typography>
       </Box>
-
-      <CoverageNote data={data} />
 
       {data.rows.length === 0 ? (
         <Paper variant="outlined" sx={{ p: 3 }}>

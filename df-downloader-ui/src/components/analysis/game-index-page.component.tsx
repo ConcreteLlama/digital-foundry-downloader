@@ -34,27 +34,6 @@ import { monoFontFamily } from "../../themes/build-theme.ts";
  * "which platform wins" tally does not hold up against this data.
  */
 
-/**
- * States plainly what this page is drawn from.
- *
- * Not a footnote or a tooltip. Only analysed content appears here and the
- * user chooses what gets analysed, so this is never a picture of the
- * library - and a page that let someone forget that would be misleading by
- * construction, not merely incomplete.
- */
-const CoverageNote = ({ data }: { data: GameIndexResponse }) => (
-  <Alert
-    severity="info"
-    variant="outlined"
-    sx={{ py: 0.25, "& .MuiAlert-message": { py: 0.5 }, "& .MuiAlert-icon": { py: 0.75 } }}
-  >
-    <Typography variant="caption" sx={{ color: "text.secondary" }}>
-      {data.analysedCount} of {data.libraryCount.toLocaleString()} analysed
-      {data.ungroupedCount > 0 && ` · ${data.ungroupedCount} without a game name`} · not a view of your whole library
-    </Typography>
-  </Alert>
-);
-
 const GroupRow = ({ group, onOpen }: { group: GameGroup; onOpen: (contentKey: string) => void }) => {
   const allPlatforms = [...new Set(group.items.flatMap((item) => item.platforms))];
   // Capped rather than wrapped: the full set pushed the header onto three
@@ -266,11 +245,10 @@ export const GameIndexPage = () => {
           Games
         </Typography>
         <Typography variant="caption" sx={{ color: "text.secondary" }}>
-          What Digital Foundry covered, grouped by game.
+          What Digital Foundry covered, grouped by game · {data.groups.length} games from {data.analysedCount} analysed
+          items
         </Typography>
       </Box>
-
-      <CoverageNote data={data} />
 
       {data.groups.length === 0 ? (
         <Paper variant="outlined" sx={{ p: 3 }}>
