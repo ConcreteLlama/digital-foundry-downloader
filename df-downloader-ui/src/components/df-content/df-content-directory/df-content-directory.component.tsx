@@ -148,9 +148,14 @@ export const DfContentInfoDirectory = () => {
             ))}
           </Box>
         )}
-        <MiddleModal open={Boolean(selectedItem)} onClose={onModalClose} id="df-content-item-detail-modal">
+        <MiddleModal
+          open={Boolean(selectedItem)}
+          onClose={onModalClose}
+          id="df-content-item-detail-modal"
+          hideCloseButton
+        >
           <Box>
-            <DfContentInfoItemDetail dfContentName={selectedItem || ""} />
+            <DfContentInfoItemDetail dfContentName={selectedItem || ""} onClose={onModalClose} />
           </Box>
         </MiddleModal>
       </Box>

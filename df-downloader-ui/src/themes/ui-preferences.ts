@@ -12,6 +12,7 @@ const THEME_KEY = "df-ui-theme";
 const RAIL_KEY = "df-ui-rail";
 const DENSITY_KEY = "df-ui-density";
 const VIEW_KEY = "df-ui-view";
+const DETAIL_LAYOUT_KEY = "df-ui-detail-layout";
 /**
  * The chosen palette's page background, cached so the inline script in
  * index.html can paint it before the bundle has even loaded. Storing the
@@ -28,6 +29,12 @@ export type RailState = "expanded" | "icon";
 export type RowDensity = "comfortable" | "compact";
 /** Library layout: one row per item, or a thumbnail grid. */
 export type ContentView = "list" | "grid";
+/**
+ * Content detail layout: media and prose beside what you can act on, or one
+ * column with the actions below. Only distinguishable at md and up - the
+ * detail grid is a single column below that regardless.
+ */
+export type DetailLayout = "split" | "stacked";
 
 const read = (key: string): string | null => {
   try {
@@ -85,3 +92,8 @@ export const storeDensity = (density: RowDensity) => write(DENSITY_KEY, density)
 export const getStoredView = (): ContentView => (read(VIEW_KEY) === "grid" ? "grid" : "list");
 
 export const storeView = (view: ContentView) => write(VIEW_KEY, view);
+
+export const getStoredDetailLayout = (): DetailLayout =>
+  read(DETAIL_LAYOUT_KEY) === "stacked" ? "stacked" : "split";
+
+export const storeDetailLayout = (layout: DetailLayout) => write(DETAIL_LAYOUT_KEY, layout);

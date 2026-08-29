@@ -402,11 +402,12 @@ export const TaskDetailsDialog = ({
           open={contentOpen}
           onClose={() => setContentOpen(false)}
           id="task-details-content-detail-modal"
+          hideCloseButton
         >
           <Box>
             {/* Keyed by `key`, not `name` - name is a cosmetic slug. The prop
                 name predates that split. */}
-            <DfContentInfoItemDetail dfContentName={dfContent.key} />
+            <DfContentInfoItemDetail dfContentName={dfContent.key} onClose={() => setContentOpen(false)} />
           </Box>
         </MiddleModal>
       )}
