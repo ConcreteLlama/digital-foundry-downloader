@@ -21,6 +21,7 @@ import { useEffect, useMemo, useState } from "react";
 import { fetchGameIndex } from "../../api/ai-analysis.ts";
 import { MiddleModal } from "../general/middle-modal.component.tsx";
 import { DfContentInfoItemDetail } from "../df-content/df-content-item-detail/df-content-item-detail.component.tsx";
+import { AnalysisDialog } from "./analysis-dialog.component.tsx";
 import { conciseFormatDate } from "../../utils/date.ts";
 import { monoFontFamily } from "../../themes/build-theme.ts";
 
@@ -212,7 +213,8 @@ export const GameIndexPage = () => {
   const [data, setData] = useState<GameIndexResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
-  const [openContentKey, setOpenContentKey] = useState<string | null>(null);
+  const [analysisKey, setAnalysisKey] = useState<string | null>(null);
+  const [contentKey, setContentKey] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -289,7 +291,7 @@ export const GameIndexPage = () => {
           <Box sx={{ overflowY: "auto", minHeight: 0, pr: 0.5 }}>
             <Stack spacing={1}>
               {filtered.map((group) => (
-                <GroupRow key={group.key} group={group} onOpen={setOpenContentKey} />
+                <GroupRow key={group.key} group={group} onOpen={setAnalysisKey} />
               ))}
               {filtered.length === 0 && (
                 <Typography variant="body2" sx={{ color: "text.disabled" }}>
@@ -301,17 +303,24 @@ export const GameIndexPage = () => {
         </>
       )}
 
+      <AnalysisDialog
+        contentKey={analysisKey}
+        title={data.groups.flatMap((group) => group.items).find((item) => item.contentKey === analysisKey)?.title}
+        onClose={() => setAnalysisKey(null)}
+        onOpenContent={(key) => {
+          setAnalysisKey(null);
+          setContentKey(key);
+        }}
+      />
+
       <MiddleModal
-        open={Boolean(openContentKey)}
-        onClose={() => setOpenContentKey(null)}
-        id="game-index-content-detail-modal"
+        open={Boolean(contentKey)}
+        onClose={() => setContentKey(null)}
+        id="game-index-content-modal"
         hideCloseButton
       >
         <Box>
-          <DfContentInfoItemDetail
-            dfContentName={openContentKey || ""}
-            onClose={() => setOpenContentKey(null)}
-          />
+          <DfContentInfoItemDetail dfContentName={contentKey || ""} onClose={() => setContentKey(null)} />
         </Box>
       </MiddleModal>
     </Stack>

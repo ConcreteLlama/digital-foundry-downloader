@@ -25,6 +25,7 @@ import { monoFontFamily } from "../../themes/build-theme.ts";
 import { conciseFormatDate } from "../../utils/date.ts";
 import { MiddleModal } from "../general/middle-modal.component.tsx";
 import { DfContentInfoItemDetail } from "../df-content/df-content-item-detail/df-content-item-detail.component.tsx";
+import { AnalysisDialog } from "./analysis-dialog.component.tsx";
 
 /**
  * Every console comparison, side by side.
@@ -170,17 +171,15 @@ const ComparisonRow = ({
         )}
       </Stack>
       {row.unrecognised.length > 0 && (
-        // Surfaced, not hidden. Some of these are platforms the canonical
-        // list has not caught up with; at least one in the real corpus is
-        // a section heading the extraction mistook for a platform. Both
-        // are worth seeing.
+        // Named rather than counted. These are mostly real platforms that
+        // simply have no column - PS4, iPhone, Mac - so a bare
+        // "1 unrecognised" both alarmed and told the reader nothing. A
+        // genuine mis-extraction reads correctly here too.
         <Tooltip title={row.unrecognised.map((entry) => entry.platform).join(" · ")}>
-          <Chip
-            size="small"
-            variant="outlined"
-            label={`${row.unrecognised.length} unrecognised`}
-            sx={{ mt: 0.5, height: 18, fontSize: "0.65rem", color: "warning.main", borderColor: "warning.main" }}
-          />
+          <Typography variant="caption" sx={{ display: "block", mt: 0.5, color: "text.disabled" }}>
+            Also: {row.unrecognised.slice(0, 2).map((entry) => entry.platform).join(", ")}
+            {row.unrecognised.length > 2 ? ` +${row.unrecognised.length - 2}` : ""}
+          </Typography>
         </Tooltip>
       )}
     </TableCell>
@@ -208,10 +207,15 @@ const ComparisonRow = ({
         <NotStated />
       )}
       {row.knownIssues.length > 0 && (
-        <Tooltip title={row.knownIssues.join(" · ")}>
+        <Tooltip title="Open the analysis to read these">
           <Chip
             size="small"
             variant="outlined"
+            clickable
+            onClick={(event) => {
+              event.stopPropagation();
+              onOpen(row.contentKey);
+            }}
             label={`${row.knownIssues.length} known ${row.knownIssues.length === 1 ? "issue" : "issues"}`}
             sx={{ mt: 0.75, height: 18, fontSize: "0.65rem", color: "error.main", borderColor: "error.main" }}
           />
@@ -225,7 +229,8 @@ export const PlatformComparisonPage = () => {
   const [data, setData] = useState<PlatformComparisonResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
-  const [openContentKey, setOpenContentKey] = useState<string | null>(null);
+  const [analysisKey, setAnalysisKey] = useState<string | null>(null);
+  const [contentKey, setContentKey] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -316,7 +321,7 @@ export const PlatformComparisonPage = () => {
                     key={row.contentKey}
                     row={row}
                     platforms={data.platformsPresent}
-                    onOpen={setOpenContentKey}
+                    onOpen={setAnalysisKey}
                   />
                 ))}
               </TableBody>
@@ -330,14 +335,24 @@ export const PlatformComparisonPage = () => {
         </>
       )}
 
+      <AnalysisDialog
+        contentKey={analysisKey}
+        title={data.rows.find((row) => row.contentKey === analysisKey)?.title}
+        onClose={() => setAnalysisKey(null)}
+        onOpenContent={(key) => {
+          setAnalysisKey(null);
+          setContentKey(key);
+        }}
+      />
+
       <MiddleModal
-        open={Boolean(openContentKey)}
-        onClose={() => setOpenContentKey(null)}
-        id="platform-comparison-detail-modal"
+        open={Boolean(contentKey)}
+        onClose={() => setContentKey(null)}
+        id="platform-comparison-content-modal"
         hideCloseButton
       >
         <Box>
-          <DfContentInfoItemDetail dfContentName={openContentKey || ""} onClose={() => setOpenContentKey(null)} />
+          <DfContentInfoItemDetail dfContentName={contentKey || ""} onClose={() => setContentKey(null)} />
         </Box>
       </MiddleModal>
     </Stack>
