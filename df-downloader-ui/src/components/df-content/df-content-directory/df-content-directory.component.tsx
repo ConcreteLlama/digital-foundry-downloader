@@ -2,6 +2,8 @@ import GridViewIcon from "@mui/icons-material/GridView";
 import ViewListIcon from "@mui/icons-material/ViewList";
 import DensitySmallIcon from "@mui/icons-material/DensitySmall";
 import DensityMediumIcon from "@mui/icons-material/DensityMedium";
+import ViewComfyIcon from "@mui/icons-material/ViewComfy";
+import ViewModuleIcon from "@mui/icons-material/ViewModule";
 import { Box, Stack, ToggleButton, ToggleButtonGroup, Tooltip, Typography, useMediaQuery, useTheme } from "@mui/material";
 import { useEffect, useRef, useState } from "react";
 import { useSelector } from "react-redux";
@@ -118,8 +120,11 @@ export const DfContentInfoDirectory = () => {
           <Box
             sx={{
               display: "grid",
-              gridTemplateColumns: "repeat(auto-fill, minmax(190px, 1fr))",
-              gap: 1.5,
+              // Density means "how much fits on screen" in both views - it
+              // sizes the cards here rather than doing nothing, which is what
+              // it did while the track was a fixed 190px.
+              gridTemplateColumns: `repeat(auto-fill, minmax(${density === "compact" ? 150 : 190}px, 1fr))`,
+              gap: density === "compact" ? 1 : 1.5,
               padding: { xs: 1, md: 2 },
             }}
           >
@@ -194,16 +199,26 @@ const TopBar = ({ density, onDensity, view, onView, compact }: TopBarProps) => {
             onChange={(_, next) => next && onDensity(next)}
             sx={{ marginLeft: 1 }}
           >
-            <ToggleButton value="comfortable" sx={{ paddingY: 0.25 }}>
-              <Tooltip title="Comfortable rows">
-                <DensityMediumIcon fontSize="small" />
-              </Tooltip>
-            </ToggleButton>
-            <ToggleButton value="compact" sx={{ paddingY: 0.25 }}>
-              <Tooltip title="Compact rows">
-                <DensitySmallIcon fontSize="small" />
-              </Tooltip>
-            </ToggleButton>
+            {/* One preference, but it has to look like it means what it does
+                in the view you are actually in - stacked-line icons offering
+                "comfortable rows" while you are looking at a grid of cards
+                read as broken, because in the grid they genuinely were. */}
+            {(view === "grid"
+              ? ([
+                  { value: "comfortable", Icon: ViewModuleIcon, label: "Larger cards" },
+                  { value: "compact", Icon: ViewComfyIcon, label: "Smaller cards" },
+                ] as const)
+              : ([
+                  { value: "comfortable", Icon: DensityMediumIcon, label: "Comfortable rows" },
+                  { value: "compact", Icon: DensitySmallIcon, label: "Compact rows" },
+                ] as const)
+            ).map(({ value, Icon, label }) => (
+              <ToggleButton key={value} value={value} sx={{ paddingY: 0.25 }}>
+                <Tooltip title={label}>
+                  <Icon fontSize="small" />
+                </Tooltip>
+              </ToggleButton>
+            ))}
           </ToggleButtonGroup>
         )}
         <ToggleButtonGroup size="small" exclusive value={view} onChange={(_, next) => next && onView(next)}>

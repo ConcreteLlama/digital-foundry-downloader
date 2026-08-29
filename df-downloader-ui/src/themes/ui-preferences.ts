@@ -21,7 +21,10 @@ const VIEW_KEY = "df-ui-view";
 const BG_KEY = "df-ui-bg";
 
 export type RailState = "expanded" | "icon";
-/** How much vertical room a library row gets. */
+/**
+ * How much of the library fits on screen. One preference across both views:
+ * the vertical room a row gets in list view, the card size in grid view.
+ */
 export type RowDensity = "comfortable" | "compact";
 /** Library layout: one row per item, or a thumbnail grid. */
 export type ContentView = "list" | "grid";
