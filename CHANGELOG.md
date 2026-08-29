@@ -4,7 +4,11 @@
 
 ## 2.7.0 (2026-08-27)
 
-Subtitles can now be generated locally on your own machine instead of being pulled from YouTube, which stopped serving them. This release also fixes a long-standing gap where newly published videos could go unnoticed entirely, corrects chapter timings on videos with a sponsor segment, and does a good deal less work on your disks along the way. The interface now updates the moment something changes rather than asking the server for everything once a second, so progress appears immediately and an app with nothing running sits completely quiet.
+Subtitles can now be generated locally on your own machine instead of being pulled from YouTube, which stopped serving them.
+
+The interface has also had a substantial overhaul: a sidebar that collapses to icons, an Activity page that shows each job's pipeline as a segmented, filling track instead of a single spinner, a two-column content detail view, and a full pass on fonts, spacing and colour so it reads as considered software rather than a stock template. It's properly usable on a phone or tablet now too, and pop-up messages finally match whichever theme you've picked.
+
+This release also fixes a long-standing gap where newly published videos could go unnoticed entirely, corrects chapter timings on videos with a sponsor segment, and does a good deal less work on your disks along the way. The interface now updates the moment something changes rather than asking the server for everything once a second, so progress appears immediately and an app with nothing running sits completely quiet.
 
 ### Features
 - Local subtitle generation (Whisper)
