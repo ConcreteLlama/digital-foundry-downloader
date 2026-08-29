@@ -16,6 +16,8 @@ import {
 import { DfContentInfoUtils, secondsToHHMMSS } from "df-downloader-common";
 import { useEffect, useState } from "react";
 import { useSelector } from "react-redux";
+import { AiAnalysisConfigUtils } from "df-downloader-common/config/ai-analysis-config";
+import { selectConfigSection } from "../../../store/config/config.selector.ts";
 import { clearPipeline } from "../../../api/tasks.ts";
 import { useDfContentEntry } from "../../../hooks/use-df-content-entry.ts";
 import { fetchYtVideoMeta, refreshDfContentMeta } from "../../../store/df-content/df-content.action.ts";
@@ -30,6 +32,7 @@ import {
 } from "../../../themes/ui-preferences.ts";
 import { Thumb } from "../../general/thumb.component.tsx";
 import { YouTubeEmbed } from "../../general/youtube-embed.tsx";
+import { AiAnalysisPanel } from "../ai-analysis/ai-analysis-panel.component.tsx";
 import { DfTagList } from "../df-tag-list.component.tsx";
 import { OnDiskRows } from "../downloaded-info/on-disk-rows.component.tsx";
 import { FormatRows } from "../media-info/format-rows.component.tsx";
@@ -62,6 +65,12 @@ export const DfContentInfoItemDetail = ({ dfContentName, onClose }: DfContentInf
     // scans, and only once per entry (the service caches the result).
     store.dispatch(fetchYtVideoMeta.start(dfContentName));
   }, [dfContentName]);
+  // Gates the panel on the feature actually being usable, so it explains
+  // itself rather than offering an Analyse button that would fail on the
+  // first request for want of a key.
+  const aiAnalysisConfig = useSelector(selectConfigSection("aiAnalysis"));
+  const aiAnalysisEnabled = AiAnalysisConfigUtils.isUsable(aiAnalysisConfig ?? undefined);
+
   const downloadingPipelineIds = useSelector(
     selectQueryPipelineIds({
       filter: {
@@ -235,6 +244,13 @@ export const DfContentInfoItemDetail = ({ dfContentName, onClose }: DfContentInf
                 Nothing downloaded yet
               </Typography>
             )}
+          </Box>
+
+          <Box>
+            <Typography variant="overline">Analysis</Typography>
+            <Box sx={{ marginTop: 1 }}>
+              <AiAnalysisPanel contentKey={dfContentEntry.key} enabled={aiAnalysisEnabled} />
+            </Box>
           </Box>
 
           <Box>

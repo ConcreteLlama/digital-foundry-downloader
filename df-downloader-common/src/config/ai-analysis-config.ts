@@ -118,16 +118,16 @@ export type AutomaticAiAnalysisMode = z.infer<typeof AutomaticAiAnalysisMode>;
  * Whether inferred tags are written straight onto the content or held for
  * review.
  *
- * Defaults to "suggest". Tags drive real filtering in this app (including
- * auto-download exclusion rules), so a model that doesn't know the user's
- * own tagging conventions silently writing into that set could quietly
- * change what gets downloaded. Suggesting is the reversible default;
- * auto-apply is available for anyone who'd rather not confirm each one.
+ * Defaults to "auto_apply" - confirming each tag by hand is friction that
+ * buys little here, since applying a tag is trivially reversible: every
+ * suggestion is kept on the analysis record, and removing one takes it
+ * back off the content. "suggest" remains for anyone who would rather
+ * approve each one before it can affect a filter.
  */
 export const AiTagApplyMode = z
   .enum(["suggest", "auto_apply"])
   .describe(
-    "Suggested tags are held for you to accept or reject. Applying them automatically is quicker, but tags drive your filters and auto-download rules, so a wrong one has consequences beyond looking untidy."
+    "Applying tags automatically is the quicker default and easy to undo - you can remove any tag from the analysis afterwards. Holding them for review is available if you would rather approve each one before it can affect a filter."
   );
 export type AiTagApplyMode = z.infer<typeof AiTagApplyMode>;
 
@@ -138,7 +138,7 @@ export const AiTaggingConfig = z.object({
     .describe(
       "Suggest tags for your content. This is the one part of analysis that does not need a transcript - a title and description alone are enough to infer something useful, so it works for everything in your library, not just what you have downloaded. Tags inferred from a transcript are more specific and more reliable than ones inferred from a title alone, and each suggestion records which it was."
     ),
-  applyMode: AiTagApplyMode.default("suggest"),
+  applyMode: AiTagApplyMode.default("auto_apply"),
   useTranscriptWhenAvailable: z
     .boolean()
     .default(true)

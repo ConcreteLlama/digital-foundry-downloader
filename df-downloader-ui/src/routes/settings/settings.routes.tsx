@@ -7,6 +7,7 @@ import FolderIcon from "@mui/icons-material/Folder";
 import NotificationsIcon from "@mui/icons-material/Notifications";
 import RadarIcon from "@mui/icons-material/Radar";
 import SettingsIcon from "@mui/icons-material/Settings";
+import AutoAwesomeIcon from "@mui/icons-material/AutoAwesome";
 import SubtitlesIcon from "@mui/icons-material/Subtitles";
 import VideoSettingsIcon from "@mui/icons-material/VideoSettings";
 import { AppearanceSettingsForm } from "../../components/settings/appearance-settings-form.component.tsx";
@@ -18,6 +19,7 @@ import { DfSettingsForm } from "../../components/settings/df-settings.component"
 import { DownloadsSettingsForm } from "../../components/settings/downloads-settings.component";
 import { MetadataSettingsForm } from "../../components/settings/metadata-settings-form.component";
 import { NotificationSettingsForm } from "../../components/settings/notification-settings.component";
+import { AiAnalysisSettingsForm } from "../../components/settings/ai-analysis-settings-form.component";
 import { SubtitlesSettingsForm } from "../../components/settings/subtitles-settings-form.component";
 import { DfLogoIcon } from "../../icons/df-logo.component";
 import { NestedSubRoute } from "../nav/nested-routes.ts";
@@ -75,6 +77,12 @@ export const settingsRouteDefinitions: NestedSubRoute = {
       element: <SubtitlesSettingsForm />,
       name: "Subtitles",
       icon: SubtitlesIcon,
+    },
+    {
+      path: "/settings/ai-analysis",
+      element: <AiAnalysisSettingsForm />,
+      name: "AI Analysis",
+      icon: AutoAwesomeIcon,
     },
     {
       path: "/settings/notifications",
