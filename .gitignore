@@ -6,3 +6,12 @@ dist
 update_remote.sh
 TODO.txt
 docker_run.sh
+
+# Internal planning/investigation docs - useful for dev collaboration, not meant for
+# the public repo. Keep the actual files locally, just don't track/publish them.
+docs/ROADMAP.md
+docs/DATABASE_MIGRATION_PLAN.md
+docs/REALTIME_UPDATES_PLAN.md
+docs/INFRASTRUCTURE_PROPOSALS.md
+docs/AI_CONTENT_ANALYSIS_PLAN.md
+docs/WHISPER_JARGON_SEED_PLAN.md
