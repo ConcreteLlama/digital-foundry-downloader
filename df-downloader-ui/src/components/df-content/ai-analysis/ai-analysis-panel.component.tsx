@@ -238,14 +238,6 @@ export const AiAnalysisPanel = ({ contentKey, enabled }: AiAnalysisPanelProps) =
     }
   };
 
-  if (!enabled) {
-    return (
-      <Alert severity="info" variant="outlined">
-        AI analysis is turned off. Enable it and add an Anthropic API key in Settings &rsaquo; AI Analysis.
-      </Alert>
-    );
-  }
-
   if (loading) {
     return (
       <Stack direction="row" spacing={1} alignItems="center" sx={{ py: 2 }}>
@@ -258,6 +250,16 @@ export const AiAnalysisPanel = ({ contentKey, enabled }: AiAnalysisPanelProps) =
   }
 
   if (!result) {
+    // The only branch where being switched off decides what is shown -
+    // there is nothing stored to display, so all that is left is why
+    // the Analyse button is absent.
+    if (!enabled) {
+      return (
+        <Alert severity="info" variant="outlined">
+          AI analysis is turned off. Enable it and add an Anthropic API key in Settings &rsaquo; AI Analysis.
+        </Alert>
+      );
+    }
     return (
       <Stack spacing={1.5}>
         <Typography variant="body2" sx={{ color: "text.secondary" }}>
@@ -304,7 +306,7 @@ export const AiAnalysisPanel = ({ contentKey, enabled }: AiAnalysisPanelProps) =
           Analysis failed: {result.error}
         </Alert>
         <Box>
-          <Button size="small" variant="outlined" disabled={starting} onClick={() => runAnalysis(true)}>
+          <Button size="small" variant="outlined" disabled={starting || !enabled} onClick={() => runAnalysis(true)}>
             Try again
           </Button>
         </Box>
@@ -320,9 +322,15 @@ export const AiAnalysisPanel = ({ contentKey, enabled }: AiAnalysisPanelProps) =
       <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap" useFlexGap>
         <Chip size="small" variant="outlined" color="primary" label={AiContentTypeLabels[result.contentType]} />
         <Box sx={{ flex: "1 1 auto" }} />
-        <Tooltip title="Analyse again, replacing this result">
+        <Tooltip
+          title={
+            enabled
+              ? "Analyse again, replacing this result"
+              : "AI analysis is turned off, so this cannot be re-run. The result below was saved when it was on."
+          }
+        >
           <span>
-            <Button size="small" disabled={starting} onClick={() => runAnalysis(true)}>
+            <Button size="small" disabled={starting || !enabled} onClick={() => runAnalysis(true)}>
               Re-analyse
             </Button>
           </span>
