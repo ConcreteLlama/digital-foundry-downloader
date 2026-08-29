@@ -13,6 +13,7 @@ import { makeSubtitlesRouter } from "./api/subtitles.js";
 import { makeUserRouter } from "./api/user.js";
 import { makeRealtimeRouter } from "./api/realtime.js";
 import { makeAiAnalysisRouter } from "./api/ai-analysis.js";
+import { makeBackfillRouter } from "./api/backfill.js";
 
 export const makeApiRouter = (contentManager: DigitalFoundryContentManager, jwtManager: JwtManager) => {
   const router = express.Router({ mergeParams: true });
@@ -29,6 +30,7 @@ export const makeApiRouter = (contentManager: DigitalFoundryContentManager, jwtM
   router.use("/user", authenticateMiddleware(jwtManager), makeUserRouter(contentManager));
   router.use("/subtitles", authenticateMiddleware(jwtManager), makeSubtitlesRouter(contentManager));
   router.use("/ai-analysis", authenticateMiddleware(jwtManager), makeAiAnalysisRouter(contentManager));
+  router.use("/backfill", authenticateMiddleware(jwtManager), makeBackfillRouter(contentManager));
   // Single multiplexed SSE stream for every push channel - see
   // realtime/stream-broadcaster.ts. Same auth as everything else; an
   // EventSource request is a plain GET, so the cookie rides along.

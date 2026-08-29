@@ -6,6 +6,7 @@ import {
   ControlPipelineRequest,
   ControlRequest,
   ControlTaskRequest,
+  BulkBackfillTarget,
   DfContentEntry,
   DfContentInfo,
   DownloadTaskInfo,
@@ -68,6 +69,8 @@ import {
   createAiAnalysisTaskPipeline,
 } from "./task-pipelines/ai-analysis-task-pipeline.js";
 import { AiAnalysisTaskManager } from "./tasks/ai-analysis-task.js";
+import { BULK_BACKFILL_CONCURRENCY, BulkBackfillTask } from "./tasks/bulk-backfill-task.js";
+import { ensureArticleForContent } from "./utils/df-articles/ensure-article.js";
 import { AiAnalysisConfig } from "df-downloader-common/config/ai-analysis-config.js";
 import { Chapter } from "./utils/chatpers.js";
 import { DfDownloaderOperationalDb } from "./db/df-operational-db.js";
@@ -396,6 +399,125 @@ export class DfTaskManager {
     });
     this.addTaskPipelineExecution(analysisExecution);
     return analysisExecution;
+  }
+
+  /**
+   * Resolves once a pipeline finishes, so a bulk run can wait on the same
+   * pipelines the single-item actions use rather than reimplementing their
+   * work.
+   *
+   * Safe to attach after the pipeline may already have finished: these
+   * executions replay their event cache to new listeners, so a fast
+   * pipeline cannot complete into a gap before the handler is registered.
+   */
+  private awaitPipeline(execution: { on: (event: "completed", cb: (result: any) => void) => void }, what: string) {
+    return new Promise<any>((resolve, reject) => {
+      execution.on("completed", (result) => {
+        if (result?.status === "success") {
+          resolve(result);
+        } else {
+          reject(new Error(`${what} failed: ${result?.error ? makeErrorMessage(result.error) : result?.status ?? "unknown"}`));
+        }
+      });
+    });
+  }
+
+  /**
+   * Generates subtitles for one item as part of a bulk run.
+   *
+   * Mirrors the single-item REST path deliberately, including recording
+   * the result against the download afterwards - without that the file
+   * gains subtitles but nothing in the library knows, so the next bulk run
+   * would generate them all over again.
+   */
+  private async runSubtitlesForContent(contentKey: string, language: string) {
+    const db = serviceLocator.db;
+    const entry = await db.getContentEntry(contentKey);
+    if (!entry) {
+      throw new Error(`Content ${contentKey} not found`);
+    }
+    const download = entry.downloads.find((candidate) => candidate.mediaInfo.type === "VIDEO");
+    if (!download) {
+      throw new Error(`No downloaded video for ${entry.contentInfo.title}`);
+    }
+    const subtitlesConfig = configService.config.subtitles;
+    const generators = serviceLocator.getSubtitleGenerators(subtitlesConfig?.servicePriorities);
+    if (!generators.length) {
+      throw new Error("No subtitles services are configured");
+    }
+    const execution = this.generateSubs(
+      entry.contentInfo,
+      download.mediaInfo,
+      download.downloadLocation,
+      language,
+      generators
+    );
+    const result = await this.awaitPipeline(execution, `Subtitles for ${entry.contentInfo.title}`);
+    const generated = result?.pipelineResult;
+    if (generated) {
+      await db.subsGenerated(contentKey, download.downloadLocation, {
+        language: generated.language,
+        service: generated.service,
+        path: generated.path,
+      });
+    }
+    return "subtitles";
+  }
+
+  /**
+   * Analyses one item as part of a bulk run.
+   *
+   * Looks for a Digital Foundry article first, exactly as the single-item
+   * path does - the article is grounding that materially improves the
+   * result, so a bulk run that skipped it would produce systematically
+   * worse analyses than analysing the same items one at a time.
+   */
+  private async runAnalysisForContent(contentKey: string, config: AiAnalysisConfig) {
+    const db = serviceLocator.db;
+    const entry = await db.getContentEntry(contentKey);
+    if (!entry) {
+      throw new Error(`Content ${contentKey} not found`);
+    }
+    const article = await ensureArticleForContent(db, entry.contentInfo).catch(() => undefined);
+    const execution = this.analyseContent(entry, config, {
+      articleText: article?.text,
+      articleUrl: article?.url,
+      articleTitle: article?.title,
+    });
+    await this.awaitPipeline(execution, `Analysis of ${entry.contentInfo.title}`);
+    return "analysed";
+  }
+
+  /**
+   * Queues one bulk backfill run over the given items.
+   *
+   * The items are taken as given; deciding whether each still needs the
+   * work happens inside the task, against live state, as each comes up -
+   * see stillNeedsWork in bulk-backfill-task.ts.
+   */
+  bulkBackfill(contentKeys: string[], target: BulkBackfillTarget, force: boolean, language: string) {
+    const task = this.maintenanceOperationsTaskManager.addTask(
+      BulkBackfillTask(
+        contentKeys.map((contentKey) => ({ contentKey })),
+        {
+          target,
+          force,
+          language,
+          db: serviceLocator.db,
+          aiAnalysisConfig: configService.config.aiAnalysis,
+          runSubtitles: (contentKey: string) => this.runSubtitlesForContent(contentKey, language),
+          runAnalysis: (contentKey: string) => {
+            const config = configService.config.aiAnalysis;
+            if (!config) {
+              return Promise.reject(new Error("AI analysis is not configured"));
+            }
+            return this.runAnalysisForContent(contentKey, config);
+          },
+        },
+        { maxConcurrent: BULK_BACKFILL_CONCURRENCY[target] }
+      )
+    );
+    return this.trackTask(task);
   }
 
   updateDownloadMetadata(dfContentInfo: DfContentInfo, fileLocation: string, mediaFileMeta?: MediaFileMeta) {
