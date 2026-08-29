@@ -82,8 +82,43 @@ export const PLATFORM_ALIASES: Record<string, string> = {
   switch: "Switch",
   "nintendo switch 2": "Switch 2",
   "switch 2": "Switch 2",
+  // Docked and handheld are genuinely different performance profiles, so
+  // they are kept apart - but the four spellings the extraction produced
+  // for those two concepts are not.
+  "switch 2 docked": "Switch 2 (Docked)",
+  "nintendo switch 2 docked": "Switch 2 (Docked)",
+  "switch 2 portable": "Switch 2 (Handheld)",
+  "switch 2 handheld": "Switch 2 (Handheld)",
+  "nintendo switch 2 handheld": "Switch 2 (Handheld)",
   pc: "PC",
 };
+
+/**
+ * The platforms a comparison table gets a column for.
+ *
+ * A fixed list rather than whatever the data happens to contain, because
+ * the data contains things that are not platforms: the extraction has
+ * produced entries like "General Issues Across All Platforms" - a section
+ * heading read as a platform. Letting the columns be data-driven would
+ * hand a junk value its own column across every row.
+ *
+ * Anything not listed here is not discarded; it is shown per-row instead,
+ * so a genuinely new platform is visible rather than silently dropped and
+ * a category error is visible rather than structural.
+ */
+export const TABLE_PLATFORMS = [
+  "PS5",
+  "PS5 Pro",
+  "Xbox Series X",
+  "Xbox Series S",
+  "Switch 2",
+  "Switch 2 (Docked)",
+  "Switch 2 (Handheld)",
+  "PC",
+] as const;
+
+export const isTablePlatform = (label: string): boolean =>
+  (TABLE_PLATFORMS as readonly string[]).includes(label);
 
 /**
  * Game-name synonyms.

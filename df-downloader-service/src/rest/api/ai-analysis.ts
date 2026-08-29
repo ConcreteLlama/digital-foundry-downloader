@@ -12,6 +12,7 @@ import { configService } from "../../config/config.js";
 import { DigitalFoundryContentManager } from "../../df-content-manager.js";
 import { estimateAnalysisCost } from "../../utils/ai/analyse.js";
 import { buildGameIndex } from "../../utils/ai/game-index.js";
+import { buildPlatformComparison } from "../../utils/ai/platform-comparison.js";
 import { ensureArticleForContent } from "../../utils/df-articles/ensure-article.js";
 import { DfFetchPriority } from "../../df-request-queue.js";
 import { sanitizeContentName } from "../../utils/df-utils.js";
@@ -89,6 +90,20 @@ export const makeAiAnalysisRouter = (contentManager: DigitalFoundryContentManage
   router.get("/game-index", async (_req, res) => {
     try {
       return sendResponse(res, await buildGameIndex(contentManager.db));
+    } catch (e) {
+      return sendErrorAsResponse(res, e);
+    }
+  });
+
+  /**
+   * Every console comparison, side by side.
+   *
+   * Aggregated server-side for the same reason as the game index - the
+   * browser has no business reading every result to draw a table.
+   */
+  router.get("/platform-comparison", async (_req, res) => {
+    try {
+      return sendResponse(res, await buildPlatformComparison(contentManager.db));
     } catch (e) {
       return sendErrorAsResponse(res, e);
     }

@@ -5,6 +5,7 @@ import {
   AiTagStatus,
   DfArticle,
   GameIndexResponse,
+  PlatformComparisonResponse,
   parseResponseBody,
 } from "df-downloader-common";
 import { z } from "zod";
@@ -111,4 +112,10 @@ export const fetchDfArticle = async (
 export const fetchGameIndex = async (): Promise<GameIndexResponse> => {
   const response = await fetchJson(`${API_URL}/ai-analysis/game-index`);
   return unwrap(response, GameIndexResponse);
+};
+
+/** Every console comparison, side by side. Aggregated server-side. */
+export const fetchPlatformComparison = async (): Promise<PlatformComparisonResponse> => {
+  const response = await fetchJson(`${API_URL}/ai-analysis/platform-comparison`);
+  return unwrap(response, PlatformComparisonResponse);
 };
