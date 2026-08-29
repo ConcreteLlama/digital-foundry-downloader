@@ -1,6 +1,6 @@
 import OpenInNewIcon from "@mui/icons-material/OpenInNew";
 import CloseIcon from "@mui/icons-material/Close";
-import { Box, Button, Divider, IconButton, Stack, Typography } from "@mui/material";
+import { Box, Button, Divider, IconButton, Paper, Stack, Typography, styled } from "@mui/material";
 import { AiAnalysisConfigUtils } from "df-downloader-common/config/ai-analysis-config";
 import { useEffect } from "react";
 import { useSelector } from "react-redux";
@@ -9,6 +9,43 @@ import { selectConfigSection } from "../../store/config/config.selector.ts";
 import { store } from "../../store/store.ts";
 import { AiAnalysisPanel } from "../df-content/ai-analysis/ai-analysis-panel.component.tsx";
 import { MiddleModal } from "../general/middle-modal.component.tsx";
+
+/**
+ * The dialog's own surface.
+ *
+ * MiddleModal positions its child but does not paint anything, so a child
+ * that is only a Box renders as transparent text over whatever is behind
+ * it - which is what a plain Box here produced. Same treatment as the
+ * content detail panel: a Paper with responsive padding, no horizontal
+ * overflow, and a height cap so a long analysis scrolls inside the dialog
+ * rather than running off the screen.
+ */
+const AnalysisDialogSurface = styled(Paper)(({ theme }) => ({
+  padding: theme.spacing(3),
+  paddingTop: theme.spacing(2),
+  display: "flex",
+  flexDirection: "column",
+  maxWidth: "100%",
+  overflowX: "hidden",
+  overflowY: "auto",
+  maxHeight: "85vh",
+  [theme.breakpoints.down("md")]: {
+    padding: theme.spacing(2),
+    paddingTop: theme.spacing(1.5),
+  },
+  [theme.breakpoints.down("sm")]: {
+    padding: theme.spacing(1.5),
+    paddingTop: theme.spacing(1),
+  },
+}));
+
+export type AnalysisDialogProps = {
+  contentKey: string | null;
+  title?: string;
+  onClose: () => void;
+  /** Opens the full content detail view for this item. */
+  onOpenContent: (contentKey: string) => void;
+};
 
 /**
  * The analysis for one item, on its own.
@@ -21,14 +58,6 @@ import { MiddleModal } from "../general/middle-modal.component.tsx";
  * analysis first and offers the content details as a step out rather than
  * making them the destination.
  */
-export type AnalysisDialogProps = {
-  contentKey: string | null;
-  title?: string;
-  onClose: () => void;
-  /** Opens the full content detail view for this item. */
-  onOpenContent: (contentKey: string) => void;
-};
-
 export const AnalysisDialog = ({ contentKey, title, onClose, onOpenContent }: AnalysisDialogProps) => {
   // Config sections load per-consumer, so a component that reads one has to
   // ask for it - otherwise the panel reports the feature as switched off to
@@ -41,8 +70,13 @@ export const AnalysisDialog = ({ contentKey, title, onClose, onOpenContent }: An
 
   return (
     <MiddleModal open={Boolean(contentKey)} onClose={onClose} id="analysis-dialog" hideCloseButton>
-      <Box sx={{ p: { xs: 2, sm: 3 }, minWidth: 0 }}>
-        <Stack direction="row" spacing={1} alignItems="flex-start" sx={{ mb: 1 }}>
+      <AnalysisDialogSurface elevation={8}>
+        <Stack
+          direction="row"
+          spacing={1}
+          alignItems="flex-start"
+          sx={{ mb: 1, position: "sticky", top: 0, bgcolor: "background.paper", zIndex: 1, pt: 0.5 }}
+        >
           <Box sx={{ flex: "1 1 auto", minWidth: 0 }}>
             <Typography variant="overline" sx={{ color: "text.disabled" }}>
               Analysis
@@ -64,14 +98,16 @@ export const AnalysisDialog = ({ contentKey, title, onClose, onOpenContent }: An
 
         <Divider sx={{ mt: 2, mb: 1.5 }} />
 
-        <Button
-          size="small"
-          startIcon={<OpenInNewIcon fontSize="small" />}
-          onClick={() => contentKey && onOpenContent(contentKey)}
-        >
-          Content details, downloads and formats
-        </Button>
-      </Box>
+        <Box>
+          <Button
+            size="small"
+            startIcon={<OpenInNewIcon fontSize="small" />}
+            onClick={() => contentKey && onOpenContent(contentKey)}
+          >
+            Content details, downloads and formats
+          </Button>
+        </Box>
+      </AnalysisDialogSurface>
     </MiddleModal>
   );
 };
