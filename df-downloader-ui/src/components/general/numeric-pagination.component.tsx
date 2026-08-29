@@ -15,11 +15,14 @@ export type NumericPaginationProps = {
  * "Next Page", which cost a whole bar of vertical space to move one page at a
  * time - unhelpful when the archive runs to 31 pages.
  */
+const NEIGHBOUR_RADIUS = 3;
+
 const buildPageList = (current: number, total: number): (number | "gap")[] => {
-  if (total <= 7) {
+  if (total <= 2 * NEIGHBOUR_RADIUS + 3) {
     return Array.from({ length: total }, (_, i) => i + 1);
   }
-  const pages = new Set<number>([1, total, current, current - 1, current + 1]);
+  const neighbours = Array.from({ length: NEIGHBOUR_RADIUS * 2 + 1 }, (_, i) => current - NEIGHBOUR_RADIUS + i);
+  const pages = new Set<number>([1, total, ...neighbours]);
   const sorted = [...pages].filter((p) => p >= 1 && p <= total).sort((a, b) => a - b);
   const out: (number | "gap")[] = [];
   sorted.forEach((page, i) => {
@@ -37,43 +40,90 @@ export const NumericPagination = ({ currentPage, numPages, onUpdatePage }: Numer
   }
   const pages = buildPageList(currentPage, numPages);
   return (
-    <Box sx={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 0.25, paddingY: 1 }}>
-      <IconButton size="small" disabled={currentPage === 1} onClick={() => onUpdatePage(currentPage - 1)}>
-        <ChevronLeftIcon fontSize="small" />
+    // grid, not flex+justifyContent:center: the page-number cluster's own
+    // width varies with how many are shown ("1 2 3 4 5" vs "1 … 15 … 31"),
+    // which under a single centered flex row drags the arrows around with it
+    // - clicking "next" repeatedly meant re-finding it each time rather than
+    // clicking the same spot. Fixed outer columns pin the arrows in place;
+    // the middle column centers the cluster independently within whatever
+    // space is left. Capped maxWidth (rather than the full row) keeps the
+    // arrows from splitting off to the far edges of a wide desktop window -
+    // widened alongside NEIGHBOUR_RADIUS so the extra page numbers actually
+    // have room, rather than just moving the same dead space inward.
+    <Box
+      sx={{
+        display: "grid",
+        gridTemplateColumns: "auto 1fr auto",
+        alignItems: "center",
+        gap: 1,
+        maxWidth: 560,
+        marginX: "auto",
+        paddingY: 0.75,
+      }}
+    >
+      <IconButton
+        disabled={currentPage === 1}
+        onClick={() => onUpdatePage(currentPage - 1)}
+        sx={{
+          justifySelf: "start",
+          // Explicit padding rather than size="small"/"medium": small pairs
+          // its default padding with a 20px icon (too subtle to be an
+          // obvious button), medium pairs 8px padding with a 24px icon and
+          // grows the whole bar noticeably taller than it needs to be. This
+          // keeps the same 24px icon but tightens the padding around it.
+          padding: 0.75,
+          border: "1px solid",
+          borderColor: "divider",
+          "&:hover": { borderColor: "primary.main" },
+        }}
+      >
+        <ChevronLeftIcon />
       </IconButton>
-      {pages.map((page, i) =>
-        page === "gap" ? (
-          <Typography key={`gap-${i}`} sx={{ paddingX: 0.5, color: "text.disabled", fontFamily: monoFontFamily }}>
-            …
-          </Typography>
-        ) : (
-          <Box
-            key={page}
-            component="button"
-            onClick={() => onUpdatePage(page)}
-            aria-current={page === currentPage ? "page" : undefined}
-            sx={{
-              minWidth: 28,
-              height: 28,
-              paddingX: 0.75,
-              borderRadius: 1,
-              cursor: "pointer",
-              fontFamily: monoFontFamily,
-              fontSize: "0.75rem",
-              border: "1px solid",
-              borderColor: page === currentPage ? "primary.main" : "transparent",
-              backgroundColor: "transparent",
-              color: page === currentPage ? "primary.main" : "text.secondary",
-              fontWeight: page === currentPage ? 700 : 400,
-              "&:hover": { backgroundColor: "action.hover", color: "text.primary" },
-            }}
-          >
-            {page}
-          </Box>
-        )
-      )}
-      <IconButton size="small" disabled={currentPage === numPages} onClick={() => onUpdatePage(currentPage + 1)}>
-        <ChevronRightIcon fontSize="small" />
+      <Box sx={{ display: "flex", justifyContent: "center", gap: 0.25 }}>
+        {pages.map((page, i) =>
+          page === "gap" ? (
+            <Typography key={`gap-${i}`} sx={{ paddingX: 0.5, color: "text.disabled", fontFamily: monoFontFamily }}>
+              …
+            </Typography>
+          ) : (
+            <Box
+              key={page}
+              component="button"
+              onClick={() => onUpdatePage(page)}
+              aria-current={page === currentPage ? "page" : undefined}
+              sx={{
+                minWidth: 28,
+                height: 28,
+                paddingX: 0.75,
+                borderRadius: 1,
+                cursor: "pointer",
+                fontFamily: monoFontFamily,
+                fontSize: "0.75rem",
+                border: "1px solid",
+                borderColor: page === currentPage ? "primary.main" : "transparent",
+                backgroundColor: "transparent",
+                color: page === currentPage ? "primary.main" : "text.secondary",
+                fontWeight: page === currentPage ? 700 : 400,
+                "&:hover": { backgroundColor: "action.hover", color: "text.primary" },
+              }}
+            >
+              {page}
+            </Box>
+          )
+        )}
+      </Box>
+      <IconButton
+        disabled={currentPage === numPages}
+        onClick={() => onUpdatePage(currentPage + 1)}
+        sx={{
+          justifySelf: "end",
+          padding: 0.75,
+          border: "1px solid",
+          borderColor: "divider",
+          "&:hover": { borderColor: "primary.main" },
+        }}
+      >
+        <ChevronRightIcon />
       </IconButton>
     </Box>
   );
