@@ -1,4 +1,36 @@
 versions:
+  - version: "2.8.0"
+    date: "2026-08-29"
+    notes: "Your downloads can now be read as well as watched. Point it at an Anthropic API key and it will write a detailed summary and a separate verdict for each video, pull the hard numbers out into a table you can actually compare - per-platform resolutions and frame rates for a console face-off, the recommended settings for a PC review - and suggest tags. It costs a few pence a video and tells you roughly what a run will cost before you spend it.\n\nIt also finds Digital Foundry's own written article for a video where one exists, links it, and reads it alongside the transcript. That matters more than it sounds: an article is written rather than transcribed, so the product names and figures in it are right, where speech-to-text mangles exactly that kind of jargon.\n\nA new Analysis section reads across everything you have analysed rather than one video at a time - every console comparison side by side, filterable by the platforms you care about, and an index of what was covered per game."
+    changes:
+      features:
+        - "AI analysis of your content":
+          - "A detailed summary and a separate verdict for each video, naming the specific numbers and settings rather than describing it in general terms"
+          - "The hard numbers pulled out where the content supports it - per-platform resolutions, frame rates and modes for a console comparison, the settings table for a PC review, and a per-topic breakdown for a Q+A rather than one summary flattening several unrelated discussions"
+          - "Where a figure was never actually stated it says so, rather than filling the gap with a plausible guess. An invented number reads exactly like a real one, which makes it worse than an honest blank"
+          - "You choose the model - Haiku, Sonnet, Opus or Fable. Haiku is the default and the recommendation: in testing it extracted settings tables and per-platform numbers correctly at around a tenth of the cost of the larger models"
+          - "See what a run will cost before starting it. The figure comes from a real token count rather than an estimate, and came within about 10% of actual in testing"
+          - "Run it by hand per video, or automatically after each download. Automatic waits for subtitles to finish first, so it has a transcript to work from rather than quietly producing a thinner result"
+        - "Suggested tags, including for content you have not downloaded":
+          - "Tagging is the one part that does not need a transcript - a title and description alone are enough to infer something useful, so it works across your whole library rather than only what you have downloaded and transcribed"
+          - "Tags inferred from a transcript or an article are more specific and better founded than ones inferred from a title alone, and every tag records which it came from, shown next to it. A tag drawn from a title is marked, because it is a weaker claim and you may be filtering on it"
+          - "Tags are applied as they are found rather than held for approval, and removing one takes it straight back off the content"
+        - "Digital Foundry's written articles, found and used":
+          - "Where DF published a written companion piece for a video, it is found, linked on the content, and read alongside the transcript when analysing"
+          - "This measurably improves the result. An article is written rather than transcribed, so its terminology, product names and figures are correct where speech-to-text reliably garbles them, and for PC reviews it often contains the settings table outright"
+          - "A match is confirmed by checking the article embeds that exact video, not by the titles looking similar - so another article about the same game is not mistaken for this one"
+          - "Nothing is searched for while you browse. Looking at a video does not go and ask Digital Foundry about it; that only happens when you ask, or when an analysis runs"
+          - "If no article is found that is treated as 'not yet' rather than 'never'. Patreon content is often early access, so the article may simply not be written, and it will look again later"
+        - "A new Analysis section, reading across everything you have analysed":
+          - "Platform comparisons: every analysed console face-off side by side, with Digital Foundry's own recommendation quoted against each"
+          - "Filter it to the platforms you care about - the rows and the columns both narrow, so picking two consoles gives you those two beside each other instead of hiding among eight"
+          - "Games: what was covered per game, grouping the several videos DF often publish about one release, each opening its full analysis"
+          - "Nothing here is averaged, scored or ranked. There is no best-platform column because the figure that would be needed for one - what a mode actually ran at, as opposed to what it aims for - is stated in only about a tenth of cases, and is missing most often when platforms performed about the same"
+    known_issues:
+      - "Analysis needs something to read":
+        - "With no transcript and no matching article, only tags can be produced - there is nothing to summarise from. Generating subtitles for a video and analysing it again gives the full result"
+        - "The analysis records what it had to work from, so items analysed thinly are identifiable rather than silently worse"
+      - "A plain game review is not yet recognised as its own kind of content, so it is analysed but does not appear under its game in the Analysis section. Face-offs, PC reviews, previews and Q+A shows all are"
   - version: "2.7.1"
     date: "2026-08-29"
     notes: "A small fix-up release: the content list's page controls could become completely unreachable once your library passed 100 items, made worse on a phone by a related sizing bug that cut off whatever sat at the bottom of the screen."
