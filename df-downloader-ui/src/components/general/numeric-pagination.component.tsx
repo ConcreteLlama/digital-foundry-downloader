@@ -15,11 +15,14 @@ export type NumericPaginationProps = {
  * "Next Page", which cost a whole bar of vertical space to move one page at a
  * time - unhelpful when the archive runs to 31 pages.
  */
+const NEIGHBOUR_RADIUS = 3;
+
 const buildPageList = (current: number, total: number): (number | "gap")[] => {
-  if (total <= 7) {
+  if (total <= 2 * NEIGHBOUR_RADIUS + 3) {
     return Array.from({ length: total }, (_, i) => i + 1);
   }
-  const pages = new Set<number>([1, total, current, current - 1, current + 1]);
+  const neighbours = Array.from({ length: NEIGHBOUR_RADIUS * 2 + 1 }, (_, i) => current - NEIGHBOUR_RADIUS + i);
+  const pages = new Set<number>([1, total, ...neighbours]);
   const sorted = [...pages].filter((p) => p >= 1 && p <= total).sort((a, b) => a - b);
   const out: (number | "gap")[] = [];
   sorted.forEach((page, i) => {
@@ -44,15 +47,16 @@ export const NumericPagination = ({ currentPage, numPages, onUpdatePage }: Numer
     // clicking the same spot. Fixed outer columns pin the arrows in place;
     // the middle column centers the cluster independently within whatever
     // space is left. Capped maxWidth (rather than the full row) keeps the
-    // arrows from splitting off to the far edges of a wide desktop window,
-    // where the number cluster is narrow but the row itself isn't.
+    // arrows from splitting off to the far edges of a wide desktop window -
+    // widened alongside NEIGHBOUR_RADIUS so the extra page numbers actually
+    // have room, rather than just moving the same dead space inward.
     <Box
       sx={{
         display: "grid",
         gridTemplateColumns: "auto 1fr auto",
         alignItems: "center",
         gap: 1,
-        maxWidth: 420,
+        maxWidth: 560,
         marginX: "auto",
         paddingY: 0.75,
       }}
