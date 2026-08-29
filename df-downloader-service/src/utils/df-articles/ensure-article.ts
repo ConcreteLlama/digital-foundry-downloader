@@ -67,6 +67,8 @@ export const ensureArticleForContent = async (
     return undefined;
   }
 
+  await fileByproducts(db, outcome.byproducts, contentKey);
+
   if (outcome.status === "found") {
     const state: DfArticleLookupState = {
       contentKey,
@@ -82,6 +84,62 @@ export const ensureArticleForContent = async (
 
   await recordMiss(db, contentKey, existing, outcome.reason);
   return undefined;
+};
+
+/**
+ * Stores articles that were fetched while looking for something else.
+ *
+ * Verifying a candidate means fetching the page, and the page says which
+ * video it belongs to. When that is not the video being searched for, the
+ * old behaviour discarded a definitive, already-paid-for answer about some
+ * other item. Rejected candidates are also not a random sample: the
+ * title-and-date scoring means they are usually another video about the
+ * same game, which is exactly the content most likely to be in the library
+ * as well.
+ *
+ * Nothing here costs a request - every article was already downloaded.
+ *
+ * Two things it deliberately does not do. It never overwrites an existing
+ * stored match, because that one was confirmed the same way and there is
+ * nothing to gain. And it never *creates* a lookup record for content that
+ * is not in the library, which would accumulate entries for videos the
+ * user does not have.
+ */
+const fileByproducts = async (
+  db: DfDownloaderOperationalDb,
+  byproducts: { article: DfArticle }[],
+  searchedFor: string
+) => {
+  for (const { article } of byproducts) {
+    // Content keys are "yt-<videoId>" for anything with a YouTube link,
+    // which is every item that could have matched an article in the first
+    // place - an article is only ever identified by its embedded video.
+    const otherKey = `yt-${article.youtubeVideoId}`;
+    if (otherKey === searchedFor) {
+      continue;
+    }
+    try {
+      const entry = await db.getContentEntry(otherKey);
+      if (!entry) {
+        continue;
+      }
+      const existing = await db.getDfArticleLookup(otherKey);
+      if (existing?.article) {
+        continue;
+      }
+      await db.setDfArticleLookup({
+        contentKey: otherKey,
+        article,
+        lastAttemptedAt: new Date(),
+        missCount: 0,
+      });
+      logger.log("info", `Filed article for ${otherKey} found while searching for ${searchedFor}: ${article.url}`);
+    } catch (e) {
+      // A byproduct is a bonus - failing to file one must not fail the
+      // lookup that was actually asked for.
+      logger.log("warn", `Could not file byproduct article for ${otherKey}: ${e}`);
+    }
+  }
 };
 
 const recordMiss = async (

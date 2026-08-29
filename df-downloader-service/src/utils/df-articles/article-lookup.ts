@@ -189,9 +189,26 @@ const yearsToSearch = (publishedDate: Date): number[] => {
   return years.length ? years : [currentYear];
 };
 
-export type ArticleLookupOutcome =
+/**
+ * An article that was fetched and positively identified as belonging to a
+ * *different* video than the one being searched for.
+ *
+ * Worth returning rather than discarding: the page has already been paid
+ * for, and it carries a definitive answer ("this article belongs to video
+ * X") for whatever content that is. Rejected candidates are also not a
+ * random sample - the title-and-date scoring means they are usually
+ * another video about the same game, which is exactly the population most
+ * likely to be in the library too.
+ */
+export type ArticleByproduct = { article: DfArticle };
+
+export type ArticleLookupOutcome = (
   | { status: "found"; article: DfArticle }
-  | { status: "not_found"; reason: string };
+  | { status: "not_found"; reason: string }
+) & {
+  /** Confirmed matches for other content, collected for free along the way. */
+  byproducts: ArticleByproduct[];
+};
 
 /**
  * Looks for the article accompanying one piece of content.
@@ -206,12 +223,13 @@ export const findArticleForContent = async (
   opts: { priority?: number } = {}
 ): Promise<ArticleLookupOutcome> => {
   const { youtubeVideoId, title, publishedDate } = contentInfo;
+  const byproducts: ArticleByproduct[] = [];
   if (!youtubeVideoId) {
     // Without a video ID there is nothing to verify a candidate against,
     // and title similarity alone is not good enough to attach an article
     // to content - a wrong one would be read by the analysis as
     // authoritative, which is worse than having none.
-    return { status: "not_found", reason: "No YouTube video ID for this content, so a match cannot be verified" };
+    return { status: "not_found", reason: "No YouTube video ID for this content, so a match cannot be verified", byproducts };
   }
 
   const published = publishedDate instanceof Date ? publishedDate : new Date(publishedDate);
@@ -225,7 +243,7 @@ export const findArticleForContent = async (
   }
 
   if (!entries.length) {
-    return { status: "not_found", reason: "Could not read Digital Foundry's article index" };
+    return { status: "not_found", reason: "Could not read Digital Foundry's article index", byproducts };
   }
 
   const publishedMs = published.getTime();
@@ -252,21 +270,27 @@ export const findArticleForContent = async (
     });
 
   if (!scored.length) {
-    return { status: "not_found", reason: "No article with a similar title published around the same time" };
+    return { status: "not_found", reason: "No article with a similar title published around the same time", byproducts };
   }
 
   const toVerify = scored.slice(0, MAX_CANDIDATES_TO_VERIFY);
   for (const candidate of toVerify) {
-    const article = await verifyCandidate(candidate, youtubeVideoId, opts.priority);
-    if (article) {
+    const result = await verifyCandidate(candidate, youtubeVideoId, opts.priority);
+    if (result.kind === "match") {
       logger.log("info", `Matched article for ${contentInfo.key}: ${candidate.url}`);
-      return { status: "found", article };
+      return { status: "found", article: result.article, byproducts };
+    }
+    if (result.kind === "other") {
+      // Already fetched and positively identified - keep it so the caller
+      // can file it against whatever content it does belong to.
+      byproducts.push({ article: result.article });
     }
   }
 
   return {
     status: "not_found",
     reason: `Checked ${toVerify.length} similarly-titled article${toVerify.length === 1 ? "" : "s"}, none embedded this video`,
+    byproducts,
   };
 };
 
@@ -277,11 +301,16 @@ export const findArticleForContent = async (
  * article about the same game - which DF reliably publish several of -
  * would be accepted and then fed to the analysis as fact.
  */
+type VerifyResult =
+  | { kind: "match"; article: DfArticle }
+  | { kind: "other"; article: DfArticle }
+  | { kind: "unusable" };
+
 const verifyCandidate = async (
   candidate: SitemapEntry,
   youtubeVideoId: string,
   priority?: number
-): Promise<DfArticle | undefined> => {
+): Promise<VerifyResult> => {
   try {
     const response = await dfFetch(
       candidate.url,
@@ -289,33 +318,30 @@ const verifyCandidate = async (
       { priority: priority ?? DfFetchPriority.BACKGROUND, label: `Article check: ${candidate.slug.slice(0, 40)}` }
     );
     if (!response.ok) {
-      return undefined;
+      return { kind: "unusable" };
     }
     const parsed = parseArticlePage(await response.text());
-    if (!parsed) {
-      return undefined;
+    if (!parsed?.text.trim() || !parsed.youtubeVideoId) {
+      return { kind: "unusable" };
     }
-    if (parsed.youtubeVideoId !== youtubeVideoId) {
-      logger.log(
-        "debug",
-        `Article ${candidate.slug} embeds ${parsed.youtubeVideoId ?? "no video"}, not ${youtubeVideoId} - rejected`
-      );
-      return undefined;
-    }
-    if (!parsed.text.trim()) {
-      return undefined;
-    }
-    return {
+    const article: DfArticle = {
       url: candidate.url,
       slug: candidate.slug,
       title: parsed.title,
-      youtubeVideoId,
+      youtubeVideoId: parsed.youtubeVideoId,
       text: parsed.text,
       author: parsed.author,
       matchedAt: new Date(),
     };
+    if (parsed.youtubeVideoId !== youtubeVideoId) {
+      // Not what we were looking for, but now positively identified. The
+      // caller decides whether that video is in the library.
+      logger.log("debug", `Article ${candidate.slug} belongs to ${parsed.youtubeVideoId}, not ${youtubeVideoId}`);
+      return { kind: "other", article };
+    }
+    return { kind: "match", article };
   } catch (e) {
     logger.log("warn", `Article candidate check failed: ${e instanceof Error ? e.message : String(e)}`);
-    return undefined;
+    return { kind: "unusable" };
   }
 };
