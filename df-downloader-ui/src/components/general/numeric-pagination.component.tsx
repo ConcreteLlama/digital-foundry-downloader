@@ -43,15 +43,37 @@ export const NumericPagination = ({ currentPage, numPages, onUpdatePage }: Numer
     // - clicking "next" repeatedly meant re-finding it each time rather than
     // clicking the same spot. Fixed outer columns pin the arrows in place;
     // the middle column centers the cluster independently within whatever
-    // space is left.
-    <Box sx={{ display: "grid", gridTemplateColumns: "auto 1fr auto", alignItems: "center", paddingY: 1 }}>
+    // space is left. Capped maxWidth (rather than the full row) keeps the
+    // arrows from splitting off to the far edges of a wide desktop window,
+    // where the number cluster is narrow but the row itself isn't.
+    <Box
+      sx={{
+        display: "grid",
+        gridTemplateColumns: "auto 1fr auto",
+        alignItems: "center",
+        gap: 1,
+        maxWidth: 420,
+        marginX: "auto",
+        paddingY: 0.75,
+      }}
+    >
       <IconButton
-        size="small"
         disabled={currentPage === 1}
         onClick={() => onUpdatePage(currentPage - 1)}
-        sx={{ justifySelf: "start" }}
+        sx={{
+          justifySelf: "start",
+          // Explicit padding rather than size="small"/"medium": small pairs
+          // its default padding with a 20px icon (too subtle to be an
+          // obvious button), medium pairs 8px padding with a 24px icon and
+          // grows the whole bar noticeably taller than it needs to be. This
+          // keeps the same 24px icon but tightens the padding around it.
+          padding: 0.75,
+          border: "1px solid",
+          borderColor: "divider",
+          "&:hover": { borderColor: "primary.main" },
+        }}
       >
-        <ChevronLeftIcon fontSize="small" />
+        <ChevronLeftIcon />
       </IconButton>
       <Box sx={{ display: "flex", justifyContent: "center", gap: 0.25 }}>
         {pages.map((page, i) =>
@@ -87,12 +109,17 @@ export const NumericPagination = ({ currentPage, numPages, onUpdatePage }: Numer
         )}
       </Box>
       <IconButton
-        size="small"
         disabled={currentPage === numPages}
         onClick={() => onUpdatePage(currentPage + 1)}
-        sx={{ justifySelf: "end" }}
+        sx={{
+          justifySelf: "end",
+          padding: 0.75,
+          border: "1px solid",
+          borderColor: "divider",
+          "&:hover": { borderColor: "primary.main" },
+        }}
       >
-        <ChevronRightIcon fontSize="small" />
+        <ChevronRightIcon />
       </IconButton>
     </Box>
   );
