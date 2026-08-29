@@ -27,7 +27,7 @@ export const isTaskInfo = (task: any): task is TaskInfo => {
   return 'taskType' in task;
 }
 
-export const DfTaskType = z.enum(["download", "subtitles", "inject_metadata", "move_file", "batch_move_files", CLEAR_MISSING_FILES_TASK_TYPE, SCAN_FOR_EXISTING_CONTENT_TASK_TYPE]);
+export const DfTaskType = z.enum(["download", "subtitles", "ai_analysis", "inject_metadata", "move_file", "batch_move_files", CLEAR_MISSING_FILES_TASK_TYPE, SCAN_FOR_EXISTING_CONTENT_TASK_TYPE]);
 export type DfTaskType = z.infer<typeof DfTaskType>;
 
 export const getTaskFriendlyName = (task: TaskInfo | DfTaskType): string => {
@@ -42,6 +42,8 @@ export const getTaskFriendlyName = (task: TaskInfo | DfTaskType): string => {
       return "Download";
     case "subtitles":
       return "Generate subtitles";
+    case "ai_analysis":
+      return "Analyse content";
     case "inject_metadata":
       return "Inject metadata";
     case "move_file":

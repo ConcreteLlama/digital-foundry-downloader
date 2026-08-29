@@ -6,6 +6,7 @@ import {
   ControlPipelineRequest,
   ControlRequest,
   ControlTaskRequest,
+  DfContentEntry,
   DfContentInfo,
   DownloadTaskInfo,
   DownloadTaskStatus,
@@ -61,6 +62,15 @@ import {
   SubtitlesTaskPipelineExecution,
   createSubtitlesTaskPipeline,
 } from "./task-pipelines/subtitles-task-pipeline.js";
+import {
+  AiAnalysisTaskPipeline,
+  AiAnalysisTaskPipelineExecution,
+  createAiAnalysisTaskPipeline,
+} from "./task-pipelines/ai-analysis-task-pipeline.js";
+import { AiAnalysisTaskManager } from "./tasks/ai-analysis-task.js";
+import { AiAnalysisConfig } from "df-downloader-common/config/ai-analysis-config.js";
+import { Chapter } from "./utils/chatpers.js";
+import { DfDownloaderOperationalDb } from "./db/df-operational-db.js";
 import { BatchMoveFilesTask, isBatchMoveFilesTask, makeMoveFilesTaskStatus } from "./tasks/batch-move-files-task.js";
 import { ClearMissingFilesTask, isClearMissingFilesTask } from "./tasks/clear-missing-files-task.js";
 import { DownloadTask, DownloadTaskManager, isDownloadTask } from "./tasks/download-task.js";
@@ -73,13 +83,14 @@ type DfTaskManagerOpts = {
   autoClearCompletedPipelines?: boolean;
 };
 
-type PipelineExecutionTypes = SubtitlesTaskPipelineExecution | DownloadTaskPipelineExecution | UpdateDownloadMetadataTaskPipelineExecution;
+type PipelineExecutionTypes = SubtitlesTaskPipelineExecution | DownloadTaskPipelineExecution | UpdateDownloadMetadataTaskPipelineExecution | AiAnalysisTaskPipelineExecution;
 /**
  * This class is responsible for managing the task pipelines for downloading and generating subtitles (and any
  * other task pipelines that may be added in the future).
  */
 export class DfTaskManager {
   readonly subtitleTaskPipeline: SubtitlesTaskPipeline;
+  readonly aiAnalysisTaskPipeline: AiAnalysisTaskPipeline;
   readonly downloadTaskPipeline: DownloadTaskPipeline;
   readonly updateDownloadMetadataTaskPipeline: UpdateDownloadMetadataTaskPipeline;
 
@@ -166,6 +177,11 @@ export class DfTaskManager {
     });
     this.maintenanceOperationsTaskManager = new TaskManager({
       concurrentTasks: 1,
+    });
+    this.aiAnalysisTaskPipeline = createAiAnalysisTaskPipeline({
+      aiAnalysisTaskManager: new AiAnalysisTaskManager(),
+      storageTaskManager: this.maintenanceOperationsTaskManager,
+      db: serviceLocator.db,
     });
   }
 
@@ -355,6 +371,25 @@ export class DfTaskManager {
     });
     this.addTaskPipelineExecution(subtitleExecution);
     return subtitleExecution;
+  }
+
+  /**
+   * Queues an analysis run for one content entry.
+   *
+   * Takes a resolved config rather than reading it here so a caller can
+   * run with settings that differ from the saved ones - which is what the
+   * "analyse with a different model" path in the UI needs.
+   */
+  analyseContent(entry: DfContentEntry, config: AiAnalysisConfig, opts: { chapters?: Chapter[]; articleText?: string } = {}) {
+    const analysisExecution = this.aiAnalysisTaskPipeline.start({
+      dfContentInfo: entry.contentInfo,
+      entry,
+      config,
+      chapters: opts.chapters,
+      articleText: opts.articleText,
+    });
+    this.addTaskPipelineExecution(analysisExecution);
+    return analysisExecution;
   }
 
   updateDownloadMetadata(dfContentInfo: DfContentInfo, fileLocation: string, mediaFileMeta?: MediaFileMeta) {
