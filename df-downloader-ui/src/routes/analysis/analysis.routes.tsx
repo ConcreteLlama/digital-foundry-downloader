@@ -17,6 +17,10 @@ import { NestedSubRoute } from "../nav/nested-routes.tsx";
 export const analysisRouteDefinitions: NestedSubRoute = {
   name: "Analysis",
   icon: InsightsIcon,
+  // These pages are wide - a comparison table with a column per platform
+  // in particular - so a second vertical nav beside the rail takes width
+  // the content needs, to choose between two pages.
+  compactNavOnly: true,
   routes: [
     {
       path: "/analysis/platform-comparisons",

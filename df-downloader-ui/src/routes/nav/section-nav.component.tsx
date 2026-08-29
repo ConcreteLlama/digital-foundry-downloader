@@ -24,6 +24,10 @@ export const SectionNav = () => {
   if (!destination?.section) {
     return null;
   }
+  if (destination.section.compactNavOnly) {
+    // This section renders its links inline instead - see NestedSubRoute.
+    return null;
+  }
   const routes = flattenSectionRoutes(destination.section).filter((r) => !r.devOnly || devModeEnabled);
   if (routes.length <= 1) {
     // A single-page section doesn't need a column to choose from.
@@ -111,7 +115,9 @@ export const SectionNavCompact = () => {
   return (
     <Box
       sx={{
-        display: { xs: "flex", md: "none" },
+        // Normally the small-screen alternative to the column, but the
+        // only nav for a section that opted out of the column entirely.
+        display: destination.section.compactNavOnly ? "flex" : { xs: "flex", md: "none" },
         gap: 1,
         overflowX: "auto",
         paddingBottom: 1,

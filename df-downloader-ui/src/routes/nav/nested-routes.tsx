@@ -16,6 +16,15 @@ export type NestedSubRoute = {
   icon?: React.FC;
   routes: NestedRouteElement[];
   devOnly?: boolean;
+  /**
+   * Use the compact row of links at every width, never the 208px column.
+   *
+   * For sections holding a couple of wide pages, where a second vertical
+   * nav beside the rail costs more width than choosing between two things
+   * is worth. Settings has a dozen pages and earns its column; a section
+   * with two does not.
+   */
+  compactNavOnly?: boolean;
 };
 export const isNestedSubRoute = (route: NestedRouteElement): route is NestedSubRoute => {
   return (route as NestedSubRoute).routes !== undefined;

@@ -269,7 +269,7 @@ export const PlatformComparisonPage = () => {
   }
 
   return (
-    <Stack sx={{ p: { xs: 1.5, sm: 3 }, gap: 1.5, height: "100%", minHeight: 0 }}>
+    <Stack sx={{ gap: 1.5, height: "100%", minHeight: 0 }}>
       <Box>
         <Typography variant="h6" sx={{ fontWeight: 700 }}>
           Platform comparisons
