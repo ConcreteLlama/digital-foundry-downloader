@@ -21,6 +21,7 @@ import { useCallback, useEffect, useState } from "react";
 import { useSelector } from "react-redux";
 import { Link, Outlet, useLocation } from "react-router-dom";
 import { LiveStatusStrip } from "../../components/general/live-status-strip.component";
+import { ThemeSwitcher } from "../../components/general/theme-switcher.component";
 import { DfLogoIcon } from "../../icons/df-logo.component";
 import { selectDevConfigEnabled } from "../../store/config/config.selector.ts";
 import { monoFontFamily, NARROW_RAIL_MAX_WIDTH } from "../../themes/build-theme";
@@ -336,6 +337,7 @@ const AppTopBar = ({ railWidth, showMenuButton, onMenuClick }: AppTopBarProps) =
           {getPageTitle(pathname)}
         </Typography>
         <LiveStatusStrip />
+        <ThemeSwitcher />
       </Toolbar>
     </AppBar>
   );
