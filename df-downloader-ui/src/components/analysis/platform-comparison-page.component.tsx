@@ -90,12 +90,14 @@ const PlatformCell = ({ modes }: { modes: PlatformMode[] | undefined }) => {
               real modes, so a permanent placeholder row would be mostly
               noise. */}
           {mode.fpsMeasuredAvg != null && (
-            <Typography variant="caption" sx={{ display: "block", color: "text.disabled" }}>
-              measured avg{" "}
-              <Box component="span" sx={{ fontFamily: monoFontFamily }}>
-                {mode.fpsMeasuredAvg}
-              </Box>
-            </Typography>
+            <Tooltip title="What Digital Foundry measured it actually running at, as opposed to the frame rate the mode aims for">
+              <Typography variant="caption" sx={{ display: "block", color: "text.disabled" }}>
+                actually ran at{" "}
+                <Box component="span" sx={{ fontFamily: monoFontFamily }}>
+                  {mode.fpsMeasuredAvg}fps
+                </Box>
+              </Typography>
+            </Tooltip>
           )}
         </Box>
       ))}
@@ -120,24 +122,25 @@ const CoverageNote = ({ data }: { data: PlatformComparisonResponse }) => {
       icon={<WarningAmberIcon fontSize="small" />}
       sx={{ py: 0.25, "& .MuiAlert-message": { py: 0.5 }, "& .MuiAlert-icon": { py: 0.75 } }}
     >
-      {/* Counts rather than bare percentages: "85%" says neither what is
-          being measured nor out of what. "89 of 105 modes" needs no
-          explaining, and the shrinking numerator is the point. */}
+      {/* Both frame-rate figures are defined where they are used. "Target"
+          and "measured average" are the schema's words, not words a reader
+          arrives already knowing, and the difference between them is the
+          whole reason this table has no best-platform column. */}
       <Typography variant="caption" sx={{ color: "text.secondary", display: "block" }}>
-        How often Digital Foundry actually stated each figure, across {coverage.totalModes} modes in{" "}
-        {data.comparisonCount} comparisons:
+        {data.comparisonCount} comparisons covering {coverage.totalModes} platform modes. A blank cell means Digital
+        Foundry did not give that figure — not that something is missing here.
       </Typography>
-      <Typography variant="caption" sx={{ color: "text.secondary", display: "block" }}>
-        resolution <strong>{coverage.withResolution}</strong> · target frame rate{" "}
-        <strong>{coverage.withFpsTarget}</strong> · measured average{" "}
+      <Typography variant="caption" sx={{ color: "text.secondary", display: "block", mt: 0.25 }}>
+        They gave the resolution for <strong>{coverage.withResolution}</strong> modes, and the frame rate the mode aims
+        for in <strong>{coverage.withFpsTarget}</strong> — but only{" "}
         <Box component="strong" sx={{ color: "warning.main" }}>
           {coverage.withMeasuredAvg}
         </Box>{" "}
-        — so blank cells are the source being silent, not a fault here.
+        say what it <em>actually</em> ran at when they tested it.
       </Typography>
-      <Typography variant="caption" sx={{ color: "text.disabled", display: "block" }}>
-        There is no ranking column because measured average is the figure it would need, and it is missing most often
-        where platforms performed similarly.
+      <Typography variant="caption" sx={{ color: "text.disabled", display: "block", mt: 0.25 }}>
+        That last figure is the only one that could rank platforms, and it is missing most often when they performed
+        about the same — so there is no "best platform" column.
       </Typography>
     </Alert>
   );
