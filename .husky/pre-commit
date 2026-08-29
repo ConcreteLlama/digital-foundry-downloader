@@ -6,7 +6,6 @@ set -e
 npm run install-all-deps
 npm run update-versions
 npm run check-build
-git add */package*.json
 npm run validate-changelog
 npm run build-changelog
 git add CHANGELOG.md
