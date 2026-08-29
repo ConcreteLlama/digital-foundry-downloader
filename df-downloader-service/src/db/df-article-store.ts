@@ -3,7 +3,7 @@ import crypto from "crypto";
 import fs from "fs";
 import path from "path";
 import { z } from "zod";
-import { ensureDirectory } from "../utils/file-utils.js";
+import { ensureDirectory, writeFileAtomic } from "../utils/file-utils.js";
 
 /**
  * Storage for Digital Foundry article lookups.
@@ -78,16 +78,12 @@ export class DfArticleStore {
   private async writeIndex(): Promise<void> {
     this.index.lastUpdated = new Date();
     const indexPath = path.join(this.dir, INDEX_FILENAME);
-    const tempPath = `${indexPath}.tmp`;
-    await fs.promises.writeFile(tempPath, JSON.stringify(this.index, null, 2), { encoding: "utf-8" });
-    await fs.promises.rename(tempPath, indexPath);
+    await writeFileAtomic(indexPath, JSON.stringify(this.index, null, 2));
   }
 
   async set(state: DfArticleLookupState): Promise<void> {
     const filePath = path.join(this.dir, keyToFilename(state.contentKey));
-    const tempPath = `${filePath}.tmp`;
-    await fs.promises.writeFile(tempPath, JSON.stringify(state, null, 2), { encoding: "utf-8" });
-    await fs.promises.rename(tempPath, filePath);
+    await writeFileAtomic(filePath, JSON.stringify(state, null, 2));
     this.index.entries[state.contentKey] = {
       lastAttemptedAt: state.lastAttemptedAt,
       missCount: state.missCount,

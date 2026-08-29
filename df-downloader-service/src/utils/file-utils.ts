@@ -189,3 +189,51 @@ export const sanitizeFilePath = (filePath: string, sanitizeOpt: SanitizeFilename
 };
 
 export const pathIsEqual = (path1: string, path2: string) => path.resolve(path1) === path.resolve(path2);
+/**
+ * Writes a file via a temp file and a rename, retrying the rename.
+ *
+ * Temp-then-rename is the usual way to avoid a reader seeing a
+ * half-written file: the rename is atomic within a directory, so a reader
+ * sees either the old contents or the new ones. On Windows that rename can
+ * still fail with EPERM when something else briefly holds a handle to
+ * either file - a sync client, an indexer, or a virus scanner opening the
+ * temp file the moment it appears. This is not hypothetical: it happens
+ * reliably when the DB directory sits inside a Nextcloud/Dropbox-synced
+ * folder, which is a perfectly reasonable place for someone to keep it.
+ *
+ * A handle like that is held for a moment, not permanently, so retrying
+ * with a short backoff clears it. If it somehow does not, the last resort
+ * is writing straight over the destination: that gives up atomicity, which
+ * is a real loss, but losing the write entirely is worse - the alternative
+ * is data the caller believes was saved and was not.
+ */
+export const writeFileAtomic = async (filePath: string, contents: string): Promise<void> => {
+  const tempPath = `${filePath}.tmp`;
+  await fs.promises.writeFile(tempPath, contents, { encoding: "utf-8" });
+
+  const delaysMs = [0, 25, 75, 200];
+  for (let attempt = 0; attempt < delaysMs.length; attempt++) {
+    if (delaysMs[attempt]) {
+      await new Promise((resolve) => setTimeout(resolve, delaysMs[attempt]));
+    }
+    try {
+      await fs.promises.rename(tempPath, filePath);
+      return;
+    } catch (e) {
+      const code = (e as NodeJS.ErrnoException)?.code;
+      // Only transient sharing violations are worth retrying. Anything
+      // else (a missing directory, a bad path) will not fix itself.
+      if (code !== "EPERM" && code !== "EACCES" && code !== "EBUSY") {
+        await fs.promises.rm(tempPath, { force: true }).catch(() => {});
+        throw e;
+      }
+    }
+  }
+
+  logger.log(
+    "warn",
+    `Could not rename ${path.basename(tempPath)} into place after retries - writing directly. Something is holding a handle on this directory (a file sync client or virus scanner is the usual cause).`
+  );
+  await fs.promises.writeFile(filePath, contents, { encoding: "utf-8" });
+  await fs.promises.rm(tempPath, { force: true }).catch(() => {});
+};

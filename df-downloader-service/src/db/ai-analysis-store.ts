@@ -9,7 +9,7 @@ import crypto from "crypto";
 import fs from "fs";
 import path from "path";
 import { z } from "zod";
-import { ensureDirectory } from "../utils/file-utils.js";
+import { ensureDirectory, writeFileAtomic } from "../utils/file-utils.js";
 
 /**
  * Storage for AI analysis results: one JSON file per content item, plus a
@@ -143,12 +143,7 @@ export class AiAnalysisStore {
   private async writeIndex(): Promise<void> {
     this.index.lastUpdated = new Date();
     const indexPath = path.join(this.dir, INDEX_FILENAME);
-    const tempPath = `${indexPath}.tmp`;
-    // Written via a temp file and renamed: the index is read at startup,
-    // and a process killed mid-write would otherwise leave truncated JSON
-    // that reads as "nothing has ever been analysed".
-    await fs.promises.writeFile(tempPath, JSON.stringify(this.index, null, 2), { encoding: "utf-8" });
-    await fs.promises.rename(tempPath, indexPath);
+    await writeFileAtomic(indexPath, JSON.stringify(this.index, null, 2));
   }
 
   async set(contentKey: string, result: AiAnalysisResult): Promise<void> {
@@ -157,9 +152,7 @@ export class AiAnalysisStore {
     // a rebuild can recover the mapping without having to reverse the
     // hash - which it cannot do.
     const payload = { contentKey, result };
-    const tempPath = `${filePath}.tmp`;
-    await fs.promises.writeFile(tempPath, JSON.stringify(payload, null, 2), { encoding: "utf-8" });
-    await fs.promises.rename(tempPath, filePath);
+    await writeFileAtomic(filePath, JSON.stringify(payload, null, 2));
     this.index.entries[contentKey] = makeAiAnalysisIndexEntry(result);
     await this.writeIndex();
   }
