@@ -113,7 +113,6 @@ const PlatformCell = ({ modes }: { modes: PlatformMode[] | undefined }) => {
  */
 const CoverageNote = ({ data }: { data: PlatformComparisonResponse }) => {
   const { coverage } = data;
-  const pct = (n: number) => (coverage.totalModes ? Math.round((n / coverage.totalModes) * 100) : 0);
   return (
     <Alert
       severity="info"
@@ -121,16 +120,24 @@ const CoverageNote = ({ data }: { data: PlatformComparisonResponse }) => {
       icon={<WarningAmberIcon fontSize="small" />}
       sx={{ py: 0.25, "& .MuiAlert-message": { py: 0.5 }, "& .MuiAlert-icon": { py: 0.75 } }}
     >
+      {/* Counts rather than bare percentages: "85%" says neither what is
+          being measured nor out of what. "89 of 105 modes" needs no
+          explaining, and the shrinking numerator is the point. */}
       <Typography variant="caption" sx={{ color: "text.secondary", display: "block" }}>
-        {data.comparisonCount} comparisons · {coverage.totalModes} modes · resolution {pct(coverage.withResolution)}% ·
-        target fps {pct(coverage.withFpsTarget)}% · measured avg{" "}
+        How often Digital Foundry actually stated each figure, across {coverage.totalModes} modes in{" "}
+        {data.comparisonCount} comparisons:
+      </Typography>
+      <Typography variant="caption" sx={{ color: "text.secondary", display: "block" }}>
+        resolution <strong>{coverage.withResolution}</strong> · target frame rate{" "}
+        <strong>{coverage.withFpsTarget}</strong> · measured average{" "}
         <Box component="strong" sx={{ color: "warning.main" }}>
-          {pct(coverage.withMeasuredAvg)}%
-        </Box>
+          {coverage.withMeasuredAvg}
+        </Box>{" "}
+        — so blank cells are the source being silent, not a fault here.
       </Typography>
       <Typography variant="caption" sx={{ color: "text.disabled", display: "block" }}>
-        No ranking column: that last figure is the one it would need, and it is missing more often where platforms
-        performed similarly.
+        There is no ranking column because measured average is the figure it would need, and it is missing most often
+        where platforms performed similarly.
       </Typography>
     </Alert>
   );
