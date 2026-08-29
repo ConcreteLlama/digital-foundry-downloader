@@ -61,6 +61,10 @@ export class FileDb<T> {
             concurrent: 1,
             maxRetries: 5,
             retryDelay: 200,
+            // A write can be scheduled (scheduleUpdateDb) moments before shutdown and
+            // still be merely queued, not yet active, when close() runs - the default
+            // close mode would silently drop it. DB writes must never be dropped.
+            dropPendingOnClose: false,
         });
     }
     public async updateDb(data: T) {
@@ -85,6 +89,6 @@ export class FileDb<T> {
         return this.data;
     }
     public async close() {
-        await this.writeQueue.close();
+        await this.writeQueue.close(60000, "wait_for_all_jobs");
     }
 }

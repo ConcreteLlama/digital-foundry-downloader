@@ -7,18 +7,28 @@ const allWorkerQueues = new Set<WorkerQueue>();
 
 type WorkerQueueOptions = {
   namePrefix: string;
+  // Queues holding work that must never be silently dropped on shutdown (DB writes)
+  // should set this - closeAllQueues() then waits for queued-but-not-yet-active work
+  // too, instead of the default 'wait_for_current_job' mode, which pauses the queue
+  // and only waits for a job already picked up as active, dropping anything merely
+  // queued (confirmed live: a write scheduled immediately before SIGINT silently
+  // never happened - see feature/sqlite-migration commit 1de5bf6 for the FileDb-local
+  // half of this fix).
+  dropPendingOnClose?: boolean;
 } & Partial<QueueOptions<any, any>>;
 export class WorkerQueue {
   readonly queueId = queueIdIncr++;
   readonly name: string;
   readonly queue: Queue;
   readonly isRetry: boolean;
+  readonly dropPendingOnClose: boolean;
   private _activeJobs = 0;
   private _queuedJobs = 0;
   private _closing = false;
 
   constructor(opts: WorkerQueueOptions) {
     this.isRetry = opts.maxRetries && opts.maxRetries > 0 ? true : false;
+    this.dropPendingOnClose = opts.dropPendingOnClose ?? true;
     allWorkerQueues.add(this);
     this.name = `${opts.namePrefix}-${this.queueId}`;
     this.queue = new Queue(async (task: { run: () => Promise<void> }, cb) => {
@@ -129,7 +139,9 @@ export const fileScannerQueue = new WorkerQueue({
 
 export const closeAllQueues = async (timeout: number = 60000) => {
   logger.log("info", `Closing ${allWorkerQueues.size} queues with timeout ${timeout}`);
-  const closePromises = Array.from(allWorkerQueues).map((queue) => queue.close(timeout));
+  const closePromises = Array.from(allWorkerQueues).map((queue) =>
+    queue.close(timeout, queue.dropPendingOnClose ? "wait_for_current_job" : "wait_for_all_jobs")
+  );
   await Promise.allSettled(closePromises);
   logger.log("info", "All queues closed");
 }
