@@ -3,8 +3,24 @@
 
 set -e
 
-npm run install-all-deps
-npm run update-versions
+# Dependency work only when a commit actually touches a manifest.
+#
+# These two both run npm install, which relinks node_modules underneath
+# anything already running against it - a nodemon dev server watching
+# dist, or vite's pre-bundled dependency cache in node_modules/.vite. Run
+# unconditionally they killed the dev servers on every single commit,
+# which reads as the servers being flaky rather than as the commit doing
+# it.
+#
+# Same principle as removing the blanket `git add */package*.json`: the
+# hook should not do workspace maintenance for commits that did not ask
+# for any. A commit that does change a manifest still gets the full
+# treatment.
+if git diff --cached --name-only | grep -qE '(^|/)package(-lock)?\.json$'; then
+  npm run install-all-deps
+  npm run update-versions
+fi
+
 npm run check-build
 npm run validate-changelog
 npm run build-changelog
