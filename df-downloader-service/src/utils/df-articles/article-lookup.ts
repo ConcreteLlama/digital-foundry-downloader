@@ -39,6 +39,23 @@ import { parseArticlePage } from "./article-parser.js";
  * 3. **The embedded video ID**, which is the actual proof. The first two
  *    only decide what is worth fetching; this decides what is correct.
  *
+ * ## When several articles embed the same video
+ *
+ * Only one is kept, and it is the best-scoring one rather than whichever
+ * arrived first: candidates are sorted by title overlap and then date
+ * proximity before any are fetched, and the search stops at the first
+ * confirmed match, so "first" and "best" are the same candidate. That is
+ * a deliberate simplification rather than an oversight - a video's
+ * companion piece is the article about it, and a second page that merely
+ * embeds the same video (a news post, a weekly roundup) is not a better
+ * source for it. Storing every page that references a video would grow
+ * the grounding text with material about other things, which is the
+ * opposite of what the grounding is for.
+ *
+ * The inverse case - one article embedding several videos - is handled in
+ * verifyCandidate, and matters more, because getting it wrong attaches an
+ * article to content it only mentions.
+ *
  * ## Request economy
  *
  * Digital Foundry are a small team and their robots.txt asks for a
@@ -281,9 +298,16 @@ export const findArticleForContent = async (
       return { status: "found", article: result.article, byproducts };
     }
     if (result.kind === "other") {
-      // Already fetched and positively identified - keep it so the caller
-      // can file it against whatever content it does belong to.
-      byproducts.push({ article: result.article });
+      // Kept only when the page is unambiguously about one video. A
+      // roundup embedding several is not "the article for" any single one
+      // of them, and filing it against whichever happens to appear first
+      // would attach a page to content it merely mentions - a false
+      // positive that then gets fed to an analysis as grounding.
+      if (result.embedCount === 1) {
+        byproducts.push({ article: result.article });
+      } else {
+        logger.log("debug", `Not filing ${result.article.slug} - embeds ${result.embedCount} videos, so not specific to one`);
+      }
     }
   }
 
@@ -303,7 +327,7 @@ export const findArticleForContent = async (
  */
 type VerifyResult =
   | { kind: "match"; article: DfArticle }
-  | { kind: "other"; article: DfArticle }
+  | { kind: "other"; article: DfArticle; embedCount: number }
   | { kind: "unusable" };
 
 const verifyCandidate = async (
@@ -321,25 +345,46 @@ const verifyCandidate = async (
       return { kind: "unusable" };
     }
     const parsed = parseArticlePage(await response.text());
-    if (!parsed?.text.trim() || !parsed.youtubeVideoId) {
+    if (!parsed?.text.trim() || !parsed.youtubeVideoIds.length) {
       return { kind: "unusable" };
     }
-    const article: DfArticle = {
-      url: candidate.url,
-      slug: candidate.slug,
-      title: parsed.title,
-      youtubeVideoId: parsed.youtubeVideoId,
-      text: parsed.text,
-      author: parsed.author,
-      matchedAt: new Date(),
-    };
-    if (parsed.youtubeVideoId !== youtubeVideoId) {
-      // Not what we were looking for, but now positively identified. The
-      // caller decides whether that video is in the library.
-      logger.log("debug", `Article ${candidate.slug} belongs to ${parsed.youtubeVideoId}, not ${youtubeVideoId}`);
-      return { kind: "other", article };
+    // Membership, not equality. An article can lead with a trailer before
+    // the video it is actually about, and testing only the first embed
+    // would reject it as belonging to something else.
+    if (parsed.youtubeVideoIds.includes(youtubeVideoId)) {
+      return {
+        kind: "match",
+        article: {
+          url: candidate.url,
+          slug: candidate.slug,
+          title: parsed.title,
+          youtubeVideoId,
+          text: parsed.text,
+          author: parsed.author,
+          matchedAt: new Date(),
+        },
+      };
     }
-    return { kind: "match", article };
+    // Not what we were looking for, but positively identified. The caller
+    // decides whether that video is in the library, and how much the
+    // identification is worth given how many videos this page embeds.
+    logger.log(
+      "debug",
+      `Article ${candidate.slug} embeds ${parsed.youtubeVideoIds.join(", ")}, not ${youtubeVideoId}`
+    );
+    return {
+      kind: "other",
+      embedCount: parsed.youtubeVideoIds.length,
+      article: {
+        url: candidate.url,
+        slug: candidate.slug,
+        title: parsed.title,
+        youtubeVideoId: parsed.youtubeVideoIds[0],
+        text: parsed.text,
+        author: parsed.author,
+        matchedAt: new Date(),
+      },
+    };
   } catch (e) {
     logger.log("warn", `Article candidate check failed: ${e instanceof Error ? e.message : String(e)}`);
     return { kind: "unusable" };

@@ -11,24 +11,42 @@ import * as cheerio from "cheerio";
 
 export type ParsedArticle = {
   title: string;
-  /** The embedded YouTube video ID, when the article has one. This is what verifies a match. */
+  /**
+   * Every distinct YouTube video embedded in the article, in page order.
+   *
+   * A list rather than a single value because an article does not
+   * necessarily embed exactly one video. A companion piece normally does
+   * (the same ID appears two or three times, as the nocookie and standard
+   * variants), but a roundup embeds several, and an article can lead with
+   * a trailer before the video it is actually about. Reading only the
+   * first embed gets both of those wrong: it rejects a correct article
+   * whose own video is not first, and it mis-attributes a roundup to
+   * whichever video happens to lead.
+   */
+  youtubeVideoIds: string[];
+  /** The first embed, kept for display. Not sufficient for matching - use the list. */
   youtubeVideoId?: string;
   text: string;
   author?: string;
 };
 
 /**
- * The video ID lives only in an iframe `src` attribute.
+ * Every distinct YouTube video embedded in the page, in order.
  *
- * Worth stating because it rules out the obvious approach: the ID is not
- * indexed anywhere as searchable text, so neither DF's own search nor a
- * site-scoped web search can find an article by video ID. It can only be
- * read from a page already fetched - which is why matching is
- * search-by-title then verify-by-ID rather than a direct lookup.
+ * The IDs live only in iframe `src` attributes. Worth stating because it
+ * rules out the obvious approach: they are not indexed anywhere as
+ * searchable text, so neither DF's own search nor a site-scoped web search
+ * can find an article by video ID. They can only be read from a page
+ * already fetched - which is why matching is search-by-title then
+ * verify-by-ID rather than a direct lookup.
+ *
+ * Deduplicated because the same video is normally embedded more than once
+ * per page (the nocookie and standard variants both appear), and a repeat
+ * says nothing about how many videos the article actually covers.
  */
-const extractYoutubeVideoId = (html: string): string | undefined => {
-  const match = html.match(/youtube(?:-nocookie)?\.com\/embed\/([A-Za-z0-9_-]{6,})/);
-  return match?.[1];
+const extractYoutubeVideoIds = (html: string): string[] => {
+  const matches = html.matchAll(/youtube(?:-nocookie)?\.com\/embed\/([A-Za-z0-9_-]{6,})/g);
+  return [...new Set([...matches].map((match) => match[1]))];
 };
 
 /**
@@ -114,9 +132,11 @@ export const parseArticlePage = (html: string): ParsedArticle | undefined => {
     }
   });
 
+  const youtubeVideoIds = extractYoutubeVideoIds(html);
   return {
     title,
-    youtubeVideoId: extractYoutubeVideoId(html),
+    youtubeVideoIds,
+    youtubeVideoId: youtubeVideoIds[0],
     text: parts.join("\n\n"),
     author: extractAuthor($),
   };
