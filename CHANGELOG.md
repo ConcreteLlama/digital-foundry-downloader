@@ -2,6 +2,19 @@
 
 
 
+## 2.7.1 (2026-08-29)
+
+A small fix-up release: the content list's page controls could become completely unreachable once your library passed 100 items, made worse on a phone by a related sizing bug that cut off whatever sat at the bottom of the screen.
+
+### Bug Fixes
+- Fixed the content list's page controls being unreachable once you had more than 100 results
+  - They sat after the full list of items on the page, with no way to reach them without scrolling past everything first - on a long list that read as 'there's no way to see more,' not 'it's further down'
+  - Pinned them to the bottom of the screen instead, the same way the search bar is pinned to the top
+- Fixed a sizing bug that could cut off content at the bottom of the screen on a phone
+  - The app sized its main view assuming the browser's own address bar was fully out of the way, which it usually isn't right after opening a page - so on a real phone the app could believe it had more room than was actually visible
+  - Whatever sat at that cut-off edge simply vanished rather than being reachable by scrolling, including the phone navigation bar in some cases and, combined with the issue above, the page controls entirely
+  - This didn't show up in a resized desktop browser window, only on an actual phone, since desktop browsers don't have this address-bar behaviour to begin with
+
 ## 2.7.0 (2026-08-27)
 
 Subtitles can now be generated locally on your own machine instead of being pulled from YouTube, which stopped serving them.

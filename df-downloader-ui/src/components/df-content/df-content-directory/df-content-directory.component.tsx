@@ -160,11 +160,27 @@ export const DfContentInfoDirectory = () => {
         </MiddleModal>
       </Box>
 
-      <NumericPagination
-        currentPage={currentPage}
-        numPages={numPages}
-        onUpdatePage={(page) => store.dispatch(updateDfContentQuery({ page }))}
-      />
+      {/* Sticky at the bottom for the same reason the top bar is sticky at the
+          top: this sits after a naturally tall list of up to `limit` items in
+          a scrolling flex column, so without this it's only reachable by
+          scrolling past the entire current page's content first - which reads
+          as "there's no pagination" rather than "it's further down." */}
+      <Box
+        sx={{
+          position: "sticky",
+          bottom: 0,
+          zIndex: 1,
+          backgroundColor: "background.default",
+          borderTop: "1px solid",
+          borderColor: "divider",
+        }}
+      >
+        <NumericPagination
+          currentPage={currentPage}
+          numPages={numPages}
+          onUpdatePage={(page) => store.dispatch(updateDfContentQuery({ page }))}
+        />
+      </Box>
     </Box>
   );
 };

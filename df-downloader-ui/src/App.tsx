@@ -165,7 +165,18 @@ const MainApp = () => {
         id="main-app-stack"
         sx={{
           flex: "1 1 auto",
-          height: "100vh",
+          // 100dvh, not 100vh: on a real mobile browser the address bar can be
+          // showing on initial load, so 100vh (which assumes it's fully
+          // collapsed) reports a taller height than what's actually visible.
+          // Since this container is overflow:hidden by design (see below),
+          // that gap wasn't just "hidden under something" - it was clipped
+          // off-screen entirely, taking the mobile tab bar and anything
+          // anchored near the bottom of the page (e.g. content list
+          // pagination) with it. Confirmed: broken on a real phone, fine on
+          // desktop and even a narrow desktop window, which is exactly the
+          // signature of a vh/dvh mismatch rather than a layout or CSS
+          // specificity bug.
+          height: "100dvh",
           // Deliberately NOT a scroller. It is exactly viewport-height and its
           // two children partition that height, so anything it could scroll
           // would be scrolling the fixed AppBar's spacer off the top and
