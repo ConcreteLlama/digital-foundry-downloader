@@ -21,7 +21,20 @@ export class DfUserManager {
   }
 
   async checkDfUserInfo(priority?: number) {
-    const userInfo = await getDfUserInfo(undefined, priority);
+    let userInfo: DfUserInfo | undefined;
+    try {
+      userInfo = await getDfUserInfo(undefined, priority);
+    } catch (e) {
+      // Couldn't reach digitalfoundry.net at all - this says nothing about
+      // whether the session is actually still valid, so it must NOT be
+      // treated as "confirmed signed out". Keep the last known state and
+      // let the next scheduled check try again. Persisting `undefined` here
+      // on every transient network blip is exactly what was making the
+      // frontend's "Not Connected" dialog pop up for genuinely signed-in
+      // installs and then self-correct a short while later.
+      logger.log("warn", "checkDfUserInfo: could not reach Digital Foundry - keeping last known sign-in state", e);
+      return this.currentDfUserInfo;
+    }
     if (!_.isEqual(this.currentDfUserInfo, userInfo)) {
       this.currentDfUserInfo = userInfo;
       this.userTierChangeListeners.forEach((listener) => listener(userInfo?.tier));

@@ -421,31 +421,34 @@ function extractDfUserInfo(html: string): DfUserInfo | undefined {
 
 /**
  * Checks whether the configured autologin cookie currently authenticates as a
- * subscriber. "Not signed in" is a normal, expected outcome here (no cookie
- * configured yet, an invalid/expired one, or a transient failure reaching the
- * site) - always resolves to undefined in that case rather than throwing, so
- * callers (DfUserManager's startup check, its periodic recheck, and the
- * config-update listener that reacts to the user pasting a new cookie) don't
- * need their own error handling for what is the default state for a fresh
- * install. Confirmed empirically: the site returns 403 Forbidden (not just a
- * logged-out 200) for a syntactically-present-but-invalid cookie value.
+ * subscriber. "Not signed in" (a resolved `undefined`) is a normal, expected
+ * outcome for no cookie configured, an invalid/expired one, or an explicit
+ * auth rejection from the site (401/403) - confirmed empirically the site
+ * returns 403 Forbidden, not just a logged-out 200, for a
+ * syntactically-present-but-invalid cookie value.
+ *
+ * A network-level failure to reach digitalfoundry.net at all is NOT treated
+ * the same way - it says nothing about whether the session is actually still
+ * valid, so it throws instead of resolving to `undefined`. Resolving to
+ * `undefined` here used to mean "confirmed not signed in" either way, and
+ * DfUserManager persisted that verbatim - a single transient network blip
+ * (not uncommon for any external HTTP dependency) was enough to flip a
+ * genuinely-signed-in install to "not signed in" until the next check
+ * happened to succeed, which is exactly what was making the UI's "Not
+ * Connected" dialog pop up and then self-correct a short while later.
+ * Callers that want the old "never throws" behavior for a specific reason
+ * should catch explicitly, not rely on this function swallowing the error.
  */
 export async function getDfUserInfo(sessionIdOverride?: string, priority?: number): Promise<DfUserInfo | undefined> {
-  let response: Response;
-  try {
-    response = await dfFetch(
-      `${dfBaseUrl}/videos`,
-      {
-        headers: {
-          ...makeAuthHeaders(sessionIdOverride),
-        },
+  const response = await dfFetch(
+    `${dfBaseUrl}/videos`,
+    {
+      headers: {
+        ...makeAuthHeaders(sessionIdOverride),
       },
-      { priority, label: "Checking Digital Foundry sign-in" }
-    );
-  } catch (e) {
-    logger.log("warn", "Failed to reach digitalfoundry.net while checking auth status - treating as not signed in", e);
-    return undefined;
-  }
+    },
+    { priority, label: "Checking Digital Foundry sign-in" }
+  );
   if (!response.ok) {
     const isExpectedAuthRejection = response.status === 401 || response.status === 403;
     logger.log(
