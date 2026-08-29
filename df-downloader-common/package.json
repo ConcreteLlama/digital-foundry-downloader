@@ -1,6 +1,6 @@
 {
   "name": "df-downloader-common",
-  "version": "2.7.0",
+  "version": "2.7.1",
   "description": "",
   "private": true,
   "main": "dist/index.js",
