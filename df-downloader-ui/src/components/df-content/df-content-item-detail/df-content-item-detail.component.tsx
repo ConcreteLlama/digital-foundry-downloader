@@ -18,6 +18,7 @@ import { useEffect, useState } from "react";
 import { useSelector } from "react-redux";
 import { AiAnalysisConfigUtils } from "df-downloader-common/config/ai-analysis-config";
 import { selectConfigSection } from "../../../store/config/config.selector.ts";
+import { queryConfigSection } from "../../../store/config/config.action.ts";
 import { clearPipeline } from "../../../api/tasks.ts";
 import { useDfContentEntry } from "../../../hooks/use-df-content-entry.ts";
 import { fetchYtVideoMeta, refreshDfContentMeta } from "../../../store/df-content/df-content.action.ts";
@@ -66,6 +67,15 @@ export const DfContentInfoItemDetail = ({ dfContentName, onClose }: DfContentInf
     // scans, and only once per entry (the service caches the result).
     store.dispatch(fetchYtVideoMeta.start(dfContentName));
   }, [dfContentName]);
+  // Config sections are fetched per-consumer rather than all at once, so a
+  // component that reads one has to ask for it - otherwise the selector
+  // returns undefined for anyone who has not happened to open that
+  // section's settings page, and the panel below reports the feature as
+  // switched off when it is not.
+  useEffect(() => {
+    store.dispatch(queryConfigSection.start("aiAnalysis"));
+  }, []);
+
   // Gates the panel on the feature actually being usable, so it explains
   // itself rather than offering an Analyse button that would fail on the
   // first request for want of a key.
