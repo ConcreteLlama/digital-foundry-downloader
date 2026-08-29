@@ -19,6 +19,8 @@ import {
 import { AiContentTypeLabels, GameGroup, GameIndexResponse, normaliseName } from "df-downloader-common";
 import { useEffect, useMemo, useState } from "react";
 import { fetchGameIndex } from "../../api/ai-analysis.ts";
+import { MiddleModal } from "../general/middle-modal.component.tsx";
+import { DfContentInfoItemDetail } from "../df-content/df-content-item-detail/df-content-item-detail.component.tsx";
 import { formatDate } from "../../utils/date.ts";
 import { monoFontFamily } from "../../themes/build-theme.ts";
 
@@ -53,7 +55,7 @@ const CoverageNote = ({ data }: { data: GameIndexResponse }) => (
   </Alert>
 );
 
-const GroupRow = ({ group }: { group: GameGroup }) => {
+const GroupRow = ({ group, onOpen }: { group: GameGroup; onOpen: (contentKey: string) => void }) => {
   const platforms = [...new Set(group.items.flatMap((item) => item.platforms))];
   return (
     <Accordion disableGutters variant="outlined" defaultExpanded={group.items.length > 1}>
@@ -102,7 +104,30 @@ const GroupRow = ({ group }: { group: GameGroup }) => {
       <AccordionDetails sx={{ pt: 0 }}>
         <Stack divider={<Divider />}>
           {group.items.map((item) => (
-            <Box key={item.contentKey} sx={{ py: 1.25 }}>
+            <Box
+              key={item.contentKey}
+              role="button"
+              tabIndex={0}
+              onClick={() => onOpen(item.contentKey)}
+              onKeyDown={(event) => {
+                if (event.key === "Enter" || event.key === " ") {
+                  event.preventDefault();
+                  onOpen(item.contentKey);
+                }
+              }}
+              // This view is an index into the per-item analysis, not a
+              // replacement for it - every row leads to the full panel
+              // rather than restating a trimmed version of it here.
+              sx={{
+                py: 1.25,
+                px: 1,
+                mx: -1,
+                borderRadius: 1,
+                cursor: "pointer",
+                "&:hover": { bgcolor: "action.hover" },
+                "&:focus-visible": { outline: "2px solid", outlineColor: "primary.main", outlineOffset: -2 },
+              }}
+            >
               <Stack direction="row" spacing={1} alignItems="baseline" flexWrap="wrap" useFlexGap>
                 <Typography variant="body2" sx={{ fontWeight: 500, flex: "1 1 260px" }}>
                   {item.title}
@@ -161,6 +186,7 @@ export const GameIndexPage = () => {
   const [data, setData] = useState<GameIndexResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
+  const [openContentKey, setOpenContentKey] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -237,7 +263,7 @@ export const GameIndexPage = () => {
           <Box sx={{ overflowY: "auto", minHeight: 0, pr: 0.5 }}>
             <Stack spacing={1}>
               {filtered.map((group) => (
-                <GroupRow key={group.key} group={group} />
+                <GroupRow key={group.key} group={group} onOpen={setOpenContentKey} />
               ))}
               {filtered.length === 0 && (
                 <Typography variant="body2" sx={{ color: "text.disabled" }}>
@@ -248,6 +274,20 @@ export const GameIndexPage = () => {
           </Box>
         </>
       )}
+
+      <MiddleModal
+        open={Boolean(openContentKey)}
+        onClose={() => setOpenContentKey(null)}
+        id="game-index-content-detail-modal"
+        hideCloseButton
+      >
+        <Box>
+          <DfContentInfoItemDetail
+            dfContentName={openContentKey || ""}
+            onClose={() => setOpenContentKey(null)}
+          />
+        </Box>
+      </MiddleModal>
     </Stack>
   );
 };
