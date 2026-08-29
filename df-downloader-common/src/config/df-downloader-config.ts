@@ -13,6 +13,7 @@ import { AuthenticationConfig, AuthenticationConfigKey, DefaultAuthenticationCon
 import { DevConfig, DevConfigKey } from "./dev-config.js";
 import { MediaFormatsConfigKey, MediaFormatsConfig } from "./media-formats-config.js";
 import { UiConfig, UiConfigKey } from "./ui-config.js";
+import { AiAnalysisConfig, AiAnalysisConfigKey } from "./ai-analysis-config.js";
 
 // prefault(), not default() - these sections are {} with every field having
 // its own nested default, so the empty object is only valid as *input* (gets
@@ -32,6 +33,7 @@ export const DfDownloaderConfig = z.object({
   [RestApiConfigKey]: RestApiConfig.default(DefaultRestApiConfig),
   [MetadataConfigKey]: MetadataConfig.default(DefaultMetadataConfig),
   [SubtitlesConfigKey]: SubtitlesConfig.optional(),
+  [AiAnalysisConfigKey]: AiAnalysisConfig.optional(),
   [NotificationsConfigKey]: NotificationsConfig.optional(),
   [LoggingConfigKey]: LoggingConfig.default(DefaultLoggingConfig),
   // prefault, not default - `theme` has its own default, so {} is valid input

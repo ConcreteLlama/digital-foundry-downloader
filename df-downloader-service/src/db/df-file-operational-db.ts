@@ -1,10 +1,11 @@
-import { DfContentAvailabilityInfo, DfContentDownloadInfo, DfContentEntry, DfContentEntryUtils, DfContentInfo, DfContentInfoQueryParams, DfContentSubtitleInfo, DfTagInfo, DfUserInfo, UserInfo } from "df-downloader-common";
+import { AiAnalysisResult, DfContentAvailabilityInfo, DfContentDownloadInfo, DfContentEntry, DfContentEntryUtils, DfContentInfo, DfContentInfoQueryParams, DfContentSubtitleInfo, DfTagInfo, DfUserInfo, UserInfo } from "df-downloader-common";
 import { ensureEnvString } from "../utils/env-utils.js";
 import { DfContentStatusEntry } from "./df-db-model.js";
 import { ContentAvailabilityParams, DfDbQueryResult, DfDownloaderOperationalDb, DownloadInfoWithName, MoveDownloadOpts, RemoveDownloadOpts } from "./df-operational-db.js";
 import { DfContentInfoDb } from "./file-dbs/content-info-db.js";
 import { DfContentAvailabilityDb } from "./file-dbs/content-status-db.js";
 import { DfUserDb } from "./file-dbs/user-db.js";
+import { AiAnalysisStore } from "./ai-analysis-store.js";
 
 export class DfFileOperationalDb extends DfDownloaderOperationalDb {
     async getAllContentNames(): Promise<string[]> {
@@ -40,9 +41,10 @@ export class DfFileOperationalDb extends DfDownloaderOperationalDb {
         const contentInfoDb = await DfContentInfoDb.create(dbDir);
         const userDb = await DfUserDb.create(dbDir);
         const contentStatusDb = await DfContentAvailabilityDb.create(dbDir);
-        return new DfFileOperationalDb(contentInfoDb, userDb, contentStatusDb);
+        const aiAnalysisStore = await AiAnalysisStore.create(dbDir);
+        return new DfFileOperationalDb(contentInfoDb, userDb, contentStatusDb, aiAnalysisStore);
     }
-    private constructor(private readonly contentInfoDb: DfContentInfoDb, private readonly userDb: DfUserDb, private readonly contentStatusDb: DfContentAvailabilityDb) {
+    private constructor(private readonly contentInfoDb: DfContentInfoDb, private readonly userDb: DfUserDb, private readonly contentStatusDb: DfContentAvailabilityDb, private readonly aiAnalysisStore: AiAnalysisStore) {
         super();
     }
     async init() {
@@ -131,6 +133,22 @@ export class DfFileOperationalDb extends DfDownloaderOperationalDb {
     }
     async subsGenerated(dfContentName: string, downloadLocation: string, subsInfo: DfContentSubtitleInfo) {
         this.contentStatusDb.subsGenerated(dfContentName, downloadLocation, subsInfo);
+    }
+    async setAiAnalysis(contentName: string, aiAnalysis: AiAnalysisResult | undefined) {
+        if (aiAnalysis) {
+            await this.aiAnalysisStore.set(contentName, aiAnalysis);
+        } else {
+            await this.aiAnalysisStore.remove(contentName);
+        }
+    }
+    async getAiAnalysis(contentName: string) {
+        return this.aiAnalysisStore.get(contentName);
+    }
+    getAiAnalysisIndex() {
+        return this.aiAnalysisStore.getAllIndexEntries();
+    }
+    getAiAnalysisIndexEntry(contentName: string) {
+        return this.aiAnalysisStore.getIndexEntry(contentName);
     }
 
     async isFirstRunComplete() {

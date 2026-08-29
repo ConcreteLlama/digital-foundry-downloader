@@ -1,6 +1,8 @@
 import {
   DfContentAvailability,
   DfContentAvailabilityInfo,
+  AiAnalysisIndexEntry,
+  AiAnalysisResult,
   DfContentEntry,
   DfContentInfo,
   DfContentInfoQueryParams,
@@ -87,6 +89,11 @@ export abstract class DfDownloaderOperationalDb {
     missingFiles: MoveDownloadOpts[];
   }>;
   abstract subsGenerated(dfContentName: string, downloadLocation: string, subsInfo: DfContentSubtitleInfo): Promise<void>;
+  abstract setAiAnalysis(contentName: string, aiAnalysis: AiAnalysisResult | undefined): Promise<void>;
+  abstract getAiAnalysis(contentName: string): Promise<AiAnalysisResult | undefined>;
+  /** Synchronous: the index is held in memory precisely so list views can ask per row. */
+  abstract getAiAnalysisIndex(): Record<string, AiAnalysisIndexEntry>;
+  abstract getAiAnalysisIndexEntry(contentName: string): AiAnalysisIndexEntry | undefined;
   protected abstract doQuery(params: DfContentInfoQueryParams): Promise<DfDbQueryResult>;
 
   async setContentInfosWithAvailability(contentInfosWithStatuses: ContentInfoWithAvailability[], userTier: string) {

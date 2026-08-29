@@ -64,6 +64,40 @@ const isSponsorParagraph = (paragraph: string) => {
  * discarded - a false positive costs a paragraph its position, not its
  * existence.
  */
+/**
+ * Whether a line reads as a sponsor credit rather than content.
+ *
+ * Exported for the AI analysis prompts, which pass chapter titles through
+ * it before including them as context. DF's dedicated "Sponsored by X"
+ * chapter is normally dropped upstream by applySponsorSegmentToChapters,
+ * so this is the cheap second line of defence for the cases that fix
+ * doesn't cover - a title that carries a sponsor mention without being a
+ * dedicated sponsor chapter.
+ */
+export const looksLikeSponsorText = (text: string) => isSponsorParagraph(text.trim());
+
+/**
+ * Removes a leading sponsor blurb outright, rather than relocating it.
+ *
+ * Deliberately distinct from moveSponsorshipToEnd, which exists for
+ * *display* - there the blurb is still something the user might want to
+ * see, so nothing is discarded. For prompt context the concern is the
+ * opposite: the sponsor read was cut from the downloaded file, has nothing
+ * to do with the video's subject, and spending input tokens on it only
+ * invites the model to mention a sponsor in a summary of content that
+ * never contained one. Two different needs that happen to share one
+ * detection routine.
+ */
+export const stripSponsorship = (description: string): string => {
+  if (!description?.trim()) {
+    return description;
+  }
+  const paragraphs = description.split(/\n\s*\n/);
+  const searchDepth = Math.min(SPONSOR_PARAGRAPH_SEARCH_DEPTH, paragraphs.length);
+  const kept = paragraphs.filter((paragraph, index) => index >= searchDepth || !isSponsorParagraph(paragraph.trim()));
+  return kept.join("\n\n").trim();
+};
+
 export const moveSponsorshipToEnd = (description: string): string => {
   if (!description?.trim()) {
     return description;

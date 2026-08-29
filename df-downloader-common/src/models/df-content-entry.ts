@@ -3,6 +3,7 @@ import { DfContentDownloadInfo } from "./df-content-download-info.js";
 import { DfContentInfo, DfContentInfoUtils } from "./df-content-info.js";
 import { DfContentAvailabilityInfo } from "./df-content-status.js";
 import { MediaInfo } from "./media-info/media-info.js";
+import { AiAnalysisResult } from "./ai-analysis.js";
 
 export const DfContentEntry = z.object({
   /** Mirrors the DB record's key (see DfContentInfo.key) - not the pretty contentInfo.name. */
@@ -10,6 +11,15 @@ export const DfContentEntry = z.object({
   contentInfo: DfContentInfo,
   statusInfo: DfContentAvailabilityInfo,
   downloads: DfContentDownloadInfo.array(),
+  /**
+   * The most recent AI analysis of this content, when one has been run.
+   *
+   * Optional and additive: every entry already in the DB parses unchanged,
+   * so no migration step is needed. Absent means "never analysed", which is
+   * the normal state for most of the library - analysis is opt-in, costs
+   * real money per item, and is never run across the archive implicitly.
+   */
+  aiAnalysis: AiAnalysisResult.optional(),
 });
 export type DfContentEntry = z.infer<typeof DfContentEntry>;
 

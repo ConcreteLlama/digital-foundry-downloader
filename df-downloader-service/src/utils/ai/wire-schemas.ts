@@ -1,0 +1,146 @@
+import { z } from "zod";
+
+/**
+ * Schemas describing what the model is asked to return, as distinct from
+ * what gets stored.
+ *
+ * Separate from the storage schemas in df-downloader-common's
+ * ai-analysis.ts for a concrete reason rather than tidiness: the API's
+ * structured-output mode compiles a schema to strict JSON Schema, which
+ * requires every property to be listed in `required` and forbids
+ * additional properties. Optional fields and zod defaults do not survive
+ * that faithfully. So everything here is **required and explicitly
+ * nullable** - "the model must answer this field, and null is a legitimate
+ * answer" - which is the wanted semantics anyway: an unstated number
+ * should be an explicit null, not a quietly absent key.
+ *
+ * ## Why the analysis is split across two calls
+ *
+ * Structured-output mode rejects a schema containing more than 16
+ * union-typed parameters, and every nullable field counts as one. A single
+ * schema covering the universal fields plus all three per-type payloads
+ * came to 26 and was refused outright (HTTP 400, "too many parameters with
+ * union types"). Dropping nullability to fit would have meant giving up
+ * the "leave it null rather than guess" discipline that makes this data
+ * worth storing, so the work is split instead:
+ *
+ *   1. WireOverview      - classify, summarise, tag. 2 union params.
+ *   2. one of the below  - extract structured data for that type only.
+ *
+ * This is also just a better shape: a Q+A never has a settings-table
+ * schema compiled for it, and the second call is skipped entirely for the
+ * types that carry no structured data.
+ */
+
+const nullableString = () => z.string().nullable();
+const nullableNumber = () => z.number().nullable();
+
+export const WireContentType = z.enum([
+  "console_comparison",
+  "pc_review_settings",
+  "hands_on_preview",
+  "qa_roundtable",
+  "other",
+]);
+export type WireContentType = z.infer<typeof WireContentType>;
+
+export const WireTag = z.object({
+  tag: z.string(),
+  confidence: z.number().min(0).max(1),
+});
+
+/**
+ * First call: what kind of video is this, what does it say, how would you
+ * tag it.
+ *
+ * Universal - runs for every content type, and is the only call made for
+ * the types that carry no reliable structured data.
+ */
+export const WireOverview = z.object({
+  contentType: WireContentType,
+  contentTypeConfidence: z.number().min(0).max(1),
+  summary: nullableString(),
+  /**
+   * Nullable on purpose, and the prompt says so explicitly: hands-on
+   * previews routinely decline to reach a verdict ("too early to judge"),
+   * and manufacturing one would invent certainty the presenters
+   * themselves disclaimed.
+   */
+  conclusion: nullableString(),
+  tags: z.array(WireTag),
+});
+export type WireOverview = z.infer<typeof WireOverview>;
+
+/** Tag-only response, for content with neither a transcript nor an article. */
+export const WireTagOnly = z.object({
+  contentType: WireContentType,
+  contentTypeConfidence: z.number().min(0).max(1),
+  tags: z.array(WireTag),
+});
+export type WireTagOnly = z.infer<typeof WireTagOnly>;
+
+export const WirePlatformMode = z.object({
+  label: z.string(),
+  resolution: nullableString(),
+  fpsTarget: nullableNumber(),
+  fpsMeasuredAvg: nullableNumber(),
+  notes: nullableString(),
+});
+
+export const WirePlatform = z.object({
+  platform: z.string(),
+  modes: z.array(WirePlatformMode),
+});
+
+/** Second call, console_comparison branch. 7 union params. */
+export const WireConsoleComparison = z.object({
+  game: nullableString(),
+  developer: nullableString(),
+  platforms: z.array(WirePlatform),
+  knownIssues: z.array(z.string()),
+  recommendation: nullableString(),
+});
+export type WireConsoleComparison = z.infer<typeof WireConsoleComparison>;
+
+export const WireSetting = z.object({
+  name: z.string(),
+  levelsTested: z.array(z.string()),
+  perfDeltaPct: nullableNumber(),
+  consoleEquivalent: nullableString(),
+  recommendation: nullableString(),
+});
+
+/**
+ * Second call, pc_review_settings branch. 12 union params - the largest of
+ * the three, and the reason the 16 limit is worth keeping in mind before
+ * adding fields here.
+ *
+ * The optimised-settings result is flattened rather than nested because
+ * nesting it bought nothing and the flat form is one fewer object for the
+ * model to get wrong; analyse.ts reassembles it.
+ */
+export const WirePcReviewSettings = z.object({
+  game: nullableString(),
+  engine: nullableString(),
+  verdict: nullableString(),
+  bottleneckType: nullableString(),
+  bottleneckDetail: nullableString(),
+  settings: z.array(WireSetting),
+  optimisedTestSystem: nullableString(),
+  optimisedFpsBefore: nullableNumber(),
+  optimisedFpsAfter: nullableNumber(),
+  optimisedGainPct: nullableNumber(),
+});
+export type WirePcReviewSettings = z.infer<typeof WirePcReviewSettings>;
+
+export const WireQaSegment = z.object({
+  topic: z.string(),
+  summary: nullableString(),
+  conclusion: nullableString(),
+});
+
+/** Second call, qa_roundtable branch. 2 union params. */
+export const WireQaSegments = z.object({
+  segments: z.array(WireQaSegment),
+});
+export type WireQaSegments = z.infer<typeof WireQaSegments>;

@@ -27,6 +27,7 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.122.0",
     "@deepgram/sdk": "^1.18.1",
     "@google-cloud/speech": "^6.2.0",
     "async-mutex": "^0.4.1",
