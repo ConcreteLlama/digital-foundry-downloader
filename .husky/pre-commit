@@ -1,6 +1,12 @@
 #!/usr/bin/env sh
 . "$(dirname -- "$0")/_/husky.sh"
 
+set -e
+
 npm run install-all-deps
-npm run update-versions && npm run check-build && git add */package*.json
-npm run validate-changelog && npm run build-changelog && git add CHANGELOG.md
+npm run update-versions
+npm run check-build
+git add */package*.json
+npm run validate-changelog
+npm run build-changelog
+git add CHANGELOG.md
