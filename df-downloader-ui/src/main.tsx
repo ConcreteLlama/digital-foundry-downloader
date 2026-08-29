@@ -7,6 +7,7 @@ import "@fontsource-variable/archivo";
 import "@fontsource-variable/jetbrains-mono";
 import "./index.css";
 import { store } from "./store/store.ts";
+import { ErrorBoundary } from "./components/general/error-boundary.component.tsx";
 
 // Dev builds only. Registers window.__DF_FIXTURES__ (see src/dev/task-fixtures.ts)
 // so the console handle works on any page, not just after the Dev settings panel
@@ -19,10 +20,12 @@ if (import.meta.env.DEV) {
 
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
-    <Provider store={store}>
-      <BrowserRouter>
-        <App />
-      </BrowserRouter>
-    </Provider>
+    <ErrorBoundary>
+      <Provider store={store}>
+        <BrowserRouter>
+          <App />
+        </BrowserRouter>
+      </Provider>
+    </ErrorBoundary>
   </React.StrictMode>
 );
