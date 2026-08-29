@@ -2,7 +2,9 @@
 
 Project-specific guidance for working on DF Downloader. Read `docs/ARCHITECTURE.md` and
 `docs/DF_SITE_MIGRATION.md` before making non-trivial changes — this file is a summary
-and pointer, not a replacement for them. `docs/ROADMAP.md` has the current phase plan.
+and pointer, not a replacement for them. `docs/ROADMAP.md` has the current phase plan
+(gitignored - an internal working doc, not part of the public repo; it exists locally
+for whoever's doing dev work here, so the references below assume you have it).
 
 ## What this project is
 

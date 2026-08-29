@@ -224,6 +224,11 @@ Subtitles can now be generated locally on your own machine instead of being pull
   - If you have already run Reorganize Files and hit this, do not run it again - it would now try to move files from the old locations it still has recorded and, if you have 'remove record if missing' turned on, discard those records instead. Run Clear Missing Files under Tools followed by Scan For Existing Content, which finds the files where they actually are and reattaches them
   - Should this ever fail again, it now reports the affected files as failed rather than as moved
 - Turning to the next page of the content list now takes you back to the top of it. Previously it left you wherever you had scrolled to, so you landed part-way down a page you hadn't seen the start of
+- Fixed a database write scheduled right before shutdown being silently dropped
+  - A change queued in the last moment before the app restarted or was updated - most often the very last step of a job completing - could be lost rather than saved, if it hadn't actually started running yet when shutdown began. Confirmed live against a real SIGINT
+  - Shutdown now waits for that work to actually finish rather than only for whatever was already running
+- The app now shows a plain error message and a reload button if something goes wrong, instead of a blank page
+  - An error the interface didn't expect previously took the whole app down to a blank screen with nothing but a message in the browser console
 ### Maintenance
 - Removed YouTube subtitle extraction. YouTube no longer serves captions to anything that isn't a web browser, so this had silently stopped working - an empty response is indistinguishable from 'this video has no captions', which is why it went unnoticed. Existing configurations are updated automatically on startup
 ### Known Issues
