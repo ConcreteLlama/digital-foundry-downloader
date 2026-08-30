@@ -129,6 +129,31 @@ export const ContentMedia = ({ contentEntry, onPlayFromReady }: ContentMediaProp
     </Box>
   );
 
+  /*
+    The player, available whichever source the panel is showing.
+
+    It used to be rendered inside the download branch, so switching the panel
+    to YouTube took it out of the tree - and clicking an analysis timestamp
+    then set state that nothing rendered, doing visibly nothing at all.
+
+    A timestamp is an offset into the file that was transcribed and analysed,
+    not into YouTube's copy of the video: the same edit usually, but not
+    dependably, and a sponsor read of a different length would land the
+    viewer somewhere else entirely while looking like it worked. So the
+    toggle decides what the panel shows, and a timestamp always opens the
+    file the timestamp came from.
+  */
+  const playbackDownload = playable[active?.kind === "download" ? active.index : 0];
+  const playerDialog = playbackDownload && (
+    <VideoPlayerDialog
+      contentEntry={contentEntry}
+      download={playbackDownload}
+      open={playerOpen}
+      onClose={() => setPlayerOpen(false)}
+      startSeconds={startSeconds}
+    />
+  );
+
   if (active?.kind === "download") {
     /*
       A poster that opens the player, rather than a second live player.
@@ -185,13 +210,7 @@ export const ContentMedia = ({ contentEntry, onPlayFromReady }: ContentMediaProp
           </Box>
         </Box>
         {switcher}
-        <VideoPlayerDialog
-          contentEntry={contentEntry}
-          download={playable[active.index]}
-          open={playerOpen}
-          onClose={() => setPlayerOpen(false)}
-          startSeconds={startSeconds}
-        />
+        {playerDialog}
       </Box>
     );
   }
@@ -204,6 +223,7 @@ export const ContentMedia = ({ contentEntry, onPlayFromReady }: ContentMediaProp
         <Thumb src={DfContentInfoUtils.getThumbnailUrl(contentInfo, 1200, 600)} alt={contentInfo.title} width="100%" />
       )}
       {switcher}
+      {playerDialog}
     </Box>
   );
 };
