@@ -141,6 +141,10 @@ Downloads also play in the app itself now. Press the still at the top of a downl
 - Fixed pop-up panels never reaching the edges of a phone screen
   - A band of the page showed down both sides of every dialog, which reads as a misaligned window rather than as deliberate spacing
   - The rule meant to make dialogs full width on a phone had been silently overridden since it was written, so this had never once worked
+- The check for new content now starts when the app does
+  - The recurring check for newly published Digital Foundry videos was only set going once everything else the app does at startup had finished - filling in details missing from YouTube, scanning your download folder for files you already have. On a large library that is hours, and until it finished nothing new was noticed
+  - An install left running could therefore sit there not picking up new videos, and appear to start working properly only because it had been restarted
+  - The periodic checks are now started straight away. They still wait for the scan of the archive itself, which is the one thing they genuinely need in place first, but no longer for the slow work that follows it
 ### Security
 - Reading a file's embedded metadata now only works for files this app actually downloaded. It previously trusted the filename it was handed, so a signed-in user could have pointed it at any file on the machine and read its details back. The app itself only ever sent a real download, so nothing changes about how it is used
 ### Known Issues

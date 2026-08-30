@@ -1,3 +1,4 @@
+import { writeFileAtomic } from "../utils/file-utils.js";
 import { logger } from "df-downloader-common";
 import { copyFile } from "fs/promises";
 import { WorkerQueue } from "../utils/queue-utils.js";
@@ -45,7 +46,12 @@ export class FileDb<T> {
                 throw new Error(parsed.error.issues.map((issue) => issue.message).join("\n"));
             }
             data = parsed.data;
-            await fs.promises.writeFile(filename, JSON.stringify(data, null, 2));
+            // Atomic, and retried: this is the first write of startup, and on a
+            // synced folder something else can briefly hold the file open -
+            // observed here as EBUSY from the Nextcloud client, which killed the
+            // service before it finished booting. writeFileAtomic already treats
+            // EBUSY/EPERM/EACCES/ENOENT as worth retrying; a raw write does not.
+            await writeFileAtomic(filename, JSON.stringify(data, null, 2));
             return new FileDb<T>(filename, data);
         } catch (e) {
             if (fs.existsSync(backupLocation)) {
