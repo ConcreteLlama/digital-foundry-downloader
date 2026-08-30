@@ -10,7 +10,6 @@ import { queryConfigSection, updateConfigSection } from "../../store/config/conf
 import { selectConfigError, selectConfigLoading, selectConfigSection } from "../../store/config/config.selector";
 import { store } from "../../store/store";
 import { Loading } from "../general/loading.component.tsx";
-import { MOBILE_TAB_BAR_HEIGHT } from "../../routes/nav/nav-metrics.ts";
 
 export const CurrentSettingsContext = createContext<Partial<DfDownloaderConfig>>({});
 
@@ -151,19 +150,19 @@ const StickySaveBar = ({ sectionName }: { sectionName: keyof DfDownloaderConfig 
     <Box
       sx={{
         position: "sticky",
-        // Pinned flush with the bottom of the scroll area, then padded by
-        // the height of the mobile tab bar so the controls still sit above
-        // it. Offsetting the whole bar upwards instead leaves a band below
-        // it that content scrolls through, which looks like the bar is
-        // floating over the page rather than closing it off.
+        // bottom:0 and nothing else. The offset resolves against the scroll
+        // container's content box, and the shell already keeps 56px of that
+        // clear for the mobile tab bar - so this lands just above the tab
+        // bar on its own. Adding clearance here double-counts it: offsetting
+        // the bar upwards left a band of content scrolling below it, and
+        // padding it instead pushed the controls far up the screen.
         bottom: 0,
         display: "flex",
         alignItems: "center",
         justifyContent: "flex-end",
         gap: 2,
         marginTop: 4,
-        paddingTop: 1.5,
-        paddingBottom: { xs: `${MOBILE_TAB_BAR_HEIGHT + 12}px`, md: 1.5 },
+        paddingY: 1.5,
         backgroundColor: "background.default",
         borderTop: "1px solid",
         borderColor: "divider",
