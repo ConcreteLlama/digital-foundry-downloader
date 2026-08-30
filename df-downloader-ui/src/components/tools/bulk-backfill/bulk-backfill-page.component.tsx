@@ -41,6 +41,22 @@ const TARGET_DESCRIPTIONS: Record<BulkBackfillTarget, string> = {
     "Find Digital Foundry's own written article for each video. Costs nothing but time, and gives later analyses a better source to work from than the transcript alone.",
 };
 
+/**
+ * How many rows are actually put in the DOM.
+ *
+ * The article target offers every item with a YouTube video, which here
+ * is close to 3,000. Even with the rows memoised, React reconciles every
+ * one of them on each toggle, and ticking a checkbox measurably lagged.
+ *
+ * Capping rather than virtualising is the pragmatic call: the table's
+ * columns are sized to their content, so windowing would make them jump
+ * as rows scrolled in and out. Nothing is lost by capping, because the
+ * selection buttons work on the whole filtered set rather than on what
+ * happens to be rendered - and picking individual items out of three
+ * thousand means filtering first regardless.
+ */
+const MAX_RENDERED_ROWS = 250;
+
 const FORCE_LABELS: Record<BulkBackfillTarget, string> = {
   subtitles: "Re-transcribe items that already have subtitles",
   ai_analysis: "Re-analyse items that have already been analysed",
@@ -93,6 +109,8 @@ export const BulkBackfillPage = () => {
     return candidates.filter((candidate) => candidate.title.toLowerCase().includes(needle));
   }, [candidates, filterText]);
 
+  const visible = useMemo(() => filtered.slice(0, MAX_RENDERED_ROWS), [filtered]);
+
   // Force is deliberately not a factor - see isMissing. This counts what
   // is missing the thing, which is a useful subset to select whether or
   // not re-running is on.
@@ -121,7 +139,9 @@ export const BulkBackfillPage = () => {
 
   const willSkip = selected.size - runKeys.length;
 
-  const toggle = (contentKey: string, isSelected: boolean) =>
+  // Stable across renders, so the memoised rows actually stay memoised -
+  // a fresh function identity here would re-render every row per click.
+  const toggle = useCallback((contentKey: string, isSelected: boolean) => {
     setSelected((current) => {
       const next = new Set(current);
       if (isSelected) {
@@ -131,6 +151,7 @@ export const BulkBackfillPage = () => {
       }
       return next;
     });
+  }, []);
 
   const openConfirm = async () => {
     setConfirmOpen(true);
@@ -252,10 +273,12 @@ export const BulkBackfillPage = () => {
           <Typography variant="caption" sx={{ color: "text.disabled" }}>
             {candidates.length} of {libraryCount.toLocaleString()} items can take this action
             {filtered.length !== candidates.length && ` · ${filtered.length} match the filter`}
+            {filtered.length > visible.length &&
+              ` · showing the first ${visible.length} - filter to see others, though the buttons above still apply to all ${filtered.length}`}
             {willSkip > 0 && ` · ${willSkip} of the ${selected.size} selected will be skipped, ${SKIP_REASONS[target]}`}
           </Typography>
 
-          <BackfillTable candidates={filtered} target={target} selected={selected} onToggle={toggle} />
+          <BackfillTable candidates={visible} target={target} selected={selected} onToggle={toggle} />
 
         </>
       )}

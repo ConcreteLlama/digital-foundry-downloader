@@ -19,6 +19,7 @@ import {
   BulkBackfillTarget,
   BulkBackfillTargetLabels,
 } from "df-downloader-common";
+import { memo } from "react";
 import { ColumnInfo, GridCell, GridRow, GridTable, GridTextCell } from "../../general/grid-table.tsx";
 import { conciseFormatDate } from "../../../utils/date.ts";
 import { monoFontFamily } from "../../../themes/build-theme.ts";
@@ -88,7 +89,21 @@ type BackfillRowProps = {
   onToggle: (contentKey: string, selected: boolean) => void;
 };
 
-const BackfillRow = ({ candidate, target, selected, onToggle }: BackfillRowProps) => {
+/**
+ * Memoised, and that is load-bearing rather than tidiness.
+ *
+ * The article target offers every item with a YouTube video - thousands
+ * of rows. Without this, ticking one checkbox re-rendered all of them,
+ * because the parent holds the selection and re-renders on every change.
+ * Each row carries a MUI Checkbox and Chip, so that was thousands of
+ * component renders per click and the list visibly lagged behind the
+ * cursor.
+ *
+ * The props are deliberately all primitives or stable references -
+ * `selected` is a boolean rather than the selection Set, whose identity
+ * changes on every toggle and would defeat the comparison entirely.
+ */
+const BackfillRow = memo(({ candidate, target, selected, onToggle }: BackfillRowProps) => {
   const status = statusFor(candidate, target);
   return (
     <GridRow sx={{ alignItems: "center" }}>
@@ -96,6 +111,9 @@ const BackfillRow = ({ candidate, target, selected, onToggle }: BackfillRowProps
         <Checkbox
           size="small"
           checked={selected}
+          // The ripple animates per click across a very long list, and
+          // costs more than it communicates for a plain row checkbox.
+          disableRipple
           onChange={(event) => onToggle(candidate.contentKey, event.target.checked)}
           inputProps={{ "aria-label": `Select ${candidate.title}` }}
         />
@@ -127,7 +145,8 @@ const BackfillRow = ({ candidate, target, selected, onToggle }: BackfillRowProps
       </GridCell>
     </GridRow>
   );
-};
+});
+BackfillRow.displayName = "BackfillRow";
 
 export type BackfillTableProps = {
   candidates: BulkBackfillCandidate[];
@@ -136,15 +155,16 @@ export type BackfillTableProps = {
   onToggle: (contentKey: string, selected: boolean) => void;
 };
 
+const BACKFILL_COLUMNS: ColumnInfo[] = [
+  { name: "", size: "min-content" },
+  { name: "Content", size: "minmax(200px, 1fr)" },
+  { name: "Published", size: "min-content" },
+  { name: "Status", size: "min-content" },
+];
+
 export const BackfillTable = ({ candidates, target, selected, onToggle }: BackfillTableProps) => {
-  const columns: ColumnInfo[] = [
-    { name: "", size: "min-content" },
-    { name: "Content", size: "minmax(200px, 1fr)" },
-    { name: "Published", size: "min-content" },
-    { name: "Status", size: "min-content" },
-  ];
   return (
-    <GridTable columns={columns}>
+    <GridTable columns={BACKFILL_COLUMNS}>
       {candidates.map((candidate) => (
         <BackfillRow
           key={candidate.contentKey}
