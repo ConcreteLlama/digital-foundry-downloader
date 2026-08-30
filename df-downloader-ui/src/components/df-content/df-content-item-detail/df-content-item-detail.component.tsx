@@ -35,9 +35,8 @@ import {
   getStoredDetailLayout,
   storeDetailLayout,
 } from "../../../themes/ui-preferences.ts";
-import { Thumb } from "../../general/thumb.component.tsx";
-import { YouTubeEmbed } from "../../general/youtube-embed.tsx";
 import { AiAnalysisPanel } from "../ai-analysis/ai-analysis-panel.component.tsx";
+import { ContentMedia } from "./content-media.component.tsx";
 import { DfArticleLink } from "../ai-analysis/df-article-link.component.tsx";
 import { DfTagList } from "../df-tag-list.component.tsx";
 import { OnDiskRows } from "../downloaded-info/on-disk-rows.component.tsx";
@@ -290,15 +289,9 @@ export const DfContentInfoItemDetail = ({ dfContentName, onClose }: DfContentInf
 
   const media = (
     <Box sx={{ minWidth: 0 }}>
-      {contentInfo.youtubeVideoId ? (
-        <YouTubeEmbed videoId={contentInfo.youtubeVideoId} width="100%" />
-      ) : (
-        <Thumb
-          src={DfContentInfoUtils.getThumbnailUrl(contentInfo, 1200, 600)}
-          alt={contentInfo.title}
-          width="100%"
-        />
-      )}
+      {/* A downloaded file leads over the YouTube embed of the same video,
+          with a switcher beneath when there is more than one source. */}
+      <ContentMedia contentEntry={dfContentEntry} />
       <DfTagList tags={contentInfo.tags || []} sx={{ justifyContent: "flex-start", marginTop: 2 }} />
       {/* Descriptions are prose with real paragraph breaks (YouTube-sourced
           ones especially - blurb, links, then a chapter list). HTML collapses

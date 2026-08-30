@@ -1,6 +1,7 @@
 import DeleteIcon from "@mui/icons-material/Delete";
 import EditIcon from "@mui/icons-material/Edit";
 import MoreVertIcon from "@mui/icons-material/MoreVert";
+import PlayArrowIcon from "@mui/icons-material/PlayArrow";
 import RefreshIcon from "@mui/icons-material/Refresh";
 import SubtitlesIcon from "@mui/icons-material/Subtitles";
 import {
@@ -24,6 +25,7 @@ import { postJson } from "../../../utils/fetch.ts";
 import { DeleteDownloadDialog } from "./delete-download-dialog.component.tsx";
 import { EditMetadataDialog } from "./edit-metadata-dialog.component.tsx";
 import { GenerateSubtitlesDialog } from "./generate-subtitles-dialog.component.tsx";
+import { VideoPlayerDialog } from "./video-player-dialog.component.tsx";
 
 type DownloadedItemActionsProps = {
   contentEntry: DfContentEntry;
@@ -47,6 +49,7 @@ export const DownloadedItemActions = ({
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [editMetadataDialogOpen, setEditMetadataDialogOpen] = useState(false);
   const [menuAnchor, setMenuAnchor] = useState<HTMLElement | null>(null);
+  const [playerOpen, setPlayerOpen] = useState(false);
   const currentActiveTaskPipelines = useSelector(
     selectQueryPipelineIds({
       filter: {
@@ -57,6 +60,11 @@ export const DownloadedItemActions = ({
   );
   const updatesDisabled = currentActiveTaskPipelines.length > 0;
   const downloadIsVideo = download.mediaInfo.type === "VIDEO";
+  // Audio downloads play in the same element, so playback is not video-only -
+  // an archive is the thing there is nothing to play in. Whether the codec is
+  // actually decodable is decided in the browser when the player opens, not
+  // here: it depends on the machine, not on the file (see VideoPlayerDialog).
+  const downloadIsPlayable = downloadIsVideo || download.mediaInfo.type === "AUDIO";
 
   const refreshDownloadMetadata = async () => {
     const requestBody: DfContentUpdateDownloadMetaRequest = {
@@ -69,6 +77,14 @@ export const DownloadedItemActions = ({
   };
 
   const actions = [
+    {
+      key: "play",
+      label: "Play",
+      icon: PlayArrowIcon,
+      run: () => setPlayerOpen(true),
+      disabled: !downloadIsPlayable,
+      reason: !downloadIsPlayable ? "Nothing to play in this kind of file" : undefined,
+    },
     {
       key: "subtitles",
       label: "Generate subtitles",
@@ -125,6 +141,12 @@ export const DownloadedItemActions = ({
       <EditMetadataDialog
         open={editMetadataDialogOpen}
         onClose={() => setEditMetadataDialogOpen(false)}
+        contentEntry={contentEntry}
+        download={download}
+      />
+      <VideoPlayerDialog
+        open={playerOpen}
+        onClose={() => setPlayerOpen(false)}
         contentEntry={contentEntry}
         download={download}
       />

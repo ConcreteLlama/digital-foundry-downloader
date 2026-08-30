@@ -224,8 +224,26 @@ export const injectMediaMetadata = async (
 
 };
 
+/**
+ * The video stream as ffprobe describes it, for callers that need to know
+ * what a player would be asked to decode. Reported alongside the metadata
+ * rather than by a probe of its own so opening a file for playback costs
+ * one ffprobe of a multi-gigabyte file, not two.
+ */
+export type ProbedVideoStream = {
+  codecName: string;
+  profile?: string;
+  level?: number;
+  width?: number;
+  height?: number;
+};
+
 type MediaFileMetaNoSubs = Omit<MediaFileMeta, 'subtitles'> & {
   subsLang?: string;
+  /** See ProbedVideoStream. Stripped by extractMediaMeta - not part of MediaFileMeta. */
+  videoStream?: ProbedVideoStream;
+  /** Measured container duration in seconds. Stripped by extractMediaMeta, as above. */
+  durationSeconds?: number;
 };
 export const extractBaseMetadata = async (mediaFilePath: string, includeChapters: boolean = true): Promise<MediaFileMetaNoSubs> => {
   const ffprobeArgs = [
@@ -265,6 +283,20 @@ export const extractBaseMetadata = async (mediaFilePath: string, includeChapters
   const subtitleStream = parsed.streams?.find((stream: any) => stream.codec_type === "subtitle");
   if (subtitleStream) {
     meta.subsLang = subtitleStream.tags.language;
+  }
+  const videoStream = parsed.streams?.find((stream: any) => stream.codec_type === "video");
+  if (videoStream) {
+    meta.videoStream = {
+      codecName: videoStream.codec_name,
+      profile: videoStream.profile,
+      level: typeof videoStream.level === "number" ? videoStream.level : undefined,
+      width: videoStream.width,
+      height: videoStream.height,
+    };
+  }
+  const duration = parseFloat(parsed.format?.duration);
+  if (isFinite(duration) && duration > 0) {
+    meta.durationSeconds = duration;
   }
   return meta;
 };
@@ -337,7 +369,12 @@ export const extractMediaMeta = async(mediaFilePath: string, opts: ExtractMediaM
       };
     }
   }
+  // These three are extras for callers that want the probe's own view of the
+  // file (see ProbedVideoStream); MediaFileMeta is the metadata-injection
+  // shape and must not gain fields that would be written back into a file.
   delete baseMeta.subsLang;
+  delete baseMeta.videoStream;
+  delete baseMeta.durationSeconds;
   return {
     ...baseMeta,
     subtitles,
