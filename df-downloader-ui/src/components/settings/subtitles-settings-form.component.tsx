@@ -111,6 +111,7 @@ const SubtitlesSettings = () => {
             { id: "auto", label: "Automatic - embed during download, separate file otherwise" },
             { id: "embed", label: "Always embed in the video file" },
             { id: "sidecar", label: "Always write a separate .srt file" },
+            { id: "both", label: "Both - embed in the video and write a separate .srt file" },
           ]}
         />
         <ZodNumberField

@@ -164,6 +164,12 @@ export type SubtitlesService = z.infer<typeof SubtitlesService>;
  * That gets the durability of embedding where it's free, and avoids
  * rewriting files that are already in use.
  *
+ * `both` embeds and writes the sidecar. Useful precisely because of the
+ * interaction described below: with deferred generation `auto` never
+ * embeds, so this is the only way to get subtitles that both travel with
+ * the file and sit beside it where a media server will find them without
+ * reading the container.
+ *
  * Note how this interacts with AutomaticSubtitlesMode, because it isn't
  * obvious from either setting alone: `after_download` always generates
  * against a file that has already been filed, so `auto` resolves to sidecar
@@ -173,9 +179,9 @@ export type SubtitlesService = z.infer<typeof SubtitlesService>;
  * library.
  */
 export const SubtitlesOutputMode = z
-  .enum(["auto", "embed", "sidecar"])
+  .enum(["auto", "embed", "sidecar", "both"])
   .describe(
-    "Embedding puts subtitles inside the video so they travel with it, but rewrites the whole file. A separate .srt is instant and does not touch a file your media server may be playing, but is left behind if you move the video without it. Note that with 'After download' selected above, Automatic always means a separate file - the video is already in your library by the time subtitles are made."
+    "Embedding puts subtitles inside the video so they travel with it, but rewrites the whole file. A separate .srt is instant and does not touch a file your media server may be playing, but is left behind if you move the video without it. Both does exactly that - the subtitles travel with the file and are readable beside it. Note that with 'After download' selected above, Automatic always means a separate file - the video is already in your library by the time subtitles are made."
   );
 export type SubtitlesOutputMode = z.infer<typeof SubtitlesOutputMode>;
 

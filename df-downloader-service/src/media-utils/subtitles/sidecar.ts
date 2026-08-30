@@ -39,18 +39,35 @@ export const writeSubtitleSidecar = async (videoPath: string, subtitles: Generat
 /**
  * Resolves the configured output mode for a particular situation.
  *
+ * Returns both flags rather than one mode, because `both` is a real choice -
+ * see SubtitlesOutputMode. Callers ask what they should do rather than
+ * comparing against a single winner.
+ *
  * `auto` means "embed if it's free, sidecar if it isn't". It's free while the
  * download is still being assembled, because the file is being written
  * anyway and nothing has seen it yet. It isn't once the file is in the
  * library: embedding then means rewriting a multi-gigabyte file that a media
  * server has indexed and may be streaming.
  */
+export type ResolvedSubtitlesOutput = {
+  embed: boolean;
+  sidecar: boolean;
+};
+
 export const resolveSubtitlesOutput = (
   configured: SubtitlesOutputMode,
   situation: "assembling_download" | "existing_file"
-): "embed" | "sidecar" => {
-  if (configured !== "auto") {
-    return configured;
+): ResolvedSubtitlesOutput => {
+  switch (configured) {
+    case "embed":
+      return { embed: true, sidecar: false };
+    case "sidecar":
+      return { embed: false, sidecar: true };
+    case "both":
+      return { embed: true, sidecar: true };
+    case "auto":
+      return situation === "assembling_download"
+        ? { embed: true, sidecar: false }
+        : { embed: false, sidecar: true };
   }
-  return situation === "assembling_download" ? "embed" : "sidecar";
 };

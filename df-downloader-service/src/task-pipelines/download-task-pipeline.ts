@@ -210,7 +210,7 @@ export const createDownloadTaskPipeline = (opts: DownloadTaskPipelineOpts) => {
         // see the Write Subtitles step below.
         const subtitles =
           generatedSubtitles &&
-          resolveSubtitlesOutput(config.subtitles?.output ?? "auto", "assembling_download") === "embed"
+          resolveSubtitlesOutput(config.subtitles?.output ?? "auto", "assembling_download").embed
             ? generatedSubtitles
             : null;
         const ytMeta = ytMetaTaskResult?.status === "success" ? ytMetaTaskResult.result : null;
@@ -305,7 +305,7 @@ export const createDownloadTaskPipeline = (opts: DownloadTaskPipelineOpts) => {
         // keepTranscript means "write the .srt as well", so it also runs in
         // embed mode - where otherwise no readable transcript is produced at
         // all, the subtitles existing only inside the container.
-        if (outputMode !== "sidecar" && !subtitlesConfig?.keepTranscript) {
+        if (!outputMode.sidecar && !subtitlesConfig?.keepTranscript) {
           return null;
         }
         return WriteSubtitlesSidecarTask(context.finalLocation, generatedSubtitles);

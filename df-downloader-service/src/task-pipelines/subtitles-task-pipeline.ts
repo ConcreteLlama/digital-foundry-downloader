@@ -47,7 +47,7 @@ export const createSubtitlesTaskPipeline = (opts: SubtitlesTaskPipelineCreatorOp
         // This pipeline always acts on a file that's already in place, so
         // "auto" resolves to a sidecar here - embedding would mean rewriting
         // a file the library has indexed and may be streaming.
-        if (resolveSubtitlesOutput(configService.config.subtitles?.output ?? "auto", "existing_file") !== "embed") {
+        if (!resolveSubtitlesOutput(configService.config.subtitles?.output ?? "auto", "existing_file").embed) {
           return null;
         }
         return InjectMetadataTask(fileLocation, makeMediaFileMeta(undefined, previousTaskResult));
@@ -62,7 +62,7 @@ export const createSubtitlesTaskPipeline = (opts: SubtitlesTaskPipelineCreatorOp
         const subtitlesConfig = configService.config.subtitles;
         if (
           !subtitles ||
-          (resolveSubtitlesOutput(subtitlesConfig?.output ?? "auto", "existing_file") !== "sidecar" &&
+          (!resolveSubtitlesOutput(subtitlesConfig?.output ?? "auto", "existing_file").sidecar &&
             !subtitlesConfig?.keepTranscript)
         ) {
           return null;
