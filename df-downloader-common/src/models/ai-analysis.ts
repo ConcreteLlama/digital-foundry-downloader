@@ -79,12 +79,37 @@ export const AiTagSuggestion = z.object({
 export type AiTagSuggestion = z.infer<typeof AiTagSuggestion>;
 
 /** One display/performance mode of one platform, in a console comparison. */
+/**
+ * Where a finding is stated in the video.
+ *
+ * `quote` is a span the model copied verbatim out of the transcript it was
+ * given; `timestampSeconds` is where that span sits, resolved by locating
+ * the quote in the transcript rather than by asking for a number.
+ *
+ * That indirection is the whole design. Asked for a timestamp directly the
+ * model will produce a plausible one, and a jump that lands ninety seconds
+ * out looks exactly as confident as a correct one. Asked for a quote it
+ * either copied something that exists - in which case the position is a
+ * fact, not a guess - or it did not, which is detectable for free and
+ * yields an honest null. Measured over two videos and twenty-five
+ * findings, every quote returned was found verbatim.
+ *
+ * Both are nullish: analyses written before this existed have neither, and
+ * a finding drawn from the article rather than the speech has a quote that
+ * will never locate.
+ */
+export const AiAnchorFields = {
+  quote: z.string().nullish(),
+  timestampSeconds: z.number().nullish(),
+};
+
 export const AiPlatformMode = z.object({
   label: z.string(),
   resolution: z.string().nullish(),
   fpsTarget: z.number().nullish(),
   fpsMeasuredAvg: z.number().nullish(),
   notes: z.string().nullish(),
+  ...AiAnchorFields,
 });
 export type AiPlatformMode = z.infer<typeof AiPlatformMode>;
 
@@ -93,6 +118,23 @@ export const AiPlatformComparison = z.object({
   modes: z.array(AiPlatformMode).default([]),
 });
 export type AiPlatformComparison = z.infer<typeof AiPlatformComparison>;
+
+/**
+ * A problem the video calls out, and where it says so.
+ *
+ * Stored as an object rather than a bare string so it can carry an anchor
+ * like every other finding. Records written before that change hold plain
+ * strings, so those are lifted into this shape on read - the alternative
+ * was a migration for data that is cheap to re-derive.
+ */
+export const AiKnownIssue = z.preprocess(
+  (value) => (typeof value === "string" ? { issue: value } : value),
+  z.object({
+    issue: z.string(),
+    ...AiAnchorFields,
+  })
+);
+export type AiKnownIssue = z.infer<typeof AiKnownIssue>;
 
 /**
  * Console face-off data.
@@ -109,7 +151,7 @@ export const AiConsoleComparisonData = z.object({
   game: z.string().nullish(),
   developer: z.string().nullish(),
   platforms: z.array(AiPlatformComparison).default([]),
-  knownIssues: z.array(z.string()).default([]),
+  knownIssues: z.array(AiKnownIssue).default([]),
   recommendation: z.string().nullish(),
 });
 export type AiConsoleComparisonData = z.infer<typeof AiConsoleComparisonData>;
@@ -121,6 +163,7 @@ export const AiSettingEntry = z.object({
   perfDeltaPct: z.number().nullish(),
   consoleEquivalent: z.string().nullish(),
   recommendation: z.string().nullish(),
+  ...AiAnchorFields,
 });
 export type AiSettingEntry = z.infer<typeof AiSettingEntry>;
 
@@ -161,6 +204,7 @@ export const AiQaSegment = z.object({
   topic: z.string(),
   summary: z.string().nullish(),
   conclusion: z.string().nullish(),
+  ...AiAnchorFields,
 });
 export type AiQaSegment = z.infer<typeof AiQaSegment>;
 

@@ -201,9 +201,15 @@ export type AiAnalysisPanelProps = {
   enabled: boolean;
   /** Reports whether an analysis exists, so a tab can indicate it. */
   onHasContent?: (hasContent: boolean) => void;
+  /**
+   * Jump the video to a moment. Absent when there is nothing to drive - a
+   * YouTube embed, or an item with no downloaded file - and findings then
+   * show no jump control at all rather than a dead one.
+   */
+  onJumpTo?: (seconds: number) => void;
 };
 
-export const AiAnalysisPanel = ({ contentKey, enabled, onHasContent }: AiAnalysisPanelProps) => {
+export const AiAnalysisPanel = ({ contentKey, enabled, onHasContent, onJumpTo }: AiAnalysisPanelProps) => {
   const [result, setResult] = useState<AiAnalysisResult | null>(null);
   const [estimate, setEstimate] = useState<AiAnalysisCostEstimate | null>(null);
   const [loading, setLoading] = useState(true);
@@ -445,7 +451,7 @@ export const AiAnalysisPanel = ({ contentKey, enabled, onHasContent }: AiAnalysi
       {result.structuredData && (
         <>
           <Divider />
-          <AnalysisStructuredData data={result.structuredData} />
+          <AnalysisStructuredData data={result.structuredData} onJumpTo={onJumpTo} />
         </>
       )}
 

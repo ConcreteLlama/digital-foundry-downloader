@@ -85,6 +85,14 @@ export const WirePlatformMode = z.object({
   fpsTarget: nullableNumber(),
   fpsMeasuredAvg: nullableNumber(),
   notes: nullableString(),
+  /**
+   * A span copied verbatim out of the transcript, or null if none exists.
+   *
+   * Never a timestamp: the model is not asked where something is, only to
+   * cite it. Locating the citation is this side's job, which is what makes
+   * a wrong time impossible rather than merely unlikely.
+   */
+  quote: nullableString(),
 });
 
 export const WirePlatform = z.object({
@@ -92,12 +100,24 @@ export const WirePlatform = z.object({
   modes: z.array(WirePlatformMode),
 });
 
-/** Second call, console_comparison branch. 7 union params. */
+export const WireKnownIssue = z.object({
+  issue: z.string(),
+  /**
+   * A span copied verbatim out of the transcript, or null if none exists.
+   *
+   * Never a timestamp: the model is not asked where something is, only to
+   * cite it. Locating the citation is this side's job, which is what makes
+   * a wrong time impossible rather than merely unlikely.
+   */
+  quote: nullableString(),
+});
+
+/** Second call, console_comparison branch. 9 union params. */
 export const WireConsoleComparison = z.object({
   game: nullableString(),
   developer: nullableString(),
   platforms: z.array(WirePlatform),
-  knownIssues: z.array(z.string()),
+  knownIssues: z.array(WireKnownIssue),
   recommendation: nullableString(),
 });
 export type WireConsoleComparison = z.infer<typeof WireConsoleComparison>;
@@ -108,12 +128,21 @@ export const WireSetting = z.object({
   perfDeltaPct: nullableNumber(),
   consoleEquivalent: nullableString(),
   recommendation: nullableString(),
+  /**
+   * A span copied verbatim out of the transcript, or null if none exists.
+   *
+   * Never a timestamp: the model is not asked where something is, only to
+   * cite it. Locating the citation is this side's job, which is what makes
+   * a wrong time impossible rather than merely unlikely.
+   */
+  quote: nullableString(),
 });
 
 /**
- * Second call, pc_review_settings branch. 12 union params - the largest of
+ * Second call, pc_review_settings branch. 13 union params - the largest of
  * the three, and the reason the 16 limit is worth keeping in mind before
- * adding fields here.
+ * adding fields here. Adding the per-setting quote took it from 12 to 13,
+ * so there are three left.
  *
  * The optimised-settings result is flattened rather than nested because
  * nesting it bought nothing and the flat form is one fewer object for the
@@ -137,9 +166,17 @@ export const WireQaSegment = z.object({
   topic: z.string(),
   summary: nullableString(),
   conclusion: nullableString(),
+  /**
+   * A span copied verbatim out of the transcript, or null if none exists.
+   *
+   * Never a timestamp: the model is not asked where something is, only to
+   * cite it. Locating the citation is this side's job, which is what makes
+   * a wrong time impossible rather than merely unlikely.
+   */
+  quote: nullableString(),
 });
 
-/** Second call, qa_roundtable branch. 2 union params. */
+/** Second call, qa_roundtable branch. 3 union params. */
 export const WireQaSegments = z.object({
   segments: z.array(WireQaSegment),
 });

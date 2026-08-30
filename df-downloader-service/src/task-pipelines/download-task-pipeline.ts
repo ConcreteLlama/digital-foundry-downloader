@@ -182,7 +182,10 @@ export const createDownloadTaskPipeline = (opts: DownloadTaskPipelineOpts) => {
         const { dfContentInfo } = context;
         const [, , , subtitlesTaskResult] = allResults;
         const generatedSubtitles = subtitlesTaskResult?.status === "success" ? subtitlesTaskResult.result : null;
-        const transcriptText = generatedSubtitles ? srtLinesToText(generatedSubtitles.lines) : undefined;
+        // Cues rather than flattened prose: the timings are what let the
+        // analysis anchor its findings to moments in the video, and the
+        // sidecar they could otherwise be read from may not exist yet.
+        const transcriptLines = generatedSubtitles?.lines;
         return AiAnalysisTaskBuilder({
           entry: {
             key: dfContentInfo.key,
@@ -191,7 +194,7 @@ export const createDownloadTaskPipeline = (opts: DownloadTaskPipelineOpts) => {
             downloads: [],
           },
           config: aiConfig,
-          transcriptText,
+          transcriptLines,
         });
       },
       continueOnFail: true,

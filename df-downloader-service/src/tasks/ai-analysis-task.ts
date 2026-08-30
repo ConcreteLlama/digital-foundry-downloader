@@ -1,3 +1,4 @@
+import { SrtLine } from "df-downloader-common";
 import { AiAnalysisResult, DfContentEntry, logger } from "df-downloader-common";
 import { AiAnalysisConfig } from "df-downloader-common/config/ai-analysis-config.js";
 import { configService } from "../config/config.js";
@@ -15,16 +16,18 @@ type AiAnalysisTaskContext = {
   articleTitle?: string;
   /** Supplied by the during-download path, where the transcript exists but the download is not filed yet. */
   transcriptText?: string;
+  /** Cues, when the caller has them - see AnalysisInputs.transcriptLines. */
+  transcriptLines?: SrtLine[];
   /** Set as the run progresses, purely so the UI can say what it is doing. */
   stage?: string;
 };
 
 const aiAnalysisTaskControls: TaskControls<AiAnalysisResult, AiAnalysisTaskContext> = {
   start: async (context: AiAnalysisTaskContext) => {
-    const { entry, config, chapters, articleText, articleUrl, articleTitle, transcriptText } = context;
+    const { entry, config, chapters, articleText, articleUrl, articleTitle, transcriptText, transcriptLines } = context;
     context.stage = "Analysing";
     logger.log("info", `Analysing ${entry.key} with ${config.model}`);
-    const result = await analyseContent(config, { entry, chapters, articleText, articleUrl, articleTitle, transcriptText });
+    const result = await analyseContent(config, { entry, chapters, articleText, articleUrl, articleTitle, transcriptText, transcriptLines });
     // analyseContent reports an ordinary failure inside the result rather
     // than throwing, so the task has to promote it - otherwise a run that
     // failed would be recorded as a successful task holding an error.

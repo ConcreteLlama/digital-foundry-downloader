@@ -16,7 +16,7 @@ import {
   useTheme,
 } from "@mui/material";
 import { DfContentInfoUtils, secondsToHHMMSS } from "df-downloader-common";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSelector } from "react-redux";
 import { AiAnalysisConfigUtils } from "df-downloader-common/config/ai-analysis-config";
 import { selectConfigSection } from "../../../store/config/config.selector.ts";
@@ -217,6 +217,35 @@ export const DfContentInfoItemDetail = ({ dfContentName, onClose }: DfContentInf
     });
   };
 
+  /**
+   * The player's seek, handed up by ContentMedia once a downloaded file is
+   * mounted. Held in a ref rather than state because nothing renders
+   * differently for having it - it is only ever called.
+   */
+  const seekRef = useRef<((startMs: number) => void) | null>(null);
+  const onSeekReady = useCallback((seek: (startMs: number) => void) => {
+    seekRef.current = seek;
+  }, []);
+
+  /**
+   * Jump the video to a moment an analysis finding refers to.
+   *
+   * Switches to the media first when it is behind a tab, because seeking
+   * something the reader cannot see looks like nothing happening. The
+   * Content tab stays mounted (see its TabPanel) precisely so the player
+   * still exists to be driven while the reader is on Analysis.
+   */
+  const jumpTo = useCallback(
+    (seconds: number) => {
+      if (!seekRef.current) {
+        return;
+      }
+      setTab((current) => (current === "analysis" || current === "article" ? "content" : current));
+      seekRef.current(seconds * 1000);
+    },
+    []
+  );
+
   const [hasAnalysis, setHasAnalysis] = useState(false);
   const [hasArticle, setHasArticle] = useState(false);
   // Stable, so the child effects that report state do not re-run on every
@@ -291,7 +320,7 @@ export const DfContentInfoItemDetail = ({ dfContentName, onClose }: DfContentInf
     <Box sx={{ minWidth: 0 }}>
       {/* A downloaded file leads over the YouTube embed of the same video,
           with a switcher beneath when there is more than one source. */}
-      <ContentMedia contentEntry={dfContentEntry} />
+      <ContentMedia contentEntry={dfContentEntry} onSeekReady={onSeekReady} />
       <DfTagList tags={contentInfo.tags || []} sx={{ justifyContent: "flex-start", marginTop: 2 }} />
       {/* Descriptions are prose with real paragraph breaks (YouTube-sourced
           ones especially - blurb, links, then a chapter list). HTML collapses
@@ -354,7 +383,14 @@ export const DfContentInfoItemDetail = ({ dfContentName, onClose }: DfContentInf
           "::-webkit-scrollbar": { display: "none" },
         }}
       >
-      {stacked && <TabPanel active={activeTab === "content"}>{media}</TabPanel>}
+      {/* keepMounted: the player has to still exist while the reader is on
+          another tab, both so a jump has something to drive and so changing
+          tab does not restart whatever was playing. */}
+      {stacked && (
+        <TabPanel active={activeTab === "content"} keepMounted>
+          {media}
+        </TabPanel>
+      )}
 
       <TabPanel active={activeTab === "files"}>
         <Stack spacing={3}>
@@ -388,6 +424,7 @@ export const DfContentInfoItemDetail = ({ dfContentName, onClose }: DfContentInf
           contentKey={dfContentEntry.key}
           enabled={aiAnalysisEnabled}
           onHasContent={reportAnalysis}
+          onJumpTo={jumpTo}
         />
       </TabPanel>
 

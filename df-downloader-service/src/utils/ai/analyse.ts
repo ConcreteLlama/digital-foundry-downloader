@@ -8,6 +8,7 @@ import {
   AiTagSuggestion,
   DfContentEntry,
   logger,
+  SrtLine,
 } from "df-downloader-common";
 import { AiAnalysisConfig, AiAnalysisConfigUtils } from "df-downloader-common/config/ai-analysis-config.js";
 import { Chapter } from "../chatpers.js";
@@ -20,7 +21,7 @@ import {
   buildTagOnlyContentBlock,
   buildTagOnlyInstruction,
 } from "./prompts.js";
-import { resolveTranscript } from "./transcript.js";
+import { ResolvedTranscript, locateQuote, resolveTranscript, srtLinesToTextWithOffsets } from "./transcript.js";
 import {
   WireConsoleComparison,
   WireContentType,
@@ -65,6 +66,15 @@ export type AnalysisInputs = {
    * something that is not filed yet.
    */
   transcriptText?: string;
+  /**
+   * The same transcript as cues rather than prose.
+   *
+   * Preferred over transcriptText where the caller has it, because the
+   * timings are what let a quoted finding be located. Flattening to text
+   * throws them away, and the sidecar they could be recovered from may not
+   * be written yet on the during-download path.
+   */
+  transcriptLines?: SrtLine[];
 };
 
 type PreparedCall = {
@@ -72,6 +82,8 @@ type PreparedCall = {
   content: string;
   tagsOnly: boolean;
   evidence: AiEvidenceSource[];
+  /** Present when the transcript carried timings, so findings can be anchored. */
+  transcript?: ResolvedTranscript;
 };
 
 const addUsage = (a: AiAnalysisUsage | undefined, b: AiAnalysisUsage): AiAnalysisUsage => ({
@@ -94,7 +106,12 @@ export const prepareAnalysis = async (config: AiAnalysisConfig, inputs: Analysis
 
   const wantsTranscript =
     config.features.summary || config.features.structuredData || config.features.tagging.useTranscriptWhenAvailable;
-  const resolved = wantsTranscript && !inputs.transcriptText ? await resolveTranscript(entry) : undefined;
+  const fromLines =
+    wantsTranscript && inputs.transcriptLines?.length
+      ? { ...srtLinesToTextWithOffsets(inputs.transcriptLines), source: "sidecar" as const }
+      : undefined;
+  const resolved =
+    fromLines ?? (wantsTranscript && !inputs.transcriptText ? await resolveTranscript(entry) : undefined);
 
   let transcript = inputs.transcriptText || resolved?.text;
   if (transcript && transcript.length > config.maxTranscriptChars) {
@@ -133,7 +150,44 @@ export const prepareAnalysis = async (config: AiAnalysisConfig, inputs: Analysis
     content: tagsOnly ? buildTagOnlyContentBlock(contentInfo) : buildContentBlock({ contentInfo, transcript, chapters, articleText }),
     tagsOnly,
     evidence,
+    // Only when the text actually sent is the one we hold offsets for. A
+    // transcript passed in as prose, or dropped for exceeding the length
+    // limit, cannot anchor anything - and a quote located against different
+    // text would be worse than no timestamp at all.
+    transcript: resolved && transcript === resolved.text ? resolved : undefined,
   };
+};
+
+/**
+ * Resolves each quoted finding to the moment it was said.
+ *
+ * Walks the structured payload rather than being folded into extraction,
+ * so the model's answer and where it sits are separate steps: the model
+ * cites, this locates. A quote that cannot be found leaves the timestamp
+ * null and keeps the quote, which is the honest outcome and also the
+ * evidence for why it failed.
+ */
+const anchorFindings = (data: AiStructuredData, transcript?: ResolvedTranscript): AiStructuredData => {
+  if (!transcript) {
+    return data;
+  }
+  const at = <T extends { quote?: string | null }>(item: T) => ({
+    ...item,
+    timestampSeconds: item.quote ? locateQuote(transcript, item.quote) ?? null : null,
+  });
+
+  switch (data.contentType) {
+    case "console_comparison":
+      return {
+        ...data,
+        platforms: data.platforms.map((platform) => ({ ...platform, modes: platform.modes.map(at) })),
+        knownIssues: data.knownIssues.map(at),
+      };
+    case "pc_review_settings":
+      return { ...data, settings: data.settings.map(at) };
+    case "qa_roundtable":
+      return { ...data, segments: data.segments.map(at) };
+  }
 };
 
 /**
@@ -375,7 +429,7 @@ export const analyseContent = async (config: AiAnalysisConfig, inputs: AnalysisI
 
     if (config.features.structuredData && EXTRACTABLE_TYPES.includes(overview.contentType)) {
       const extraction = await extractStructuredData(client, config, prepared, overview.contentType);
-      structuredData = extraction.data;
+      structuredData = extraction.data ? anchorFindings(extraction.data, prepared.transcript) : undefined;
       if (extraction.usage) {
         usage = addUsage(usage, extraction.usage);
       }

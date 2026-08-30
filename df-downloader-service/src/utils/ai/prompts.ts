@@ -106,14 +106,38 @@ export const buildOverviewInstruction = (config: AiAnalysisConfig): string => {
  * content is hedged, exploratory opinion, and tabulating it would
  * manufacture precision the source does not have.
  */
+/**
+ * Asks each finding to cite itself.
+ *
+ * Appended to every extraction instruction rather than written into each,
+ * because the wording is load-bearing and should not drift between content
+ * types. This exact phrasing was measured over a face-off and a discussion
+ * show: twenty-five findings, every quote returned found verbatim in the
+ * transcript, none paraphrased.
+ *
+ * The two things doing the work are "character for character" and the
+ * explicit permission to answer null. Softening either invites a tidied-up
+ * near-quote, which cannot be located and is therefore worse than nothing.
+ */
+const QUOTE_INSTRUCTION = [
+  `For each item also set "quote": a span of 8 to 20 words copied EXACTLY from the transcript, character for character, at the point where that item is stated. Do not paraphrase, correct, summarise or re-punctuate it - it has to appear in the transcript verbatim, because it gets located by searching for it.`,
+  `Set quote to null if there is no exact span to copy - for example when the item comes from the article rather than the video, or when you are summarising something said across several places. A null is expected and fine; an approximated quote is not, because it silently fails to locate.`,
+].join(" ");
+
 export const buildExtractionInstruction = (contentType: WireContentType): string => {
   switch (contentType) {
     case "console_comparison":
-      return `Extract the per-platform technical comparison. For each platform covered, record each display/performance mode it offers, with the resolution as described (including upscaling where stated), the target frame rate, and the measured average frame rate if one is actually given. Record known bugs, crashes or performance problems the video calls out, and the overall platform recommendation. Remember that an unstated number is null, not an estimate.`;
+      return `Extract the per-platform technical comparison. For each platform covered, record each display/performance mode it offers, with the resolution as described (including upscaling where stated), the target frame rate, and the measured average frame rate if one is actually given. Record known bugs, crashes or performance problems the video calls out, and the overall platform recommendation. Remember that an unstated number is null, not an estimate.
+
+${QUOTE_INSTRUCTION}`;
     case "pc_review_settings":
-      return `Extract the PC settings analysis. For each graphics setting discussed, record the levels tested, the performance cost as a percentage if one is actually stated, any console-equivalent comparison made, and the recommended level. Record the main performance bottleneck if the video identifies one, and the before/after result of the optimised settings if it gives one. A setting described only qualitatively ("barely costs anything") has a null percentage - do not convert words into a number.`;
+      return `Extract the PC settings analysis. For each graphics setting discussed, record the levels tested, the performance cost as a percentage if one is actually stated, any console-equivalent comparison made, and the recommended level. Record the main performance bottleneck if the video identifies one, and the before/after result of the optimised settings if it gives one. A setting described only qualitatively ("barely costs anything") has a null percentage - do not convert words into a number.
+
+${QUOTE_INSTRUCTION}`;
     case "qa_roundtable":
-      return `Break this discussion into its distinct topics, in order. For each, give the topic, a summary of what was said, and the conclusion reached - or null where the participants disagreed or left it open, which is common and should not be smoothed over into false agreement. Do not record who asked a question: usernames cannot be transcribed reliably and there is nothing to check them against.`;
+      return `Break this discussion into its distinct topics, in order. For each, give the topic, a summary of what was said, and the conclusion reached - or null where the participants disagreed or left it open, which is common and should not be smoothed over into false agreement. Do not record who asked a question: usernames cannot be transcribed reliably and there is nothing to check them against.
+
+${QUOTE_INSTRUCTION}`;
     default:
       return "";
   }

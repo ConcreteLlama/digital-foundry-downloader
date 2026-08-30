@@ -1,7 +1,7 @@
 import { Alert, Box, CircularProgress, Stack, Typography } from "@mui/material";
 import { Chapter, DfContentEntry, DfContentInfoUtils, PlaybackInfo, secondsToHHMMSS } from "df-downloader-common";
 import { DfContentDownloadInfo } from "df-downloader-common/models/df-content-download-info";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { apiIsCrossOrigin, getPlaybackInfo, playbackStreamUrl, playbackSubtitlesUrl } from "../../../api/playback.ts";
 import { useQuery } from "../../../hooks/use-query.ts";
 import { monoFontFamily } from "../../../themes/build-theme";
@@ -36,6 +36,17 @@ export type DownloadPlayerProps = {
    * list drives the video.
    */
   sidePanel?: React.ReactNode;
+  /**
+   * Hands the parent a way to drive playback, so something outside this
+   * component can jump the video to a moment.
+   *
+   * This is the other half of the sidePanel seam: an analysis finding that
+   * knows when it was said needs to move the video, and it lives in a
+   * different part of the panel entirely. Given as a callback rather than a
+   * ref because the parent only ever wants to call it, never to read
+   * anything back.
+   */
+  onSeekReady?: (seek: (startMs: number) => void) => void;
 };
 
 /**
@@ -148,6 +159,7 @@ export const DownloadPlayer = ({
   belowVideo,
   layout = "stacked",
   sidePanel,
+  onSeekReady,
 }: DownloadPlayerProps) => {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const [activeChapter, setActiveChapter] = useState(-1);
@@ -210,7 +222,7 @@ export const DownloadPlayer = ({
     return () => video.removeEventListener("timeupdate", onTimeUpdate);
   }, [info, supported, layout]);
 
-  const seekTo = (startMs: number) => {
+  const seekTo = useCallback((startMs: number) => {
     const video = videoRef.current;
     if (!video) {
       return;
@@ -220,7 +232,13 @@ export const DownloadPlayer = ({
       // Autoplay policy can refuse this if nothing has been played yet. The
       // seek still happened, so the user can press play themselves.
     });
-  };
+  }, []);
+
+  // Effect rather than during render: handing a function to a parent is a
+  // side effect, and doing it inline would fire on every render.
+  useEffect(() => {
+    onSeekReady?.(seekTo);
+  }, [onSeekReady, seekTo]);
 
   if (loading) {
     return (

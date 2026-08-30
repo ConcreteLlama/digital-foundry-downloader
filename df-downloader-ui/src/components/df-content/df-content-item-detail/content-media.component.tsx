@@ -7,6 +7,13 @@ import { YouTubeEmbed } from "../../general/youtube-embed.tsx";
 
 export type ContentMediaProps = {
   contentEntry: DfContentEntry;
+  /**
+   * Passed straight through to the player, so the panel above can jump the
+   * video to a moment an analysis finding refers to. Only ever handed over
+   * for a downloaded file - a YouTube embed is somebody else's iframe and
+   * cannot be driven from here.
+   */
+  onSeekReady?: (seek: (startMs: number) => void) => void;
 };
 
 type MediaSource = { kind: "download"; index: number } | { kind: "youtube" };
@@ -27,7 +34,7 @@ const sourceKey = (source: MediaSource) => (source.kind === "youtube" ? "youtube
  * between. With one download and no YouTube id there is nothing to choose,
  * and a control offering a single option is just noise.
  */
-export const ContentMedia = ({ contentEntry }: ContentMediaProps) => {
+export const ContentMedia = ({ contentEntry, onSeekReady }: ContentMediaProps) => {
   const { contentInfo, downloads } = contentEntry;
   // Only media worth playing. An archive has nothing to show in a player, and
   // offering it as a source would be a dead end.
@@ -112,6 +119,7 @@ export const ContentMedia = ({ contentEntry }: ContentMediaProps) => {
           maxHeight="52vh"
           // Under the video, above the chapters - next to what it changes.
           belowVideo={switcher}
+          onSeekReady={onSeekReady}
         />
       </Box>
     );

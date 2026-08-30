@@ -77,7 +77,9 @@ export const buildPlatformComparison = async (
       developer: data.developer,
       platforms,
       unrecognised,
-      knownIssues: data.knownIssues,
+      // Flattened back to text: this is the cross-library table, which has
+      // no player to jump into, so an issue's anchor is of no use here.
+      knownIssues: data.knownIssues.map((known) => known.issue),
       recommendation: data.recommendation,
       hasArticle: result.evidence.includes("article"),
       usedTranscript: result.evidence.includes("transcript"),

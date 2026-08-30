@@ -1,5 +1,7 @@
+import PlayArrowIcon from "@mui/icons-material/PlayArrow";
 import {
   Box,
+  Chip,
   Divider,
   Paper,
   Stack,
@@ -16,6 +18,7 @@ import {
   AiPcReviewSettingsData,
   AiQaRoundtableData,
   AiStructuredData,
+  secondsToHHMMSS,
 } from "df-downloader-common";
 import { monoFontFamily } from "../../../themes/build-theme.ts";
 
@@ -70,7 +73,7 @@ const Stat = ({ label, value, delta }: { label: string; value: React.ReactNode; 
   </Paper>
 );
 
-const PcReviewSettings = ({ data }: { data: AiPcReviewSettingsData }) => {
+const PcReviewSettings = ({ data, onJumpTo }: { data: AiPcReviewSettingsData; onJumpTo?: (seconds: number) => void }) => {
   const optimised = data.optimisedSettingsResult;
   const hasOptimised = optimised && (optimised.fpsBefore != null || optimised.fpsAfter != null);
   return (
@@ -129,7 +132,10 @@ const PcReviewSettings = ({ data }: { data: AiPcReviewSettingsData }) => {
                 {data.settings.map((setting) => (
                   <TableRow key={setting.name}>
                     <TableCell sx={{ fontWeight: 500 }}>
-                      {setting.name}
+                      <Stack direction="row" spacing={0.75} alignItems="center" flexWrap="wrap" useFlexGap>
+                        <span>{setting.name}</span>
+                        <JumpChip seconds={setting.timestampSeconds} onJumpTo={onJumpTo} />
+                      </Stack>
                       {setting.levelsTested.length > 0 && (
                         <Typography variant="caption" sx={{ color: "text.disabled", display: "block" }}>
                           {setting.levelsTested.join(" · ")}
@@ -157,7 +163,7 @@ const PcReviewSettings = ({ data }: { data: AiPcReviewSettingsData }) => {
  * read by comparing across platforms, and a table of every platform-mode
  * combination forces horizontal scrolling in a narrow dialog.
  */
-const ConsoleComparison = ({ data }: { data: AiConsoleComparisonData }) => (
+const ConsoleComparison = ({ data, onJumpTo }: { data: AiConsoleComparisonData; onJumpTo?: (seconds: number) => void }) => (
   <Stack spacing={2}>
     {(data.game || data.developer) && (
       <Typography variant="body2" sx={{ color: "text.secondary" }}>
@@ -177,9 +183,12 @@ const ConsoleComparison = ({ data }: { data: AiConsoleComparisonData }) => (
           {platform.modes.map((mode, index) => (
             <Box key={`${mode.label}-${index}`} sx={{ px: 1.5, py: 1, borderTop: index ? 1 : 0, borderColor: "divider" }}>
               <Stack direction="row" justifyContent="space-between" alignItems="baseline" spacing={1}>
-                <Typography variant="body2" sx={{ fontWeight: 500 }}>
-                  {mode.label}
-                </Typography>
+                <Stack direction="row" spacing={0.75} alignItems="center" flexWrap="wrap" useFlexGap>
+                  <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                    {mode.label}
+                  </Typography>
+                  <JumpChip seconds={mode.timestampSeconds} onJumpTo={onJumpTo} />
+                </Stack>
                 {mode.fpsTarget != null && (
                   <Typography variant="body2" sx={{ color: "primary.main", fontFamily: monoFontFamily }}>
                     {mode.fpsTarget} fps
@@ -210,9 +219,14 @@ const ConsoleComparison = ({ data }: { data: AiConsoleComparisonData }) => (
       <Box>
         <SectionLabel>Known issues</SectionLabel>
         <Box component="ul" sx={{ m: 0, mt: 0.5, pl: 2.5, color: "text.secondary" }}>
-          {data.knownIssues.map((issue, index) => (
+          {data.knownIssues.map((known, index) => (
             <Typography component="li" variant="body2" key={index}>
-              {issue}
+              {known.issue}
+              {known.timestampSeconds != null && onJumpTo && (
+                <Box component="span" sx={{ ml: 0.75, verticalAlign: "middle" }}>
+                  <JumpChip seconds={known.timestampSeconds} onJumpTo={onJumpTo} />
+                </Box>
+              )}
             </Typography>
           ))}
         </Box>
@@ -235,13 +249,50 @@ const ConsoleComparison = ({ data }: { data: AiConsoleComparisonData }) => (
  * the participants left unresolved says so rather than being given a
  * verdict it never reached.
  */
-const QaRoundtable = ({ data }: { data: AiQaRoundtableData }) => (
+
+/**
+ * Jump the video to where a finding was said.
+ *
+ * Rendered only when the finding actually carries a resolved timestamp, and
+ * only when there is a player to drive - never as a disabled control. A
+ * finding whose quote could not be located has no anchor, and the honest
+ * presentation of that is nothing at all rather than a button that goes
+ * somewhere approximate.
+ */
+const JumpChip = ({ seconds, onJumpTo }: { seconds?: number | null; onJumpTo?: (seconds: number) => void }) => {
+  if (seconds == null || !onJumpTo) {
+    return null;
+  }
+  return (
+    <Chip
+      size="small"
+      variant="outlined"
+      clickable
+      icon={<PlayArrowIcon sx={{ fontSize: "0.85rem" }} />}
+      label={secondsToHHMMSS(Math.floor(seconds))}
+      onClick={() => onJumpTo(seconds)}
+      sx={{
+        height: 20,
+        fontFamily: monoFontFamily,
+        fontSize: "0.65rem",
+        color: "primary.main",
+        borderColor: "primary.main",
+        "& .MuiChip-icon": { color: "primary.main", ml: 0.4 },
+      }}
+    />
+  );
+};
+
+const QaRoundtable = ({ data, onJumpTo }: { data: AiQaRoundtableData; onJumpTo?: (seconds: number) => void }) => (
   <Stack spacing={1}>
     {data.segments.map((segment, index) => (
       <Paper key={index} variant="outlined" sx={{ p: 1.5 }}>
-        <Typography variant="body2" sx={{ fontWeight: 600, mb: 0.5 }}>
-          {segment.topic}
-        </Typography>
+        <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 0.5 }} flexWrap="wrap" useFlexGap>
+          <Typography variant="body2" sx={{ fontWeight: 600 }}>
+            {segment.topic}
+          </Typography>
+          <JumpChip seconds={segment.timestampSeconds} onJumpTo={onJumpTo} />
+        </Stack>
         {segment.summary && (
           <Typography variant="body2" sx={{ color: "text.secondary" }}>
             {segment.summary}
@@ -261,14 +312,20 @@ const QaRoundtable = ({ data }: { data: AiQaRoundtableData }) => (
   </Stack>
 );
 
-export const AnalysisStructuredData = ({ data }: { data: AiStructuredData }) => {
+export const AnalysisStructuredData = ({
+  data,
+  onJumpTo,
+}: {
+  data: AiStructuredData;
+  onJumpTo?: (seconds: number) => void;
+}) => {
   switch (data.contentType) {
     case "pc_review_settings":
-      return <PcReviewSettings data={data} />;
+      return <PcReviewSettings data={data} onJumpTo={onJumpTo} />;
     case "console_comparison":
-      return <ConsoleComparison data={data} />;
+      return <ConsoleComparison data={data} onJumpTo={onJumpTo} />;
     case "qa_roundtable":
-      return <QaRoundtable data={data} />;
+      return <QaRoundtable data={data} onJumpTo={onJumpTo} />;
     default:
       return null;
   }
