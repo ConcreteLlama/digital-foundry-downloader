@@ -16,7 +16,7 @@ import {
   useTheme,
 } from "@mui/material";
 import { DfContentInfoUtils, secondsToHHMMSS } from "df-downloader-common";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSelector } from "react-redux";
 import { AiAnalysisConfigUtils } from "df-downloader-common/config/ai-analysis-config";
 import { selectConfigSection } from "../../../store/config/config.selector.ts";
@@ -54,6 +54,9 @@ export type DfContentInfoItemDetailProps = {
 };
 
 type DetailTab = "content" | "files" | "analysis" | "article" | "activity";
+
+/** Far enough that a swipe is unambiguous rather than a stray drag. */
+const SWIPE_THRESHOLD_PX = 60;
 
 /**
  * One tab's label, carrying its own state.
@@ -238,7 +241,10 @@ export const DfContentInfoItemDetail = ({ dfContentName, onClose }: DfContentInf
     return list;
   }, [stacked, downloadCount, hasAnalysis, hasArticle, pipelineIds.length, liveCount]);
 
-  const [tab, setTab] = useState<DetailTab>("files");
+  // Content by default. In split there is no Content tab - the media is
+  // permanently on the left - so the fallback below resolves this to
+  // Files without needing to know the layout here.
+  const [tab, setTab] = useState<DetailTab>("content");
   // Work in flight is the thing you opened the panel to see, so it wins
   // the opening tab - but only until you pick something else, hence the
   // dependency on the id rather than on liveCount.
@@ -253,6 +259,66 @@ export const DfContentInfoItemDetail = ({ dfContentName, onClose }: DfContentInf
   // removes Content, and a finished download removes Activity.
   const activeTab = tabs.some((entry) => entry.id === tab) ? tab : tabs[0].id;
 
+  /**
+   * Swipe between tabs on a touch screen.
+   *
+   * Hand-rolled rather than pulled from a library: the behaviour is a
+   * threshold and two guards, and the usual dependency for this is
+   * unmaintained.
+   *
+   * The guards are the substance. A swipe that is mostly vertical is the
+   * page being scrolled, and a swipe that starts inside something which
+   * can itself scroll sideways - the settings tables in an analysis, a
+   * long file path - belongs to that element, not to the tab strip.
+   * Without the second guard those become unreadable on a phone, because
+   * every attempt to scroll them changes tab instead.
+   */
+  const swipeArea = useRef<HTMLDivElement | null>(null);
+  const swipeStart = useRef<{ x: number; y: number; locked: boolean } | null>(null);
+
+  const startsInHorizontalScroller = (target: EventTarget | null) => {
+    let node = target as HTMLElement | null;
+    while (node && node !== swipeArea.current) {
+      if (node.scrollWidth > node.clientWidth + 1) {
+        const overflowX = window.getComputedStyle(node).overflowX;
+        if (overflowX === "auto" || overflowX === "scroll") {
+          return true;
+        }
+      }
+      node = node.parentElement;
+    }
+    return false;
+  };
+
+  const onTouchStart = (event: React.TouchEvent) => {
+    const touch = event.touches[0];
+    swipeStart.current = {
+      x: touch.clientX,
+      y: touch.clientY,
+      locked: startsInHorizontalScroller(event.target),
+    };
+  };
+
+  const onTouchEnd = (event: React.TouchEvent) => {
+    const start = swipeStart.current;
+    swipeStart.current = null;
+    if (!start || start.locked) {
+      return;
+    }
+    const touch = event.changedTouches[0];
+    const dx = touch.clientX - start.x;
+    const dy = touch.clientY - start.y;
+    // Comfortably horizontal, and far enough to be deliberate.
+    if (Math.abs(dx) < SWIPE_THRESHOLD_PX || Math.abs(dx) < Math.abs(dy) * 1.5) {
+      return;
+    }
+    const index = tabs.findIndex((entry) => entry.id === activeTab);
+    const next = dx < 0 ? index + 1 : index - 1;
+    if (next >= 0 && next < tabs.length) {
+      setTab(tabs[next].id);
+    }
+  };
+
   if (!dfContentEntry) {
     //TODO: Make this more sensible
     return <Typography>ERROR</Typography>;
@@ -260,6 +326,8 @@ export const DfContentInfoItemDetail = ({ dfContentName, onClose }: DfContentInf
   const { contentInfo } = dfContentEntry;
   const { statusInfo } = dfContentEntry;
   const queuedContentAvailability = statusInfo.availability;
+
+  const swipeAreaProps = { onTouchStart, onTouchEnd };
 
   const media = (
     <Box sx={{ minWidth: 0 }}>
@@ -312,7 +380,7 @@ export const DfContentInfoItemDetail = ({ dfContentName, onClose }: DfContentInf
     opposite ends of a stack: they answer one question.
   */
   const panels = (
-    <Stack spacing={2} sx={{ minWidth: 0 }}>
+    <Stack spacing={2} sx={{ minWidth: 0 }} ref={swipeArea} {...swipeAreaProps}>
       {tabStrip}
 
       {stacked && <TabPanel active={activeTab === "content"}>{media}</TabPanel>}
