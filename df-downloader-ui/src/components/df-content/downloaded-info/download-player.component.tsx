@@ -8,7 +8,13 @@ import { DfContentDownloadInfo } from "df-downloader-common/models/df-content-do
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AnalysisJump } from "../ai-analysis/analysis-jumps.ts";
 import { CastButton } from "./cast-button.component.tsx";
-import { rememberPlaybackPosition, rememberedPlaybackPosition } from "./playback-positions.ts";
+import {
+  pauseOtherPlayers,
+  registerPlayer,
+  rememberPlaybackPosition,
+  rememberedPlaybackPosition,
+  subscribePlaybackPosition,
+} from "./playback-positions.ts";
 import { apiIsCrossOrigin, getPlaybackInfo, playbackStreamUrl, playbackSubtitlesUrl } from "../../../api/playback.ts";
 import { useQuery } from "../../../hooks/use-query.ts";
 import { monoFontFamily } from "../../../themes/build-theme";
@@ -60,24 +66,6 @@ export type DownloadPlayerProps = {
    * to call it, never to read anything back.
    */
   onSeekReady?: (seek: (startMs: number) => void) => void;
-  /**
-   * Hands the parent a way to stop playback.
-   *
-   * The content panel plays inline and can also open the same file in the
-   * player dialog. Without this, doing that leaves two copies of the video
-   * playing over each other, one of them behind a modal and unreachable.
-   */
-  onPauseReady?: (pause: () => void) => void;
-  /**
-   * Change this to have the player pick up the remembered position again.
-   *
-   * The content panel plays inline *and* can open the same file in the
-   * player dialog, and while that dialog is up this player sits paused
-   * behind it, going stale. Closing it would otherwise leave the inline copy
-   * offering to resume from wherever it was before you opened the dialog,
-   * discarding everything you watched in it.
-   */
-  positionResyncKey?: number;
   /**
    * Announces entering and leaving full screen.
    *
@@ -316,12 +304,12 @@ export const DownloadPlayer = ({
   analysisJumps,
   timelineMaxHeight = "none",
   onSeekReady,
-  onPauseReady,
-  positionResyncKey,
   onImmersiveChange,
 }: DownloadPlayerProps) => {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const [positionSeconds, setPositionSeconds] = useState(0);
+  // Identifies this player among any others mounted at the same time.
+  const playerId = useRef(Symbol("player")).current;
   /*
     Immersive mode: the video filling the screen with the timeline available
     over the top of it.
@@ -436,9 +424,21 @@ export const DownloadPlayer = ({
       return;
     }
     const publish = () => {
+      /*
+        Nothing to say until the file is actually loaded.
+
+        A video with no metadata reports currentTime 0, and a seek on it is
+        discarded by the browser while still firing `seeked` - so an element
+        still loading would broadcast a confident 0 that overwrote the real
+        position other players had recorded, and then fail to restore itself
+        because the position it read back was its own 0.
+      */
+      if (video.readyState < 1) {
+        return;
+      }
       const seconds = Math.floor(video.currentTime);
       setPositionSeconds((current) => (current === seconds ? current : seconds));
-      rememberPlaybackPosition(download.downloadLocation, seconds);
+      rememberPlaybackPosition(download.downloadLocation, seconds, playerId);
     };
     video.addEventListener("timeupdate", publish);
     video.addEventListener("seeked", publish);
@@ -446,7 +446,7 @@ export const DownloadPlayer = ({
       video.removeEventListener("timeupdate", publish);
       video.removeEventListener("seeked", publish);
     };
-  }, [supported, layout, download.downloadLocation]);
+  }, [supported, layout, download.downloadLocation, playerId]);
 
   /*
     Pick up where this file was left off.
@@ -487,21 +487,58 @@ export const DownloadPlayer = ({
     return () => video.removeEventListener("loadedmetadata", restore);
   }, [supported, layout, download.downloadLocation]);
 
-  // Deliberately does not start playback: this is catching up with what
-  // happened elsewhere, not a request to watch.
-  const resyncedFor = useRef(positionResyncKey);
+  /*
+    Follows the same file being played somewhere else.
+
+    Only while paused, and never from itself. The content panel plays inline
+    and the dialog plays the same download, so whichever one is not being
+    watched keeps up on its own - which means closing the dialog leaves the
+    inline copy where you actually got to, no matter which of the several
+    routes into the player was used. Catching up deliberately does not start
+    playback: this is staying in sync, not a request to watch.
+  */
   useEffect(() => {
-    if (resyncedFor.current === positionResyncKey) {
-      return;
-    }
-    resyncedFor.current = positionResyncKey;
+    const location = download.downloadLocation;
+    return subscribePlaybackPosition(location, (seconds, source) => {
+      const video = videoRef.current;
+      if (source === playerId || !video || !video.paused) {
+        return;
+      }
+      // Seeking a video that has not loaded is discarded anyway, and doing it
+      // pre-empts this player's own restore - see the publish guard above.
+      if (video.readyState < 1) {
+        return;
+      }
+      if (Math.abs(video.currentTime - seconds) < 2) {
+        return;
+      }
+      video.currentTime = seconds;
+    });
+  }, [download.downloadLocation, playerId]);
+
+  /*
+    One video at a time, wherever it was started from.
+
+    Two copies of the same file playing over each other is never wanted, and
+    this used to be handled only at the one call site that remembered to -
+    the content panel paused its inline player when opening the dialog, while
+    opening the same dialog from the Files tab left it playing behind the
+    modal. A rule the player enforces itself cannot be forgotten by a new
+    way of opening one.
+  */
+  useEffect(() => {
     const video = videoRef.current;
-    const seconds = rememberedPlaybackPosition(download.downloadLocation);
-    if (!video || seconds == null || Math.abs(video.currentTime - seconds) < 2) {
+    if (!video) {
       return;
     }
-    video.currentTime = seconds;
-  }, [positionResyncKey, download.downloadLocation]);
+    const unregister = registerPlayer(playerId, video);
+    const onPlay = () => pauseOtherPlayers(playerId);
+    video.addEventListener("play", onPlay);
+    return () => {
+      video.removeEventListener("play", onPlay);
+      unregister();
+    };
+  }, [playerId, supported, layout, download.downloadLocation]);
 
   const seekTo = useCallback((startMs: number) => {
     const video = videoRef.current;
@@ -521,10 +558,6 @@ export const DownloadPlayer = ({
     onSeekReady?.(seekTo);
   }, [onSeekReady, seekTo]);
 
-  const pause = useCallback(() => videoRef.current?.pause(), []);
-  useEffect(() => {
-    onPauseReady?.(pause);
-  }, [onPauseReady, pause]);
 
   const timelineRows = useMemo(
     () => buildTimeline(info?.chapters ?? [], analysisJumps ?? []),

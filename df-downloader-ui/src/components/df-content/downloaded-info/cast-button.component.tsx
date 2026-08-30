@@ -4,7 +4,7 @@ import { DfContentEntry, PlaybackVideoCodec } from "df-downloader-common";
 import { DfContentDownloadInfo } from "df-downloader-common/models/df-content-download-info";
 import { useEffect, useState } from "react";
 import { mintCastUrl } from "../../../api/playback.ts";
-import { castMedia, watchCastAvailability } from "../../../utils/cast.ts";
+import { castMedia, subscribeCastAvailability } from "../../../utils/cast.ts";
 import { triggerSnackbar } from "../../../utils/snackbar.tsx";
 
 export type CastButtonProps = {
@@ -32,25 +32,9 @@ export const CastButton = ({ contentEntry, download, currentSeconds, videoCodec 
   const [castable, setCastable] = useState(false);
   const [busy, setBusy] = useState(false);
 
-  useEffect(() => {
-    let stop: (() => void) | undefined;
-    let cancelled = false;
-    watchCastAvailability((available) => {
-      if (!cancelled) {
-        setCastable(available);
-      }
-    }).then((unsubscribe) => {
-      if (cancelled) {
-        unsubscribe();
-      } else {
-        stop = unsubscribe;
-      }
-    });
-    return () => {
-      cancelled = true;
-      stop?.();
-    };
-  }, []);
+  // One shared answer for every player on the page - see cast.ts. Subscribing
+  // per component let two players disagree about whether Cast was available.
+  useEffect(() => subscribeCastAvailability(setCastable), []);
 
   if (!castable) {
     return null;

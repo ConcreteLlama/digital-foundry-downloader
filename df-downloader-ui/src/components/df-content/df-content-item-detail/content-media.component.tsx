@@ -1,7 +1,7 @@
 import OpenInFullIcon from "@mui/icons-material/OpenInFull";
 import { Box, Button, ToggleButton, ToggleButtonGroup, Tooltip, Typography } from "@mui/material";
 import { DfContentEntry, DfContentInfoUtils } from "df-downloader-common";
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useMemo, useState } from "react";
 import { useAnalysisJumps } from "../ai-analysis/analysis-jumps.ts";
 import { DownloadPlayer } from "../downloaded-info/download-player.component.tsx";
 import { VideoPlayerDialog } from "../downloaded-info/video-player-dialog.component.tsx";
@@ -73,24 +73,6 @@ export const ContentMedia = ({ contentEntry, onSeekReady }: ContentMediaProps) =
   const { jumps } = useAnalysisJumps(contentEntry.key, active?.kind === "download");
 
   const [playerOpen, setPlayerOpen] = useState(false);
-  // Opening the dialog puts a second copy of the same video on screen. This
-  // one is behind a modal and unreachable, so it has to be stopped rather
-  // than left playing to itself.
-  const pauseRef = useRef<(() => void) | null>(null);
-  const onPauseReady = useCallback((pause: () => void) => {
-    pauseRef.current = pause;
-  }, []);
-  const openPlayer = useCallback(() => {
-    pauseRef.current?.();
-    setPlayerOpen(true);
-  }, []);
-  // Bumped when the dialog closes, so this player catches up with wherever
-  // the dialog got to rather than offering to resume from before it opened.
-  const [positionResyncKey, setPositionResyncKey] = useState(0);
-  const closePlayer = useCallback(() => {
-    setPlayerOpen(false);
-    setPositionResyncKey((key) => key + 1);
-  }, []);
 
   const label = (source: MediaSource) => {
     if (source.kind === "youtube") {
@@ -149,7 +131,7 @@ export const ContentMedia = ({ contentEntry, onSeekReady }: ContentMediaProps) =
       <Button
         size="small"
         startIcon={<OpenInFullIcon fontSize="small" />}
-        onClick={openPlayer}
+        onClick={() => setPlayerOpen(true)}
         sx={{ textTransform: "none", flexShrink: 0, marginTop: 1 }}
       >
         Open player
@@ -189,14 +171,12 @@ export const ContentMedia = ({ contentEntry, onSeekReady }: ContentMediaProps) =
             </Box>
           }
           onSeekReady={onSeekReady}
-          onPauseReady={onPauseReady}
-          positionResyncKey={positionResyncKey}
         />
         <VideoPlayerDialog
           contentEntry={contentEntry}
           download={playable[active.index]}
           open={playerOpen}
-          onClose={closePlayer}
+          onClose={() => setPlayerOpen(false)}
         />
       </Box>
     );

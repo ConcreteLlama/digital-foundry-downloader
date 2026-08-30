@@ -59,17 +59,36 @@ export const loadCastSdk = (): Promise<boolean> => {
 };
 
 /**
- * Prepares the cast context and reports whether a receiver is around.
+ * Whether a receiver is around, as one answer shared by every button.
  *
- * `onStateChange` fires as devices appear and disappear, which is what
- * decides whether the button is shown - a Cast button with nothing to cast
- * to is just a button that produces an empty dialog.
+ * This is deliberately a single subscription rather than one per component.
+ * Two players can be mounted at once - the panel plays inline while the
+ * dialog plays the same file - and when each discovered availability for
+ * itself they could disagree, so the same file showed a Cast button in one
+ * place and not the other. Discovery is asynchronous and the SDK reports
+ * state through an event that has already fired by the time a later
+ * subscriber arrives, which is exactly the shape that produces that.
+ *
+ * So: subscribe once, remember the last answer, and replay it immediately to
+ * anything that asks later. Every button then agrees by construction rather
+ * than by both happening to be listening at the right moment.
  */
-export const watchCastAvailability = async (onStateChange: (castable: boolean) => void): Promise<() => void> => {
+let castable = false;
+let started = false;
+const listeners = new Set<(castable: boolean) => void>();
+
+const publish = (next: boolean) => {
+  castable = next;
+  for (const listener of listeners) {
+    listener(next);
+  }
+};
+
+const startWatching = async () => {
   const ready = await loadCastSdk();
   if (!ready) {
-    onStateChange(false);
-    return () => {};
+    publish(false);
+    return;
   }
   const { cast, chrome } = globals();
   const context = cast.framework.CastContext.getInstance();
@@ -81,10 +100,29 @@ export const watchCastAvailability = async (onStateChange: (castable: boolean) =
     autoJoinPolicy: chrome.cast.AutoJoinPolicy.ORIGIN_SCOPED,
   });
   const stateFor = (state: string) => state !== cast.framework.CastState.NO_DEVICES_AVAILABLE;
-  const listener = (event: any) => onStateChange(stateFor(event.castState));
-  context.addEventListener(cast.framework.CastContextEventType.CAST_STATE_CHANGED, listener);
-  onStateChange(stateFor(context.getCastState()));
-  return () => context.removeEventListener(cast.framework.CastContextEventType.CAST_STATE_CHANGED, listener);
+  context.addEventListener(cast.framework.CastContextEventType.CAST_STATE_CHANGED, (event: any) =>
+    publish(stateFor(event.castState))
+  );
+  publish(stateFor(context.getCastState()));
+};
+
+/**
+ * Reports cast availability now and whenever it changes.
+ *
+ * Fires immediately with what is already known, so a component mounting
+ * after discovery has finished is not left waiting for an event that will
+ * never come again.
+ */
+export const subscribeCastAvailability = (onChange: (castable: boolean) => void): (() => void) => {
+  listeners.add(onChange);
+  onChange(castable);
+  if (!started) {
+    started = true;
+    void startWatching();
+  }
+  return () => {
+    listeners.delete(onChange);
+  };
 };
 
 /**
