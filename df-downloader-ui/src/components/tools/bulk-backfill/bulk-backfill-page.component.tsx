@@ -42,20 +42,24 @@ const TARGET_DESCRIPTIONS: Record<BulkBackfillTarget, string> = {
 };
 
 /**
- * How many rows are actually put in the DOM.
+ * How many rows are put in the DOM at once.
  *
  * The article target offers every item with a YouTube video, which here
  * is close to 3,000. Even with the rows memoised, React reconciles every
- * one of them on each toggle, and ticking a checkbox measurably lagged.
+ * one of them on each toggle, and ticking a checkbox measurably lagged -
+ * about 25ms against about 6ms at this page size.
  *
- * Capping rather than virtualising is the pragmatic call: the table's
- * columns are sized to their content, so windowing would make them jump
- * as rows scrolled in and out. Nothing is lost by capping, because the
- * selection buttons work on the whole filtered set rather than on what
- * happens to be rendered - and picking individual items out of three
- * thousand means filtering first regardless.
+ * Paginated rather than virtualised because the table's columns are
+ * sized to their content, and windowing would make them jump as rows
+ * scrolled in and out. Pages keep every row reachable, which a bare cap
+ * did not.
+ *
+ * Selection is deliberately independent of the page: it lives in one Set
+ * keyed by content, so ticking rows across several pages accumulates,
+ * and the select-all buttons act on the whole filtered set rather than
+ * the page in view.
  */
-const MAX_RENDERED_ROWS = 250;
+const PAGE_SIZE = 250;
 
 const FORCE_LABELS: Record<BulkBackfillTarget, string> = {
   subtitles: "Re-transcribe items that already have subtitles",
@@ -71,6 +75,7 @@ export const BulkBackfillPage = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [filterText, setFilterText] = useState("");
+  const [page, setPage] = useState(0);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [estimate, setEstimate] = useState<BulkBackfillEstimate | null>(null);
@@ -109,7 +114,18 @@ export const BulkBackfillPage = () => {
     return candidates.filter((candidate) => candidate.title.toLowerCase().includes(needle));
   }, [candidates, filterText]);
 
-  const visible = useMemo(() => filtered.slice(0, MAX_RENDERED_ROWS), [filtered]);
+  useEffect(() => {
+    setPage(0);
+  }, [filterText, target]);
+
+  const pageCount = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+  // Clamped rather than reset: narrowing the filter can leave the current
+  // page past the end, which would otherwise show an empty table.
+  const currentPage = Math.min(page, pageCount - 1);
+  const visible = useMemo(
+    () => filtered.slice(currentPage * PAGE_SIZE, (currentPage + 1) * PAGE_SIZE),
+    [filtered, currentPage]
+  );
 
   // Force is deliberately not a factor - see isMissing. This counts what
   // is missing the thing, which is a useful subset to select whether or
@@ -273,12 +289,29 @@ export const BulkBackfillPage = () => {
           <Typography variant="caption" sx={{ color: "text.disabled" }}>
             {candidates.length} of {libraryCount.toLocaleString()} items can take this action
             {filtered.length !== candidates.length && ` · ${filtered.length} match the filter`}
-            {filtered.length > visible.length &&
-              ` · showing the first ${visible.length} - filter to see others, though the buttons above still apply to all ${filtered.length}`}
+            {selected.size > 0 && ` · ${selected.size} selected across all pages`}
             {willSkip > 0 && ` · ${willSkip} of the ${selected.size} selected will be skipped, ${SKIP_REASONS[target]}`}
           </Typography>
 
           <BackfillTable candidates={visible} target={target} selected={selected} onToggle={toggle} />
+
+          {pageCount > 1 && (
+            <Stack direction="row" spacing={1} alignItems="center">
+              <Button size="small" disabled={currentPage === 0} onClick={() => setPage(currentPage - 1)}>
+                Previous
+              </Button>
+              <Typography variant="caption" sx={{ color: "text.disabled" }}>
+                Page {currentPage + 1} of {pageCount}
+              </Typography>
+              <Button
+                size="small"
+                disabled={currentPage >= pageCount - 1}
+                onClick={() => setPage(currentPage + 1)}
+              >
+                Next
+              </Button>
+            </Stack>
+          )}
 
         </>
       )}
