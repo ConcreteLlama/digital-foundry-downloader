@@ -14,6 +14,8 @@ There is also a new Backfill tool under Tools, for applying any of this to conte
 
 Articles are also picked up on their own from now on. It checks Digital Foundry's newly published pieces periodically and attaches each to whatever video it is about, so something you download today gains its written companion when that appears next week, with nothing to press.
 
+Downloads also play in the app itself now. Open a video you have already downloaded and it plays right there, with its subtitles and a clickable list of its chapters beside it, so checking what was actually said - or jumping to the one section you care about - no longer means finding the file on disk. Skipping to the last ten minutes of a four-gigabyte Direct is immediate rather than a wait for the whole thing, since only the part being watched is sent. Whether a given file plays is down to your own machine: h.264 downloads play anywhere, while HEVC ones need a decoder from your operating system, and where that is missing the player says so and points you at the file instead of sitting there black.
+
 ### Features
 - AI analysis of your content
   - A detailed summary and a separate verdict for each video, naming the specific numbers and settings rather than describing it in general terms
@@ -58,6 +60,23 @@ Articles are also picked up on their own from now on. It checks Digital Foundry'
 - Costs shown before you commit to them
   - Analysing a set of videos shows an estimated total first, worked out from real pricing of a few of the items you actually picked rather than a generic figure
   - Article matching shows how many requests it will make to Digital Foundry and roughly how long that takes, since it is deliberately slow - a whole-library run is measured in hours
+- Play a downloaded video in the app
+  - Once a video has been downloaded, the file itself is what the content panel shows, rather than the YouTube embed of the same thing. A small control under the video switches back to YouTube, or between downloads when you have more than one
+  - Theater mode gives the video nearly the whole window with the chapters in a column beside it, for actually watching something rather than glancing at it
+  - The video shows its thumbnail until you press play, and nothing is downloaded until then
+  - Play sits with the rest of a file's actions, on the Files tab of any video you have downloaded
+  - Uses the browser's own player, so seeking, volume, fullscreen, playback speed and the captions menu all behave the way they do on any other site rather than being reinvented here
+  - Only the part of the file being watched is sent, so a multi-gigabyte video starts almost immediately and seeking anywhere in it is instant. This matters more than it sounds - without it, playing a four-gigabyte Direct would mean transferring all four gigabytes before the first frame appeared
+- Chapters you can jump to
+  - The chapters already written into each download are listed beside the video, and clicking one jumps straight there
+  - Whichever chapter is playing is highlighted as it goes, so the list also tells you where you are
+  - Read out of the file itself each time you open it, so chapters refreshed since the download are the ones you see
+- Subtitles in the player
+  - The .srt kept alongside a video is offered in the player's own captions menu, converted on the way out since browsers cannot read .srt directly
+  - Subtitles embedded into the video instead cannot be shown - no browser can read subtitles back out of a video file. Rather than simply having no captions, the player explains why, and generating them again with the separate-.srt output is the way to get them
+- An honest answer when a file will not play
+  - Instead of a black rectangle you are told this machine has no decoder for the video, along with where the file is, so you can open it in a real player or through your media server
+  - The check asks your browser what it can actually decode rather than assuming from the format, so an HEVC download is not refused on a machine that plays it perfectly well
 ### Enhancements
 - A run checks each item again as it reaches it, rather than trusting the list from when it started. Over a few hundred items that gap matters: something can gain subtitles from an unrelated action while it waits its turn, and it now gets skipped rather than redone
 - The content panel is organised into tabs
@@ -79,6 +98,8 @@ Articles are also picked up on their own from now on. It checks Digital Foundry'
 - Fixed pop-up panels never reaching the edges of a phone screen
   - A band of the page showed down both sides of every dialog, which reads as a misaligned window rather than as deliberate spacing
   - The rule meant to make dialogs full width on a phone had been silently overridden since it was written, so this had never once worked
+### Security
+- Reading a file's embedded metadata now only works for files this app actually downloaded. It previously trusted the filename it was handed, so a signed-in user could have pointed it at any file on the machine and read its details back. The app itself only ever sent a real download, so nothing changes about how it is used
 ### Known Issues
 - Analysis needs something to read
   - With no transcript and no matching article, only tags can be produced - there is nothing to summarise from. Generating subtitles for a video and analysing it again gives the full result

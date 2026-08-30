@@ -133,7 +133,18 @@ export const makeContentApiRouter = (contentManager: DigitalFoundryContentManage
         message: "Content not found",
       });
     }
-    const meta = await extractMediaMeta(mediaFilename, {
+    // Probe the path the DB holds, not the one the caller sent. Looking the
+    // entry up and then ffprobing whatever filename came in with the request
+    // meant any authenticated caller could point this at an arbitrary file on
+    // the server and read its metadata back. The UI has always sent a real
+    // downloadLocation, so matching on it (pathIsEqual) costs nothing.
+    const downloadInfo = ServiceContentUtils.getDownloadByLocation(contentEntry, mediaFilename);
+    if (!downloadInfo) {
+      return res.status(404).send({
+        message: "No such download for this content",
+      });
+    }
+    const meta = await extractMediaMeta(downloadInfo.downloadLocation, {
       includeChapters,
       includeSubs
     });
