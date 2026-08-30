@@ -5,6 +5,7 @@ import { BATCH_MOVE_FILES_TASK_TYPE, MoveFilesTaskInfo } from "./move-files-task
 import { SCAN_FOR_EXISTING_CONTENT_TASK_TYPE, ScanForExistingContentTaskInfo } from "./scan-for-existing-files-task.js";
 import { CLEAR_MISSING_FILES_TASK_TYPE, ClearMissingFilesTaskInfo } from "./clear-missing-files-task.js";
 import { REMOVE_EMPTY_DIRS_TASK_TYPE, RemoveEmptyDirsTaskInfo } from "./remove-empty-dirs-task.js";
+import { BULK_BACKFILL_TASK_TYPE, BulkBackfillTaskInfo } from "./bulk-backfill-task.js";
 
 export const TaskInfo = z.any().transform((data) => {
   switch (data.taskType) {
@@ -18,6 +19,8 @@ export const TaskInfo = z.any().transform((data) => {
       return ClearMissingFilesTaskInfo.parse(data);
     case REMOVE_EMPTY_DIRS_TASK_TYPE:
       return RemoveEmptyDirsTaskInfo.parse(data);
+    case BULK_BACKFILL_TASK_TYPE:
+      return BulkBackfillTaskInfo.parse(data);
     default:
       return BasicTaskInfo.parse(data);
   }

@@ -79,8 +79,16 @@ const makeControls = <OPERATION_PARAMETERS, TASK_OPTS, RESULT_TYPE>(fn: (params:
         await workerQueue.cancel();
     },
     getStatus: ({ operations }) => {
+        // Progress for any batch task, from what it already tracks. An
+        // operation with an endTime is finished however it finished, which
+        // is what "how far through is this" actually means - a run that
+        // skips most of its items is still progressing.
+        const finished = operations.filter((op) => op.endTime).length;
         return {
             moveStatuses: operations,
+            progress: operations.length
+                ? { percent: (finished / operations.length) * 100, detail: `${finished} of ${operations.length}` }
+                : undefined,
         }
     }
 });

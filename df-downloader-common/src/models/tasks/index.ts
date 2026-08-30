@@ -3,6 +3,7 @@ export * from './move-files-task.js';
 export * from './clear-missing-files-task.js';
 export * from './scan-for-existing-files-task.js';
 export * from './remove-empty-dirs-task.js';
+export * from './bulk-backfill-task.js';
 export * from './download-task.js';
 export * from './task-info.js';
 export * from './tasks.js';

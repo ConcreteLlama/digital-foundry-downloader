@@ -18,6 +18,7 @@ import {
   MoveFilesTaskResult,
   REMOVE_EMPTY_DIRS_TASK_TYPE,
   RemoveEmptyDirsTaskInfo,
+  BulkBackfillTaskInfo,
   SCAN_FOR_EXISTING_CONTENT_TASK_TYPE,
   ScanForExistingContentTaskInfo,
   StepDetails,
@@ -69,7 +70,7 @@ import {
   createAiAnalysisTaskPipeline,
 } from "./task-pipelines/ai-analysis-task-pipeline.js";
 import { AiAnalysisTaskManager } from "./tasks/ai-analysis-task.js";
-import { BULK_BACKFILL_CONCURRENCY, BulkBackfillTask } from "./tasks/bulk-backfill-task.js";
+import { BULK_BACKFILL_CONCURRENCY, BulkBackfillTask, isBulkBackfillTask } from "./tasks/bulk-backfill-task.js";
 import { ensureArticleForContent } from "./utils/df-articles/ensure-article.js";
 import { AiAnalysisConfig } from "df-downloader-common/config/ai-analysis-config.js";
 import { Chapter } from "./utils/chatpers.js";
@@ -1097,6 +1098,8 @@ const makeTaskInfo = (
     return makeScanForExistingContentTaskInfo(managedTask, positionInfo);
   } else if (isRemoveEmptyDirsTask(managedTask.task)) {
     return makeRemoveEmptyDirsTaskInfo(managedTask, positionInfo);
+  } else if (isBulkBackfillTask(managedTask.task)) {
+    return makeBulkBackfillTaskInfo(managedTask, positionInfo);
   } else {
     return makeBasicTaskInfo(managedTask, positionInfo);
   }
@@ -1147,6 +1150,93 @@ const makeCommonTaskStatusInfo = (managedTask: GenericManagedTask): TaskStatus =
     lastResumedAt: task.lastResumedAt,
   };
 }
+
+/**
+ * How many failures a run reports individually.
+ *
+ * The whole task snapshot is pushed to every connected browser on every
+ * change, so a run of three thousand items that failed wholesale would
+ * otherwise send three thousand rows several times a second. The counts
+ * still tell the true story; the list is there to be read.
+ */
+const BACKFILL_FAILURE_LIMIT = 50;
+
+/**
+ * A tally of what a backfill run actually did.
+ *
+ * Without this a finished run said only "Done", which is the one thing you
+ * already knew. The interesting part is the split - a run of 300 that
+ * produced 4 results is not a failure if 296 of them already had the thing,
+ * and is a real problem if they were skipped for want of a transcript.
+ */
+const makeBulkBackfillTaskInfo = (
+  managedTask: GenericManagedTask,
+  positionInfo: PriorityPositionInfo | null
+): BulkBackfillTaskInfo => {
+  const common = makeCommonTaskInfo(managedTask, positionInfo);
+  const detail = managedTask.task.getStatus() as { moveStatuses?: any[] } | undefined;
+  const operations = detail?.moveStatuses ?? [];
+
+  let done = 0;
+  let skipped = 0;
+  let notApplicable = 0;
+  let failed = 0;
+  let pending = 0;
+  const failures: { contentKey: string; error: string }[] = [];
+
+  for (const operation of operations) {
+    const contentKey = operation?.params?.contentKey ?? "unknown";
+    if (operation?.error) {
+      failed++;
+      if (failures.length < BACKFILL_FAILURE_LIMIT) {
+        const error = operation.error;
+        failures.push({ contentKey, error: error?.message ? String(error.message) : String(error) });
+      }
+      continue;
+    }
+    if (!operation?.endTime) {
+      pending++;
+      continue;
+    }
+    switch (operation.result) {
+      case "done":
+        done++;
+        break;
+      case "skipped":
+        skipped++;
+        break;
+      case "not_applicable":
+        notApplicable++;
+        break;
+      default:
+        // Finished with no recorded outcome - counted as pending rather
+        // than invented as a success.
+        pending++;
+    }
+  }
+
+  return {
+    ...common,
+    taskType: "bulk_backfill",
+    // The batch builder implements all three, so the row can offer them.
+    capabilities: ["pause", "cancel"],
+    status: common.status
+      ? {
+          ...common.status,
+          backfill: {
+            total: operations.length,
+            done,
+            skipped,
+            notApplicable,
+            failed,
+            pending,
+            failures,
+            failuresTruncated: failed > failures.length,
+          },
+        }
+      : null,
+  };
+};
 
 const makeBasicTaskInfo = (
   managedTask: GenericManagedTask,
