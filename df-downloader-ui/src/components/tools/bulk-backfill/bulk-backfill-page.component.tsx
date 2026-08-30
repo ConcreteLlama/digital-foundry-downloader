@@ -244,11 +244,6 @@ export const BulkBackfillPage = () => {
             <Button size="small" disabled={selected.size === 0} onClick={() => setSelected(new Set())}>
               Clear
             </Button>
-            <Box sx={{ flex: "1 1 auto" }} />
-            <Typography variant="body2" sx={{ color: "text.secondary" }}>
-              {selected.size} selected
-              {willSkip > 0 && ` · ${willSkip} will be skipped, ${SKIP_REASONS[target]}`}
-            </Typography>
             <Button variant="contained" size="small" disabled={runKeys.length === 0} onClick={openConfirm}>
               Run ({runKeys.length})
             </Button>
@@ -257,6 +252,7 @@ export const BulkBackfillPage = () => {
           <Typography variant="caption" sx={{ color: "text.disabled" }}>
             {candidates.length} of {libraryCount.toLocaleString()} items can take this action
             {filtered.length !== candidates.length && ` · ${filtered.length} match the filter`}
+            {willSkip > 0 && ` · ${willSkip} of the ${selected.size} selected will be skipped, ${SKIP_REASONS[target]}`}
           </Typography>
 
           <BackfillTable candidates={filtered} target={target} selected={selected} onToggle={toggle} />
