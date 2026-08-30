@@ -16,7 +16,12 @@ export const GridHeader = styled(Box)(({ theme }) => ({
   paddingBottom: theme.spacing(1),
 }));
 
-export const GridTableContent = styled(Box)<{ columnSizes: string[] }>(({ theme, columnSizes }) => ({
+export const GridTableContent = styled(Box, {
+  // columnSizes drives the grid template and is not an HTML attribute, so it
+  // has to be filtered out - emotion forwards anything it does not recognise
+  // as a DOM prop, which React then warns about on every render.
+  shouldForwardProp: (prop) => prop !== "columnSizes",
+})<{ columnSizes: string[] }>(({ theme, columnSizes }) => ({
   display: 'grid',
   gridTemplateColumns: columnSizes.join(' '),
   gap: theme.spacing(2),

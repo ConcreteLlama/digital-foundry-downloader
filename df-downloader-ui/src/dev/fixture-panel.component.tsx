@@ -14,7 +14,10 @@ export const FixturePanel = () => {
   const { scenario: playing, ticking } = useSyncExternalStore(subscribe, getState);
   return (
     <Paper variant="outlined" sx={{ padding: 2, marginTop: 4 }}>
-      <Stack direction="row" spacing={1} alignItems="center">
+      {/* Wraps: the heading and its chip do not fit a phone on one line,
+          and without this the whole page scrolled sideways. useFlexGap so
+          the spacing survives wrapping - Stack's default margins do not. */}
+      <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap" useFlexGap>
         <ScienceIcon color="warning" />
         <Typography variant="h6">Task fixtures</Typography>
         <Chip size="small" color="warning" variant="outlined" label="dev build only" />
@@ -83,7 +86,14 @@ export const FixturePanel = () => {
           Stop fixture
         </Button>
       </Stack>
-      <Typography variant="caption" color="text.secondary" sx={{ display: "block", marginTop: 2 }}>
+      {/* The console snippets are single unbreakable tokens - no spaces to
+          wrap at - so on a phone they set a min-content width wider than the
+          screen and scrolled the whole page sideways. */}
+      <Typography
+        variant="caption"
+        color="text.secondary"
+        sx={{ display: "block", marginTop: 2, overflowWrap: "anywhere" }}
+      >
         Also available from the console: <code>__DF_FIXTURES__.play(&quot;failed&quot;)</code>,{" "}
         <code>.stop()</code>, <code>.list()</code>. The store itself is at <code>__DF_STORE__</code>.
       </Typography>
