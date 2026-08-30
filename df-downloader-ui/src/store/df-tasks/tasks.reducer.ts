@@ -47,6 +47,12 @@ export const taskPipelinesReducer = createReducer(INITIAL_STATE, (builder) => {
           delete state.taskPipelines[pipelineId];
         }
       }
+      // Kept in step with the map, the same way taskPipelineIds is. This was
+      // initialised to [] and then never assigned, so selectTaskIds always
+      // answered "no tasks" however many the service sent - which is why
+      // standalone jobs had selectors and a store entry but never appeared.
+      const taskIds = payload.tasks.map((task) => task.id);
+      state.taskIds = _.isEqual(state.taskIds, taskIds) ? state.taskIds : taskIds;
       for (const newTask of payload.tasks) {
         const currentTask = state.tasks[newTask.id];
         if (!currentTask?.status?.isComplete && newTask.status?.isComplete) {

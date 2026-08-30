@@ -7,15 +7,20 @@ import {
   selectCompletedPipelineIds,
   selectDownloadingPipelineIds,
   selectPostProcessingPipelineIds,
+  selectTaskIds,
 } from "../../store/df-tasks/tasks.selector.ts";
 import { monoFontFamily } from "../../themes/build-theme.ts";
 import { ScheduledDownloadsList } from "./scheduled-downloads-list.component.tsx";
+import { StandaloneTaskInfo } from "./standalone-task-info.component.tsx";
 import { DraggableTaskInfo, DraggableTaskInfoData, TaskInfo } from "./task-info.component.tsx";
 
 export const TaskList = () => {
   const downloadingTasks = useSelector(selectDownloadingPipelineIds);
   const postProcessingTasks = useSelector(selectPostProcessingPipelineIds);
   const completedTasks = useSelector(selectCompletedPipelineIds);
+  // Standalone jobs - a backfill, a batch move - which are tracked separately
+  // from pipelines and so are not covered by any of the groups above.
+  const standaloneTaskIds = useSelector(selectTaskIds);
   const onClearCompleted = () => clearCompletedPipelines().catch((e) => console.error(e));
   const theme = useTheme();
   const belowSm = useMediaQuery(theme.breakpoints.down("sm"));
@@ -34,6 +39,20 @@ export const TaskList = () => {
       <ScheduledDownloadsList />
       <DraggableTaskInfoSet pipelineIds={[...downloadingTasks]} name="Downloads" noTasksMessage="No Download tasks" />
       <TaskInfoSet pipelineIds={postProcessingTasks} name="Post Processing" />
+      {/* After the download groups deliberately: downloads are what this page
+          is for, and a backfill running in the background should not push
+          them down. Before Completed, since these are live work rather than
+          history. */}
+      {standaloneTaskIds.length > 0 && (
+        <Box>
+          <Typography variant="overline">Jobs</Typography>
+          <Stack sx={{ gap: 1, marginTop: 1 }}>
+            {standaloneTaskIds.map((taskId) => (
+              <StandaloneTaskInfo key={taskId} taskId={taskId} />
+            ))}
+          </Stack>
+        </Box>
+      )}
       <TaskInfoSet
         pipelineIds={completedTasks}
         name="Completed"
