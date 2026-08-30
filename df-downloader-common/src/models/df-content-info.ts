@@ -171,9 +171,43 @@ export const DfContentInfoUtils = {
     }
     return "";
   },
+  /**
+   * Asks Digital Foundry's image server for a thumbnail at a given size.
+   *
+   * The size lives in the URL path, and the path shape changed when DF left
+   * their old host: thumbnails are now `/media/<id>/<W>x<H>.jpg`, where they
+   * used to be `/thumbnail/<W>x<H>/...`. Only the old shape was ever matched
+   * here, so for every thumbnail on the new site this was a silent no-op -
+   * `.replace()` returns the string untouched when the pattern misses, so
+   * every caller asking for a large image received the scraped original and
+   * upscaled it. Every thumbnail in the database is scraped at 300x169, which
+   * is what a request for 1200 wide was actually rendering.
+   *
+   * Both shapes are handled: the old one matches nothing in a migrated
+   * database but costs nothing to keep, and an install carrying older
+   * records is not worth breaking to save a branch.
+   *
+   * Anything else is returned unchanged, which is deliberate rather than a
+   * fallthrough - a YouTube thumbnail and DF's own logo placeholder (served
+   * by a different CDN, sized by query string) both arrive here, and neither
+   * takes a size in its path.
+   *
+   * Confirmed against the live server before relying on it: arbitrary sizes
+   * are honoured exactly, including non-16:9 ones. 1200x600 comes back as a
+   * true 2:1 crop and 400x400 as a square, rather than a stretch, a 404 or a
+   * fallback image.
+   */
   thumbnailUrlToSize(thumbnailUrl: string, width: number, height?: number) {
     height = height ? height : Math.floor((width * 9) / 16);
-    return (thumbnailUrl || "").replace(/\/thumbnail\/.*\//, `/thumbnail/${width}x${height}/`);
+    if (!thumbnailUrl) {
+      return "";
+    }
+    // Keeps the media id and the extension, replacing only the size segment.
+    const resized = thumbnailUrl.replace(/(\/media\/\d+\/)\d+x\d+(\.[a-z]+)/i, `$1${width}x${height}$2`);
+    if (resized !== thumbnailUrl) {
+      return resized;
+    }
+    return thumbnailUrl.replace(/\/thumbnail\/.*\//, `/thumbnail/${width}x${height}/`);
   },
   getYoutubeThumbnailUrl(
     youtubeVideoId: string,

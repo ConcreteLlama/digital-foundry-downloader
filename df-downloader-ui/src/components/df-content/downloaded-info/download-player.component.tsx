@@ -580,7 +580,16 @@ export const DownloadPlayer = ({
         present. DfThumbnailImage is the component that retries at a lower
         resolution.
       */
-      poster={DfContentInfoUtils.getThumbnailUrl(contentEntry.contentInfo, 1200, 600) || undefined}
+      /*
+        16:9 to match the video behind it. This asked for 1200x600 and was
+        silently handed a 16:9 image anyway - the resize was a no-op against
+        the current URL shape, so every caller got the scraped 300x169
+        original upscaled. Now that the size is honoured, asking for 2:1
+        would produce a poster genuinely shaped differently to the video it
+        stands in for, which is not what it was doing before and not what is
+        wanted.
+      */
+      poster={DfContentInfoUtils.getThumbnailUrl(contentEntry.contentInfo, 1200, 675) || undefined}
       onError={() => {
         // The backstop for an optimistic canPlayType: the element only finds
         // out it cannot decode once it has actually read the file.

@@ -90,6 +90,10 @@ versions:
           - "The file is capped and rotates, so it cannot quietly fill the disk on a long-running install"
         - "Picking items in the Backfill list stays responsive with a few thousand of them, and the list is paged rather than cut short - the selection and the select-all buttons still apply across every page"
       bugfixes:
+        - "Thumbnails are sharp again everywhere they are shown large":
+          - "Every thumbnail was being fetched at 300 pixels wide and then stretched to fit, so anywhere one was shown big - the top of a video's panel, the still behind the player before you press play - it was soft and blocky"
+          - "The app had been asking for a larger image all along; the request was being quietly discarded because it was written for the address format Digital Foundry's old site used, and every thumbnail now comes from the new one"
+          - "Thumbnails are also requested at the resolution your screen actually has, so they are crisp on a phone or a high-resolution monitor rather than only on an ordinary one"
         - "Fixed pop-up panels never reaching the edges of a phone screen":
           - "A band of the page showed down both sides of every dialog, which reads as a misaligned window rather than as deliberate spacing"
           - "The rule meant to make dialogs full width on a phone had been silently overridden since it was written, so this had never once worked"

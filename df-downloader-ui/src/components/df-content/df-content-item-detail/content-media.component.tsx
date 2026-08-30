@@ -193,7 +193,7 @@ export const ContentMedia = ({ contentEntry, onPlayFromReady }: ContentMediaProp
             "&:focus-visible": { outline: "2px solid", outlineColor: "primary.main", outlineOffset: 2 },
           }}
         >
-          <Thumb src={DfContentInfoUtils.getThumbnailUrl(contentInfo, 1200, 600)} alt={contentInfo.title} width="100%" />
+          <Thumb src={DfContentInfoUtils.getThumbnailUrl(contentInfo, 1200, 675)} alt={contentInfo.title} width="100%" />
           <Box
             className="play-overlay"
             sx={{
@@ -220,7 +220,7 @@ export const ContentMedia = ({ contentEntry, onPlayFromReady }: ContentMediaProp
       {active?.kind === "youtube" && contentInfo.youtubeVideoId ? (
         <YouTubeEmbed videoId={contentInfo.youtubeVideoId} width="100%" />
       ) : (
-        <Thumb src={DfContentInfoUtils.getThumbnailUrl(contentInfo, 1200, 600)} alt={contentInfo.title} width="100%" />
+        <Thumb src={DfContentInfoUtils.getThumbnailUrl(contentInfo, 1200, 675)} alt={contentInfo.title} width="100%" />
       )}
       {switcher}
       {playerDialog}
