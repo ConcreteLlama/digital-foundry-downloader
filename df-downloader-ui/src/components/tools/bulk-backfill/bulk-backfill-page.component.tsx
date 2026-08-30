@@ -75,6 +75,9 @@ export const BulkBackfillPage = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [filterText, setFilterText] = useState("");
+  // Narrowing to what still needs doing is the common case - the list is
+  // otherwise mostly rows that are already done and cannot be actioned.
+  const [onlyNeedsWork, setOnlyNeedsWork] = useState(false);
   const [page, setPage] = useState(0);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [confirmOpen, setConfirmOpen] = useState(false);
@@ -108,15 +111,19 @@ export const BulkBackfillPage = () => {
 
   const filtered = useMemo(() => {
     const needle = filterText.trim().toLowerCase();
-    if (!needle) {
-      return candidates;
+    let list = candidates;
+    if (needle) {
+      list = list.filter((candidate) => candidate.title.toLowerCase().includes(needle));
     }
-    return candidates.filter((candidate) => candidate.title.toLowerCase().includes(needle));
-  }, [candidates, filterText]);
+    if (onlyNeedsWork) {
+      list = list.filter((candidate) => isMissing(candidate, target));
+    }
+    return list;
+  }, [candidates, filterText, onlyNeedsWork, target]);
 
   useEffect(() => {
     setPage(0);
-  }, [filterText, target]);
+  }, [filterText, target, onlyNeedsWork]);
 
   const pageCount = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
   // Clamped rather than reset: narrowing the filter can leave the current
@@ -264,6 +271,17 @@ export const BulkBackfillPage = () => {
               onChange={(event) => setFilterText(event.target.value)}
               sx={{ maxWidth: 260, flex: "1 1 180px" }}
             />
+            <FormControlLabel
+              control={
+                <Switch
+                  size="small"
+                  checked={onlyNeedsWork}
+                  onChange={(event) => setOnlyNeedsWork(event.target.checked)}
+                />
+              }
+              label="Needs work only"
+              sx={{ marginLeft: 0, "& .MuiFormControlLabel-label": { fontSize: "0.8125rem" } }}
+            />
             <Button
               size="small"
               variant="outlined"
@@ -277,6 +295,24 @@ export const BulkBackfillPage = () => {
               onClick={() => setSelected(new Set(filtered.map((candidate) => candidate.contentKey)))}
             >
               Select all ({filtered.length})
+            </Button>
+            <Button
+              size="small"
+              disabled={visible.length === 0}
+              // Adds rather than replaces: selection deliberately accumulates
+              // across pages, so this is for building one up a page at a time
+              // where the two buttons above act on the whole filtered set.
+              onClick={() =>
+                setSelected((previous) => {
+                  const next = new Set(previous);
+                  for (const candidate of visible) {
+                    next.add(candidate.contentKey);
+                  }
+                  return next;
+                })
+              }
+            >
+              Select page ({visible.length})
             </Button>
             <Button size="small" disabled={selected.size === 0} onClick={() => setSelected(new Set())}>
               Clear

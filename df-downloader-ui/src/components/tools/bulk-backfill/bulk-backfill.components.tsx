@@ -12,6 +12,7 @@ import {
   DialogTitle,
   Stack,
   Typography,
+  useMediaQuery,
 } from "@mui/material";
 import {
   BulkBackfillCandidate,
@@ -103,6 +104,67 @@ type BackfillRowProps = {
  * `selected` is a boolean rather than the selection Set, whose identity
  * changes on every toggle and would defeat the comparison entirely.
  */
+const StatusChip = ({ status }: { status: ReturnType<typeof statusFor> }) => (
+  <Chip
+    size="small"
+    variant="outlined"
+    label={status.label}
+    sx={{
+      height: 20,
+      fontSize: "0.68rem",
+      flexShrink: 0,
+      ...(status.tone === "done"
+        ? { color: "success.main", borderColor: "success.main" }
+        : status.tone === "waiting"
+          ? { color: "text.disabled" }
+          : { color: "warning.main", borderColor: "warning.main" }),
+    }}
+  />
+);
+
+/**
+ * The same row, stacked, for a phone.
+ *
+ * Four columns with a 200px minimum on the title cannot fit a handset, so
+ * the grid was scrolling sideways and the status chip - the thing you are
+ * scanning the list for - sat off the edge. Stacked, the title gets the
+ * width and the date and status sit under it where they are still visible.
+ *
+ * Memoised for the same reason the grid row is: the article target lists
+ * thousands of rows and the parent re-renders on every tick of a checkbox.
+ */
+const BackfillStackedRow = memo(({ candidate, target, selected, onToggle }: BackfillRowProps) => {
+  const status = statusFor(candidate, target);
+  return (
+    <Stack
+      direction="row"
+      spacing={1}
+      sx={{ alignItems: "flex-start", paddingY: 0.75, borderBottom: 1, borderColor: "divider" }}
+    >
+      <Checkbox
+        size="small"
+        checked={selected}
+        disableRipple
+        onChange={(event) => onToggle(candidate.contentKey, event.target.checked)}
+        inputProps={{ "aria-label": `Select ${candidate.title}` }}
+        sx={{ padding: 0.5, marginTop: "-2px" }}
+      />
+      <Box sx={{ minWidth: 0, flex: "1 1 auto" }}>
+        <Typography variant="body2" sx={{ lineHeight: 1.3 }}>
+          {candidate.title}
+        </Typography>
+        <Stack direction="row" spacing={1} sx={{ alignItems: "center", marginTop: 0.5 }}>
+          <Typography variant="caption" sx={{ color: "text.disabled", fontFamily: monoFontFamily }}>
+            {conciseFormatDate(candidate.publishedDate)}
+          </Typography>
+          <StatusChip status={status} />
+        </Stack>
+      </Box>
+    </Stack>
+  );
+});
+BackfillStackedRow.displayName = "BackfillStackedRow";
+
 const BackfillRow = memo(({ candidate, target, selected, onToggle }: BackfillRowProps) => {
   const status = statusFor(candidate, target);
   return (
@@ -128,20 +190,7 @@ const BackfillRow = memo(({ candidate, target, selected, onToggle }: BackfillRow
         </Typography>
       </GridCell>
       <GridCell>
-        <Chip
-          size="small"
-          variant="outlined"
-          label={status.label}
-          sx={{
-            height: 20,
-            fontSize: "0.68rem",
-            ...(status.tone === "done"
-              ? { color: "success.main", borderColor: "success.main" }
-              : status.tone === "waiting"
-                ? { color: "text.disabled" }
-                : { color: "warning.main", borderColor: "warning.main" }),
-          }}
-        />
+        <StatusChip status={status} />
       </GridCell>
     </GridRow>
   );
@@ -163,6 +212,22 @@ const BACKFILL_COLUMNS: ColumnInfo[] = [
 ];
 
 export const BackfillTable = ({ candidates, target, selected, onToggle }: BackfillTableProps) => {
+  const stacked = useMediaQuery("(max-width:899.95px)");
+  if (stacked) {
+    return (
+      <Box>
+        {candidates.map((candidate) => (
+          <BackfillStackedRow
+            key={candidate.contentKey}
+            candidate={candidate}
+            target={target}
+            selected={selected.has(candidate.contentKey)}
+            onToggle={onToggle}
+          />
+        ))}
+      </Box>
+    );
+  }
   return (
     <GridTable columns={BACKFILL_COLUMNS}>
       {candidates.map((candidate) => (
