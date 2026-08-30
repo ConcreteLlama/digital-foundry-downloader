@@ -34,10 +34,20 @@ import { scanForNewArticles, walkArticleArchive } from "./utils/df-articles/arti
  * Not for the archive scan's sake - start() awaits that before it arms
  * this loop at all. It is for what follows the scan and is not awaited:
  * the deferred metadata refresh, the existing-file scan, and the content
- * poll loop's deliberately-immediate first tick, all of which want the
- * request queue more urgently than this does.
+ * poll loop's deliberately-immediate first tick.
+ *
+ * Short, because the queue is what actually arbitrates this: article work is
+ * queued at BACKGROUND priority and anything more urgent goes ahead of it
+ * regardless of who asked first. This was five minutes, which yielded
+ * nothing a priority already yields - and the work it was deferring to can
+ * run for hours, so waiting five minutes and then queueing behind it is the
+ * same outcome as queueing behind it immediately.
+ *
+ * What the delay is still worth: letting the process finish coming up before
+ * it starts asking for things. Sign-in is settled before these loops are
+ * registered, so half a minute covers it.
  */
-const ARTICLE_SCAN_STARTUP_DELAY_MS = 5 * 60 * 1000;
+const ARTICLE_SCAN_STARTUP_DELAY_MS = 30 * 1000;
 import { ContentInfoWithAvailability, DfDownloaderOperationalDb, DownloadInfoWithName } from "./db/df-operational-db.js";
 import { forEachListingPage, fetchContentInfo, DfFetchOpts } from "./df-fetcher.js";
 import { DfFetchPriority } from "./df-request-queue.js";
@@ -84,6 +94,7 @@ export class DigitalFoundryContentManager {
    * most of them anyway (see scanWholeArchive's `legacy` handling).
    */
   private startupScanComplete = false;
+  private startupScanCompleteWaiters: (() => void)[] = [];
   private pendingStartupMetaRefresh = new Set<string>();
   /**
    * Re-entrancy lock for scanWholeArchive() specifically (metaFetchesInProgress
@@ -224,7 +235,7 @@ export class DigitalFoundryContentManager {
         "Not scanning Digital Foundry - no valid autologin cookie configured (or account isn't a subscriber). Configure it in Settings > Digital Foundry."
       );
     }
-    this.startupScanComplete = true;
+    this.markStartupScanComplete();
     await this.flushPendingMetaRefresh();
     if (contentManagementConfig.scanForExistingFiles) {
       const scanTask = this.taskManager.scanForExistingContent(this);
@@ -319,10 +330,44 @@ export class DigitalFoundryContentManager {
    * actually got a real IP banned during testing - see DfUserManager's
    * schedulePeriodicRecheck doc comment.
    */
+  private markStartupScanComplete() {
+    this.startupScanComplete = true;
+    const waiters = this.startupScanCompleteWaiters;
+    this.startupScanCompleteWaiters = [];
+    for (const waiter of waiters) {
+      waiter();
+    }
+  }
+
+  /**
+   * Resolves once the archive scan has finished, or immediately if it
+   * already has.
+   *
+   * The periodic loops are registered before the long startup work so they
+   * cannot be lost behind it, but registering is not the same as being ready
+   * to run: articles are filed against content by video id, so an article
+   * pass that overtakes the archive scan reads a week of articles against a
+   * half-populated library, fails to match them, and advances its watermark
+   * past them regardless. They would then only ever be found by the
+   * per-video lookup someone triggers by hand.
+   *
+   * This waits for the scan and nothing more. It deliberately does not wait
+   * for the metadata refresh or the existing-files scan, which is the
+   * distinction that matters: those can run for hours, and waiting on them
+   * is what stopped the loops running at all.
+   */
+  private whenStartupScanComplete(): Promise<void> {
+    if (this.startupScanComplete) {
+      return Promise.resolve();
+    }
+    return new Promise<void>((resolve) => this.startupScanCompleteWaiters.push(resolve));
+  }
+
   private startContentPollLoop() {
     const { contentCheckInterval } = configService.config.contentDetection;
     logger.log("info", `Checking for new Digital Foundry content every ${contentCheckInterval}ms while signed in`);
     const runCheck = async () => {
+      await this.whenStartupScanComplete();
       if (!this.dfUserManager.isUserSignedIn()) {
         return;
       }
@@ -375,6 +420,7 @@ export class DigitalFoundryContentManager {
     }
     logger.log("info", `Checking for new Digital Foundry articles every ${config.scanInterval}ms while signed in`);
     const runScan = async () => {
+      await this.whenStartupScanComplete();
       if (!this.dfUserManager.isUserSignedIn()) {
         return;
       }
@@ -413,6 +459,7 @@ export class DigitalFoundryContentManager {
       `Working backwards through older articles every ${config.archiveWalkInterval}ms, up to ${config.archiveWalkPerRun} at a time`
     );
     const runWalk = async () => {
+      await this.whenStartupScanComplete();
       if (!this.dfUserManager.isUserSignedIn()) {
         return;
       }
