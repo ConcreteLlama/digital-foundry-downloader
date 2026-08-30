@@ -34,10 +34,16 @@ export const makeApiRouter = (contentManager: DigitalFoundryContentManager, jwtM
   router.use("/ai-analysis", authenticateMiddleware(jwtManager), makeAiAnalysisRouter(contentManager));
   router.use("/backfill", authenticateMiddleware(jwtManager), makeBackfillRouter(contentManager));
   router.use("/logs", authenticateMiddleware(jwtManager), makeLogsRouter());
-  // Serves the bytes of already-downloaded files for in-app playback. Same
-  // auth as everything else - a <video src> is a plain GET, so the cookie
-  // rides along, including on the range requests the browser makes itself.
-  router.use("/playback", authenticateMiddleware(jwtManager), makePlaybackRouter(contentManager));
+  /*
+    Serves the bytes of already-downloaded files for in-app playback.
+
+    The only router here without a blanket authenticateMiddleware, and
+    deliberately so: a cast receiver is a separate device with no session
+    cookie, so the two routes that serve bytes have to accept a signed URL
+    as well. Rather than exempting the whole router, it authenticates per
+    route - see rest/api/playback.ts and rest/auth/cast-url-signing.ts.
+  */
+  router.use("/playback", makePlaybackRouter(contentManager, jwtManager));
   // Single multiplexed SSE stream for every push channel - see
   // realtime/stream-broadcaster.ts. Same auth as everything else; an
   // EventSource request is a plain GET, so the cookie rides along.

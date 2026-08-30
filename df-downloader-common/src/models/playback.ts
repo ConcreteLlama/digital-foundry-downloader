@@ -81,3 +81,42 @@ export const PlaybackInfo = z.object({
   embeddedSubtitlesOnly: z.boolean(),
 });
 export type PlaybackInfo = z.infer<typeof PlaybackInfo>;
+
+/**
+ * A subtitle track a cast receiver can fetch for itself.
+ *
+ * Same track as PlaybackSubtitleTrack, plus the absolute signed URL - a
+ * receiver is a separate device with no session and no way to resolve a
+ * relative path against the browser that sent it.
+ */
+export const CastSubtitleTrack = PlaybackSubtitleTrack.extend({
+  url: z.string(),
+});
+export type CastSubtitleTrack = z.infer<typeof CastSubtitleTrack>;
+
+/**
+ * Everything needed to hand one download to a cast receiver.
+ *
+ * Minted only when Cast is actually pressed, never alongside ordinary
+ * playback: every URL in here is a bearer capability for that one file
+ * until it expires, so producing one is a deliberate act rather than
+ * something that happens because a page loaded.
+ *
+ * The URLs are absolute and built server-side. The receiver fetches them
+ * from its own position on the network, so the address the browser happens
+ * to have used is not necessarily one the receiver can reach.
+ */
+export const CastPlaybackUrls = z.object({
+  contentKey: z.string(),
+  /** What the receiver shows on screen while playing. */
+  title: z.string(),
+  streamUrl: z.string(),
+  mimeType: z.string(),
+  videoCodec: PlaybackVideoCodec,
+  durationSeconds: z.number().optional(),
+  thumbnailUrl: z.string().optional(),
+  subtitleTracks: z.array(CastSubtitleTrack),
+  /** Epoch milliseconds. The UI warns rather than failing silently. */
+  expiresAt: z.number(),
+});
+export type CastPlaybackUrls = z.infer<typeof CastPlaybackUrls>;

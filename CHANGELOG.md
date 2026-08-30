@@ -74,6 +74,13 @@ Downloads also play in the app itself now. Open a video you have already downloa
 - Subtitles in the player
   - The .srt kept alongside a video is offered in the player's own captions menu, converted on the way out since browsers cannot read .srt directly
   - Subtitles embedded into the video instead cannot be shown - no browser can read subtitles back out of a video file. Rather than simply having no captions, the player explains why, and generating them again with the separate-.srt output is the way to get them
+- Cast a downloaded video to a TV
+  - A Cast button on the player sends the file to a Chromecast or Android TV on your network, picking up from wherever you had got to rather than starting again
+  - Subtitles go with it, and the video's title and thumbnail show on the TV while it plays
+  - The button only appears when there is somewhere to send it - casting from the browser needs Chrome or Edge on a desktop, and there has to be a device switched on
+  - Your cast device fetches the video directly from this app, so it needs an address on your network it can actually reach. If it cannot work one out it says so rather than failing silently on the TV - set a public address under Settings then REST API if that happens
+  - Casting does not weaken the sign-in on anything else. Pressing Cast creates a link to that one file, good for six hours, and it is the only thing a cast device is ever given - long enough that a link cannot expire midway through a Direct, and useless for reaching anything else
+  - Very old cast devices cannot decode HEVC video, which most 4K downloads use. Where that is the problem it is named as the likely cause instead of leaving a black screen on the TV with no explanation
 - An honest answer when a file will not play
   - Instead of a black rectangle you are told this machine has no decoder for the video, along with where the file is, so you can open it in a real player or through your media server
   - The check asks your browser what it can actually decode rather than assuming from the format, so an HEVC download is not refused on a machine that plays it perfectly well

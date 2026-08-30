@@ -7,6 +7,7 @@ import { Chapter, DfContentEntry, DfContentInfoUtils, PlaybackInfo, secondsToHHM
 import { DfContentDownloadInfo } from "df-downloader-common/models/df-content-download-info";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AnalysisJump } from "../ai-analysis/analysis-jumps.ts";
+import { CastButton } from "./cast-button.component.tsx";
 import { rememberPlaybackPosition, rememberedPlaybackPosition } from "./playback-positions.ts";
 import { apiIsCrossOrigin, getPlaybackInfo, playbackStreamUrl, playbackSubtitlesUrl } from "../../../api/playback.ts";
 import { useQuery } from "../../../hooks/use-query.ts";
@@ -715,6 +716,17 @@ export const DownloadPlayer = ({
       }}
     >
       {videoElement}
+      {/* Not while immersive: the two buttons up there are already the exit
+          and the timeline, and casting is a thing you do instead of watching
+          here rather than while filling this screen. */}
+      {!immersive && (
+        <CastButton
+          contentEntry={contentEntry}
+          download={download}
+          currentSeconds={positionSeconds}
+          videoCodec={info.videoCodec}
+        />
+      )}
       {canImmerse && !immersiveRefused && (
         <Tooltip title={immersive ? "Leave full screen" : "Full screen - tap the picture for the timeline"}>
           <IconButton
