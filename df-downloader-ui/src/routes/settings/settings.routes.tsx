@@ -1,4 +1,5 @@
 import CodeIcon from "@mui/icons-material/Code";
+import SubjectIcon from "@mui/icons-material/Subject";
 import PaletteIcon from "@mui/icons-material/Palette";
 import DataObjectIcon from "@mui/icons-material/DataObject";
 import DownloadIcon from "@mui/icons-material/Download";
@@ -22,6 +23,7 @@ import { NotificationSettingsForm } from "../../components/settings/notification
 import ArticleIcon from "@mui/icons-material/Article";
 import { AiAnalysisSettingsForm } from "../../components/settings/ai-analysis-settings-form.component";
 import { DfArticlesSettingsForm } from "../../components/settings/df-articles-settings-form.component";
+import { LoggingSettingsForm } from "../../components/settings/logging-settings-form.component";
 import { SubtitlesSettingsForm } from "../../components/settings/subtitles-settings-form.component";
 import { DfLogoIcon } from "../../icons/df-logo.component";
 import { NestedSubRoute } from "../nav/nested-routes.ts";
@@ -97,6 +99,12 @@ export const settingsRouteDefinitions: NestedSubRoute = {
       element: <NotificationSettingsForm />,
       name: "Notifications",
       icon: NotificationsIcon,
+    },
+    {
+      path: "/settings/logging",
+      element: <LoggingSettingsForm />,
+      name: "Logging",
+      icon: SubjectIcon,
     },
     {
       path: "/settings/appearance",
