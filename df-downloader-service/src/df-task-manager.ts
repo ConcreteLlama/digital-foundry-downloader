@@ -116,7 +116,7 @@ export class DfTaskManager {
    * concurrency number on the shared one - which would only raise the
    * item count needed to deadlock.
    */
-  readonly bulkOperationsTaskManager: TaskManager;
+  readonly bulkOperationsTaskManagers: Record<BulkBackfillTarget, TaskManager>;
 
   readonly pipelineExecutions = new Map<string, PipelineExecutionTypes>();
   readonly tasks = new Map<string, ManagedTask<any, any>>();
@@ -204,13 +204,29 @@ export class DfTaskManager {
     this.maintenanceOperationsTaskManager = new TaskManager({
       concurrentTasks: 1,
     });
-    this.bulkOperationsTaskManager = new TaskManager({
-      // One run at a time is still right - each already limits its own
-      // per-item concurrency, and two bulk runs would fight over the same
-      // request queue and CPU. The point of the separation is that this
-      // slot is not one the work it awaits also needs.
-      concurrentTasks: 1,
-    });
+    /*
+      One slot per kind of bulk run, rather than one slot for all of them.
+
+      A single shared slot was justified on the grounds that two bulk runs
+      would fight over the same request queue and CPU - but that is precisely
+      what these do not share. Matching articles is bound by the Digital
+      Foundry request queue and spends nearly all its time waiting on it;
+      generating subtitles is local Whisper and is bound by CPU; analysing is
+      bound by the Anthropic API. Three different resources, so a
+      whole-library article run - hours of deliberately spaced requests - was
+      blocking a transcription run that needed none of what it was holding.
+
+      Keeping each target to one run at a time still prevents the contention
+      the single slot was really protecting against: two Whisper runs
+      competing for cores, or two article runs queueing against each other.
+      Access to Digital Foundry is paced centrally by the request queue in
+      any case (see df-request-queue.ts), so that resource was never the one
+      this slot was protecting.
+    */
+    this.bulkOperationsTaskManagers = BulkBackfillTarget.options.reduce((managers, target) => {
+      managers[target] = new TaskManager({ concurrentTasks: 1 });
+      return managers;
+    }, {} as Record<BulkBackfillTarget, TaskManager>);
     this.aiAnalysisTaskPipeline = createAiAnalysisTaskPipeline({
       aiAnalysisTaskManager,
       storageTaskManager: this.maintenanceOperationsTaskManager,
@@ -547,7 +563,7 @@ export class DfTaskManager {
    * see stillNeedsWork in bulk-backfill-task.ts.
    */
   bulkBackfill(contentKeys: string[], target: BulkBackfillTarget, force: boolean, language: string) {
-    const task = this.bulkOperationsTaskManager.addTask(
+    const task = this.bulkOperationsTaskManagers[target].addTask(
       BulkBackfillTask(
         contentKeys.map((contentKey) => ({ contentKey })),
         {
