@@ -78,7 +78,9 @@ export const buildOverviewInstruction = (config: AiAnalysisConfig): string => {
   if (config.features.summary) {
     sections.push(
       `Write a detailed summary: name the specific numbers, settings, platforms and verdicts the video gives, rather than describing it in general terms. "Performance was better on PS5 Pro" is a bad summary; "PS5 Pro holds 60fps in the mode where the base PS5 drops to the low 50s" is a good one.`,
-      `Write the conclusion - the overall verdict or takeaway - as a separate field from the summary, not folded into it. Set it to null if the video genuinely does not reach one; hands-on previews in particular often say outright that it is too early to judge, and when they do, null is the honest answer.`
+      `Write the conclusion - the overall verdict or takeaway - as a separate field from the summary, not folded into it. Set it to null if the video genuinely does not reach one; hands-on previews in particular often say outright that it is too early to judge, and when they do, null is the honest answer.`,
+      `Break the summary into short paragraphs, separated by a blank line, one per distinct point. A single unbroken block is hard to read at any length, and these are read on a phone as often as not.`,
+      `Where the classification you just made means a structured breakdown gets extracted separately - the per-platform table for a comparison, the settings list for a PC review, the topic-by-topic breakdown for a discussion show - say what the video covers and what it concludes, and leave the item-by-item detail to that breakdown. It is displayed beside this summary, so walking through every topic again in prose produces a wall of text restating what the reader can already see.`
     );
   } else {
     sections.push(`Set summary and conclusion to null - summarising is switched off.`);

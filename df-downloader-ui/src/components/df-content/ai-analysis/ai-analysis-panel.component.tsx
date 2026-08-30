@@ -420,7 +420,11 @@ export const AiAnalysisPanel = ({ contentKey, enabled, onHasContent }: AiAnalysi
       {result.summary && (
         <Box>
           <SectionLabel>Summary</SectionLabel>
-          <Typography variant="body2" sx={{ mt: 0.5 }}>
+          {/* Summaries are written as paragraphs, and HTML collapses the
+              breaks between them by default - the same reason the content
+              description sets this. Without it a multi-paragraph summary
+              renders as one unbroken block. */}
+          <Typography variant="body2" sx={{ mt: 0.5, whiteSpace: "pre-line" }}>
             {result.summary}
           </Typography>
         </Box>
@@ -432,7 +436,7 @@ export const AiAnalysisPanel = ({ contentKey, enabled, onHasContent }: AiAnalysi
           sx={{ p: 1.5, borderLeft: 3, borderLeftColor: "primary.main", bgcolor: "background.default" }}
         >
           <SectionLabel>Verdict</SectionLabel>
-          <Typography variant="body2" sx={{ mt: 0.5 }}>
+          <Typography variant="body2" sx={{ mt: 0.5, whiteSpace: "pre-line" }}>
             {result.conclusion}
           </Typography>
         </Paper>
