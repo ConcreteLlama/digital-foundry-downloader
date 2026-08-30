@@ -222,6 +222,12 @@ export const DfContentInfoItemDetail = ({ dfContentName, onClose }: DfContentInf
    * mounted. Held in a ref rather than state because nothing renders
    * differently for having it - it is only ever called.
    */
+  // Below md the grid is one column whatever the stored preference says, so
+  // the media has nowhere else to live and needs a tab of its own. Declared
+  // here because the jump handler below has to know whether the video is
+  // on screen already.
+  const stacked = belowMd || layout === "stacked";
+
   const seekRef = useRef<((startMs: number) => void) | null>(null);
   const onSeekReady = useCallback((seek: (startMs: number) => void) => {
     seekRef.current = seek;
@@ -240,10 +246,16 @@ export const DfContentInfoItemDetail = ({ dfContentName, onClose }: DfContentInf
       if (!seekRef.current) {
         return;
       }
-      setTab((current) => (current === "analysis" || current === "article" ? "content" : current));
+      // Only when the media is actually behind a tab. Side by side it is
+      // already on screen, and there is no Content tab to switch to - asking
+      // for one there fell through to the first tab instead, so clicking a
+      // timestamp bounced the reader off the analysis they were reading.
+      if (stacked) {
+        setTab("content");
+      }
       seekRef.current(seconds * 1000);
     },
-    []
+    [stacked]
   );
 
   const [hasAnalysis, setHasAnalysis] = useState(false);
@@ -255,7 +267,6 @@ export const DfContentInfoItemDetail = ({ dfContentName, onClose }: DfContentInf
 
   // Below md the grid is one column whatever the stored preference says,
   // so the media has nowhere else to live and needs a tab of its own.
-  const stacked = belowMd || layout === "stacked";
   const downloadCount = dfContentEntry?.downloads.length ?? 0;
 
   const tabs = useMemo(() => {
