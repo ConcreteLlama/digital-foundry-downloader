@@ -324,15 +324,11 @@ export const DownloadPlayer = ({
       const active = document.fullscreenElement === stageRef.current;
       setImmersive(active);
       /*
-        Shown on the way in, hidden on the way out.
-
-        It started hidden, waiting for a tap. That is the right resting state
-        once you know it is there, and completely undiscoverable before -
-        full screen just looked like ordinary full screen. Showing it once on
-        entry is what tells you the timeline is available at all; the first
-        tap then dismisses it.
+        Full screen starts as full screen - just the video. The timeline is a
+        tap away, and the button over the picture is what says so, which is
+        what auto-opening the panel was standing in for.
       */
-      setOverlayOpen(active);
+      setOverlayOpen(false);
     };
     document.addEventListener("fullscreenchange", onFullscreenChange);
     return () => document.removeEventListener("fullscreenchange", onFullscreenChange);
@@ -696,8 +692,16 @@ export const DownloadPlayer = ({
             top: 0,
             right: 0,
             bottom: 0,
-            width: { xs: "100%", sm: 420 },
-            maxWidth: "100%",
+            /*
+              Never the full width, so there is always picture left to tap.
+
+              Tapping the video toggles this panel, which only works while
+              some video is reachable - at full width every tap landed on the
+              panel, which stops taps so they do not fall through to the
+              video, and the gesture that opened it could not close it.
+            */
+            width: { xs: "78%", sm: 420 },
+            maxWidth: "78%",
             overflowY: "auto",
             padding: 2,
             // Clear of the buttons floating over its top-right corner.
