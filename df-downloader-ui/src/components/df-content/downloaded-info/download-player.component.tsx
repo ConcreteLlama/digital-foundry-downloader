@@ -78,6 +78,15 @@ export type DownloadPlayerProps = {
    * discarding everything you watched in it.
    */
   positionResyncKey?: number;
+  /**
+   * Announces entering and leaving full screen.
+   *
+   * The host needs this to stop its layout changing underneath: going full
+   * screen resizes the viewport, which can flip a media query, which can
+   * swap this component to a different layout branch - remounting the very
+   * element that is currently full screen.
+   */
+  onImmersiveChange?: (immersive: boolean) => void;
 };
 
 /**
@@ -309,6 +318,7 @@ export const DownloadPlayer = ({
   onSeekReady,
   onPauseReady,
   positionResyncKey,
+  onImmersiveChange,
 }: DownloadPlayerProps) => {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const [positionSeconds, setPositionSeconds] = useState(0);
@@ -362,6 +372,12 @@ export const DownloadPlayer = ({
     document.addEventListener("fullscreenchange", onFullscreenChange);
     return () => document.removeEventListener("fullscreenchange", onFullscreenChange);
   }, []);
+
+  // Separate from the listener above so the callback is never captured stale
+  // by an effect that only runs once.
+  useEffect(() => {
+    onImmersiveChange?.(immersive);
+  }, [immersive, onImmersiveChange]);
   const [playbackError, setPlaybackError] = useState<string | null>(null);
   // Captions are turned on once per file, not on every render - otherwise
   // switching them off in the player's own menu would be undone immediately.
@@ -597,16 +613,18 @@ export const DownloadPlayer = ({
       */
       preload={autoPlay ? "auto" : "none"}
       /*
-        Hides the control bar's own fullscreen button, leaving ours as the
-        only one.
+        The control bar keeps its own fullscreen button, deliberately.
 
-        The native button fullscreens the video element itself, which the
-        browser hands to a surface nothing can be drawn over - so it silently
-        produces a full screen with no timeline, sitting a few pixels from
-        the button that does. Two buttons that look like they do the same
-        thing and do not is worse than one.
+        It was hidden with controlsList for a while, to leave ours as the
+        only one - that button fullscreens the video element itself, which
+        the browser hands to a surface nothing can be drawn over, so it
+        silently produces a full screen with no timeline. But setting
+        controlsList also switches off Chrome's click-the-picture-to-pause,
+        measured directly: same click, same spot, playing throughout with the
+        attribute set and paused without it. Losing the ordinary way to pause
+        a video is a far worse trade than having two fullscreen buttons that
+        do slightly different things.
       */
-      controlsList={canImmerse && !immersiveRefused ? "nofullscreen" : undefined}
       /*
         Only when the API really is on another origin - see apiIsCrossOrigin.
         Setting this unconditionally also forces the poster through CORS, and

@@ -5,7 +5,7 @@ import { Box, Dialog, DialogContent, DialogTitle, IconButton, Stack, Tooltip, Ty
 import useMediaQuery from "@mui/material/useMediaQuery";
 import { DfContentEntry } from "df-downloader-common";
 import { DfContentDownloadInfo } from "df-downloader-common/models/df-content-download-info";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { monoFontFamily } from "../../../themes/build-theme";
 import { useAnalysisJumps } from "../ai-analysis/analysis-jumps.ts";
 import { DownloadPlayer } from "./download-player.component.tsx";
@@ -51,6 +51,19 @@ export const VideoPlayerDialog = ({ contentEntry, download, open, onClose }: Vid
   const [theater, setTheater] = useState(true);
 
   /*
+    The layout is held still while the player is full screen.
+
+    Going full screen resizes the viewport, which flips the query above, which
+    swaps the player between its stacked and theater branches - and those are
+    different element trees, so the stage that is currently full screen gets
+    unmounted out from under the browser. What that looked like was pressing
+    full screen, getting full screen, and being shown the *enter* button again
+    with no timeline overlay; pressing it a second time then worked, because
+    by then the layout had settled.
+  */
+  const [playerImmersive, setPlayerImmersive] = useState(false);
+
+  /*
     Back to theater every time it is opened.
 
     This dialog stays mounted and only gates its contents on `open`, so the
@@ -64,7 +77,14 @@ export const VideoPlayerDialog = ({ contentEntry, download, open, onClose }: Vid
       setTheater(true);
     }
   }, [open]);
-  const inTheater = theater && roomForTheater;
+  const preferredLayout = theater && roomForTheater;
+  // Written during render deliberately: reading it back an effect later would
+  // be one render too late, and that render is the one that does the damage.
+  const layoutWhileImmersive = useRef(preferredLayout);
+  if (!playerImmersive) {
+    layoutWhileImmersive.current = preferredLayout;
+  }
+  const inTheater = playerImmersive ? layoutWhileImmersive.current : preferredLayout;
 
   // Only while open: a closed dialog is not worth a request, and the one
   // that matters is made the moment it opens.
@@ -137,6 +157,7 @@ export const VideoPlayerDialog = ({ contentEntry, download, open, onClose }: Vid
             // player renders the timeline in both layouts, so "alongside or
             // below" falls out of the layout choice already being made.
             analysisJumps={jumps}
+            onImmersiveChange={setPlayerImmersive}
           />
         )}
       </DialogContent>
