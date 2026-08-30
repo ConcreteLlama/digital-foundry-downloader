@@ -70,10 +70,24 @@ const DfArticlesSettings = () => {
                assumption of a long crawl on first boot, which is the thing
                this was built not to do. */
             <Alert severity="info" variant="outlined">
-              Reads one index and up to the limit above per check, picking up where it left off, so the archive is
-              covered over days of ordinary running rather than in one go. It stops by itself once it has been through
-              everything.
+              Reads one index and up to the limit below per pass, picking up where it left off, so the archive is
+              covered over a couple of days of ordinary running rather than in one go. Requests are spaced out and
+              anything you do yourself takes priority, and it stops by itself once it has been through everything.
             </Alert>
+          )}
+          {archiveWalkEnabled && (
+            <>
+              <ZodNumberField
+                name="archiveWalkPerRun"
+                label="Older articles to read per pass"
+                zodNumber={DfArticlesConfig.shape.archiveWalkPerRun}
+              />
+              <ZodNumberField
+                name="archiveWalkInterval"
+                label="Pass through older articles every (ms)"
+                zodNumber={DfArticlesConfig.shape.archiveWalkInterval}
+              />
+            </>
           )}
         </>
       )}

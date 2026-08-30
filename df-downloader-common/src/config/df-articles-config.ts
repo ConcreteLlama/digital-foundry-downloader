@@ -84,6 +84,32 @@ export const DfArticlesConfig = z.object({
    * so a decade of archive is read over days of ordinary running rather than
    * in one sitting. It stops on its own once it reaches the far end.
    */
+  /**
+   * The walk's own budget, separate from the forward scan's.
+   *
+   * Sharing the forward scan's numbers made this uselessly slow: 25 articles
+   * on a twelve-hour tick is 50 a day, and the 2026 index alone held 377
+   * unread - so a full archive would have taken months. The two jobs want
+   * different pacing because they are different sizes. Forward is a handful
+   * a day forever; backwards is a large finite pile that should be got
+   * through and then stop.
+   *
+   * Requests are paced by the shared queue regardless (5-15s apart, and
+   * anything you do yourself jumps ahead of it), so this bounds how much
+   * work each tick queues rather than how fast it is allowed to go.
+   */
+  archiveWalkPerRun: z
+    .number()
+    .min(1)
+    .default(100)
+    .describe(
+      "The most older articles to read per pass. Requests are spaced out regardless, and anything you do yourself takes priority, so this decides how long the catch-up takes overall rather than how hard it hits the site."
+    ),
+  archiveWalkInterval: z
+    .number()
+    .min(60000)
+    .default(3600000)
+    .describe("How often to do a pass through older articles, while there are still any left to read."),
   archiveWalkEnabled: z
     .boolean()
     .default(true)

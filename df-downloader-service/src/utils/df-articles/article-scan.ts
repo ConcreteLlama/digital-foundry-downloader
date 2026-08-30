@@ -270,11 +270,16 @@ const MAX_EMPTY_YEARS_PER_RUN = 2;
  * was set up. Everything older waited for someone to go and press the
  * backfill tool, which in practice nobody does.
  *
- * Deliberately shaped as a trickle rather than a crawl, because the whole
- * archive is thousands of pages against a site that asks for a five-second
- * crawl delay: one index and at most `maxArticlesPerScan` articles per run,
- * resuming exactly where it stopped, and stopping for good once it reaches
- * the far end.
+ * Paced by its own budget rather than the forward scan's, because the two
+ * jobs are different sizes: forward is a handful a day forever, backwards is
+ * a large finite pile that should be got through and then stop. Sharing the
+ * scan's numbers made it uselessly slow - a full archive would have taken
+ * months. One index and at most `archiveWalkPerRun` articles per run,
+ * resuming exactly where it stopped, and stopping for good at the far end.
+ *
+ * Requests are spaced by the shared queue regardless, and anything the user
+ * does takes priority over this, so the budget decides how long the catch-up
+ * takes rather than how hard it hits the site.
  *
  * Position is a year because the indexes are per-year, so it is both the
  * resume point and the next thing to ask for. The year only advances once
@@ -332,7 +337,8 @@ export const walkArticleArchive = async (
       continue;
     }
 
-    const toRead = unread.slice(0, config.maxArticlesPerScan);
+    // The walk's own budget, not the forward scan's - see archiveWalkPerRun.
+    const toRead = unread.slice(0, config.archiveWalkPerRun);
     result.capped = unread.length > toRead.length;
     logger.log(
       "info",
