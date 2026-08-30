@@ -54,20 +54,41 @@ export const DfArticlesConfig = z.object({
       "The most articles a single check will read. A safety limit rather than a goal - anything beyond it is picked up by the next check."
     ),
   /**
-   * How much history a *first* run considers.
+   * How much history a *first* run considers, going forwards.
    *
-   * Small on purpose. A fresh install has an empty cursor, and without
-   * this the first tick would treat the site's entire back catalogue as
-   * new. Going backwards through history is what the backfill tool is
-   * for, where it is an explicit choice with a stated cost, rather than
-   * something that happens quietly on first boot.
+   * Small on purpose: a fresh install has an empty cursor, and without this
+   * the first tick would treat the site's entire back catalogue as new and
+   * fetch it in one go.
+   *
+   * Older articles are not abandoned, they are just approached differently -
+   * see archiveWalkEnabled, which works backwards a capped batch at a time
+   * instead of all at once.
    */
   initialLookbackDays: z
     .number()
     .min(0)
     .default(7)
     .describe(
-      "On a brand-new install, how far back the first check looks. Kept short so setting the app up does not trigger a long crawl - use Tools → Backfill to go through older content deliberately."
+      "On a brand-new install, how far back the first check looks. Kept short so setting the app up does not trigger a long crawl - older articles are picked up gradually instead, see below."
+    ),
+  /**
+   * Whether to work backwards through the archive as well as forwards.
+   *
+   * The forward scan only ever looks at what is newer than its watermark, so
+   * without this an install only gets articles for content published after it
+   * was set up. Everything older needed someone to go and press the backfill
+   * tool, which in practice nobody does.
+   *
+   * Deliberately a slow trickle rather than a crawl: one index and at most
+   * maxArticlesPerScan articles per check, resuming exactly where it stopped,
+   * so a decade of archive is read over days of ordinary running rather than
+   * in one sitting. It stops on its own once it reaches the far end.
+   */
+  archiveWalkEnabled: z
+    .boolean()
+    .default(true)
+    .describe(
+      "Work backwards through older Digital Foundry articles a batch at a time, so content you already have gains its written companion without running the Backfill tool. Uses the same per-check limit above, so it is a trickle rather than a crawl, and stops once it has been through everything."
     ),
 });
 export type DfArticlesConfig = z.infer<typeof DfArticlesConfig>;

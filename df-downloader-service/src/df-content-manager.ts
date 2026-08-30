@@ -26,7 +26,7 @@ import { configService } from "./config/config.js";
 import { AiAnalysisConfig, AiAnalysisConfigUtils } from "df-downloader-common/config/ai-analysis-config.js";
 import { SubtitlesTaskPipelineExecution } from "./task-pipelines/subtitles-task-pipeline.js";
 import { ensureArticleForContent } from "./utils/df-articles/ensure-article.js";
-import { scanForNewArticles } from "./utils/df-articles/article-scan.js";
+import { scanForNewArticles, walkArticleArchive } from "./utils/df-articles/article-scan.js";
 
 /**
  * How long after startup the first article scan waits.
@@ -364,6 +364,21 @@ export class DigitalFoundryContentManager {
         await scanForNewArticles(this.db, configService.config.dfArticles);
       } catch (e) {
         logger.log("error", "Error during scheduled article scan", e);
+      }
+      /*
+        Then a step backwards through the archive, on the same tick.
+
+        Separate try/catch on purpose: the forward scan is the one that keeps
+        an install current, and a problem reading a decade-old index is no
+        reason for it to stop. The walk stops on its own once it has been
+        through everything, and does nothing at all after that.
+      */
+      if (configService.config.dfArticles.archiveWalkEnabled) {
+        try {
+          await walkArticleArchive(this.db, configService.config.dfArticles);
+        } catch (e) {
+          logger.log("error", "Error during article archive walk", e);
+        }
       }
     };
     setTimeout(() => {

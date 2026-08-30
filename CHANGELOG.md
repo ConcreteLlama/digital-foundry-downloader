@@ -35,6 +35,10 @@ Downloads also play in the app itself now. Press the still at the top of a downl
   - Nothing is searched for while you browse. Looking at a video does not go and ask Digital Foundry about it; that only happens when you ask, or when an analysis runs
   - If no article is found that is treated as 'not yet' rather than 'never'. Patreon content is often early access, so the article may simply not be written, and it will look again later
   - A video can have more than one article attached. The piece written about it is the main link; anything that merely includes it - a round-up, a week in review - is listed separately as related reading, and is never used as the source for an analysis, since most of its text is about something else
+- Older articles are picked up on their own too, not just new ones
+  - The app works backwards through Digital Foundry's archive in the background, so videos you downloaded long before setting this up gain their written companion without you going and running the Backfill tool
+  - Deliberately a trickle rather than a crawl: one index and a small batch of articles per check, picking up exactly where it stopped, so a decade of archive is read over days of ordinary running instead of in one sitting
+  - It stops for good once it has been through everything, and can be turned off under Settings then DF Articles
 - New articles are noticed on their own, without searching for each video
   - Digital Foundry's recently published articles are checked periodically and attached to whatever video each is about, so the companion piece turns up on its own when it is written rather than only if you go looking
   - This is cheap in a way that searching per video is not. It reads each new article once instead of asking the site about every video you own, which works out at a handful of requests a day
@@ -89,6 +93,10 @@ Downloads also play in the app itself now. Press the still at the top of a downl
   - Instead of a black rectangle you are told this machine has no decoder for the video, along with where the file is, so you can open it in a real player or through your media server
   - The check asks your browser what it can actually decode rather than assuming from the format, so an HEVC download is not refused on a machine that plays it perfectly well
 ### Enhancements
+- Backfill runs show up on the Activity page, and say what they did
+  - A run appears while it is going, with progress and a stop button, instead of disappearing until it finished
+  - Clicking it shows the breakdown: how many were done, how many already had the thing, how many could never take it, and anything that failed. A run of 300 producing 4 results is unremarkable if 296 already had it, and a real problem if they were skipped for want of a transcript - so those are counted separately
+  - Finished runs join the Completed list with everything else, and are cleared by the same Clear all
 - The backfill list is easier to work through
   - A "needs work only" switch hides everything already done, which is most of the list once you have been through it once
   - "Select page" adds just the page you are looking at, alongside the existing buttons that select the whole filtered set - selection still adds up across pages

@@ -119,6 +119,8 @@ export abstract class DfDownloaderOperationalDb {
   abstract listDfArticleMeta(): (DfArticleMeta & { url: string })[];
   abstract setDfArticleMeta(url: string, meta: DfArticleMeta): void;
   /** How far the periodic article scan has read. Undefined until it first runs. */
+  abstract getDfArticleArchiveWalkState(): { year?: number; complete: boolean };
+  abstract setDfArticleArchiveWalkState(state: { year?: number; complete?: boolean }): Promise<void>;
   abstract getDfArticleScanCursor(): Date | undefined;
   abstract setDfArticleScanCursor(cursor: Date): Promise<void>;
   protected abstract doQuery(params: DfContentInfoQueryParams): Promise<DfDbQueryResult>;

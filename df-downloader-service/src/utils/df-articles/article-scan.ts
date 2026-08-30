@@ -244,3 +244,124 @@ const fileAgainstLibrary = async (
   }
   return counts;
 };
+
+/**
+ * Where the backward walk gives up rather than probing ever-older years.
+ *
+ * Digital Foundry's writing does not predate this, and a year with no index
+ * costs a request to discover, so there has to be a bottom.
+ */
+const ARCHIVE_WALK_FLOOR_YEAR = 2004;
+
+/**
+ * How many empty years one run will step past.
+ *
+ * An empty index is cheap - the fetch caches the empty result - but it is
+ * still a request, so a run walks past a couple and leaves the rest for the
+ * next tick rather than sprinting through a decade of nothing.
+ */
+const MAX_EMPTY_YEARS_PER_RUN = 2;
+
+/**
+ * Works backwards through the archive, a capped batch at a time.
+ *
+ * The forward scan only ever looks at what is newer than its watermark, so
+ * on its own an install only gains articles for content published after it
+ * was set up. Everything older waited for someone to go and press the
+ * backfill tool, which in practice nobody does.
+ *
+ * Deliberately shaped as a trickle rather than a crawl, because the whole
+ * archive is thousands of pages against a site that asks for a five-second
+ * crawl delay: one index and at most `maxArticlesPerScan` articles per run,
+ * resuming exactly where it stopped, and stopping for good once it reaches
+ * the far end.
+ *
+ * Position is a year because the indexes are per-year, so it is both the
+ * resume point and the next thing to ask for. The year only advances once
+ * everything in it has been read - an article that failed to fetch stays
+ * unread and is retried, rather than being stepped over.
+ */
+export const walkArticleArchive = async (
+  db: DfDownloaderOperationalDb,
+  config: DfArticlesConfig,
+  now: Date = new Date()
+): Promise<ArticleScanResult> => {
+  const result: ArticleScanResult = { articlesRead: 0, primaryMatches: 0, relatedMatches: 0, capped: false };
+
+  const state = db.getDfArticleArchiveWalkState();
+  if (state.complete) {
+    return result;
+  }
+
+  let year = state.year ?? now.getUTCFullYear();
+  let emptyYears = 0;
+
+  for (;;) {
+    if (year < ARCHIVE_WALK_FLOOR_YEAR) {
+      logger.log("info", `Article archive walk finished - nothing older than ${ARCHIVE_WALK_FLOOR_YEAR} to read`);
+      await db.setDfArticleArchiveWalkState({ complete: true });
+      return result;
+    }
+
+    let entries: SitemapEntry[];
+    try {
+      entries = await fetchSitemap(year, DfFetchPriority.BACKGROUND);
+    } catch (e) {
+      // Stay put rather than stepping past a year that was never read.
+      logger.log("warn", `Article archive walk could not read the ${year} index: ${e}`);
+      await db.setDfArticleArchiveWalkState({ year });
+      return result;
+    }
+
+    const unread = entries
+      .filter((entry): entry is SitemapEntry & { lastmod: Date } => Boolean(entry.lastmod))
+      .filter((entry) => !db.isDfArticleMetaFresh(entry.url, entry.lastmod))
+      // Newest first within the year, so the most likely to matter to a
+      // recent library are read first.
+      .sort((a, b) => b.lastmod.getTime() - a.lastmod.getTime());
+
+    if (!unread.length) {
+      if (!entries.length) {
+        emptyYears++;
+      }
+      year -= 1;
+      if (emptyYears >= MAX_EMPTY_YEARS_PER_RUN) {
+        await db.setDfArticleArchiveWalkState({ year });
+        return result;
+      }
+      continue;
+    }
+
+    const toRead = unread.slice(0, config.maxArticlesPerScan);
+    result.capped = unread.length > toRead.length;
+    logger.log(
+      "info",
+      `Article archive walk reading ${toRead.length} of ${unread.length} remaining from ${year}`
+    );
+
+    for (const entry of toRead) {
+      const article = await readArticle(entry);
+      if (!article) {
+        continue;
+      }
+      result.articlesRead++;
+      db.setDfArticleMeta(entry.url, {
+        slug: entry.slug,
+        title: article.article.title,
+        author: article.article.author,
+        videoIds: article.videoIds,
+        lastmod: entry.lastmod,
+        cachedAt: new Date(),
+      });
+      const filed = await fileAgainstLibrary(db, article.article, article.videoIds);
+      result.primaryMatches += filed.primary;
+      result.relatedMatches += filed.related;
+    }
+
+    // Stay on this year. Anything read is fresh next time, so `unread`
+    // shrinks; the year advances only when it empties, which is also what
+    // gives a failed fetch another go.
+    await db.setDfArticleArchiveWalkState({ year });
+    return result;
+  }
+};

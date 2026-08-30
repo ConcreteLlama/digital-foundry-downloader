@@ -55,6 +55,16 @@ const DfArticleIndexFile = z.object({
    * treating the whole back catalogue as new.
    */
   scanCursor: z.coerce.date().optional(),
+  /**
+   * How far back through the archive the backward walk has reached.
+   *
+   * A year rather than a date because the article indexes are per-year, so
+   * this is both the resume point and the next index to ask for. Absent
+   * until the walk first runs.
+   */
+  archiveWalkYear: z.number().optional(),
+  /** Set once the walk runs out of years, so it stops asking. */
+  archiveWalkComplete: z.boolean().optional(),
 });
 type DfArticleIndexFile = z.infer<typeof DfArticleIndexFile>;
 
@@ -138,6 +148,16 @@ export class DfArticleStore {
 
   async setScanCursor(cursor: Date): Promise<void> {
     this.index.scanCursor = cursor;
+    await this.writeIndex();
+  }
+
+  getArchiveWalkState(): { year?: number; complete: boolean } {
+    return { year: this.index.archiveWalkYear, complete: Boolean(this.index.archiveWalkComplete) };
+  }
+
+  async setArchiveWalkState(state: { year?: number; complete?: boolean }): Promise<void> {
+    this.index.archiveWalkYear = state.year;
+    this.index.archiveWalkComplete = state.complete;
     await this.writeIndex();
   }
 }

@@ -181,6 +181,12 @@ export class DfFileOperationalDb extends DfDownloaderOperationalDb {
     setDfArticleMeta(url: string, meta: DfArticleMeta) {
         this.dfArticleMetaCache.set(url, meta);
     }
+    getDfArticleArchiveWalkState() {
+        return this.dfArticleStore.getArchiveWalkState();
+    }
+    setDfArticleArchiveWalkState(state: { year?: number; complete?: boolean }) {
+        return this.dfArticleStore.setArchiveWalkState(state);
+    }
     getDfArticleScanCursor() {
         return this.dfArticleStore.getScanCursor();
     }
