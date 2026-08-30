@@ -3,7 +3,6 @@ import ViewSidebarIcon from "@mui/icons-material/ViewSidebar";
 import ViewStreamIcon from "@mui/icons-material/ViewStream";
 import { Box, Dialog, DialogContent, DialogTitle, IconButton, Stack, Tooltip, Typography } from "@mui/material";
 import useMediaQuery from "@mui/material/useMediaQuery";
-import { useTheme } from "@mui/material/styles";
 import { DfContentEntry } from "df-downloader-common";
 import { DfContentDownloadInfo } from "df-downloader-common/models/df-content-download-info";
 import { useState } from "react";
@@ -38,12 +37,19 @@ export type VideoPlayerDialogProps = {
  * content is being played.
  */
 export const VideoPlayerDialog = ({ contentEntry, download, open, onClose }: VideoPlayerDialogProps) => {
-  const theme = useTheme();
-  // Theater needs the width to be worth it; below md the rail stacks anyway,
-  // at which point it is just the ordinary layout with extra chrome.
-  const wideEnough = useMediaQuery(theme.breakpoints.up("md"));
+  /*
+    Theater needs room in both directions, which is why this is a raw query
+    rather than a breakpoint.
+
+    `up("md")` was measured wrong on a real phone: 900 CSS px of width is
+    reachable on a handset, so theater engaged and produced a postage-stamp
+    video beside a full-height rail. Width alone cannot tell those apart -
+    what makes theater worth it is having enough height for a large video
+    *and* enough width for a rail beside it, so both are asked for.
+  */
+  const roomForTheater = useMediaQuery("(min-width:1200px) and (min-height:640px)");
   const [theater, setTheater] = useState(true);
-  const inTheater = theater && wideEnough;
+  const inTheater = theater && roomForTheater;
 
   // Only while open: a closed dialog is not worth a request, and the one
   // that matters is made the moment it opens.
@@ -78,7 +84,7 @@ export const VideoPlayerDialog = ({ contentEntry, download, open, onClose }: Vid
               {[download.mediaInfo.formatString, download.size].filter(Boolean).join("  ·  ")}
             </Typography>
           </Box>
-          {wideEnough && (
+          {roomForTheater && (
             <Tooltip title={theater ? "Timeline below the video" : "Theater mode - timeline beside the video"}>
               <IconButton onClick={() => setTheater((current) => !current)} aria-label="Toggle theater mode">
                 {theater ? <ViewStreamIcon /> : <ViewSidebarIcon />}

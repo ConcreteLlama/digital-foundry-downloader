@@ -1,4 +1,6 @@
-import { Alert, Box, CircularProgress, Stack, Typography } from "@mui/material";
+import FullscreenIcon from "@mui/icons-material/Fullscreen";
+import FullscreenExitIcon from "@mui/icons-material/FullscreenExit";
+import { Alert, Box, CircularProgress, IconButton, Stack, Tooltip, Typography } from "@mui/material";
 import { Chapter, DfContentEntry, DfContentInfoUtils, PlaybackInfo, secondsToHHMMSS } from "df-downloader-common";
 import { DfContentDownloadInfo } from "df-downloader-common/models/df-content-download-info";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -295,6 +297,38 @@ export const DownloadPlayer = ({
 }: DownloadPlayerProps) => {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const [positionSeconds, setPositionSeconds] = useState(0);
+  /*
+    Immersive mode: the video filling the screen with the timeline available
+    over the top of it.
+
+    Fullscreen is requested on this wrapper rather than on the <video>, and
+    that distinction is the whole feature. A fullscreened video element is
+    handed to the browser's own fullscreen surface, which nothing can be
+    drawn over - which is exactly what the player's native fullscreen button
+    does, and why it cannot show the timeline. Fullscreening the element
+    *containing* the video keeps both it and our overlay on screen together.
+
+    The trade-off is that this only works where an arbitrary element can be
+    fullscreened. iOS Safari allows it for video elements only, so the button
+    is hidden there and the native control remains the way to fill the
+    screen, just without the overlay.
+  */
+  const stageRef = useRef<HTMLDivElement | null>(null);
+  const [immersive, setImmersive] = useState(false);
+  const [overlayOpen, setOverlayOpen] = useState(false);
+
+  useEffect(() => {
+    const onFullscreenChange = () => {
+      const active = document.fullscreenElement === stageRef.current;
+      setImmersive(active);
+      if (!active) {
+        // Leaving should not leave the panel primed to appear next time.
+        setOverlayOpen(false);
+      }
+    };
+    document.addEventListener("fullscreenchange", onFullscreenChange);
+    return () => document.removeEventListener("fullscreenchange", onFullscreenChange);
+  }, []);
   const [playbackError, setPlaybackError] = useState<string | null>(null);
   // Captions are turned on once per file, not on every render - otherwise
   // switching them off in the player's own menu would be undone immediately.
@@ -392,15 +426,23 @@ export const DownloadPlayer = ({
     [info, analysisJumps]
   );
   const activeRow = useMemo(() => rowIndexAt(timelineRows, positionSeconds), [timelineRows, positionSeconds]);
-  const timeline = timelineRows.length > 0 && (
+  const hasTimeline = timelineRows.length > 0;
+  /*
+    The cap is per-place, not per-player: in a page the list needs a ceiling
+    so it does not push everything below it off the bottom, but the immersive
+    overlay is its own scroller filling the screen height, and capping it
+    there would strand the list in a short box inside a tall panel.
+  */
+  const renderTimeline = (listMaxHeight: number | string) => (
     <MediaTimeline
       rows={timelineRows}
       activeIndex={activeRow}
       onSeek={seekTo}
-      maxHeight={timelineMaxHeight}
+      maxHeight={listMaxHeight}
       heading={timelineHeading(info?.chapters.length ?? 0, analysisJumps?.length ?? 0)}
     />
   );
+  const timeline = hasTimeline && renderTimeline(timelineMaxHeight);
 
   if (loading) {
     return (
@@ -491,10 +533,14 @@ export const DownloadPlayer = ({
       src={playbackStreamUrl(contentEntry.key, download.downloadLocation)}
       sx={{
         width: "100%",
-        maxHeight: maxHeight ?? "60vh",
+        // Immersive fills the screen and letterboxes rather than cropping;
+        // the ordinary case is capped so the timeline below stays in view.
+        maxHeight: immersive ? "100%" : maxHeight ?? "60vh",
+        height: immersive ? "100%" : undefined,
+        objectFit: immersive ? "contain" : undefined,
         minHeight: 0,
         backgroundColor: "common.black",
-        borderRadius: 1,
+        borderRadius: immersive ? 0 : 1,
       }}
     >
       {info.subtitleTracks.map((track, index) => (
@@ -509,6 +555,104 @@ export const DownloadPlayer = ({
           default={index === 0}
         />
       ))}
+    </Box>
+  );
+
+  /*
+    Everything that has to be inside the fullscreen element.
+
+    Only the fullscreened element and its descendants are rendered while
+    fullscreen is active, so the overlay has to live in here rather than
+    beside the video.
+  */
+  const canImmerse = typeof document !== "undefined" && document.fullscreenEnabled;
+
+  const stage = (
+    <Box
+      ref={stageRef}
+      onClick={
+        immersive
+          ? (event) => {
+              /*
+                Tap the picture to summon the timeline - but not on the strip
+                the native controls occupy. Those controls live in the video's
+                shadow DOM, so a press on play or the scrubber arrives here as
+                a click on the video itself and is indistinguishable from a tap
+                on the picture. Excluding the band they sit in is the only
+                thing that separates them, and it costs nothing: that band is
+                letterboxing most of the time.
+              */
+              const bottom = event.currentTarget.getBoundingClientRect().bottom;
+              if (bottom - event.clientY < 96) {
+                return;
+              }
+              setOverlayOpen((open) => !open);
+            }
+          : undefined
+      }
+      sx={{
+        position: "relative",
+        minWidth: 0,
+        ...(immersive && {
+          width: "100%",
+          height: "100%",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          backgroundColor: "common.black",
+        }),
+      }}
+    >
+      {videoElement}
+      {canImmerse && (
+        <Tooltip title={immersive ? "Leave full screen" : "Full screen - tap the picture for the timeline"}>
+          <IconButton
+            size="small"
+            onClick={(event) => {
+              // Without this the tap handler above would toggle the overlay
+              // on the way out.
+              event.stopPropagation();
+              if (immersive) {
+                void document.exitFullscreen();
+              } else {
+                void stageRef.current?.requestFullscreen?.();
+              }
+            }}
+            aria-label={immersive ? "Leave full screen" : "Full screen"}
+            sx={{
+              position: "absolute",
+              top: 8,
+              right: 8,
+              color: "common.white",
+              backgroundColor: "rgba(0, 0, 0, 0.45)",
+              "&:hover": { backgroundColor: "rgba(0, 0, 0, 0.7)" },
+            }}
+          >
+            {immersive ? <FullscreenExitIcon fontSize="small" /> : <FullscreenIcon fontSize="small" />}
+          </IconButton>
+        </Tooltip>
+      )}
+      {immersive && overlayOpen && hasTimeline && (
+        <Box
+          // A tap inside the panel is for the panel - seeking, scrolling -
+          // and must not be read as a tap on the picture behind it.
+          onClick={(event) => event.stopPropagation()}
+          sx={{
+            position: "absolute",
+            top: 0,
+            right: 0,
+            bottom: 0,
+            width: { xs: "100%", sm: 420 },
+            maxWidth: "100%",
+            overflowY: "auto",
+            padding: 2,
+            backgroundColor: "rgba(0, 0, 0, 0.78)",
+            backdropFilter: "blur(8px)",
+          }}
+        >
+          {renderTimeline("none")}
+        </Box>
+      )}
     </Box>
   );
 
@@ -543,8 +687,20 @@ export const DownloadPlayer = ({
             flexDirection: { xs: "column", md: "row" },
           }}
         >
-          <Box sx={{ minWidth: 0, flex: "1 1 auto", display: "flex", flexDirection: "column" }}>
-            {videoElement}
+          <Box
+            sx={{
+              minWidth: 0,
+              flex: "1 1 auto",
+              display: "flex",
+              flexDirection: "column",
+              // Centred in the column rather than pinned to its top: the
+              // video is capped by its own aspect ratio, so in a tall window
+              // anchoring it to the top leaves it stranded above a large
+              // empty space with the rail running past it.
+              justifyContent: "center",
+            }}
+          >
+            {stage}
             {belowVideo}
             {embeddedNote}
           </Box>
@@ -593,7 +749,7 @@ export const DownloadPlayer = ({
           pb: 1,
         }}
       >
-        {videoElement}
+        {stage}
         {belowVideo}
       </Box>
       {embeddedNote}
