@@ -195,6 +195,26 @@ export class DigitalFoundryContentManager {
     // only makes a file appear at its final path via an atomic rename (see
     // ContentManagementConfig.writeDirectToDestination), so a scan walking
     // that directory sees either nothing or a complete file.
+    /*
+      Arm the periodic loops before the long startup work, not after it.
+
+      These are timer registrations, not work - each callback guards on being
+      signed in, and each already waits out a startup delay before its first
+      run, which is what keeps them clear of the scans below.
+
+      Registering them last meant they were hostage to everything above:
+      the archive scan, the metadata refresh flush and the existing-files
+      scan are all awaited, and the metadata flush is paced through the
+      rate-limited queue at seconds per item. On an install with a large
+      refresh backlog that is hours, during which nothing periodic was ever
+      scheduled - no new-content polling and no article scanning at all.
+      Observed directly: a service up for over an hour had never logged the
+      loops arming, and the article index had not been touched.
+    */
+    this.startContentPollLoop();
+    this.startArticleScanLoop();
+    this.startArticleArchiveWalkLoop();
+
     await this.resumePersistedPipelines();
     if (this.dfUserManager.isUserSignedIn()) {
       await this.runInitialScan();
@@ -240,8 +260,6 @@ export class DigitalFoundryContentManager {
         await this.checkForNewContents();
       }
     });
-    this.startContentPollLoop();
-    this.startArticleScanLoop();
   }
 
   /**
@@ -365,25 +383,48 @@ export class DigitalFoundryContentManager {
       } catch (e) {
         logger.log("error", "Error during scheduled article scan", e);
       }
-      /*
-        Then a step backwards through the archive, on the same tick.
-
-        Separate try/catch on purpose: the forward scan is the one that keeps
-        an install current, and a problem reading a decade-old index is no
-        reason for it to stop. The walk stops on its own once it has been
-        through everything, and does nothing at all after that.
-      */
-      if (configService.config.dfArticles.archiveWalkEnabled) {
-        try {
-          await walkArticleArchive(this.db, configService.config.dfArticles);
-        } catch (e) {
-          logger.log("error", "Error during article archive walk", e);
-        }
-      }
     };
     setTimeout(() => {
       void runScan();
       setInterval(runScan, config.scanInterval);
+    }, ARTICLE_SCAN_STARTUP_DELAY_MS);
+  }
+
+  /**
+   * Works backwards through the archive on its own timer.
+   *
+   * Separate from the forward scan because the two jobs are different sizes
+   * and want different pacing - the forward scan is a handful a day forever
+   * on a twelve-hour tick, while this is a large finite pile that should be
+   * got through and then stop. Sharing that tick made a full archive take
+   * months.
+   *
+   * Once the walk is finished it costs nothing: it reads its own completion
+   * flag and returns without a request, so the timer can keep ticking
+   * harmlessly rather than needing to be torn down.
+   */
+  private startArticleArchiveWalkLoop() {
+    const config = configService.config.dfArticles;
+    if (!config.scanEnabled || !config.archiveWalkEnabled) {
+      return;
+    }
+    logger.log(
+      "info",
+      `Working backwards through older articles every ${config.archiveWalkInterval}ms, up to ${config.archiveWalkPerRun} at a time`
+    );
+    const runWalk = async () => {
+      if (!this.dfUserManager.isUserSignedIn()) {
+        return;
+      }
+      try {
+        await walkArticleArchive(this.db, configService.config.dfArticles);
+      } catch (e) {
+        logger.log("error", "Error during article archive walk", e);
+      }
+    };
+    setTimeout(() => {
+      void runWalk();
+      setInterval(runWalk, config.archiveWalkInterval);
     }, ARTICLE_SCAN_STARTUP_DELAY_MS);
   }
 
