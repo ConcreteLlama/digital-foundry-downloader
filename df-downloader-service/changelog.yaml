@@ -49,6 +49,20 @@ versions:
           - "Article matching shows how many requests it will make to Digital Foundry and roughly how long that takes, since it is deliberately slow - a whole-library run is measured in hours"
       enhancements:
         - "A run checks each item again as it reaches it, rather than trusting the list from when it started. Over a few hundred items that gap matters: something can gain subtitles from an unrelated action while it waits its turn, and it now gets skipped rather than redone"
+        - "The content panel is organised into tabs":
+          - "Files, Analysis, Article, and Activity while something is running. Opening a video you have not downloaded now shows the formats you can fetch, instead of four headings each telling you there is nothing there yet"
+          - "Every tab says what is behind it - a count of files, a dot when an analysis or article exists, a pulsing one while work is in progress - so nothing is hidden without a trace"
+          - "What you can download and what you already have sit together now, since they answer the same question"
+          - "The panel stays one size as you move between tabs rather than resizing to fit each one, which on a phone used to move the tabs out from under your thumb"
+          - "Side by side, the video and its description stay in view and each half scrolls on its own, so a long description no longer drags the formats and analysis down the page with it"
+        - "Swipe between pages on a touch screen":
+          - "Moves through the content panel's tabs, and through the pages of Tools, Analysis and Settings"
+          - "Ignores a swipe that is mostly vertical, and one that starts on something which scrolls sideways itself, so scrolling a wide settings table still scrolls the table"
+        - "Picking items in the Backfill list stays responsive with a few thousand of them, and the list is paged rather than cut short - the selection and the select-all buttons still apply across every page"
+      bugfixes:
+        - "Fixed pop-up panels never reaching the edges of a phone screen":
+          - "A band of the page showed down both sides of every dialog, which reads as a misaligned window rather than as deliberate spacing"
+          - "The rule meant to make dialogs full width on a phone had been silently overridden since it was written, so this had never once worked"
     known_issues:
       - "Analysis needs something to read":
         - "With no transcript and no matching article, only tags can be produced - there is nothing to summarise from. Generating subtitles for a video and analysing it again gives the full result"
