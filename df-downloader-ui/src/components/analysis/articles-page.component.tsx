@@ -164,14 +164,16 @@ const ArticleCard = ({
       {article.linkedVideos.length > 0 ? (
         <Stack sx={{ marginTop: 1.25 }}>
           {/* Labelled and set below a rule, so the article reads as the
-              subject of the row and the videos as what it covers - without
-              the label they competed, the thumbnail winning. */}
+              subject of the row and the videos as what relates to it -
+              without the label they competed, the thumbnail winning. */}
           <Divider sx={{ marginBottom: 0.75 }} />
           <Typography
             variant="overline"
             sx={{ color: "text.disabled", fontSize: "0.625rem", lineHeight: 1.6, marginBottom: 0.25 }}
           >
-            {article.linkedVideos.length === 1 ? "Covers" : `Covers ${article.linkedVideos.length} videos`}
+            {article.linkedVideos.length === 1
+              ? "Related video"
+              : `Related videos · ${article.linkedVideos.length}`}
           </Typography>
           {article.linkedVideos.map((video) => (
             <LinkedVideoRow key={video.contentKey} video={video} onOpenContent={onOpenContent} />
@@ -276,7 +278,16 @@ export const ArticlesPage = () => {
       inside a section - the section wrapper is what pads those, and without
       it the content sat flush against the edge of the screen.
     */
-    <Stack spacing={2} sx={{ minWidth: 0, padding: { xs: 1.5, md: 2 } }}>
+    /*
+      A flex column with `gap` rather than a Stack with `spacing`.
+
+      Stack's spacing emits `> :not(style):not(style) { margin: 0 }`, which
+      outranks the sx class on a child - so the pinned pagination's negative
+      margins, the ones that let it bleed through this page's gutters, were
+      silently computed away to zero. `gap` spaces children without touching
+      their margins.
+    */
+    <Box sx={{ display: "flex", flexDirection: "column", gap: 2, minWidth: 0, padding: { xs: 1.5, md: 2 } }}>
       {!articles?.length ? (
         <Alert severity="info">
           No articles known yet. They are recorded as Digital Foundry publish them, and as the app looks for the written
@@ -332,7 +343,32 @@ export const ArticlesPage = () => {
           </Stack>
 
           {numPages > 1 && (
-            <Box sx={{ display: "flex", justifyContent: "center", paddingTop: 0.5 }}>
+            /*
+              Pinned to the bottom, as it is in the content list and for the
+              same reason: it follows a page of tall cards in a scrolling
+              column, so unpinned it is only reachable after scrolling past
+              everything - which reads as "there is no pagination" rather than
+              "it is further down".
+
+              The negative margins let it bleed through this page's own
+              gutters to the edges, so cards scroll under a full-width bar
+              rather than past a floating island with a gap either side.
+            */
+            <Box
+              sx={{
+                position: "sticky",
+                bottom: 0,
+                zIndex: 1,
+                display: "flex",
+                justifyContent: "center",
+                backgroundColor: "background.default",
+                borderTop: "1px solid",
+                borderColor: "divider",
+                marginX: { xs: -1.5, md: -2 },
+                marginBottom: { xs: -1.5, md: -2 },
+                paddingX: { xs: 1.5, md: 2 },
+              }}
+            >
               <NumericPagination currentPage={currentPage} numPages={numPages} onUpdatePage={setPage} />
             </Box>
           )}
@@ -349,6 +385,6 @@ export const ArticlesPage = () => {
           <DfContentInfoItemDetail dfContentName={contentKey || ""} onClose={() => setContentKey(null)} />
         </Box>
       </MiddleModal>
-    </Stack>
+    </Box>
   );
 };

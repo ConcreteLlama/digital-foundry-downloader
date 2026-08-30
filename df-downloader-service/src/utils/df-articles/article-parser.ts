@@ -74,25 +74,79 @@ const tableToText = ($: cheerio.CheerioAPI, table: any): string => {
 };
 
 /**
- * Pulls the author's name out of the byline.
+ * The author, from the page's own structured data where it has any.
+ *
+ * Digital Foundry publish schema.org JSON-LD carrying a Person node with a
+ * clean `name`, which the article references by `@id`. That is a stated
+ * fact about the page rather than something recovered from display text, so
+ * it is tried first and the byline heuristic below is only a fallback.
+ */
+const authorFromStructuredData = ($: cheerio.CheerioAPI): string | undefined => {
+  const typeOf = (node: any) => (Array.isArray(node?.["@type"]) ? node["@type"].join(",") : String(node?.["@type"] ?? ""));
+  const nameOf = (node: any) => (typeof node?.name === "string" && node.name.trim() ? node.name.trim() : undefined);
+
+  for (const element of $('script[type="application/ld+json"]').toArray()) {
+    let parsed: any;
+    try {
+      parsed = JSON.parse($(element).contents().text());
+    } catch {
+      // A malformed block is not worth failing the whole parse over.
+      continue;
+    }
+    const nodes: any[] = parsed?.["@graph"] ?? (Array.isArray(parsed) ? parsed : [parsed]);
+    const article = nodes.find((node) => /Article/i.test(typeOf(node)));
+    const author = article?.author;
+
+    const direct = nameOf(author) ?? (Array.isArray(author) ? author.map(nameOf).find(Boolean) : undefined);
+    if (direct) {
+      return direct;
+    }
+    // The common shape: the article points at a Person elsewhere in the graph.
+    const reference = typeof author?.["@id"] === "string" ? author["@id"] : undefined;
+    if (reference) {
+      const person = nodes.find((node) => node?.["@id"] === reference);
+      const name = nameOf(person);
+      if (name) {
+        return name;
+      }
+    }
+    const anyPerson = nodes.filter((node) => /Person/i.test(typeOf(node))).map(nameOf).find(Boolean);
+    if (anyPerson) {
+      return anyPerson;
+    }
+  }
+  return undefined;
+};
+
+/**
+ * Pulls the author's name out of the byline, when there is no structured
+ * data to read it from.
  *
  * The byline element runs the name straight into the publication date with
  * no separator ("by A N OtherThu 30th Jul 2026"), so the raw text is not
  * usable as a name. Cut at the first weekday or digit, which is where the
  * date reliably begins, and drop the leading "by".
+ *
+ * The weekday may be followed by a comma rather than a space ("JuddWed, 27
+ * Aug"), which the original pattern did not allow for - it then fell
+ * through to cutting at the first digit and left the weekday stuck on the
+ * end of the name.
  */
-const extractAuthor = ($: cheerio.CheerioAPI): string | undefined => {
+const authorFromByline = ($: cheerio.CheerioAPI): string | undefined => {
   const raw = $('[rel="author"], .author, .byline').first().text().trim();
   if (!raw) {
     return undefined;
   }
   const name = raw
     .replace(/^\s*by\s+/i, "")
-    .split(/(?:Mon|Tue|Wed|Thu|Fri|Sat|Sun)[a-z]*\s|\d/)[0]
+    .split(/(?:Mon|Tue|Wed|Thu|Fri|Sat|Sun)[a-z]*[\s,]|\d/)[0]
     .trim()
     .replace(/[,|·]\s*$/, "");
   return name || undefined;
 };
+
+const extractAuthor = ($: cheerio.CheerioAPI): string | undefined =>
+  authorFromStructuredData($) ?? authorFromByline($);
 
 export const parseArticlePage = (html: string): ParsedArticle | undefined => {
   const $ = cheerio.load(html);
