@@ -94,6 +94,7 @@ Downloads also play in the app itself now. Open a video you have already downloa
   - A finding it cannot place shows no jump button rather than an approximate one. A timestamp that is 90 seconds out looks exactly as confident as a correct one, which makes it worse than none
   - Jumping from the analysis brings the video back into view first, so it works whether the two are side by side or on separate tabs
   - Only applies to analyses run from now on - existing ones keep working, they just have nothing to jump to until re-analysed
+  - Playing a file on its own shows the same list beside the video, or under it on a narrower screen, in time order rather than grouped by kind - what happens next, rather than what sort of thing it is
 - A log you can actually read
   - The app now writes its log to a file, and there is a Logs page under System to read it back - so working out what happened during a download no longer means having the container's console open at the time
   - Filter by level or search the text, and follow it live while something is running

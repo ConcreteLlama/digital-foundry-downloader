@@ -6,8 +6,9 @@ import useMediaQuery from "@mui/material/useMediaQuery";
 import { useTheme } from "@mui/material/styles";
 import { DfContentEntry } from "df-downloader-common";
 import { DfContentDownloadInfo } from "df-downloader-common/models/df-content-download-info";
-import { useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import { monoFontFamily } from "../../../themes/build-theme";
+import { AnalysisJumpList } from "../ai-analysis/analysis-jump-list.component.tsx";
 import { DownloadPlayer } from "./download-player.component.tsx";
 
 export type VideoPlayerDialogProps = {
@@ -39,6 +40,13 @@ export const VideoPlayerDialog = ({ contentEntry, download, open, onClose }: Vid
   const wideEnough = useMediaQuery(theme.breakpoints.up("md"));
   const [theater, setTheater] = useState(true);
   const inTheater = theater && wideEnough;
+
+  // The player hands this over once it is mounted; the jump list calls it.
+  const seekRef = useRef<((startMs: number) => void) | null>(null);
+  const onSeekReady = useCallback((seek: (startMs: number) => void) => {
+    seekRef.current = seek;
+  }, []);
+  const jumpTo = useCallback((seconds: number) => seekRef.current?.(seconds * 1000), []);
 
   return (
     <Dialog
@@ -93,6 +101,11 @@ export const VideoPlayerDialog = ({ contentEntry, download, open, onClose }: Vid
             // In theater the video fills the column it is given; stacked keeps
             // a ceiling so the chapters below it stay on screen.
             maxHeight={inTheater ? "100%" : "60vh"}
+            onSeekReady={onSeekReady}
+            // Beside the video in theater, under the chapters when stacked -
+            // the player renders this slot in both layouts, so "alongside or
+            // below" falls out of the layout choice already being made.
+            sidePanel={<AnalysisJumpList contentKey={contentEntry.key} onJumpTo={jumpTo} />}
           />
         )}
       </DialogContent>
