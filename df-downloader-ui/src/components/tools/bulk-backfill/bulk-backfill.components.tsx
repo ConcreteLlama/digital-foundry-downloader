@@ -24,19 +24,20 @@ import { conciseFormatDate } from "../../../utils/date.ts";
 import { monoFontFamily } from "../../../themes/build-theme.ts";
 
 /**
- * Whether this target still has work to do on this item.
+ * Whether this item is still missing whatever the target produces.
  *
- * The client's copy of the same question the bulk task asks itself when it
- * reaches each item. Here it drives "select all applicable" and the status
- * shown per row; there it decides whether the work actually runs. Both
- * exist deliberately - this one keeps the user from queueing pointless
- * work, and the server's keeps a list that went stale while the job ran
- * from causing it.
+ * Deliberately independent of the re-run toggle. It was not, and that made
+ * the count it drives meaningless: with re-run on, every item counted as
+ * needing the work, so "select all that need it" silently became a second
+ * "select all" while still claiming to pick out the ones missing
+ * something.
+ *
+ * Turning re-run on changes what the job *does* to an item, not whether
+ * the item is missing anything - so that belongs in the task's own check
+ * (stillNeedsWork in bulk-backfill-task.ts), which does consider it, and
+ * not here.
  */
-export const isApplicable = (candidate: BulkBackfillCandidate, target: BulkBackfillTarget, force: boolean): boolean => {
-  if (force) {
-    return true;
-  }
+export const isMissing = (candidate: BulkBackfillCandidate, target: BulkBackfillTarget): boolean => {
   switch (target) {
     case "subtitles":
       return !candidate.hasSubtitles;

@@ -19,7 +19,7 @@ import {
 } from "df-downloader-common";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { estimateBackfill, fetchBackfillCandidates, runBackfill } from "../../../api/backfill.ts";
-import { BackfillConfirmDialog, BackfillTable, isApplicable } from "./bulk-backfill.components.tsx";
+import { BackfillConfirmDialog, BackfillTable, isMissing } from "./bulk-backfill.components.tsx";
 
 /**
  * Bulk backfill: apply subtitles, AI analysis or article matching across
@@ -93,10 +93,10 @@ export const BulkBackfillPage = () => {
     return candidates.filter((candidate) => candidate.title.toLowerCase().includes(needle));
   }, [candidates, filterText]);
 
-  const applicable = useMemo(
-    () => filtered.filter((candidate) => isApplicable(candidate, target, force)),
-    [filtered, target, force]
-  );
+  // Force is deliberately not a factor - see isMissing. This counts what
+  // is missing the thing, which is a useful subset to select whether or
+  // not re-running is on.
+  const missing = useMemo(() => filtered.filter((candidate) => isMissing(candidate, target)), [filtered, target]);
 
   const toggle = (contentKey: string, isSelected: boolean) =>
     setSelected((current) => {
@@ -207,10 +207,10 @@ export const BulkBackfillPage = () => {
             <Button
               size="small"
               variant="outlined"
-              disabled={applicable.length === 0}
-              onClick={() => setSelected(new Set(applicable.map((candidate) => candidate.contentKey)))}
+              disabled={missing.length === 0}
+              onClick={() => setSelected(new Set(missing.map((candidate) => candidate.contentKey)))}
             >
-              Select all that need it ({applicable.length})
+              Select all missing ({missing.length})
             </Button>
             <Button
               size="small"
