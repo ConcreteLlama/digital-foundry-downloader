@@ -7,7 +7,8 @@ import {
   selectCompletedPipelineIds,
   selectDownloadingPipelineIds,
   selectPostProcessingPipelineIds,
-  selectTaskIds,
+  selectActiveTaskIds,
+  selectCompletedTaskIds,
 } from "../../store/df-tasks/tasks.selector.ts";
 import { monoFontFamily } from "../../themes/build-theme.ts";
 import { ScheduledDownloadsList } from "./scheduled-downloads-list.component.tsx";
@@ -18,9 +19,11 @@ export const TaskList = () => {
   const downloadingTasks = useSelector(selectDownloadingPipelineIds);
   const postProcessingTasks = useSelector(selectPostProcessingPipelineIds);
   const completedTasks = useSelector(selectCompletedPipelineIds);
-  // Standalone jobs - a backfill, a batch move - which are tracked separately
-  // from pipelines and so are not covered by any of the groups above.
-  const standaloneTaskIds = useSelector(selectTaskIds);
+  // Standalone jobs - a backfill, a batch move - tracked separately from
+  // pipelines and so covered by none of the groups above. Split so finished
+  // ones join the rest of the history rather than sitting among live work.
+  const activeTaskIds = useSelector(selectActiveTaskIds);
+  const completedTaskIds = useSelector(selectCompletedTaskIds);
   const onClearCompleted = () => clearCompletedPipelines().catch((e) => console.error(e));
   const theme = useTheme();
   const belowSm = useMediaQuery(theme.breakpoints.down("sm"));
@@ -43,21 +46,17 @@ export const TaskList = () => {
           is for, and a backfill running in the background should not push
           them down. Before Completed, since these are live work rather than
           history. */}
-      {standaloneTaskIds.length > 0 && (
-        <Box>
-          <Typography variant="overline">Jobs</Typography>
-          <Stack sx={{ gap: 1, marginTop: 1 }}>
-            {standaloneTaskIds.map((taskId) => (
-              <StandaloneTaskInfo key={taskId} taskId={taskId} />
-            ))}
-          </Stack>
-        </Box>
-      )}
+      {activeTaskIds.length > 0 && <TaskInfoSet pipelineIds={[]} taskIds={activeTaskIds} name="Jobs" />}
       <TaskInfoSet
         pipelineIds={completedTasks}
+        taskIds={completedTaskIds}
         name="Completed"
         header={
-          <Button size="small" disabled={completedTasks.length === 0} onClick={onClearCompleted}>
+          <Button
+            size="small"
+            disabled={completedTasks.length === 0 && completedTaskIds.length === 0}
+            onClick={onClearCompleted}
+          >
             Clear all
           </Button>
         }
@@ -68,6 +67,14 @@ export const TaskList = () => {
 
 type TaskInfoSetProps = {
   pipelineIds: string[];
+  /**
+   * Standalone jobs to show in this group, alongside any pipelines.
+   *
+   * A group is a place on the page rather than a kind of thing: "Completed"
+   * means finished work, and a finished backfill belongs there as much as a
+   * finished download does.
+   */
+  taskIds?: string[];
   name: string;
   noTasksMessage?: string;
   header?: React.ReactNode;
@@ -83,7 +90,8 @@ type TaskInfoSetProps = {
  * label, its count and its action are one left-aligned row now, matching the
  * overline headings used everywhere else.
  */
-const TaskInfoSet = ({ pipelineIds, name, noTasksMessage, header, draggable }: TaskInfoSetProps) => {
+const TaskInfoSet = ({ pipelineIds, taskIds = [], name, noTasksMessage, header, draggable }: TaskInfoSetProps) => {
+  const count = pipelineIds.length + taskIds.length;
   return (
     <Box>
       <Box
@@ -98,7 +106,7 @@ const TaskInfoSet = ({ pipelineIds, name, noTasksMessage, header, draggable }: T
         }}
       >
         <Typography variant="overline">{name}</Typography>
-        {pipelineIds.length > 0 && (
+        {count > 0 && (
           <Typography
             sx={{
               fontFamily: monoFontFamily,
@@ -107,14 +115,17 @@ const TaskInfoSet = ({ pipelineIds, name, noTasksMessage, header, draggable }: T
               flexShrink: 0,
             }}
           >
-            {pipelineIds.length}
+            {count}
           </Typography>
         )}
         <Box sx={{ flex: "1 1 auto" }} />
         {header}
       </Box>
-      {pipelineIds.length ? (
+      {count ? (
         <Stack sx={{ gap: 1, marginTop: 1 }}>
+          {taskIds.map((taskId) => (
+            <StandaloneTaskInfo key={taskId} taskId={taskId} />
+          ))}
           {pipelineIds.map((pipelineId) =>
             draggable ? (
               <DraggableTaskInfo key={pipelineId} pipelineId={pipelineId} />

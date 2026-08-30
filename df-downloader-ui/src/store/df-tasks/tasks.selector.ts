@@ -286,6 +286,24 @@ export const selectTaskIds = (state: RootState) => state.tasks.taskIds;
 export const selectTask = (taskId: string) =>
   createSelector(selectTasks, (tasks) => tasks[taskId]);
 
+/*
+  Standalone jobs, split by whether they have finished.
+
+  Live ones belong with the work in progress; finished ones belong with the
+  rest of the history, next to completed pipelines, so "Clear all" gathers
+  everything finished in one place rather than leaving jobs to be dismissed
+  one at a time.
+
+  Deep-equal so a snapshot that changes nothing about the split does not hand
+  back a new array and re-render the groups.
+*/
+export const selectActiveTaskIds = createDeepEqualSelector(selectTaskIds, selectTasks, (ids, tasks) =>
+  ids.filter((id) => !tasks[id]?.status?.isComplete)
+);
+export const selectCompletedTaskIds = createDeepEqualSelector(selectTaskIds, selectTasks, (ids, tasks) =>
+  ids.filter((id) => Boolean(tasks[id]?.status?.isComplete))
+);
+
 const applyTaskFilter = (task: TaskInfo, filter?: TaskFilter) => {
   if (!filter) return true;
   if (filter.state && task.status?.state !== filter.state) return false;
