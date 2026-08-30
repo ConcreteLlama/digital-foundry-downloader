@@ -17,7 +17,12 @@ import {
   BulkBackfillTarget,
   BulkBackfillTargetLabels,
 } from "df-downloader-common";
+import { AiAnalysisConfigUtils } from "df-downloader-common/config/ai-analysis-config";
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useSelector } from "react-redux";
+import { queryConfigSection } from "../../../store/config/config.action.ts";
+import { selectConfigSection } from "../../../store/config/config.selector.ts";
+import { store } from "../../../store/store.ts";
 import { estimateBackfill, fetchBackfillCandidates, runBackfill } from "../../../api/backfill.ts";
 import { BackfillConfirmDialog, BackfillTable, isMissing, SKIP_REASONS } from "./bulk-backfill.components.tsx";
 
@@ -74,6 +79,32 @@ export const BulkBackfillPage = () => {
   const [libraryCount, setLibraryCount] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  /*
+    Whether the thing this run needs is actually set up.
+
+    The service already refuses a run it cannot perform and says why, but it
+    could only say so after a target was chosen, items were selected and Run
+    was pressed - and the cost estimate the confirmation asks for fails
+    silently on the way, so the dialog just showed no figure. Checking here
+    means the page can say it up front instead of letting someone pick a
+    thousand items for a run that was never going to start.
+  */
+  const aiAnalysisConfig = useSelector(selectConfigSection("aiAnalysis"));
+  const subtitlesConfig = useSelector(selectConfigSection("subtitles"));
+  useEffect(() => {
+    store.dispatch(queryConfigSection.start("aiAnalysis"));
+    store.dispatch(queryConfigSection.start("subtitles"));
+  }, []);
+  const notConfigured = useMemo(() => {
+    if (target === "ai_analysis" && !AiAnalysisConfigUtils.isUsable(aiAnalysisConfig ?? undefined)) {
+      return "AI analysis is not set up, so this run cannot start. Add an Anthropic API key and turn it on under Settings, AI Analysis.";
+    }
+    if (target === "subtitles" && !subtitlesConfig?.servicePriorities?.length) {
+      return "No subtitles service is set up, so this run cannot start. Choose one under Settings, Subtitles.";
+    }
+    return undefined;
+  }, [target, aiAnalysisConfig, subtitlesConfig]);
+
   const [filterText, setFilterText] = useState("");
   // Narrowing to what still needs doing is the common case - the list is
   // otherwise mostly rows that are already done and cannot be actioned.
@@ -237,6 +268,11 @@ export const BulkBackfillPage = () => {
         label={<Typography variant="body2">{FORCE_LABELS[target]}</Typography>}
       />
 
+      {notConfigured && (
+        <Alert severity="warning" variant="outlined">
+          {notConfigured}
+        </Alert>
+      )}
       {error && (
         <Alert severity="error" variant="outlined" onClose={() => setError(null)}>
           {error}
@@ -317,7 +353,12 @@ export const BulkBackfillPage = () => {
             <Button size="small" disabled={selected.size === 0} onClick={() => setSelected(new Set())}>
               Clear
             </Button>
-            <Button variant="contained" size="small" disabled={runKeys.length === 0} onClick={openConfirm}>
+            <Button
+              variant="contained"
+              size="small"
+              disabled={runKeys.length === 0 || Boolean(notConfigured)}
+              onClick={openConfirm}
+            >
               Run ({runKeys.length})
             </Button>
           </Stack>

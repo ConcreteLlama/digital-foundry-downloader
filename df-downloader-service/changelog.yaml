@@ -27,8 +27,8 @@ versions:
           - "This is cheap in a way that searching per video is not. It reads each new article once instead of asking the site about every video you own, which works out at a handful of requests a day"
           - "On a new install it only considers the last week, so setting the app up does not kick off a long crawl. Going back through older content is the Backfill tool's job, where it tells you what that costs first"
           - "Turn it off, or change how often it looks and how much it reads at a time, under Settings then DF Articles"
-        - "An Articles page, under Analysis":
-          - "Every Digital Foundry article the app knows about, newest first, each linking out to the piece itself and to whichever of your videos it covers - click one to open that video"
+        - "An Articles section":
+          - "Its own place in the sidebar, listing every Digital Foundry article the app knows about, newest first - each links out to the piece itself and to whichever of your videos it covers, and clicking one of those opens that video"
           - "Videos you have downloaded are marked, so it doubles as a way to see which written companions you have the video for"
           - "This is what the app has come across rather than everything Digital Foundry have published: the pieces it read while checking for new ones, plus any it weighed up while looking for a video's companion article. The page says so rather than implying it is the full archive"
           - "Costs nothing to browse - it reads what was already stored while matching articles to videos, so opening it never asks Digital Foundry for anything"
@@ -107,6 +107,9 @@ versions:
           - "The file is capped and rotates, so it cannot quietly fill the disk on a long-running install"
         - "Picking items in the Backfill list stays responsive with a few thousand of them, and the list is paged rather than cut short - the selection and the select-all buttons still apply across every page"
       bugfixes:
+        - "Backfill says up front when it cannot run":
+          - "Choosing AI analysis without an API key, or subtitles with no transcription service set up, now says so before you pick anything, and the Run button stays out of reach until it is sorted"
+          - "It used to let you choose a target, select a thousand items and press Run before mentioning it, and the cost estimate quietly failed on the way so the confirmation showed no figure either"
         - "Starting one kind of backfill no longer stalls behind another":
           - "Backfills of different kinds shared a single slot, so starting a subtitles run while articles were being matched put it in a queue behind hours of work and it looked like nothing had happened"
           - "They use different things - matching articles waits on Digital Foundry, transcribing uses your processor, analysing calls the AI - so they now run alongside each other. Two runs of the same kind still queue, which is the case that genuinely competes"

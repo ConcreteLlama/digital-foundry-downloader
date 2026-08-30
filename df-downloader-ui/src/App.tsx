@@ -5,6 +5,7 @@ import { useSelector } from "react-redux";
 import { Route, Routes } from "react-router-dom";
 import { AppNotReadyPage } from "./AppNotReadyPage.tsx";
 import { AuthPage } from "./components/auth/auth-page.component";
+import { ArticlesPage } from "./components/analysis/articles-page.component.tsx";
 import { DownloadsPage } from "./routes/downloads/downloads.component";
 import { DfContentPage } from "./routes/home/home.component";
 import { MOBILE_TAB_BAR_HEIGHT } from "./routes/nav/mobile-tab-bar.component";
@@ -214,6 +215,7 @@ const MainApp = () => {
             <Route key="route-index" id="route-index" index element={<DfContentPage />} />
             <Route key="route-df-content" id="route-df-content" path="content" element={<DfContentPage />} />
             <Route key="route-downloads" id="route-downloads" path="downloads" element={<DownloadsPage />} />
+            <Route key="route-articles" id="route-articles" path="articles" element={<ArticlesPage />} />
             <Route key="route-auth" id="route-auth" path="auth" element={<AuthPage />} />
             <Route key="route-settings" id="route-settings" element={<NavPage />}>
               {settingsRoutes}

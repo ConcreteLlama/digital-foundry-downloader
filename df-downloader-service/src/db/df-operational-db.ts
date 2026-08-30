@@ -101,6 +101,10 @@ export abstract class DfDownloaderOperationalDb {
   abstract setDfArticleLookup(state: DfArticleLookupState): Promise<void>;
   abstract getDfArticleLookup(contentName: string): Promise<DfArticleLookupState | undefined>;
   /** Synchronous: the retry decision runs on every content-panel open. */
+  abstract getAllDfArticleIndexEntries(): Record<
+    string,
+    { lastAttemptedAt: Date; missCount: number; hasArticle: boolean; url?: string; title?: string }
+  >;
   abstract getDfArticleIndexEntry(contentName: string): { lastAttemptedAt: Date; missCount: number; hasArticle: boolean; url?: string; title?: string } | undefined;
   /**
    * What is already known about an article page without fetching it.

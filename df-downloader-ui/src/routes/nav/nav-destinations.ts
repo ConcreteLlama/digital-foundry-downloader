@@ -1,4 +1,5 @@
 import ComputerIcon from "@mui/icons-material/Computer";
+import ArticleIcon from "@mui/icons-material/Article";
 import InsightsIcon from "@mui/icons-material/Insights";
 import DownloadIcon from "@mui/icons-material/Download";
 import HandymanIcon from "@mui/icons-material/Handyman";
@@ -37,6 +38,14 @@ export const navDestinations: NavDestination[] = [
   // section. The path is left alone so existing links and bookmarks still work.
   { prefix: "/downloads", label: "Activity", icon: DownloadIcon, path: "/downloads", badge: "activity" },
   { prefix: "/analysis", label: "Analysis", icon: InsightsIcon, section: analysisRouteDefinitions },
+  /*
+    A destination of its own rather than a page inside Analysis.
+
+    Analysis reads across what the AI produced; this is a straight index of
+    Digital Foundry's writing and the videos it goes with, which is a
+    different subject and a different reason to open it.
+  */
+  { prefix: "/articles", label: "Articles", icon: ArticleIcon, path: "/articles" },
   { prefix: "/tools", label: "Tools", icon: HandymanIcon, section: toolsRouteDefinitions },
   { prefix: "/settings", label: "Settings", icon: SettingsIcon, section: settingsRouteDefinitions },
   { prefix: "/system", label: "System", icon: ComputerIcon, section: systemRouteDefinitions },

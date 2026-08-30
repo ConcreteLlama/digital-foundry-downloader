@@ -163,6 +163,9 @@ export class DfFileOperationalDb extends DfDownloaderOperationalDb {
     async getDfArticleLookup(contentName: string) {
         return this.dfArticleStore.get(contentName);
     }
+    getAllDfArticleIndexEntries() {
+        return this.dfArticleStore.getAllIndexEntries();
+    }
     getDfArticleIndexEntry(contentName: string) {
         return this.dfArticleStore.getIndexEntry(contentName);
     }
