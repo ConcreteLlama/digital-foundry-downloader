@@ -1,3 +1,4 @@
+import { MOBILE_TAB_BAR_HEIGHT } from "./nav-metrics.ts";
 import { Badge, BottomNavigation, BottomNavigationAction, Paper } from "@mui/material";
 import { useSelector } from "react-redux";
 import { useLocation, useNavigate } from "react-router-dom";
@@ -6,7 +7,7 @@ import { useNavBadge } from "./nav-badges";
 import { findDestination, getDestinationPath, NavDestination, navDestinations } from "./nav-destinations";
 
 /** Height reserved for the bar, so page content and the FAB can clear it. */
-export const MOBILE_TAB_BAR_HEIGHT = 56;
+export { MOBILE_TAB_BAR_HEIGHT } from "./nav-metrics.ts";
 
 /**
  * On a phone the five destinations are worth a permanent bar - reaching them

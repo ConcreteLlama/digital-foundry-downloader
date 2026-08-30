@@ -10,7 +10,7 @@ import { queryConfigSection, updateConfigSection } from "../../store/config/conf
 import { selectConfigError, selectConfigLoading, selectConfigSection } from "../../store/config/config.selector";
 import { store } from "../../store/store";
 import { Loading } from "../general/loading.component.tsx";
-import { MOBILE_TAB_BAR_HEIGHT } from "../../routes/nav/mobile-tab-bar.component.tsx";
+import { MOBILE_TAB_BAR_HEIGHT } from "../../routes/nav/nav-metrics.ts";
 
 export const CurrentSettingsContext = createContext<Partial<DfDownloaderConfig>>({});
 
