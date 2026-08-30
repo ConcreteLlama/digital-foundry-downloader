@@ -50,6 +50,19 @@ export const VideoPlayerDialog = ({ contentEntry, download, open, onClose, start
     *and* enough width for a rail beside it, so both are asked for.
   */
   const roomForTheater = useMediaQuery("(min-width:1200px) and (min-height:640px)");
+
+  /*
+    Edge to edge on a phone, which is what every other dialog in this app
+    already does (see the search, changelog and session-check dialogs, all of
+    which go full screen below md).
+
+    This one never adopted it, so it kept MUI's default margins and left a
+    band of the page showing down both sides - the same thing that was fixed
+    app-wide once already, reappearing here because this dialog sets its own
+    sizing and so sat outside that fix. It matters more here than elsewhere:
+    the width the video gets is the width the dialog has.
+  */
+  const fullScreen = useMediaQuery("(max-width:899.95px)");
   const [theater, setTheater] = useState(true);
 
 
@@ -101,6 +114,7 @@ export const VideoPlayerDialog = ({ contentEntry, download, open, onClose, start
     <Dialog
       open={open}
       onClose={onClose}
+      fullScreen={fullScreen}
       maxWidth={inTheater ? false : "lg"}
       fullWidth
       PaperProps={{
