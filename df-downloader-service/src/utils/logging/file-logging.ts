@@ -1,4 +1,4 @@
-import { logger } from "df-downloader-common";
+import { LogEntry, logger } from "df-downloader-common";
 import { LOG_FILE_NAME } from "df-downloader-common/config/logging-config.js";
 import path from "node:path";
 import { configService } from "../../config/config.js";
@@ -27,7 +27,14 @@ const applyConfig = () => {
     }
     return;
   }
-  sink = new FileLogSink(file.logLevel, workDir, LOG_FILE_NAME, file.maxFileSizeMb * 1024 * 1024, file.maxFiles);
+  sink = new FileLogSink(
+    file.logLevel,
+    workDir,
+    LOG_FILE_NAME,
+    file.maxFileSizeMb * 1024 * 1024,
+    file.maxFiles,
+    notifySubscribers
+  );
   logger.addSink(sink);
   logger.log(
     "info",
@@ -71,6 +78,35 @@ export const initFileLogging = () => {
  * being able to read back what happened before you disabled it is the whole
  * reason it was written.
  */
+/**
+ * Live subscribers to newly written log entries.
+ *
+ * Held here rather than on the sink because the sink is rebuilt whenever the
+ * logging config changes - anyone watching the Logs page would silently stop
+ * receiving entries the moment a setting was saved if their subscription
+ * lived on the instance.
+ */
+const entrySubscribers = new Set<(entry: LogEntry) => void>();
+
+const notifySubscribers = (entry: LogEntry) => {
+  for (const subscriber of entrySubscribers) {
+    try {
+      subscriber(entry);
+    } catch (e) {
+      // Swallowed on purpose - logging from inside the log path loops.
+    }
+  }
+};
+
+/** Returns an unsubscribe function. */
+export const subscribeToLogEntries = (subscriber: (entry: LogEntry) => void) => {
+  entrySubscribers.add(subscriber);
+  return () => entrySubscribers.delete(subscriber);
+};
+
+/** Whether anything is currently watching, so callers can skip needless work. */
+export const hasLogEntrySubscribers = () => entrySubscribers.size > 0;
+
 const derivePaths = () => {
   const base = path.join(configService.config.contentManagement.workDir, LOG_FILE_NAME);
   const paths = [base];

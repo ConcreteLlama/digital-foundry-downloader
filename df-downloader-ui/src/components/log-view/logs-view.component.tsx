@@ -112,6 +112,13 @@ export const LogsView = () => {
   const [searchInput, setSearchInput] = useState("");
   const [search, setSearch] = useState("");
   const [live, setLive] = useState(true);
+  /**
+   * Set when the live stream cannot be used, which drops the view back to the
+   * polling loop below. The stream is the better mechanism but it is not
+   * worth losing the tail entirely if a proxy in front of the app eats
+   * event-streams.
+   */
+  const [streamFailed, setStreamFailed] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [meta, setMeta] = useState<Pick<LogsResponse, "fileLoggingEnabled" | "logFilePath" | "truncated"> | null>(
@@ -152,8 +159,67 @@ export const LogsView = () => {
     void reload();
   }, [reload]);
 
+  /**
+   * Live tail over its own event stream.
+   *
+   * Its own connection rather than a channel on the app's shared stream: that
+   * one fans every channel out to every client, so log traffic would reach
+   * tabs nobody is reading logs in. Here the connection *is* the
+   * subscription - it exists only while this page is mounted with live on,
+   * and the server produces nothing when no one is listening.
+   *
+   * Entries arrive unfiltered and are filtered here, because this is a
+   * trickle of new lines rather than a whole file. The initial load is still
+   * filtered server-side, where it matters.
+   */
   useEffect(() => {
-    if (!live) {
+    if (!live || streamFailed) {
+      return;
+    }
+    const source = new EventSource(`${API_URL}/logs/stream`, { withCredentials: true });
+
+    const onLogs = (event: MessageEvent) => {
+      let incoming: LogEntry[];
+      try {
+        incoming = JSON.parse(event.data)?.data?.entries ?? [];
+      } catch (e) {
+        return;
+      }
+      const needle = search.trim().toLowerCase();
+      const matching = incoming.filter(
+        (entry) =>
+          (levels.size === 0 || levels.has(entry.level)) &&
+          (!needle || entry.message.toLowerCase().includes(needle))
+      );
+      if (!matching.length) {
+        return;
+      }
+      setEntries((current) => {
+        const next = [...current, ...matching];
+        return next.length > MAX_BUFFERED_ENTRIES ? next.slice(-MAX_BUFFERED_ENTRIES) : next;
+      });
+      setError(null);
+    };
+
+    source.addEventListener("logs", onLogs as EventListener);
+    // EventSource retries by itself, so a single error is not fatal - only a
+    // connection that has actually been closed means falling back.
+    source.onerror = () => {
+      if (source.readyState === EventSource.CLOSED) {
+        setStreamFailed(true);
+      }
+    };
+
+    return () => {
+      source.removeEventListener("logs", onLogs as EventListener);
+      source.close();
+    };
+  }, [live, streamFailed, levels, search]);
+
+  // Fallback only - see streamFailed. Reloads first, so entries the stream
+  // already appended are not fetched a second time from a stale cursor.
+  useEffect(() => {
+    if (!live || !streamFailed) {
       return;
     }
     let cancelled = false;
@@ -191,7 +257,7 @@ export const LogsView = () => {
       cancelled = true;
       clearInterval(timer);
     };
-  }, [live, levels, search]);
+  }, [live, streamFailed, levels, search]);
 
   /**
    * Follow the tail, but only while the user is actually at the bottom -

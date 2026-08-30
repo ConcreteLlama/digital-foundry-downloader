@@ -54,7 +54,15 @@ export class FileLogSink implements LogSink {
     private readonly dir: string,
     private readonly fileName: string,
     private readonly maxFileSizeBytes: number,
-    private readonly maxFiles: number
+    private readonly maxFiles: number,
+    /**
+     * Called for each entry accepted by this sink, so a live reader can be
+     * pushed to without polling the file. Fired on write rather than on
+     * flush: this is a tail for someone watching, and holding entries back
+     * for up to a flush interval is exactly the lag that makes a live view
+     * feel broken. The file is still the source of truth on reload.
+     */
+    private readonly onEntry?: (entry: LogEntry) => void
   ) {
     this.currentSizeBytes = this.statSize(this.filePath);
   }
@@ -82,6 +90,14 @@ export class FileLogSink implements LogSink {
 
   write(entry: LogEntry) {
     this.pending.push(entry);
+    // Never allowed to break logging: a subscriber that throws must not stop
+    // the entry reaching disk.
+    try {
+      this.onEntry?.(entry);
+    } catch (e) {
+      // Deliberately not logged - doing so from inside the log path is how
+      // you get an infinite loop.
+    }
     if (this.pending.length >= MAX_PENDING_ENTRIES) {
       this.flush();
       return;

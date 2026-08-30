@@ -1,8 +1,27 @@
-import { LogLevel, LogsQuery, LogsResponse, logLevels } from "df-downloader-common";
+import { LogEntry, LogLevel, LogsQuery, LogsResponse, logLevels } from "df-downloader-common";
 import express from "express";
-import { flushFileLog, getLogFilePath, getLogFilePaths, isFileLoggingEnabled } from "../../utils/logging/file-logging.js";
+import {
+  flushFileLog,
+  getLogFilePath,
+  getLogFilePaths,
+  isFileLoggingEnabled,
+  subscribeToLogEntries,
+} from "../../utils/logging/file-logging.js";
 import { readLogEntries } from "../../utils/logging/log-file-reader.js";
+import { makeSuccessResponse } from "df-downloader-common";
+import type { Request, Response } from "express";
 import { sendResponse, zodParseHttp } from "../utils/utils.js";
+
+/**
+ * How long appended entries are gathered before being sent.
+ *
+ * A busy moment writes many lines in quick succession, and one SSE frame per
+ * line would be mostly framing. This is short enough to still read as live.
+ */
+const BATCH_MS = 250;
+
+/** Keeps proxies from closing an idle stream - same reason as the task stream. */
+const HEARTBEAT_MS = 20000;
 
 const allLevels = new Set<string>(logLevels);
 
@@ -67,6 +86,72 @@ export const makeLogsRouter = () => {
       "query"
     )
   );
+
+  /**
+   * A live tail, as its own stream rather than a channel on the shared one.
+   *
+   * The shared broadcaster (rest/realtime/stream-broadcaster.ts) builds each
+   * channel once and writes the identical frame to every connected client -
+   * deliberately, so several open tabs do not multiply the work. That is the
+   * wrong shape for logs twice over: every tab would receive log traffic
+   * whether or not anyone was reading logs in it, and log entries are
+   * appended rather than re-snapshotted, so there is no "current value" to
+   * dedupe against.
+   *
+   * Here the connection is the subscription. The page opens it when the live
+   * toggle is on and closes it on unmount, and nothing is produced at all
+   * while nobody is watching.
+   *
+   * Entries go out unfiltered and the client applies its own level and search
+   * filters. That is the opposite of the read endpoint above, and for the
+   * opposite reason: this is a trickle of new lines, not a whole file, so
+   * filtering per connection would cost more bookkeeping than it saves bytes.
+   */
+  router.get("/stream", (req: Request, res: Response) => {
+    res.writeHead(200, {
+      "Content-Type": "text/event-stream",
+      "Cache-Control": "no-cache",
+      Connection: "keep-alive",
+      // Nginx buffers proxied responses by default, which makes a working
+      // stream look hung. Ignored by everything else.
+      "X-Accel-Buffering": "no",
+    });
+    res.flushHeaders();
+    res.socket?.setTimeout(0);
+    res.socket?.setNoDelay(true);
+
+    let batch: LogEntry[] = [];
+    let batchTimer: NodeJS.Timeout | null = null;
+
+    const send = () => {
+      batchTimer = null;
+      if (!batch.length) {
+        return;
+      }
+      const entries = batch;
+      batch = [];
+      res.write(`event: logs\ndata: ${JSON.stringify(makeSuccessResponse({ entries }))}\n\n`);
+    };
+
+    const unsubscribe = subscribeToLogEntries((entry) => {
+      batch.push(entry);
+      if (!batchTimer) {
+        batchTimer = setTimeout(send, BATCH_MS);
+        batchTimer.unref?.();
+      }
+    });
+
+    const heartbeat = setInterval(() => res.write(": ping\n\n"), HEARTBEAT_MS);
+    heartbeat.unref?.();
+
+    req.on("close", () => {
+      unsubscribe();
+      clearInterval(heartbeat);
+      if (batchTimer) {
+        clearTimeout(batchTimer);
+      }
+    });
+  });
 
   return router;
 };
