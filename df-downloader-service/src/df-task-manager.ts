@@ -98,6 +98,25 @@ export class DfTaskManager {
   readonly updateDownloadMetadataTaskPipeline: UpdateDownloadMetadataTaskPipeline;
 
   readonly maintenanceOperationsTaskManager: TaskManager;
+  /**
+   * Where bulk backfill runs live, deliberately NOT the maintenance
+   * manager.
+   *
+   * A bulk run is unlike every other long task here: it does not do the
+   * work itself, it drives the ordinary per-item pipelines and waits for
+   * them. The AI analysis pipeline finishes by saving through the
+   * maintenance manager, which allows one task at a time - so a bulk run
+   * queued there took the only slot, awaited a pipeline, and that
+   * pipeline's save step queued behind the run that was waiting on it.
+   * The whole thing stopped dead at "save analysis" until someone
+   * advanced it by hand.
+   *
+   * Anything that waits on other tasks needs a slot those tasks are not
+   * competing for, so this is its own manager rather than a larger
+   * concurrency number on the shared one - which would only raise the
+   * item count needed to deadlock.
+   */
+  readonly bulkOperationsTaskManager: TaskManager;
 
   readonly pipelineExecutions = new Map<string, PipelineExecutionTypes>();
   readonly tasks = new Map<string, ManagedTask<any, any>>();
@@ -183,6 +202,13 @@ export class DfTaskManager {
       youtubeFetchTaskManager,
     });
     this.maintenanceOperationsTaskManager = new TaskManager({
+      concurrentTasks: 1,
+    });
+    this.bulkOperationsTaskManager = new TaskManager({
+      // One run at a time is still right - each already limits its own
+      // per-item concurrency, and two bulk runs would fight over the same
+      // request queue and CPU. The point of the separation is that this
+      // slot is not one the work it awaits also needs.
       concurrentTasks: 1,
     });
     this.aiAnalysisTaskPipeline = createAiAnalysisTaskPipeline({
@@ -496,7 +522,7 @@ export class DfTaskManager {
    * see stillNeedsWork in bulk-backfill-task.ts.
    */
   bulkBackfill(contentKeys: string[], target: BulkBackfillTarget, force: boolean, language: string) {
-    const task = this.maintenanceOperationsTaskManager.addTask(
+    const task = this.bulkOperationsTaskManager.addTask(
       BulkBackfillTask(
         contentKeys.map((contentKey) => ({ contentKey })),
         {
