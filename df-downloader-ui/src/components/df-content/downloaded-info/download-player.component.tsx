@@ -318,11 +318,27 @@ export const DownloadPlayer = ({
   const stageRef = useRef<HTMLDivElement | null>(null);
   const [immersive, setImmersive] = useState(false);
   const [overlayOpen, setOverlayOpen] = useState(false);
+  /*
+    Set when a full-screen request went nowhere.
+
+    `fullscreenEnabled` promises only that the feature exists, not that this
+    request will be honoured - and asking hides the player's own fullscreen
+    button, so a refusal strands the user with a button that does nothing and
+    no other way to fill the screen. A review found the request can also
+    *hang*: no resolve, no reject, no event. So this is driven by "full screen
+    did not happen", not by a rejected promise, and giving the native button
+    back is the recovery.
+  */
+  const [immersiveRefused, setImmersiveRefused] = useState(false);
 
   useEffect(() => {
     const onFullscreenChange = () => {
       const active = document.fullscreenElement === stageRef.current;
       setImmersive(active);
+      if (active) {
+        // It worked after all - a slow transition, not a refusal.
+        setImmersiveRefused(false);
+      }
       /*
         Full screen starts as full screen - just the video. The timeline is a
         tap away, and the button over the picture is what says so, which is
@@ -521,7 +537,7 @@ export const DownloadPlayer = ({
         the button that does. Two buttons that look like they do the same
         thing and do not is worse than one.
       */
-      controlsList={canImmerse ? "nofullscreen" : undefined}
+      controlsList={canImmerse && !immersiveRefused ? "nofullscreen" : undefined}
       /*
         Only when the API really is on another origin - see apiIsCrossOrigin.
         Setting this unconditionally also forces the poster through CORS, and
@@ -601,8 +617,16 @@ export const DownloadPlayer = ({
                 thing that separates them, and it costs nothing: that band is
                 letterboxing most of the time.
               */
-              const bottom = event.currentTarget.getBoundingClientRect().bottom;
-              if (bottom - event.clientY < 96) {
+              const rect = event.currentTarget.getBoundingClientRect();
+              /*
+                A share of the height, capped - not a flat 96px. Measured on a
+                phone held sideways, 96px is a quarter of the stage, so a
+                quarter of the picture did nothing. The control bar does not
+                grow as the screen shrinks, so the cap is what matters on a
+                desktop and the proportion is what matters on a handset.
+              */
+              const band = Math.min(96, rect.height * 0.12);
+              if (rect.bottom - event.clientY < band) {
                 return;
               }
               setOverlayOpen((open) => !open);
@@ -623,7 +647,7 @@ export const DownloadPlayer = ({
       }}
     >
       {videoElement}
-      {canImmerse && (
+      {canImmerse && !immersiveRefused && (
         <Tooltip title={immersive ? "Leave full screen" : "Full screen - tap the picture for the timeline"}>
           <IconButton
             size="small"
@@ -634,11 +658,18 @@ export const DownloadPlayer = ({
               if (immersive) {
                 void document.exitFullscreen();
               } else {
-                stageRef.current?.requestFullscreen?.().catch(() => {
-                  // Refused (a permissions policy, or a browser that will
-                  // only fullscreen video elements). Nothing to recover -
-                  // the native path is still there.
-                });
+                const stage = stageRef.current;
+                if (!stage?.requestFullscreen) {
+                  setImmersiveRefused(true);
+                  return;
+                }
+                stage.requestFullscreen().catch(() => setImmersiveRefused(true));
+                // The backstop for a request that never answers at all.
+                window.setTimeout(() => {
+                  if (document.fullscreenElement !== stage) {
+                    setImmersiveRefused(true);
+                  }
+                }, 1200);
               }
             }}
             aria-label={immersive ? "Leave full screen" : "Full screen"}

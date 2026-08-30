@@ -79,6 +79,10 @@ export const useAnalysisJumps = (contentKey: string, enabled = true) => {
 
   useEffect(() => {
     if (!enabled) {
+      // Not loading - not asked for. Seeding `loading` from the initial
+      // `enabled` would otherwise leave it stuck true forever for a caller
+      // that starts disabled.
+      setLoading(false);
       return;
     }
     let cancelled = false;

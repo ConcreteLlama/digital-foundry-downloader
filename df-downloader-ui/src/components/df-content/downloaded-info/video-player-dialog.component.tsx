@@ -5,7 +5,7 @@ import { Box, Dialog, DialogContent, DialogTitle, IconButton, Stack, Tooltip, Ty
 import useMediaQuery from "@mui/material/useMediaQuery";
 import { DfContentEntry } from "df-downloader-common";
 import { DfContentDownloadInfo } from "df-downloader-common/models/df-content-download-info";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { monoFontFamily } from "../../../themes/build-theme";
 import { useAnalysisJumps } from "../ai-analysis/analysis-jumps.ts";
 import { DownloadPlayer } from "./download-player.component.tsx";
@@ -49,6 +49,21 @@ export const VideoPlayerDialog = ({ contentEntry, download, open, onClose }: Vid
   */
   const roomForTheater = useMediaQuery("(min-width:1200px) and (min-height:640px)");
   const [theater, setTheater] = useState(true);
+
+  /*
+    Back to theater every time it is opened.
+
+    This dialog stays mounted and only gates its contents on `open`, so the
+    toggle used to outlive the thing it applied to - turning it off stuck for
+    every later open, including for a different file entirely, and then reset
+    when the panel closed. Half-remembered was the worst of both; theater is
+    documented as the default, so opening honours that.
+  */
+  useEffect(() => {
+    if (open) {
+      setTheater(true);
+    }
+  }, [open]);
   const inTheater = theater && roomForTheater;
 
   // Only while open: a closed dialog is not worth a request, and the one
