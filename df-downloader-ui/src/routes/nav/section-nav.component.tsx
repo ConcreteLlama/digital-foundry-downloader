@@ -1,4 +1,5 @@
 import { Box, List, ListItemButton, ListItemIcon, ListItemText, Tooltip, Typography } from "@mui/material";
+import { useEffect, useRef } from "react";
 import { useSelector } from "react-redux";
 import { Link, useLocation } from "react-router-dom";
 import { selectDevConfigEnabled } from "../../store/config/config.selector";
@@ -104,6 +105,22 @@ export const SectionNav = () => {
 export const SectionNavCompact = () => {
   const { pathname } = useLocation();
   const devModeEnabled = useSelector(selectDevConfigEnabled);
+  const selectedRef = useRef<HTMLAnchorElement | null>(null);
+
+  /*
+    Bring the current page into view in the strip.
+
+    The strip scrolls, and the selected page is often not in the part of
+    it you can see - reaching Media Formats leaves the strip still showing
+    Digital Foundry and its neighbours, so nothing on screen says where
+    you are. That got worse with swipe navigation, where you can move
+    several pages without ever touching the strip.
+
+    Nearest rather than centred, so it only moves when it has to.
+  */
+  useEffect(() => {
+    selectedRef.current?.scrollIntoView({ block: "nearest", inline: "nearest" });
+  }, [pathname]);
   const destination = findDestination(pathname);
   if (!destination?.section) {
     return null;
@@ -131,6 +148,7 @@ export const SectionNavCompact = () => {
         return (
           <ListItemButton
             key={route.path}
+            ref={selected ? selectedRef : undefined}
             component={Link}
             to={route.path}
             selected={selected}

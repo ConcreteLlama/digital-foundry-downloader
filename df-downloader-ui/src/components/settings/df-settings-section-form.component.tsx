@@ -151,17 +151,19 @@ const StickySaveBar = ({ sectionName }: { sectionName: keyof DfDownloaderConfig 
     <Box
       sx={{
         position: "sticky",
-        // Sticky offsets are measured against the scroll container's padding
-        // box, and the app reserves 56px there for the fixed mobile tab bar.
-        // At bottom:0 the pinned bar therefore sits behind that bar - the
-        // padding protects content in normal flow, not a pinned element.
-        bottom: { xs: `${MOBILE_TAB_BAR_HEIGHT}px`, md: 0 },
+        // Pinned flush with the bottom of the scroll area, then padded by
+        // the height of the mobile tab bar so the controls still sit above
+        // it. Offsetting the whole bar upwards instead leaves a band below
+        // it that content scrolls through, which looks like the bar is
+        // floating over the page rather than closing it off.
+        bottom: 0,
         display: "flex",
         alignItems: "center",
         justifyContent: "flex-end",
         gap: 2,
         marginTop: 4,
-        paddingY: 1.5,
+        paddingTop: 1.5,
+        paddingBottom: { xs: `${MOBILE_TAB_BAR_HEIGHT + 12}px`, md: 1.5 },
         backgroundColor: "background.default",
         borderTop: "1px solid",
         borderColor: "divider",
