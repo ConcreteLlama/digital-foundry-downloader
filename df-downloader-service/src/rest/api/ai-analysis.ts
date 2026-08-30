@@ -246,6 +246,10 @@ export const makeAiAnalysisRouter = (contentManager: DigitalFoundryContentManage
       const state = await contentManager.db.getDfArticleLookup(contentKey);
       return sendResponse(res, {
         article: article ?? null,
+        // Pages that embed this video without being about it. Kept
+        // separate from the companion piece throughout: they are worth
+        // reading, but they are not what an analysis is grounded on.
+        relatedArticles: state?.relatedArticles ?? [],
         lastAttemptedAt: state?.lastAttemptedAt ?? null,
         missCount: state?.missCount ?? 0,
         // "not yet" rather than "never" - surfaced so the UI can say when

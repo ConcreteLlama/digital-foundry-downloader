@@ -7,6 +7,7 @@ import { DfContentAvailabilityDb } from "./file-dbs/content-status-db.js";
 import { DfUserDb } from "./file-dbs/user-db.js";
 import { AiAnalysisStore } from "./ai-analysis-store.js";
 import { DfArticleStore } from "./df-article-store.js";
+import { DfArticleMeta, DfArticleMetaCache } from "./df-article-meta-cache.js";
 
 export class DfFileOperationalDb extends DfDownloaderOperationalDb {
     async getAllContentNames(): Promise<string[]> {
@@ -44,9 +45,10 @@ export class DfFileOperationalDb extends DfDownloaderOperationalDb {
         const contentStatusDb = await DfContentAvailabilityDb.create(dbDir);
         const aiAnalysisStore = await AiAnalysisStore.create(dbDir);
         const dfArticleStore = await DfArticleStore.create(dbDir);
-        return new DfFileOperationalDb(contentInfoDb, userDb, contentStatusDb, aiAnalysisStore, dfArticleStore);
+        const dfArticleMetaCache = await DfArticleMetaCache.create(dbDir);
+        return new DfFileOperationalDb(contentInfoDb, userDb, contentStatusDb, aiAnalysisStore, dfArticleStore, dfArticleMetaCache);
     }
-    private constructor(private readonly contentInfoDb: DfContentInfoDb, private readonly userDb: DfUserDb, private readonly contentStatusDb: DfContentAvailabilityDb, private readonly aiAnalysisStore: AiAnalysisStore, private readonly dfArticleStore: DfArticleStore) {
+    private constructor(private readonly contentInfoDb: DfContentInfoDb, private readonly userDb: DfUserDb, private readonly contentStatusDb: DfContentAvailabilityDb, private readonly aiAnalysisStore: AiAnalysisStore, private readonly dfArticleStore: DfArticleStore, private readonly dfArticleMetaCache: DfArticleMetaCache) {
         super();
     }
     async init() {
@@ -163,6 +165,21 @@ export class DfFileOperationalDb extends DfDownloaderOperationalDb {
     }
     getDfArticleIndexEntry(contentName: string) {
         return this.dfArticleStore.getIndexEntry(contentName);
+    }
+    getDfArticleMeta(url: string) {
+        return this.dfArticleMetaCache.get(url);
+    }
+    isDfArticleMetaFresh(url: string, lastmod?: Date) {
+        return this.dfArticleMetaCache.isFresh(url, lastmod);
+    }
+    setDfArticleMeta(url: string, meta: DfArticleMeta) {
+        this.dfArticleMetaCache.set(url, meta);
+    }
+    getDfArticleScanCursor() {
+        return this.dfArticleStore.getScanCursor();
+    }
+    async setDfArticleScanCursor(cursor: Date) {
+        return this.dfArticleStore.setScanCursor(cursor);
     }
 
     async isFirstRunComplete() {

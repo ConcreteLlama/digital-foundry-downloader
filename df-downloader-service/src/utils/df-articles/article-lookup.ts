@@ -1,4 +1,5 @@
-import { DfArticle, DfContentInfo, logger } from "df-downloader-common";
+import { DfArticle, DfArticleRef, DfContentInfo, logger } from "df-downloader-common";
+import { DfDownloaderOperationalDb } from "../../db/df-operational-db.js";
 import { DfFetchPriority, dfFetch } from "../../df-request-queue.js";
 import { parseArticlePage } from "./article-parser.js";
 
@@ -96,7 +97,7 @@ const MIN_TITLE_SCORE = 0.3;
  */
 const MAX_DATE_DISTANCE_DAYS = 120;
 
-type SitemapEntry = { url: string; slug: string; section: string; lastmod?: Date };
+export type SitemapEntry = { url: string; slug: string; section: string; lastmod?: Date };
 type CachedSitemap = { entries: SitemapEntry[]; fetchedAt: number };
 const sitemapCache = new Map<number, CachedSitemap>();
 
@@ -167,7 +168,7 @@ const parseSitemap = (xml: string): SitemapEntry[] => {
   return entries;
 };
 
-const fetchSitemap = async (year: number, priority?: number): Promise<SitemapEntry[]> => {
+export const fetchSitemap = async (year: number, priority?: number): Promise<SitemapEntry[]> => {
   const cached = sitemapCache.get(year);
   if (cached && Date.now() - cached.fetchedAt < SITEMAP_CACHE_TTL_MS) {
     return cached.entries;
@@ -217,7 +218,20 @@ const yearsToSearch = (publishedDate: Date): number[] => {
  * another video about the same game, which is exactly the population most
  * likely to be in the library too.
  */
-export type ArticleByproduct = { article: DfArticle };
+export type ArticleByproduct = {
+  ref: DfArticleRef;
+  /** Every video the page embeds - which decides what it can be filed as. */
+  videoIds: string[];
+  /**
+   * Present only when the page was actually fetched this time.
+   *
+   * A cached page can still be filed as related reading, which needs
+   * nothing but the ref. It cannot be filed as another video's companion
+   * piece, because that stores the body an analysis is grounded on - but
+   * that filing already happened the first time it was fetched.
+   */
+  text?: string;
+};
 
 export type ArticleLookupOutcome = (
   | { status: "found"; article: DfArticle }
@@ -225,6 +239,14 @@ export type ArticleLookupOutcome = (
 ) & {
   /** Confirmed matches for other content, collected for free along the way. */
   byproducts: ArticleByproduct[];
+  /**
+   * Pages that embed the video being searched for without being about it.
+   *
+   * Returned on a miss as well as a match: they are worth keeping either
+   * way, and on a miss they also record that these particular candidates
+   * have been checked, so the next retry does not pay to fetch them again.
+   */
+  related: DfArticleRef[];
 };
 
 /**
@@ -237,16 +259,17 @@ export type ArticleLookupOutcome = (
  */
 export const findArticleForContent = async (
   contentInfo: DfContentInfo,
-  opts: { priority?: number } = {}
+  opts: { priority?: number; seenUrls?: Set<string>; db?: DfDownloaderOperationalDb } = {}
 ): Promise<ArticleLookupOutcome> => {
   const { youtubeVideoId, title, publishedDate } = contentInfo;
   const byproducts: ArticleByproduct[] = [];
+  const related: DfArticleRef[] = [];
   if (!youtubeVideoId) {
     // Without a video ID there is nothing to verify a candidate against,
     // and title similarity alone is not good enough to attach an article
     // to content - a wrong one would be read by the analysis as
     // authoritative, which is worse than having none.
-    return { status: "not_found", reason: "No YouTube video ID for this content, so a match cannot be verified", byproducts };
+    return { status: "not_found", reason: "No YouTube video ID for this content, so a match cannot be verified", byproducts, related };
   }
 
   const published = publishedDate instanceof Date ? publishedDate : new Date(publishedDate);
@@ -260,7 +283,7 @@ export const findArticleForContent = async (
   }
 
   if (!entries.length) {
-    return { status: "not_found", reason: "Could not read Digital Foundry's article index", byproducts };
+    return { status: "not_found", reason: "Could not read Digital Foundry's article index", byproducts, related };
   }
 
   const publishedMs = published.getTime();
@@ -287,34 +310,61 @@ export const findArticleForContent = async (
     });
 
   if (!scored.length) {
-    return { status: "not_found", reason: "No article with a similar title published around the same time", byproducts };
+    return { status: "not_found", reason: "No article with a similar title published around the same time", byproducts, related };
   }
 
-  const toVerify = scored.slice(0, MAX_CANDIDATES_TO_VERIFY);
+  // Pages already fetched and classified on a previous attempt are not
+  // worth paying for again - without this, every retry for as long as the
+  // companion article stayed unwritten re-fetched the same round-ups.
+  const toVerify = scored.filter((candidate) => !opts.seenUrls?.has(candidate.url)).slice(0, MAX_CANDIDATES_TO_VERIFY);
+  if (!toVerify.length) {
+    return {
+      status: "not_found",
+      reason: "Every similarly-titled article has already been checked",
+      byproducts,
+      related,
+    };
+  }
   for (const candidate of toVerify) {
-    const result = await verifyCandidate(candidate, youtubeVideoId, opts.priority);
+    const result = await verifyCandidate(candidate, youtubeVideoId, opts.db, opts.priority);
+    if (result.kind === "unusable") {
+      continue;
+    }
+    const isAboutOneVideo = result.videoIds.length === 1;
     if (result.kind === "match") {
-      logger.log("info", `Matched article for ${contentInfo.key}: ${candidate.url}`);
-      return { status: "found", article: result.article, byproducts };
-    }
-    if (result.kind === "other") {
-      // Kept only when the page is unambiguously about one video. A
-      // roundup embedding several is not "the article for" any single one
-      // of them, and filing it against whichever happens to appear first
-      // would attach a page to content it merely mentions - a false
-      // positive that then gets fed to an analysis as grounding.
-      if (result.embedCount === 1) {
-        byproducts.push({ article: result.article });
-      } else {
-        logger.log("debug", `Not filing ${result.article.slug} - embeds ${result.embedCount} videos, so not specific to one`);
+      // Only reachable without text if the cache answered, and the cache
+      // is only trusted for pages that cannot become the companion piece.
+      if (isAboutOneVideo && !result.text) {
+        continue;
       }
+      // Embedding the video is not the same as being about it. A page
+      // carrying one video is the companion piece; one carrying five is a
+      // round-up that happens to include it, and using that as grounding
+      // would feed an analysis mostly-irrelevant text as though it were
+      // written about this video.
+      if (isAboutOneVideo) {
+        logger.log("info", `Matched article for ${contentInfo.key}: ${candidate.url}`);
+        return { status: "found", article: { ...result.ref, text: result.text! }, byproducts, related };
+      }
+      logger.log(
+        "debug",
+        `${result.ref.slug} embeds ${contentInfo.key} among ${result.videoIds.length} videos - keeping as related, still looking`
+      );
+      related.push(result.ref);
+      continue;
     }
+    // Positively identified as belonging to some other video. Whether it
+    // is that video's companion piece or merely related to it is the same
+    // question, answered the same way, so the caller gets the embed list
+    // and decides.
+    byproducts.push({ ref: result.ref, videoIds: result.videoIds, text: result.text });
   }
 
   return {
     status: "not_found",
-    reason: `Checked ${toVerify.length} similarly-titled article${toVerify.length === 1 ? "" : "s"}, none embedded this video`,
+    reason: `Checked ${toVerify.length} similarly-titled article${toVerify.length === 1 ? "" : "s"}, none was written about this video`,
     byproducts,
+    related,
   };
 };
 
@@ -326,15 +376,54 @@ export const findArticleForContent = async (
  * would be accepted and then fed to the analysis as fact.
  */
 type VerifyResult =
-  | { kind: "match"; article: DfArticle }
-  | { kind: "other"; article: DfArticle; embedCount: number }
+  | { kind: "match" | "other"; ref: DfArticleRef; videoIds: string[]; text?: string }
   | { kind: "unusable" };
 
+/**
+ * What a page embeds, from memory where possible and a fetch otherwise.
+ *
+ * The cache is consulted for every candidate but trusted for only two of
+ * the three answers, and the distinction is deliberate:
+ *
+ * - "this page does not embed the video" and "it embeds it among several"
+ *   are answered outright. Together those are the overwhelming majority of
+ *   candidates, and both are fully served by an embed list and a title.
+ * - "this page is about exactly this video" is re-fetched anyway, because
+ *   that is the one case whose result stores the article body for an
+ *   analysis to be grounded on, and the body is deliberately not cached.
+ *   It happens once per piece of content, ever.
+ *
+ * A page whose sitemap stamp has moved since it was read is not trusted at
+ * all - it may have gained or lost an embed.
+ */
 const verifyCandidate = async (
   candidate: SitemapEntry,
   youtubeVideoId: string,
+  db?: DfDownloaderOperationalDb,
   priority?: number
 ): Promise<VerifyResult> => {
+  const cached = db?.isDfArticleMetaFresh(candidate.url, candidate.lastmod)
+    ? db.getDfArticleMeta(candidate.url)
+    : undefined;
+  if (cached) {
+    const isOurs = cached.videoIds.includes(youtubeVideoId);
+    if (!isOurs || cached.videoIds.length > 1) {
+      logger.log("debug", `Article ${candidate.slug} answered from cache - no request needed`);
+      return {
+        kind: isOurs ? "match" : "other",
+        videoIds: cached.videoIds,
+        ref: {
+          url: candidate.url,
+          slug: cached.slug,
+          title: cached.title,
+          youtubeVideoId: isOurs ? youtubeVideoId : cached.videoIds[0],
+          author: cached.author,
+          matchedAt: new Date(),
+        },
+      };
+    }
+  }
+
   try {
     const response = await dfFetch(
       candidate.url,
@@ -348,39 +437,34 @@ const verifyCandidate = async (
     if (!parsed?.text.trim() || !parsed.youtubeVideoIds.length) {
       return { kind: "unusable" };
     }
+    db?.setDfArticleMeta(candidate.url, {
+      slug: candidate.slug,
+      title: parsed.title,
+      author: parsed.author,
+      videoIds: parsed.youtubeVideoIds,
+      lastmod: candidate.lastmod,
+      cachedAt: new Date(),
+    });
+
     // Membership, not equality. An article can lead with a trailer before
     // the video it is actually about, and testing only the first embed
     // would reject it as belonging to something else.
-    if (parsed.youtubeVideoIds.includes(youtubeVideoId)) {
-      return {
-        kind: "match",
-        article: {
-          url: candidate.url,
-          slug: candidate.slug,
-          title: parsed.title,
-          youtubeVideoId,
-          text: parsed.text,
-          author: parsed.author,
-          matchedAt: new Date(),
-        },
-      };
+    const isOurs = parsed.youtubeVideoIds.includes(youtubeVideoId);
+    if (!isOurs) {
+      logger.log(
+        "debug",
+        `Article ${candidate.slug} embeds ${parsed.youtubeVideoIds.join(", ")}, not ${youtubeVideoId}`
+      );
     }
-    // Not what we were looking for, but positively identified. The caller
-    // decides whether that video is in the library, and how much the
-    // identification is worth given how many videos this page embeds.
-    logger.log(
-      "debug",
-      `Article ${candidate.slug} embeds ${parsed.youtubeVideoIds.join(", ")}, not ${youtubeVideoId}`
-    );
     return {
-      kind: "other",
-      embedCount: parsed.youtubeVideoIds.length,
-      article: {
+      kind: isOurs ? "match" : "other",
+      videoIds: parsed.youtubeVideoIds,
+      text: parsed.text,
+      ref: {
         url: candidate.url,
         slug: candidate.slug,
         title: parsed.title,
-        youtubeVideoId: parsed.youtubeVideoIds[0],
-        text: parsed.text,
+        youtubeVideoId: isOurs ? youtubeVideoId : parsed.youtubeVideoIds[0],
         author: parsed.author,
         matchedAt: new Date(),
       },

@@ -19,7 +19,9 @@ import { DfSettingsForm } from "../../components/settings/df-settings.component"
 import { DownloadsSettingsForm } from "../../components/settings/downloads-settings.component";
 import { MetadataSettingsForm } from "../../components/settings/metadata-settings-form.component";
 import { NotificationSettingsForm } from "../../components/settings/notification-settings.component";
+import ArticleIcon from "@mui/icons-material/Article";
 import { AiAnalysisSettingsForm } from "../../components/settings/ai-analysis-settings-form.component";
+import { DfArticlesSettingsForm } from "../../components/settings/df-articles-settings-form.component";
 import { SubtitlesSettingsForm } from "../../components/settings/subtitles-settings-form.component";
 import { DfLogoIcon } from "../../icons/df-logo.component";
 import { NestedSubRoute } from "../nav/nested-routes.ts";
@@ -83,6 +85,12 @@ export const settingsRouteDefinitions: NestedSubRoute = {
       element: <AiAnalysisSettingsForm />,
       name: "AI Analysis",
       icon: AutoAwesomeIcon,
+    },
+    {
+      path: "/settings/df-articles",
+      element: <DfArticlesSettingsForm />,
+      name: "DF Articles",
+      icon: ArticleIcon,
     },
     {
       path: "/settings/notifications",

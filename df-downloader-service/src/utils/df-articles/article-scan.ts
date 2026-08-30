@@ -1,0 +1,246 @@
+import { DfArticle, DfArticleLookupState, DfArticleRef, DfArticleUtils, logger } from "df-downloader-common";
+import { DfArticlesConfig } from "df-downloader-common/config/df-articles-config.js";
+import { DfDownloaderOperationalDb } from "../../db/df-operational-db.js";
+import { DfFetchPriority, dfFetch } from "../../df-request-queue.js";
+import { SitemapEntry, fetchSitemap } from "./article-lookup.js";
+import { parseArticlePage } from "./article-parser.js";
+
+/**
+ * The periodic sweep for newly published Digital Foundry articles.
+ *
+ * This runs in the opposite direction to `ensureArticleForContent`, and
+ * that inversion is the entire reason it can run on a timer.
+ *
+ * Searching per video means scoring the site index against one title and
+ * fetching two or three candidate pages to check which video each embeds -
+ * around one and a bit requests per item, measured. Applied to a library of
+ * a few thousand, that is hours of queued requests, which is exactly why
+ * the backfill tool quotes a duration before it starts.
+ *
+ * Reading new articles instead costs one request per article, and Digital
+ * Foundry publish a few a day. Each article states which videos it embeds,
+ * so the match falls out of the read rather than being searched for. Steady
+ * state is therefore a couple of requests per run: the year's sitemap,
+ * usually served from cache, plus whatever is genuinely new.
+ *
+ * Two protections against that steady state being wrong. The cursor only
+ * advances over articles actually read, so a capped run resumes rather than
+ * skipping; and on a fresh install, with no cursor at all, the window is a
+ * few days rather than the site's entire history - going backwards through
+ * that is what the backfill tool is for, where the cost is stated and the
+ * choice is explicit.
+ */
+
+/**
+ * How the scan reports itself, for logging and the status indicator.
+ */
+export type ArticleScanResult = {
+  articlesRead: number;
+  primaryMatches: number;
+  relatedMatches: number;
+  /** True when the per-run cap stopped it short, so more remain. */
+  capped: boolean;
+};
+
+/**
+ * Sitemaps to consider, given where the cursor sits.
+ *
+ * Almost always just the current year. The previous one is included when
+ * the cursor still points into it, which matters for exactly one case: the
+ * first run after New Year, where everything published in late December
+ * would otherwise be stepped over silently.
+ */
+const yearsToScan = (cursor: Date, now: Date): number[] => {
+  const years = new Set<number>([now.getUTCFullYear(), cursor.getUTCFullYear()]);
+  return [...years].sort();
+};
+
+export const scanForNewArticles = async (
+  db: DfDownloaderOperationalDb,
+  config: DfArticlesConfig,
+  now: Date = new Date()
+): Promise<ArticleScanResult> => {
+  const result: ArticleScanResult = { articlesRead: 0, primaryMatches: 0, relatedMatches: 0, capped: false };
+
+  const storedCursor = db.getDfArticleScanCursor();
+  const cursor =
+    storedCursor ?? new Date(now.getTime() - config.initialLookbackDays * 24 * 60 * 60 * 1000);
+  if (!storedCursor) {
+    logger.log(
+      "info",
+      `First article scan - looking back ${config.initialLookbackDays} days only. Use Tools → Backfill to match older content.`
+    );
+  }
+
+  const entries: SitemapEntry[] = [];
+  for (const year of yearsToScan(cursor, now)) {
+    try {
+      entries.push(...(await fetchSitemap(year, DfFetchPriority.BACKGROUND)));
+    } catch (e) {
+      // One unreadable sitemap is not a reason to abandon the run, and it
+      // must not advance the cursor past articles that were never read.
+      logger.log("warn", `Article scan could not read the ${year} index: ${e}`);
+    }
+  }
+
+  const fresh = entries
+    .filter((entry): entry is SitemapEntry & { lastmod: Date } => Boolean(entry.lastmod))
+    .filter((entry) => entry.lastmod.getTime() > cursor.getTime())
+    // Oldest first, so that stopping at the cap leaves a cursor that is
+    // still a true watermark - everything before it has been read.
+    .sort((a, b) => a.lastmod.getTime() - b.lastmod.getTime());
+
+  if (!fresh.length) {
+    // Still advance: nothing new means the site has been read up to now,
+    // and leaving the cursor behind would re-examine the same window.
+    await db.setDfArticleScanCursor(now);
+    return result;
+  }
+
+  const toRead = fresh.slice(0, config.maxArticlesPerScan);
+  result.capped = fresh.length > toRead.length;
+  if (result.capped) {
+    logger.log(
+      "info",
+      `Article scan found ${fresh.length} new articles, reading ${toRead.length} this time - the rest follow on the next check.`
+    );
+  }
+
+  let watermark = cursor;
+  for (const entry of toRead) {
+    // Already read at this revision. Its lastmod moved for some reason
+    // other than a change we care about - or it was read by a lookup
+    // before the scan reached it - so there is nothing to pay for.
+    if (db.isDfArticleMetaFresh(entry.url, entry.lastmod)) {
+      watermark = entry.lastmod;
+      continue;
+    }
+    const article = await readArticle(entry);
+    // Only advance over articles that were actually read. A page that
+    // could not be fetched stays ahead of the cursor and is retried.
+    if (!article) {
+      continue;
+    }
+    result.articlesRead++;
+    watermark = entry.lastmod;
+    db.setDfArticleMeta(entry.url, {
+      slug: entry.slug,
+      title: article.article.title,
+      author: article.article.author,
+      videoIds: article.videoIds,
+      lastmod: entry.lastmod,
+      cachedAt: new Date(),
+    });
+    const filed = await fileAgainstLibrary(db, article.article, article.videoIds);
+    result.primaryMatches += filed.primary;
+    result.relatedMatches += filed.related;
+  }
+
+  await db.setDfArticleScanCursor(watermark);
+  if (result.primaryMatches || result.relatedMatches) {
+    logger.log(
+      "info",
+      `Article scan read ${result.articlesRead} new article${result.articlesRead === 1 ? "" : "s"}: ` +
+        `${result.primaryMatches} matched to content, ${result.relatedMatches} filed as related.`
+    );
+  }
+  return result;
+};
+
+const readArticle = async (
+  entry: SitemapEntry
+): Promise<{ article: DfArticle; videoIds: string[] } | undefined> => {
+  try {
+    const response = await dfFetch(
+      entry.url,
+      {},
+      { priority: DfFetchPriority.BACKGROUND, label: `Article scan: ${entry.slug.slice(0, 40)}` }
+    );
+    if (!response.ok) {
+      return undefined;
+    }
+    const parsed = parseArticlePage(await response.text());
+    // No embed means nothing to attach it to. Not a failure - plenty of
+    // Digital Foundry's writing is not about a video at all.
+    if (!parsed?.text.trim() || !parsed.youtubeVideoIds.length) {
+      return undefined;
+    }
+    return {
+      videoIds: parsed.youtubeVideoIds,
+      article: {
+        url: entry.url,
+        slug: entry.slug,
+        title: parsed.title,
+        youtubeVideoId: parsed.youtubeVideoIds[0],
+        text: parsed.text,
+        author: parsed.author,
+        matchedAt: new Date(),
+      },
+    };
+  } catch (e) {
+    logger.log("warn", `Article scan could not read ${entry.url}: ${e instanceof Error ? e.message : String(e)}`);
+    return undefined;
+  }
+};
+
+/**
+ * Attaches one already-read article to whatever it belongs to.
+ *
+ * Same rule as every other path files by, for the same reason: a page
+ * embedding one video is that video's companion piece, a page embedding
+ * several is a round-up related to all of them. Nothing here fetches
+ * anything, and nothing is created for content that is not in the library.
+ */
+const fileAgainstLibrary = async (
+  db: DfDownloaderOperationalDb,
+  article: DfArticle,
+  videoIds: string[]
+): Promise<{ primary: number; related: number }> => {
+  const counts = { primary: 0, related: 0 };
+  const isCompanionPiece = videoIds.length === 1;
+
+  for (const videoId of videoIds) {
+    const contentKey = `yt-${videoId}`;
+    try {
+      if (!(await db.getContentEntry(contentKey))) {
+        continue;
+      }
+      const existing = await db.getDfArticleLookup(contentKey);
+      // Related entries never carry the body - see DfArticleLookupState.
+      const { text, ...ref } = article;
+      const attributed: DfArticleRef = { ...ref, youtubeVideoId: videoId };
+
+      if (!isCompanionPiece) {
+        const base: DfArticleLookupState = existing ?? {
+          contentKey,
+          relatedArticles: [],
+          lastAttemptedAt: new Date(0),
+          missCount: 0,
+        };
+        const updated = DfArticleUtils.withRelated(base, [attributed]);
+        if (updated.relatedArticles.length === base.relatedArticles.length) {
+          continue;
+        }
+        await db.setDfArticleLookup(updated);
+        counts.related++;
+        continue;
+      }
+
+      if (existing?.article) {
+        continue;
+      }
+      await db.setDfArticleLookup({
+        contentKey,
+        article: { ...attributed, text },
+        relatedArticles: existing?.relatedArticles ?? [],
+        lastAttemptedAt: new Date(),
+        missCount: 0,
+      });
+      counts.primary++;
+      logger.log("info", `Article scan matched ${contentKey} to ${article.url}`);
+    } catch (e) {
+      logger.log("warn", `Article scan could not file ${article.url} against ${contentKey}: ${e}`);
+    }
+  }
+  return counts;
+};

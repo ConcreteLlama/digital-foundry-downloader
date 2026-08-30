@@ -10,6 +10,10 @@ It also finds Digital Foundry's own written article for a video where one exists
 
 A new Analysis section reads across everything you have analysed rather than one video at a time - every console comparison side by side, filterable by the platforms you care about, and an index of what was covered per game.
 
+There is also a new Backfill tool under Tools, for applying any of this to content you already have rather than only to whatever you download next: pick a set of videos and generate subtitles, analyse them, or find their articles, with a button that selects everything still missing whichever you picked. It runs as one background job you can watch and cancel, and tells you what an analysis run will cost before you start it.
+
+Articles are also picked up on their own from now on. It checks Digital Foundry's newly published pieces periodically and attaches each to whatever video it is about, so something you download today gains its written companion when that appears next week, with nothing to press.
+
 ### Features
 - AI analysis of your content
   - A detailed summary and a separate verdict for each video, naming the specific numbers and settings rather than describing it in general terms
@@ -28,16 +32,41 @@ A new Analysis section reads across everything you have analysed rather than one
   - A match is confirmed by checking the article embeds that exact video, not by the titles looking similar - so another article about the same game is not mistaken for this one
   - Nothing is searched for while you browse. Looking at a video does not go and ask Digital Foundry about it; that only happens when you ask, or when an analysis runs
   - If no article is found that is treated as 'not yet' rather than 'never'. Patreon content is often early access, so the article may simply not be written, and it will look again later
+  - A video can have more than one article attached. The piece written about it is the main link; anything that merely includes it - a round-up, a week in review - is listed separately as related reading, and is never used as the source for an analysis, since most of its text is about something else
+- New articles are noticed on their own, without searching for each video
+  - Digital Foundry's recently published articles are checked periodically and attached to whatever video each is about, so the companion piece turns up on its own when it is written rather than only if you go looking
+  - This is cheap in a way that searching per video is not. It reads each new article once instead of asking the site about every video you own, which works out at a handful of requests a day
+  - On a new install it only considers the last week, so setting the app up does not kick off a long crawl. Going back through older content is the Backfill tool's job, where it tells you what that costs first
+  - Turn it off, or change how often it looks and how much it reads at a time, under Settings then DF Articles
 - A new Analysis section, reading across everything you have analysed
   - Platform comparisons: every analysed console face-off side by side, with Digital Foundry's own recommendation quoted against each
   - Filter it to the platforms you care about - the rows and the columns both narrow, so picking two consoles gives you those two beside each other instead of hiding among eight
   - Games: what was covered per game, grouping the several videos DF often publish about one release, each opening its full analysis
   - Nothing here is averaged, scored or ranked. There is no best-platform column because the figure that would be needed for one - what a mode actually ran at, as opposed to what it aims for - is stated in only about a tenth of cases, and is missing most often when platforms performed about the same
+- Backfill: apply subtitles, analysis or article matching to content you already have
+  - Found under Tools. Pick any set of items and run one of the three actions across all of them at once
+  - "Select all that need it" picks out everything still missing whatever you chose - the items with no subtitles, or no analysis, or no article found yet - so catching up on a back catalogue is one click rather than a scroll through the library
+  - Manual selection works alongside it, with a filter box, so you can pick a handful instead
+  - Each row says what it already has, so it is clear why something was or was not picked
+- One background job, not hundreds
+  - A run appears on the Activity page as a single job with overall progress, and can be paused or cancelled there like anything else
+  - Work already finished when you cancel is kept - stopping a long article search does not throw away the matches it already found
+  - Items are processed at a sensible rate rather than all at once: transcribing still runs one at a time so it does not take over the machine, and requests to Digital Foundry stay spaced out
+- Options to redo work that is already done, off by default
+  - Re-transcribe, re-analyse or search again for items that already have the thing - useful after changing your Whisper model, or once Digital Foundry have published an article that did not exist when you last looked
+  - The confirmation says plainly what redoing means for that action, including that re-analysing is charged for again
+- Costs shown before you commit to them
+  - Analysing a set of videos shows an estimated total first, worked out from real pricing of a few of the items you actually picked rather than a generic figure
+  - Article matching shows how many requests it will make to Digital Foundry and roughly how long that takes, since it is deliberately slow - a whole-library run is measured in hours
+### Enhancements
+- A run checks each item again as it reaches it, rather than trusting the list from when it started. Over a few hundred items that gap matters: something can gain subtitles from an unrelated action while it waits its turn, and it now gets skipped rather than redone
 ### Known Issues
 - Analysis needs something to read
   - With no transcript and no matching article, only tags can be produced - there is nothing to summarise from. Generating subtitles for a video and analysing it again gives the full result
   - The analysis records what it had to work from, so items analysed thinly are identifiable rather than silently worse
 - A plain game review is not yet recognised as its own kind of content, so it is analysed but does not appear under its game in the Analysis section. Face-offs, PC reviews, previews and Q+A shows all are
+- Article matching across a large library is slow by design. Requests to Digital Foundry are deliberately spaced out, so a few thousand items is hours of queued work - it is safe to leave running, and safe to cancel
+- Subtitles and analysis can only be applied to content you have downloaded, since both need the video file
 
 ## 2.7.1 (2026-08-29)
 
