@@ -48,18 +48,25 @@ export const DfSettingsSectionForm = ({ sectionName, title, children, onSubmit }
         */}
         <Box
           sx={{
-            minHeight: "100%",
+            // Grows into the column NavPage provides. Explicit flex rather
+            // than minHeight:100%, which needs the parent to have a real
+            // height and silently does nothing when it only has a stretched
+            // one - the desktop case, where the bar sat under the content.
+            flex: "1 1 auto",
             width: "100%",
             display: "flex",
             flexDirection: "column",
-            // The form element itself has to carry the column too, or the
-            // save bar is laid out against the stack rather than the page.
-            "& > form": { flex: "1 1 auto", display: "flex", flexDirection: "column", minHeight: 0 },
           }}
         >
           <Typography variant="h5">{title}</Typography>
           <Divider sx={{ marginTop: 2, marginBottom: 4 }} />
           <FormContainer
+            // The form element carries the column too, or the save bar is
+            // laid out against the stack rather than against the page.
+            // Set through FormProps - the component's own hook for reaching
+            // its form element - rather than a "& > form" selector styling
+            // someone else's output from the outside.
+            FormProps={{ style: { flex: "1 1 auto", display: "flex", flexDirection: "column", minHeight: 0 } }}
             resolver={zodResolver(zodSchema)}
             defaultValues={currentSettings as any}
             onSuccess={(data) => {

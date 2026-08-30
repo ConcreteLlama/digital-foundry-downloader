@@ -379,13 +379,16 @@ export const NavPage = () => {
   const swipe = useSwipeNavigation({ onNext: () => stepPage(1), onPrevious: () => stepPage(-1) });
 
   return (
-    // minHeight fills the scroll area rather than stopping at the content.
-    // Without it a short page - Metadata is two controls - leaves most of
-    // the screen outside the swipe handler, so the gesture works at the top
-    // and does nothing lower down.
-    <Box sx={{ display: "flex", padding: { xs: 1.5, md: 4 }, width: "100%", minWidth: 0, minHeight: "100%" }}>
+    // Grows to fill the scroll area rather than stopping at its content, so
+    // a short page still covers the screen - both for the swipe handler and
+    // for the save bar a settings page puts at its bottom.
+    <Box sx={{ display: "flex", padding: { xs: 1.5, md: 4 }, width: "100%", minWidth: 0, flex: "1 1 auto" }}>
       <SectionNav />
-      <Box sx={{ flex: "1 1 auto", minWidth: 0 }} {...swipe}>
+      {/* A column, so the page inside can grow to fill it rather than
+          depending on a percentage height resolving against a box that only
+          has a stretched one - which it does not do reliably, and was why
+          the settings save bar sat under the content on desktop. */}
+      <Box sx={{ flex: "1 1 auto", minWidth: 0, display: "flex", flexDirection: "column" }} {...swipe}>
         <SectionNavCompact />
         <Outlet />
       </Box>

@@ -195,6 +195,13 @@ const MainApp = () => {
             flex: "1 1 auto",
             minHeight: 0,
             overflow: "auto",
+            // A column, so a page can grow to fill it with flex rather than
+            // a percentage height. This box is itself flex-sized, so its
+            // computed height is auto - and a percentage against that
+            // resolves to zero, which is why "minHeight: 100%" on a page
+            // silently did nothing at all.
+            display: "flex",
+            flexDirection: "column",
             // Room for the mobile tab bar, which is fixed and would otherwise
             // sit on top of the last item in whatever list is on screen.
             paddingBottom: { xs: `${MOBILE_TAB_BAR_HEIGHT}px`, md: 0 },
