@@ -6,9 +6,9 @@ import useMediaQuery from "@mui/material/useMediaQuery";
 import { useTheme } from "@mui/material/styles";
 import { DfContentEntry } from "df-downloader-common";
 import { DfContentDownloadInfo } from "df-downloader-common/models/df-content-download-info";
-import { useCallback, useRef, useState } from "react";
+import { useState } from "react";
 import { monoFontFamily } from "../../../themes/build-theme";
-import { AnalysisJumpList } from "../ai-analysis/analysis-jump-list.component.tsx";
+import { useAnalysisJumps } from "../ai-analysis/analysis-jumps.ts";
 import { DownloadPlayer } from "./download-player.component.tsx";
 
 export type VideoPlayerDialogProps = {
@@ -27,11 +27,15 @@ export type VideoPlayerDialogProps = {
  * giving the video the window rather than half of a two-column panel.
  *
  * Theater mode is the default on a wide screen - video as large as the
- * window allows with the chapters in a rail beside it, rather than pushed
- * below where a long chapter list scrolls out of sight. That rail is also
- * the intended home for the AI-analysis timestamp linkage (roadmap item 10's
- * follow-up): it takes a `sidePanel` slot for exactly that, and anything in
- * it can seek the video the same way the chapter list already does.
+ * window allows with the timeline in a rail beside it, rather than pushed
+ * below where a long list scrolls out of sight. Stacked, the video sticks to
+ * the top of the dialog and the timeline scrolls under it, which is the same
+ * arrangement turned ninety degrees.
+ *
+ * That timeline is chapters and AI-analysis findings interleaved in time
+ * order - see DownloadPlayer's analysisJumps. This component's only job in
+ * that is fetching them, since it is the part that knows which piece of
+ * content is being played.
  */
 export const VideoPlayerDialog = ({ contentEntry, download, open, onClose }: VideoPlayerDialogProps) => {
   const theme = useTheme();
@@ -41,12 +45,9 @@ export const VideoPlayerDialog = ({ contentEntry, download, open, onClose }: Vid
   const [theater, setTheater] = useState(true);
   const inTheater = theater && wideEnough;
 
-  // The player hands this over once it is mounted; the jump list calls it.
-  const seekRef = useRef<((startMs: number) => void) | null>(null);
-  const onSeekReady = useCallback((seek: (startMs: number) => void) => {
-    seekRef.current = seek;
-  }, []);
-  const jumpTo = useCallback((seconds: number) => seekRef.current?.(seconds * 1000), []);
+  // Only while open: a closed dialog is not worth a request, and the one
+  // that matters is made the moment it opens.
+  const { jumps } = useAnalysisJumps(contentEntry.key, open);
 
   return (
     <Dialog
@@ -78,7 +79,7 @@ export const VideoPlayerDialog = ({ contentEntry, download, open, onClose }: Vid
             </Typography>
           </Box>
           {wideEnough && (
-            <Tooltip title={theater ? "Chapters below the video" : "Theater mode - chapters beside the video"}>
+            <Tooltip title={theater ? "Timeline below the video" : "Theater mode - timeline beside the video"}>
               <IconButton onClick={() => setTheater((current) => !current)} aria-label="Toggle theater mode">
                 {theater ? <ViewStreamIcon /> : <ViewSidebarIcon />}
               </IconButton>
@@ -89,7 +90,17 @@ export const VideoPlayerDialog = ({ contentEntry, download, open, onClose }: Vid
           </IconButton>
         </Stack>
       </DialogTitle>
-      <DialogContent sx={inTheater ? { display: "flex", minHeight: 0 } : undefined}>
+      <DialogContent
+        sx={
+          inTheater
+            ? { display: "flex", minHeight: 0 }
+            : // No top padding, so the video can sit flush against the top of
+              // the scroller. `position: sticky` pins to the padding box, so
+              // any padding here becomes a strip above the pinned video that
+              // the timeline visibly scrolls through.
+              { paddingTop: 0 }
+        }
+      >
         {/* Mounted only while open, so closing the dialog stops the download
             being streamed rather than leaving it buffering out of sight. */}
         {open && (
@@ -99,13 +110,12 @@ export const VideoPlayerDialog = ({ contentEntry, download, open, onClose }: Vid
             autoPlay
             layout={inTheater ? "theater" : "stacked"}
             // In theater the video fills the column it is given; stacked keeps
-            // a ceiling so the chapters below it stay on screen.
-            maxHeight={inTheater ? "100%" : "60vh"}
-            onSeekReady={onSeekReady}
-            // Beside the video in theater, under the chapters when stacked -
-            // the player renders this slot in both layouts, so "alongside or
+            // a ceiling so the timeline below it stays on screen.
+            maxHeight={inTheater ? "100%" : "55vh"}
+            // Beside the video in theater, under it when stacked - the
+            // player renders the timeline in both layouts, so "alongside or
             // below" falls out of the layout choice already being made.
-            sidePanel={<AnalysisJumpList contentKey={contentEntry.key} onJumpTo={jumpTo} />}
+            analysisJumps={jumps}
           />
         )}
       </DialogContent>

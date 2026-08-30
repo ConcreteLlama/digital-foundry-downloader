@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { Box, Dialog, DialogContent, DialogTitle, Divider, Stack, Typography } from "@mui/material";
 import { DfContentEntry, audioPropertiesToString, videoPropertiesToString } from "df-downloader-common";
 import { DfContentDownloadInfo } from "df-downloader-common/models/df-content-download-info";
@@ -36,6 +37,10 @@ export const DownloadDetailsDialog = ({
   open,
   onClose,
 }: DownloadDetailsDialogProps) => {
+  // Whether the player this dialog opened is currently up - see the Dialog's
+  // sx below.
+  const [playingHere, setPlayingHere] = useState(false);
+
   const subtitles = download.subtitles || [];
   // Same formatters the format rows use, so a held format and the file it
   // produced describe themselves identically. Both return "None" rather than
@@ -47,7 +52,21 @@ export const DownloadDetailsDialog = ({
     ] as const
   ).filter(({ text }) => text && text !== "None");
   return (
-    <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth>
+    <Dialog
+      open={open}
+      onClose={onClose}
+      maxWidth="sm"
+      fullWidth
+      /*
+        Hidden rather than closed while the player is up.
+
+        The player is opened from this dialog's own buttons and is rendered
+        by them, so closing this would unmount the player along with it.
+        Staying mounted but out of sight also means closing the player puts
+        you back on the file you opened it from.
+      */
+      sx={playingHere ? { visibility: "hidden" } : undefined}
+    >
       <DialogTitle sx={{ paddingBottom: 1 }}>
         <Typography variant="h6" sx={{ wordBreak: "break-word" }}>
           {download.mediaInfo.formatString}
@@ -119,7 +138,12 @@ export const DownloadDetailsDialog = ({
           </Field>
 
           <Divider />
-          <DownloadedItemActions contentEntry={contentEntry} download={download} variant="buttons" />
+          <DownloadedItemActions
+            contentEntry={contentEntry}
+            download={download}
+            variant="buttons"
+            onPlayerOpenChange={setPlayingHere}
+          />
         </Stack>
       </DialogContent>
     </Dialog>

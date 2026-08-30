@@ -2,6 +2,7 @@ import { Alert, Box, CircularProgress, Stack, Typography } from "@mui/material";
 import { Chapter, DfContentEntry, DfContentInfoUtils, PlaybackInfo, secondsToHHMMSS } from "df-downloader-common";
 import { DfContentDownloadInfo } from "df-downloader-common/models/df-content-download-info";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { AnalysisJump } from "../ai-analysis/analysis-jumps.ts";
 import { apiIsCrossOrigin, getPlaybackInfo, playbackStreamUrl, playbackSubtitlesUrl } from "../../../api/playback.ts";
 import { useQuery } from "../../../hooks/use-query.ts";
 import { monoFontFamily } from "../../../themes/build-theme";
@@ -27,26 +28,40 @@ export type DownloadPlayerProps = {
    */
   layout?: "stacked" | "theater";
   /**
-   * Extra content for the theater rail, under the chapters.
+   * Moments the AI analysis found, merged into the chapter list rather than
+   * listed separately.
    *
-   * This is the seam for the AI-analysis timestamp linkage (roadmap item 10's
-   * follow-up): the rail is where a list of claims-with-timestamps would go,
-   * beside the video rather than under it. Nothing here needs to change to
-   * add that - it needs `onSeek` wiring, which is already how the chapter
-   * list drives the video.
+   * Chapters and findings are the same kind of thing to someone watching -
+   * places in this video - and two parallel lists meant reading both to
+   * answer "what is next", with only one of them able to follow playback.
+   * Interleaved, there is a single thing to scroll and a single row to
+   * highlight. Passed in rather than fetched here because this component
+   * knows about a file, not about an analysis.
    */
-  sidePanel?: React.ReactNode;
+  analysisJumps?: AnalysisJump[];
+  /**
+   * Caps the timeline's own scroll area. The dialog leaves it uncapped and
+   * lets the video stick to the top instead, so the list scrolls in the
+   * dialog's own scroller; a panel embedded in a page wants a ceiling.
+   */
+  timelineMaxHeight?: number | string;
   /**
    * Hands the parent a way to drive playback, so something outside this
-   * component can jump the video to a moment.
+   * component can jump the video to a moment - the content panel uses it to
+   * seek from its own analysis panel.
    *
-   * This is the other half of the sidePanel seam: an analysis finding that
-   * knows when it was said needs to move the video, and it lives in a
-   * different part of the panel entirely. Given as a callback rather than a
-   * ref because the parent only ever wants to call it, never to read
-   * anything back.
+   * Given as a callback rather than a ref because the parent only ever wants
+   * to call it, never to read anything back.
    */
   onSeekReady?: (seek: (startMs: number) => void) => void;
+  /**
+   * Hands the parent a way to stop playback.
+   *
+   * The content panel plays inline and can also open the same file in the
+   * player dialog. Without this, doing that leaves two copies of the video
+   * playing over each other, one of them behind a modal and unreachable.
+   */
+  onPauseReady?: (pause: () => void) => void;
 };
 
 /**
@@ -72,62 +87,177 @@ const canBrowserPlay = (info: PlaybackInfo): boolean => {
   return probe.canPlayType(info.codecProbe ?? info.mimeType) !== "";
 };
 
-const chapterIndexAt = (chapters: Chapter[], timeMs: number) =>
-  chapters.findIndex((chapter) => timeMs >= chapter.start && timeMs < chapter.end);
+/**
+ * One list of places in the video, chapters and findings together.
+ *
+ * Chapters come from the file, findings come from the analysis, and to
+ * someone watching they answer the same question - what happens next - so
+ * they are interleaved rather than stacked as two lists. That also makes
+ * following playback coherent: there is exactly one row that is "where we
+ * are", instead of two lists each highlighting their own.
+ *
+ * They stay visually distinct: a chapter is the heading, findings sit
+ * indented under the chapter they fall inside. Nothing enforces that
+ * nesting - it falls out of sorting by time, which is the only relationship
+ * that actually exists between them.
+ */
+type TimelineRow = {
+  seconds: number;
+  label: string;
+  detail?: string;
+  kind: "chapter" | "analysis";
+};
 
-const ChapterList = ({
-  chapters,
+const buildTimeline = (chapters: Chapter[], jumps: AnalysisJump[]): TimelineRow[] =>
+  [
+    ...chapters.map<TimelineRow>((chapter) => ({
+      seconds: chapter.start / 1000,
+      label: chapter.title,
+      kind: "chapter",
+    })),
+    ...jumps.map<TimelineRow>((jump) => ({
+      seconds: jump.seconds,
+      label: jump.label,
+      detail: jump.detail,
+      kind: "analysis",
+    })),
+  ].sort((a, b) => {
+    if (a.seconds !== b.seconds) {
+      return a.seconds - b.seconds;
+    }
+    // A chapter starting at the same moment as a finding is the heading it
+    // belongs under, so it goes first.
+    if (a.kind === b.kind) {
+      return 0;
+    }
+    return a.kind === "chapter" ? -1 : 1;
+  });
+
+/** The row you are inside - the last one that has started, not the nearest. */
+const rowIndexAt = (rows: TimelineRow[], seconds: number) => {
+  let index = -1;
+  for (let i = 0; i < rows.length; i++) {
+    if (rows[i].seconds <= seconds) {
+      index = i;
+    } else {
+      break;
+    }
+  }
+  return index;
+};
+
+const timelineHeading = (chapters: number, findings: number) => {
+  if (chapters && findings) {
+    return `Timeline · ${chapters} chapters · ${findings} from the analysis`;
+  }
+  return chapters ? `Chapters · ${chapters}` : `From the analysis · ${findings}`;
+};
+
+const MediaTimeline = ({
+  rows,
   activeIndex,
   onSeek,
   maxHeight,
+  heading,
 }: {
-  chapters: Chapter[];
+  rows: TimelineRow[];
   activeIndex: number;
   onSeek: (startMs: number) => void;
   maxHeight: number | string;
-}) => (
-  <Box sx={{ minWidth: 0 }}>
-    <Typography variant="overline" sx={{ color: "text.disabled" }}>
-      {`Chapters · ${chapters.length}`}
-    </Typography>
-    <Stack sx={{ maxHeight, overflowY: "auto", marginTop: 0.5 }}>
-      {chapters.map((chapter, index) => (
-        <Box
-          key={`chapter-${chapter.start}`}
-          role="button"
-          tabIndex={0}
-          onClick={() => onSeek(chapter.start)}
-          onKeyDown={(event) => {
-            if (event.key === "Enter" || event.key === " ") {
-              event.preventDefault();
-              onSeek(chapter.start);
-            }
-          }}
-          sx={{
-            display: "grid",
-            gridTemplateColumns: "auto minmax(0, 1fr)",
-            columnGap: 1.5,
-            alignItems: "baseline",
-            paddingY: 0.75,
-            paddingX: 1,
-            borderRadius: 1,
-            cursor: "pointer",
-            backgroundColor: index === activeIndex ? "action.selected" : undefined,
-            "&:hover": { backgroundColor: "action.hover" },
-            "&:focus-visible": { outline: "2px solid", outlineColor: "primary.main", outlineOffset: -2 },
-          }}
-        >
-          <Typography sx={{ fontFamily: monoFontFamily, fontSize: "0.6875rem", color: "text.secondary" }}>
-            {secondsToHHMMSS(Math.floor(chapter.start / 1000))}
-          </Typography>
-          <Typography sx={{ fontSize: "0.8125rem", fontWeight: index === activeIndex ? 600 : 400 }}>
-            {chapter.title}
-          </Typography>
-        </Box>
-      ))}
-    </Stack>
-  </Box>
-);
+  heading: string;
+}) => {
+  /*
+    Follows the video, but only as far as it has to.
+
+    "nearest" rather than centring: the row is usually already on screen, and
+    yanking the list to recentre it every time playback crosses a boundary is
+    how a panel like this becomes something you scroll away from. Keyed on
+    the index so it moves when the active row changes, not on every tick.
+  */
+  const activeRef = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    if (activeIndex < 0) {
+      return;
+    }
+    activeRef.current?.scrollIntoView({ block: "nearest", behavior: "smooth" });
+  }, [activeIndex]);
+
+  return (
+    <Box sx={{ minWidth: 0 }}>
+      <Typography variant="overline" sx={{ color: "text.disabled" }}>
+        {heading}
+      </Typography>
+      <Stack sx={{ maxHeight, overflowY: maxHeight === "none" ? undefined : "auto", marginTop: 0.5 }}>
+        {rows.map((row, index) => {
+          const active = index === activeIndex;
+          const isChapter = row.kind === "chapter";
+          return (
+            <Box
+              key={`${row.kind}-${row.seconds}-${row.label}`}
+              ref={active ? activeRef : undefined}
+              role="button"
+              tabIndex={0}
+              onClick={() => onSeek(row.seconds * 1000)}
+              onKeyDown={(event) => {
+                if (event.key === "Enter" || event.key === " ") {
+                  event.preventDefault();
+                  onSeek(row.seconds * 1000);
+                }
+              }}
+              sx={{
+                display: "grid",
+                gridTemplateColumns: "auto minmax(0, 1fr)",
+                columnGap: 1.5,
+                alignItems: "baseline",
+                paddingY: isChapter ? 0.75 : 0.5,
+                paddingRight: 1,
+                // Findings are indented under the chapter above them, with a
+                // rule running down the gutter so a run of them reads as one
+                // group rather than as more chapters.
+                paddingLeft: isChapter ? 1 : 3,
+                marginLeft: isChapter ? 0 : 1,
+                borderLeft: isChapter ? undefined : 2,
+                borderColor: active ? "primary.main" : "divider",
+                borderRadius: isChapter ? 1 : 0,
+                cursor: "pointer",
+                backgroundColor: active ? "action.selected" : undefined,
+                "&:hover": { backgroundColor: "action.hover" },
+                "&:focus-visible": { outline: "2px solid", outlineColor: "primary.main", outlineOffset: -2 },
+              }}
+            >
+              <Typography
+                sx={{
+                  fontFamily: monoFontFamily,
+                  fontSize: "0.6875rem",
+                  fontVariantNumeric: "tabular-nums",
+                  color: isChapter ? "text.secondary" : "primary.main",
+                }}
+              >
+                {secondsToHHMMSS(Math.floor(row.seconds))}
+              </Typography>
+              <Box sx={{ minWidth: 0 }}>
+                <Typography
+                  sx={{
+                    fontSize: "0.8125rem",
+                    lineHeight: 1.35,
+                    fontWeight: isChapter ? (active ? 700 : 600) : 400,
+                  }}
+                >
+                  {row.label}
+                </Typography>
+                {row.detail && (
+                  <Typography variant="caption" sx={{ color: "text.disabled", display: "block", lineHeight: 1.3 }}>
+                    {row.detail}
+                  </Typography>
+                )}
+              </Box>
+            </Box>
+          );
+        })}
+      </Stack>
+    </Box>
+  );
+};
 
 /**
  * Plays one downloaded file, with its subtitles and chapters.
@@ -158,11 +288,13 @@ export const DownloadPlayer = ({
   maxHeight,
   belowVideo,
   layout = "stacked",
-  sidePanel,
+  analysisJumps,
+  timelineMaxHeight = "none",
   onSeekReady,
+  onPauseReady,
 }: DownloadPlayerProps) => {
   const videoRef = useRef<HTMLVideoElement | null>(null);
-  const [activeChapter, setActiveChapter] = useState(-1);
+  const [positionSeconds, setPositionSeconds] = useState(0);
   const [playbackError, setPlaybackError] = useState<string | null>(null);
   // Captions are turned on once per file, not on every render - otherwise
   // switching them off in the player's own menu would be undone immediately.
@@ -175,7 +307,7 @@ export const DownloadPlayer = ({
 
   useEffect(() => {
     setPlaybackError(null);
-    setActiveChapter(-1);
+    setPositionSeconds(0);
     captionsInitialisedFor.current = null;
   }, [download.downloadLocation]);
 
@@ -206,21 +338,31 @@ export const DownloadPlayer = ({
     video.textTracks[0].mode = "showing";
   }, [info, supported, download.downloadLocation, layout]);
 
-  // Tracking which chapter is playing means a timeupdate listener, which
-  // fires several times a second - so state only changes when the chapter
-  // itself does, not on every tick.
+  /*
+    Where the playhead is, in whole seconds.
+
+    timeupdate fires about four times a second, and the timeline only needs
+    to know which row it is inside, so the position is rounded and state only
+    changes when the second does - a second is already finer than the rows
+    are spaced. `seeked` as well as `timeupdate` so jumping while paused
+    still moves the highlight.
+  */
   useEffect(() => {
     const video = videoRef.current;
-    if (!video || !info?.chapters.length) {
+    if (!video) {
       return;
     }
-    const onTimeUpdate = () => {
-      const next = chapterIndexAt(info.chapters, video.currentTime * 1000);
-      setActiveChapter((current) => (current === next ? current : next));
+    const publish = () => {
+      const seconds = Math.floor(video.currentTime);
+      setPositionSeconds((current) => (current === seconds ? current : seconds));
     };
-    video.addEventListener("timeupdate", onTimeUpdate);
-    return () => video.removeEventListener("timeupdate", onTimeUpdate);
-  }, [info, supported, layout]);
+    video.addEventListener("timeupdate", publish);
+    video.addEventListener("seeked", publish);
+    return () => {
+      video.removeEventListener("timeupdate", publish);
+      video.removeEventListener("seeked", publish);
+    };
+  }, [supported, layout]);
 
   const seekTo = useCallback((startMs: number) => {
     const video = videoRef.current;
@@ -239,6 +381,26 @@ export const DownloadPlayer = ({
   useEffect(() => {
     onSeekReady?.(seekTo);
   }, [onSeekReady, seekTo]);
+
+  const pause = useCallback(() => videoRef.current?.pause(), []);
+  useEffect(() => {
+    onPauseReady?.(pause);
+  }, [onPauseReady, pause]);
+
+  const timelineRows = useMemo(
+    () => buildTimeline(info?.chapters ?? [], analysisJumps ?? []),
+    [info, analysisJumps]
+  );
+  const activeRow = useMemo(() => rowIndexAt(timelineRows, positionSeconds), [timelineRows, positionSeconds]);
+  const timeline = timelineRows.length > 0 && (
+    <MediaTimeline
+      rows={timelineRows}
+      activeIndex={activeRow}
+      onSeek={seekTo}
+      maxHeight={timelineMaxHeight}
+      heading={timelineHeading(info?.chapters.length ?? 0, analysisJumps?.length ?? 0)}
+    />
+  );
 
   if (loading) {
     return (
@@ -386,28 +548,18 @@ export const DownloadPlayer = ({
             {belowVideo}
             {embeddedNote}
           </Box>
-          {(info.chapters.length > 0 || sidePanel) && (
+          {timeline && (
             <Box
               sx={{
-                width: { xs: "100%", md: 320 },
+                width: { xs: "100%", md: 360 },
                 flexShrink: 0,
                 minHeight: 0,
+                // The rail is the scroller, so the timeline fills the height
+                // the theater window has rather than a fixed crop.
                 overflowY: "auto",
               }}
             >
-              <Stack spacing={2}>
-                {info.chapters.length > 0 && (
-                  <ChapterList
-                    chapters={info.chapters}
-                    activeIndex={activeChapter}
-                    onSeek={seekTo}
-                    // Fills the rail rather than a fixed crop, so a video with
-                    // 30 chapters uses the height the theater window has.
-                    maxHeight="none"
-                  />
-                )}
-                {sidePanel}
-              </Stack>
+              {timeline}
             </Box>
           )}
         </Box>
@@ -418,13 +570,34 @@ export const DownloadPlayer = ({
   return (
     <Stack spacing={2} sx={{ minWidth: 0 }}>
       {errorBanner}
-      {videoElement}
-      {belowVideo}
+      {/*
+        The video stays put while the chapters and analysis scroll beneath
+        it. Those lists are how you navigate the thing you are watching, so
+        scrolling them must not push the video off the screen - which is
+        exactly what happened when the whole column scrolled as one block.
+
+        Sticky rather than a fixed-height flex column because this component
+        does not own its scroll container: it renders inside a dialog in one
+        place and a tab panel in another, and sticky works in both without
+        either having to be restructured. The background is opaque so the
+        list passing underneath does not show through.
+      */}
+      <Box
+        sx={{
+          position: "sticky",
+          top: 0,
+          zIndex: 2,
+          backgroundColor: "background.paper",
+          // The Stack's own gap would otherwise leave a transparent strip
+          // for content to show through as it scrolls past.
+          pb: 1,
+        }}
+      >
+        {videoElement}
+        {belowVideo}
+      </Box>
       {embeddedNote}
-      {info.chapters.length > 0 && (
-        <ChapterList chapters={info.chapters} activeIndex={activeChapter} onSeek={seekTo} maxHeight={220} />
-      )}
-      {sidePanel}
+      {timeline}
     </Stack>
   );
 };

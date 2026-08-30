@@ -38,12 +38,25 @@ type DownloadedItemActionsProps = {
    * icons.
    */
   variant?: "menu" | "buttons";
+  /**
+   * Called when the player opens and again when it closes.
+   *
+   * These actions render inside the file-details dialog as well as in the
+   * row menu, and playing from in there left that dialog sitting over the
+   * video with its buttons intercepting clicks meant for playback. The host
+   * has to get out of the way - but it cannot simply close, because the
+   * player lives inside it and closing would unmount the thing that just
+   * opened. Standing aside and coming back is both the fix and the better
+   * behaviour: closing the player returns you to the file you came from.
+   */
+  onPlayerOpenChange?: (open: boolean) => void;
 };
 
 export const DownloadedItemActions = ({
   contentEntry,
   download,
   variant = "menu",
+  onPlayerOpenChange,
 }: DownloadedItemActionsProps) => {
   const [subtitlesDialogOpen, setSubtitlesDialogOpen] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
@@ -81,7 +94,10 @@ export const DownloadedItemActions = ({
       key: "play",
       label: "Play",
       icon: PlayArrowIcon,
-      run: () => setPlayerOpen(true),
+      run: () => {
+        setPlayerOpen(true);
+        onPlayerOpenChange?.(true);
+      },
       disabled: !downloadIsPlayable,
       reason: !downloadIsPlayable ? "Nothing to play in this kind of file" : undefined,
     },
@@ -146,7 +162,10 @@ export const DownloadedItemActions = ({
       />
       <VideoPlayerDialog
         open={playerOpen}
-        onClose={() => setPlayerOpen(false)}
+        onClose={() => {
+          setPlayerOpen(false);
+          onPlayerOpenChange?.(false);
+        }}
         contentEntry={contentEntry}
         download={download}
       />

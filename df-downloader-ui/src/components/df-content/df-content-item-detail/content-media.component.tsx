@@ -1,7 +1,10 @@
-import { Box, ToggleButton, ToggleButtonGroup, Typography } from "@mui/material";
+import OpenInFullIcon from "@mui/icons-material/OpenInFull";
+import { Box, Button, ToggleButton, ToggleButtonGroup, Tooltip, Typography } from "@mui/material";
 import { DfContentEntry, DfContentInfoUtils } from "df-downloader-common";
-import { useMemo, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
+import { useAnalysisJumps } from "../ai-analysis/analysis-jumps.ts";
 import { DownloadPlayer } from "../downloaded-info/download-player.component.tsx";
+import { VideoPlayerDialog } from "../downloaded-info/video-player-dialog.component.tsx";
 import { Thumb } from "../../general/thumb.component.tsx";
 import { YouTubeEmbed } from "../../general/youtube-embed.tsx";
 
@@ -59,6 +62,29 @@ export const ContentMedia = ({ contentEntry, onSeekReady }: ContentMediaProps) =
   );
   const active = sources.find((source) => sourceKey(source) === selected) ?? sources[0];
 
+  /*
+    The analysis's own timestamps, merged into the player's chapter list.
+
+    Fetched here rather than in the player because the player knows about a
+    file and this knows about a piece of content. Only asked for when there
+    is a downloaded file to play - there is nothing to seek in a YouTube
+    iframe, so the request would be wasted.
+  */
+  const { jumps } = useAnalysisJumps(contentEntry.key, active?.kind === "download");
+
+  const [playerOpen, setPlayerOpen] = useState(false);
+  // Opening the dialog puts a second copy of the same video on screen. This
+  // one is behind a modal and unreachable, so it has to be stopped rather
+  // than left playing to itself.
+  const pauseRef = useRef<(() => void) | null>(null);
+  const onPauseReady = useCallback((pause: () => void) => {
+    pauseRef.current = pause;
+  }, []);
+  const openPlayer = useCallback(() => {
+    pauseRef.current?.();
+    setPlayerOpen(true);
+  }, []);
+
   const label = (source: MediaSource) => {
     if (source.kind === "youtube") {
       return "YouTube";
@@ -106,6 +132,24 @@ export const ContentMedia = ({ contentEntry, onSeekReady }: ContentMediaProps) =
     </Box>
   );
 
+  /*
+    Playback was previously only reachable through the Files tab's overflow
+    menu, which is three interactions away from the video you are already
+    looking at. The button lives next to that video instead.
+  */
+  const openPlayerButton = (
+    <Tooltip title="Bigger video, with the timeline beside it">
+      <Button
+        size="small"
+        startIcon={<OpenInFullIcon fontSize="small" />}
+        onClick={openPlayer}
+        sx={{ textTransform: "none", flexShrink: 0, marginTop: 1 }}
+      >
+        Open player
+      </Button>
+    </Tooltip>
+  );
+
   if (active?.kind === "download") {
     return (
       <Box sx={{ minWidth: 0 }}>
@@ -117,9 +161,34 @@ export const ContentMedia = ({ contentEntry, onSeekReady }: ContentMediaProps) =
           // making noise on its own.
           autoPlay={false}
           maxHeight="52vh"
-          // Under the video, above the chapters - next to what it changes.
-          belowVideo={switcher}
+          analysisJumps={jumps}
+          // Capped here, unlike in the dialog: this player sits in a panel
+          // with a page's worth of other things under it, and an uncapped
+          // timeline would push all of them off the bottom.
+          timelineMaxHeight={320}
+          // Under the video, above the timeline - next to what they change.
+          belowVideo={
+            <Box
+              sx={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                gap: 1,
+                flexWrap: "wrap",
+              }}
+            >
+              {switcher || <Box />}
+              {openPlayerButton}
+            </Box>
+          }
           onSeekReady={onSeekReady}
+          onPauseReady={onPauseReady}
+        />
+        <VideoPlayerDialog
+          contentEntry={contentEntry}
+          download={playable[active.index]}
+          open={playerOpen}
+          onClose={() => setPlayerOpen(false)}
         />
       </Box>
     );
