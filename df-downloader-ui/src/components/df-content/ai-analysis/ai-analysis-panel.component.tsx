@@ -199,9 +199,11 @@ export type AiAnalysisPanelProps = {
   contentKey: string;
   /** False when analysis is off or unconfigured - the panel then explains rather than offering a button that cannot work. */
   enabled: boolean;
+  /** Reports whether an analysis exists, so a tab can indicate it. */
+  onHasContent?: (hasContent: boolean) => void;
 };
 
-export const AiAnalysisPanel = ({ contentKey, enabled }: AiAnalysisPanelProps) => {
+export const AiAnalysisPanel = ({ contentKey, enabled, onHasContent }: AiAnalysisPanelProps) => {
   const [result, setResult] = useState<AiAnalysisResult | null>(null);
   const [estimate, setEstimate] = useState<AiAnalysisCostEstimate | null>(null);
   const [loading, setLoading] = useState(true);
@@ -219,6 +221,14 @@ export const AiAnalysisPanel = ({ contentKey, enabled }: AiAnalysisPanelProps) =
   useEffect(() => {
     void load();
   }, [load]);
+
+  // Lets the tab this sits behind show whether there is anything in it.
+  // Reported from here rather than fetched again by the parent, because
+  // this panel already knows and a second request for a boolean would be
+  // the same call twice.
+  useEffect(() => {
+    onHasContent?.(Boolean(result));
+  }, [result, onHasContent]);
 
   /**
    * Reloads when this content's analysis pipeline finishes.

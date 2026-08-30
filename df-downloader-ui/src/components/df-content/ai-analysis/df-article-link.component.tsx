@@ -35,7 +35,14 @@ import {
  * round-up is about this video, which is the same false positive the
  * matching itself is careful to avoid.
  */
-export const DfArticleLink = ({ contentKey }: { contentKey: string }) => {
+export const DfArticleLink = ({
+  contentKey,
+  onHasContent,
+}: {
+  contentKey: string;
+  /** Reports whether anything was found, so a tab can indicate it. */
+  onHasContent?: (hasContent: boolean) => void;
+}) => {
   const [state, setState] = useState<DfArticleLookupResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [searching, setSearching] = useState(false);
@@ -54,6 +61,10 @@ export const DfArticleLink = ({ contentKey }: { contentKey: string }) => {
   useEffect(() => {
     void load();
   }, [load]);
+
+  useEffect(() => {
+    onHasContent?.(Boolean(state?.article) || Boolean(state?.relatedArticles?.length));
+  }, [state, onHasContent]);
 
   const search = async () => {
     setSearching(true);

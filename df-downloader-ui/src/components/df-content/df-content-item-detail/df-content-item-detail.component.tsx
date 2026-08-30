@@ -6,6 +6,8 @@ import {
   Button,
   IconButton,
   Stack,
+  Tab,
+  Tabs,
   ToggleButton,
   ToggleButtonGroup,
   Tooltip,
@@ -14,7 +16,7 @@ import {
   useTheme,
 } from "@mui/material";
 import { DfContentInfoUtils, secondsToHHMMSS } from "df-downloader-common";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useSelector } from "react-redux";
 import { AiAnalysisConfigUtils } from "df-downloader-common/config/ai-analysis-config";
 import { selectConfigSection } from "../../../store/config/config.selector.ts";
@@ -50,6 +52,100 @@ export type DfContentInfoItemDetailProps = {
    */
   onClose?: () => void;
 };
+
+type DetailTab = "content" | "files" | "analysis" | "article" | "activity";
+
+/**
+ * One tab's label, carrying its own state.
+ *
+ * The state marker is the thing that makes tabs safe here. Hiding a
+ * section behind a label is only acceptable if the label says whether
+ * there is anything behind it - otherwise a matched article or a
+ * finished analysis is invisible until you happen to click, which is
+ * worse than the cluttered stack this replaces.
+ */
+const TabLabel = ({
+  label,
+  count,
+  marker,
+}: {
+  label: string;
+  count?: number;
+  marker?: "present" | "live";
+}) => (
+  <Stack direction="row" spacing={0.75} alignItems="center">
+    <span>{label}</span>
+    {count !== undefined && (
+      <Box
+        component="span"
+        sx={{
+          fontFamily: monoFontFamily,
+          fontSize: "0.625rem",
+          color: "text.disabled",
+          border: 1,
+          borderColor: "divider",
+          paddingX: 0.4,
+          lineHeight: 1.5,
+        }}
+      >
+        {count}
+      </Box>
+    )}
+    {marker && (
+      <Box
+        component="span"
+        sx={{
+          width: 6,
+          height: 6,
+          borderRadius: "50%",
+          backgroundColor: "primary.main",
+          // Only work actually in flight pulses. A steady dot means
+          // "there is something here", which is a different claim.
+          animation: marker === "live" ? "df-tab-pulse 1.8s ease-in-out infinite" : "none",
+          "@keyframes df-tab-pulse": { "0%,100%": { opacity: 1 }, "50%": { opacity: 0.25 } },
+          "@media (prefers-reduced-motion: reduce)": { animation: "none" },
+        }}
+      />
+    )}
+  </Stack>
+);
+
+/**
+ * Keeps a panel in the tree while hiding it.
+ *
+ * Analysis and Article fetch their own data on mount and report back
+ * whether they found anything, which is what drives their tab markers -
+ * so they have to be mounted whether or not they are on screen. That
+ * costs exactly what the old always-rendered stack cost, since both
+ * sections used to fetch on every panel open anyway.
+ *
+ * Files and Activity render from data the parent already holds, so they
+ * unmount freely.
+ */
+const TabPanel = ({
+  active,
+  keepMounted,
+  children,
+}: {
+  active: boolean;
+  keepMounted?: boolean;
+  children: React.ReactNode;
+}) => {
+  if (!active && !keepMounted) {
+    return null;
+  }
+  return (
+    <Box role="tabpanel" hidden={!active} sx={{ display: active ? "block" : "none", minWidth: 0 }}>
+      {children}
+    </Box>
+  );
+};
+
+const SectionHeading = ({ children }: { children: React.ReactNode }) => (
+  <Typography variant="overline" sx={{ display: "block" }}>
+    {children}
+  </Typography>
+);
 
 export const DfContentInfoItemDetail = ({ dfContentName, onClose }: DfContentInfoItemDetailProps) => {
   const dfContentEntry = useDfContentEntry(dfContentName);
@@ -102,11 +198,61 @@ export const DfContentInfoItemDetail = ({ dfContentName, onClose }: DfContentInf
     selectQueryPipelineIds({ filter: { contentName: dfContentName, state: "complete" } })
   );
   const pipelineIds = [...downloadingPipelineIds, ...postProcessingPipelineIds, ...completedPipelineIds];
+  const liveCount = downloadingPipelineIds.length + postProcessingPipelineIds.length;
   const clearCompletedPipelines = () => {
     completedPipelineIds.forEach((pipelineId) => {
       clearPipeline(pipelineId);
     });
   };
+
+  const [hasAnalysis, setHasAnalysis] = useState(false);
+  const [hasArticle, setHasArticle] = useState(false);
+  // Stable, so the child effects that report state do not re-run on every
+  // render of this panel.
+  const reportAnalysis = useCallback((has: boolean) => setHasAnalysis(has), []);
+  const reportArticle = useCallback((has: boolean) => setHasArticle(has), []);
+
+  // Below md the grid is one column whatever the stored preference says,
+  // so the media has nowhere else to live and needs a tab of its own.
+  const stacked = belowMd || layout === "stacked";
+  const downloadCount = dfContentEntry?.downloads.length ?? 0;
+
+  const tabs = useMemo(() => {
+    const list: { id: DetailTab; label: string; count?: number; marker?: "present" | "live" }[] = [];
+    if (stacked) {
+      list.push({ id: "content", label: "Content" });
+    }
+    list.push({ id: "files", label: "Files", count: downloadCount || undefined });
+    list.push({ id: "analysis", label: "Analysis", marker: hasAnalysis ? "present" : undefined });
+    list.push({ id: "article", label: "Article", marker: hasArticle ? "present" : undefined });
+    // Only present while there is something to show. An empty Activity tab
+    // would be a permanent reminder of nothing happening.
+    if (pipelineIds.length) {
+      list.push({
+        id: "activity",
+        label: "Activity",
+        count: pipelineIds.length,
+        marker: liveCount ? "live" : undefined,
+      });
+    }
+    return list;
+  }, [stacked, downloadCount, hasAnalysis, hasArticle, pipelineIds.length, liveCount]);
+
+  const [tab, setTab] = useState<DetailTab>("files");
+  // Work in flight is the thing you opened the panel to see, so it wins
+  // the opening tab - but only until you pick something else, hence the
+  // dependency on the id rather than on liveCount.
+  useEffect(() => {
+    if (liveCount > 0) {
+      setTab("activity");
+    }
+  }, [dfContentName, liveCount > 0]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // The tab set changes with layout and with what is running, so the
+  // selected one can stop existing underneath us - switching to split
+  // removes Content, and a finished download removes Activity.
+  const activeTab = tabs.some((entry) => entry.id === tab) ? tab : tabs[0].id;
+
   if (!dfContentEntry) {
     //TODO: Make this more sensible
     return <Typography>ERROR</Typography>;
@@ -114,7 +260,126 @@ export const DfContentInfoItemDetail = ({ dfContentName, onClose }: DfContentInf
   const { contentInfo } = dfContentEntry;
   const { statusInfo } = dfContentEntry;
   const queuedContentAvailability = statusInfo.availability;
-  return dfContentEntry ? (
+
+  const media = (
+    <Box sx={{ minWidth: 0 }}>
+      {contentInfo.youtubeVideoId ? (
+        <YouTubeEmbed videoId={contentInfo.youtubeVideoId} width="100%" />
+      ) : (
+        <Thumb
+          src={DfContentInfoUtils.getThumbnailUrl(contentInfo, 1200, 600)}
+          alt={contentInfo.title}
+          width="100%"
+        />
+      )}
+      <DfTagList tags={contentInfo.tags || []} sx={{ justifyContent: "flex-start", marginTop: 2 }} />
+      {/* Descriptions are prose with real paragraph breaks (YouTube-sourced
+          ones especially - blurb, links, then a chapter list). HTML collapses
+          those newlines by default, running it all into one block. */}
+      <Typography variant="body2" sx={{ whiteSpace: "pre-line", marginTop: 2, color: "text.secondary" }}>
+        {contentInfo.description}
+      </Typography>
+    </Box>
+  );
+
+  const tabStrip = (
+    <Tabs
+      value={activeTab}
+      onChange={(_event, next: DetailTab) => setTab(next)}
+      variant="scrollable"
+      scrollButtons={false}
+      sx={{
+        minHeight: 36,
+        borderBottom: 1,
+        borderColor: "divider",
+        "& .MuiTab-root": { minHeight: 36, paddingY: 0.5, textTransform: "none", fontSize: "0.8125rem" },
+      }}
+    >
+      {tabs.map((entry) => (
+        <Tab
+          key={entry.id}
+          value={entry.id}
+          label={<TabLabel label={entry.label} count={entry.count} marker={entry.marker} />}
+        />
+      ))}
+    </Tabs>
+  );
+
+  /*
+    The panels behind the tabs. Files leads because on an item you have not
+    downloaded it is the only thing you came for - which is also why what
+    you can fetch and what you already have sit together rather than at
+    opposite ends of a stack: they answer one question.
+  */
+  const panels = (
+    <Stack spacing={2} sx={{ minWidth: 0 }}>
+      {tabStrip}
+
+      {stacked && <TabPanel active={activeTab === "content"}>{media}</TabPanel>}
+
+      <TabPanel active={activeTab === "files"}>
+        <Stack spacing={3}>
+          <Box>
+            <SectionHeading>Available to download</SectionHeading>
+            {queuedContentAvailability === "PAYWALLED" && (
+              <Typography variant="body2" color="text.disabled" sx={{ marginTop: 1 }}>
+                Paywalled - not in your tier
+              </Typography>
+            )}
+            <FormatRows contentEntry={dfContentEntry} />
+          </Box>
+          <Box>
+            <SectionHeading>
+              On disk
+              {downloadCount > 0 ? ` · ${downloadCount} file${downloadCount === 1 ? "" : "s"}` : ""}
+            </SectionHeading>
+            {downloadCount > 0 ? (
+              <OnDiskRows contentEntry={dfContentEntry} />
+            ) : (
+              <Typography variant="body2" color="text.disabled" sx={{ marginTop: 1 }}>
+                Nothing downloaded yet
+              </Typography>
+            )}
+          </Box>
+        </Stack>
+      </TabPanel>
+
+      <TabPanel active={activeTab === "analysis"} keepMounted>
+        <AiAnalysisPanel
+          contentKey={dfContentEntry.key}
+          enabled={aiAnalysisEnabled}
+          onHasContent={reportAnalysis}
+        />
+      </TabPanel>
+
+      <TabPanel active={activeTab === "article"} keepMounted>
+        <DfArticleLink contentKey={dfContentEntry.key} onHasContent={reportArticle} />
+      </TabPanel>
+
+      <TabPanel active={activeTab === "activity"}>
+        <Stack spacing={1}>
+          <Box sx={{ display: "flex", justifyContent: "flex-end" }}>
+            <Button
+              size="small"
+              variant="outlined"
+              onClick={clearCompletedPipelines}
+              disabled={!completedPipelineIds.length}
+            >
+              Clear completed
+            </Button>
+          </Box>
+          {pipelineIds.map((pipelineId) => (
+            <PipelineInfoSummaryDetail
+              key={`cid-pipeline-info-summary-detail${pipelineId}`}
+              pipelineId={pipelineId}
+            />
+          ))}
+        </Stack>
+      </TabPanel>
+    </Stack>
+  );
+
+  return (
     <ContentItemDetailContainer>
       {/* Title, layout toggle and close on one line - all three are chrome for
           this panel, and stacking them cost a band of empty space the width of
@@ -178,114 +443,30 @@ export const DfContentInfoItemDetail = ({ dfContentName, onClose }: DfContentInf
       </Box>
 
       {/*
-        Split by default: the media and its prose on the left, everything you
-        can act on - what exists on disk, what can still be fetched - on the
-        right and permanently in view. This was one centred column once, which
-        put the formats below the description, so on a long YouTube
-        description the actionable half was off-screen.
+        Split keeps the media and its prose permanently on the left, with
+        everything you can act on beside it - which is what this layout was
+        introduced for, since a long YouTube description used to push the
+        actionable half off-screen.
 
-        Stacked is that single column again, now as a deliberate choice: it
-        gives the embed the full width, at the cost of pushing the actions
-        below the description. Narrow widths get it either way.
+        Stacked is one column, and there the media becomes a tab like
+        anything else. That is the layout the tabs earn their place in: the
+        actions are reachable from the top of the panel rather than below
+        however long the description happens to be.
       */}
       <Box
         sx={{
           display: "grid",
           gridTemplateColumns: {
             xs: "1fr",
-            md: layout === "split" ? "minmax(0, 1.15fr) minmax(0, 1fr)" : "1fr",
+            md: stacked ? "1fr" : "minmax(0, 1.15fr) minmax(0, 1fr)",
           },
           gap: 4,
           alignItems: "start",
         }}
       >
-        <Box sx={{ minWidth: 0 }}>
-          {contentInfo.youtubeVideoId ? (
-            <YouTubeEmbed videoId={contentInfo.youtubeVideoId} width="100%" />
-          ) : (
-            <Thumb
-              src={DfContentInfoUtils.getThumbnailUrl(contentInfo, 1200, 600)}
-              alt={contentInfo.title}
-              width="100%"
-            />
-          )}
-          <DfTagList tags={contentInfo.tags || []} sx={{ justifyContent: "flex-start", marginTop: 2 }} />
-          {/* Descriptions are prose with real paragraph breaks (YouTube-sourced
-              ones especially - blurb, links, then a chapter list). HTML collapses
-              those newlines by default, running it all into one block. */}
-          <Typography variant="body2" sx={{ whiteSpace: "pre-line", marginTop: 2, color: "text.secondary" }}>
-            {contentInfo.description}
-          </Typography>
-        </Box>
-
-        <Stack spacing={3} sx={{ minWidth: 0 }}>
-          {Boolean(pipelineIds?.length) && (
-            <Box>
-              <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 1 }}>
-                <Typography variant="overline">Tasks</Typography>
-                <Button
-                  size="small"
-                  variant="outlined"
-                  onClick={clearCompletedPipelines}
-                  disabled={!completedPipelineIds.length}
-                >
-                  Clear completed
-                </Button>
-              </Box>
-              <Stack spacing={1}>
-                {pipelineIds.map((pipelineId) => (
-                  <PipelineInfoSummaryDetail
-                    key={`cid-pipeline-info-summary-detail${pipelineId}`}
-                    pipelineId={pipelineId}
-                  />
-                ))}
-              </Stack>
-            </Box>
-          )}
-
-          <Box>
-            <Typography variant="overline">
-              On disk
-              {dfContentEntry.downloads.length > 0 ? ` · ${dfContentEntry.downloads.length} file${dfContentEntry.downloads.length === 1 ? "" : "s"}` : ""}
-            </Typography>
-            {dfContentEntry.downloads.length > 0 ? (
-              <OnDiskRows contentEntry={dfContentEntry} />
-            ) : (
-              <Typography variant="body2" color="text.disabled" sx={{ marginTop: 1 }}>
-                Nothing downloaded yet
-              </Typography>
-            )}
-          </Box>
-
-          <Box>
-            <Typography variant="overline">Digital Foundry article</Typography>
-            <Box sx={{ marginTop: 1 }}>
-              <DfArticleLink contentKey={dfContentEntry.key} />
-            </Box>
-          </Box>
-
-          <Box>
-            <Typography variant="overline">Analysis</Typography>
-            <Box sx={{ marginTop: 1 }}>
-              <AiAnalysisPanel contentKey={dfContentEntry.key} enabled={aiAnalysisEnabled} />
-            </Box>
-          </Box>
-
-          <Box>
-            <Typography variant="overline">Available formats</Typography>
-            {queuedContentAvailability === "PAYWALLED" && (
-              <Typography variant="body2" color="text.disabled" sx={{ marginTop: 1 }}>
-                Paywalled - not in your tier
-              </Typography>
-            )}
-            <FormatRows contentEntry={dfContentEntry} />
-          </Box>
-        </Stack>
+        {!stacked && media}
+        {panels}
       </Box>
     </ContentItemDetailContainer>
-  ) : (
-    <Typography>ERROR</Typography>
   );
 };
-
-// Make a table with these
