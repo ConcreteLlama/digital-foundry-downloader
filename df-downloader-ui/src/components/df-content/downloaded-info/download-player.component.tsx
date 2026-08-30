@@ -480,6 +480,11 @@ export const DownloadPlayer = ({
     );
   }
 
+  // Whether this browser will fullscreen an arbitrary element. iOS Safari
+  // will not - it allows it for video elements only - so there the native
+  // control has to stay, since ours cannot work.
+  const canImmerse = typeof document !== "undefined" && document.fullscreenEnabled;
+
   const videoElement = (
     <Box
       component="video"
@@ -516,7 +521,7 @@ export const DownloadPlayer = ({
         the button that does. Two buttons that look like they do the same
         thing and do not is worse than one.
       */
-      controlsList="nofullscreen"
+      controlsList={canImmerse ? "nofullscreen" : undefined}
       /*
         Only when the API really is on another origin - see apiIsCrossOrigin.
         Setting this unconditionally also forces the poster through CORS, and
@@ -580,7 +585,6 @@ export const DownloadPlayer = ({
     fullscreen is active, so the overlay has to live in here rather than
     beside the video.
   */
-  const canImmerse = typeof document !== "undefined" && document.fullscreenEnabled;
 
   const stage = (
     <Box
