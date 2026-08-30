@@ -203,6 +203,15 @@ progress on a feature branch. Bump `version` in root `package.json` and add a ma
 new entry at the *top* of `changelog.yaml`'s `versions` array in the same commit that
 finishes the batch of work.
 
+**Bumping the version is the project owner's call, not an implementing session's.**
+If the top `changelog.yaml` entry's version is already unreleased (hasn't been
+pushed/promoted yet), fold new user-facing work into *that* entry instead of opening a
+new one — don't bump `version` in `package.json` just because a feature or session
+finished. Only bump when the project owner explicitly asks for one. This has been a
+recurring real annoyance (an implementing session bumping the version unprompted,
+then having to be told to undo it) — when in doubt, add the changelog content and
+leave the version alone.
+
 **How to write it — this is the part that's easy to get wrong**: entries are genuinely
 **user-facing prose**, not developer changelog/commit-message style. Read the `2.7.0`
 and `2.6.0` entries in `changelog.yaml` as the reference for the expected voice before

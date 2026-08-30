@@ -88,6 +88,12 @@ Downloads also play in the app itself now. Open a video you have already downloa
 - Swipe between pages on a touch screen
   - Moves through the content panel's tabs, and through the pages of Tools, Analysis and Settings
   - Ignores a swipe that is mostly vertical, and one that starts on something which scrolls sideways itself, so scrolling a wide settings table still scrolls the table
+- Jump from an analysis to the moment it is talking about
+  - Findings now carry the time they were said. A per-platform result, a settings row or a topic from a discussion show is one click from that point in the video
+  - The time is found rather than guessed. The analysis quotes the video word for word, and the app locates that quote in the subtitles - so a jump either lands where the thing was actually said, or is not offered at all
+  - A finding it cannot place shows no jump button rather than an approximate one. A timestamp that is 90 seconds out looks exactly as confident as a correct one, which makes it worse than none
+  - Jumping from the analysis brings the video back into view first, so it works whether the two are side by side or on separate tabs
+  - Only applies to analyses run from now on - existing ones keep working, they just have nothing to jump to until re-analysed
 - A log you can actually read
   - The app now writes its log to a file, and there is a Logs page under System to read it back - so working out what happened during a download no longer means having the container's console open at the time
   - Filter by level or search the text, and follow it live while something is running
