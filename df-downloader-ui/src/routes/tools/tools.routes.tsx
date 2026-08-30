@@ -9,6 +9,11 @@ import { MaintenanceToolsPage } from "../../components/tools/maintenance/mainten
 export const toolsRouteDefinitions: NestedSubRoute = {
   name: "Tools",
   icon: HandymanIcon,
+  // Three pages do not justify a second vertical nav beside the rail, and
+  // these are wide - the backfill list and the file-move preview are both
+  // tables that want the width more than a column of three links does.
+  // Settings keeps its column; a dozen pages genuinely need one.
+  compactNavOnly: true,
   routes: [
     {
       path: "/tools/backfill",
