@@ -16,13 +16,14 @@ import {
   useTheme,
 } from "@mui/material";
 import { DfContentInfoUtils, secondsToHHMMSS } from "df-downloader-common";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useSelector } from "react-redux";
 import { AiAnalysisConfigUtils } from "df-downloader-common/config/ai-analysis-config";
 import { selectConfigSection } from "../../../store/config/config.selector.ts";
 import { queryConfigSection } from "../../../store/config/config.action.ts";
 import { clearPipeline } from "../../../api/tasks.ts";
 import { useDfContentEntry } from "../../../hooks/use-df-content-entry.ts";
+import { useSwipeNavigation } from "../../../hooks/use-swipe-navigation.ts";
 import { useViewportHeight } from "../../../hooks/use-viewport-height.ts";
 import { fetchYtVideoMeta, refreshDfContentMeta } from "../../../store/df-content/df-content.action.ts";
 import { selectQueryPipelineIds } from "../../../store/df-tasks/tasks.selector.ts";
@@ -55,9 +56,6 @@ export type DfContentInfoItemDetailProps = {
 };
 
 type DetailTab = "content" | "files" | "analysis" | "article" | "activity";
-
-/** Far enough that a swipe is unambiguous rather than a stray drag. */
-const SWIPE_THRESHOLD_PX = 60;
 
 /**
  * One tab's label, carrying its own state.
@@ -271,65 +269,16 @@ export const DfContentInfoItemDetail = ({ dfContentName, onClose }: DfContentInf
   // removes Content, and a finished download removes Activity.
   const activeTab = tabs.some((entry) => entry.id === tab) ? tab : tabs[0].id;
 
-  /**
-   * Swipe between tabs on a touch screen.
-   *
-   * Hand-rolled rather than pulled from a library: the behaviour is a
-   * threshold and two guards, and the usual dependency for this is
-   * unmaintained.
-   *
-   * The guards are the substance. A swipe that is mostly vertical is the
-   * page being scrolled, and a swipe that starts inside something which
-   * can itself scroll sideways - the settings tables in an analysis, a
-   * long file path - belongs to that element, not to the tab strip.
-   * Without the second guard those become unreadable on a phone, because
-   * every attempt to scroll them changes tab instead.
-   */
-  const swipeArea = useRef<HTMLDivElement | null>(null);
-  const swipeStart = useRef<{ x: number; y: number; locked: boolean } | null>(null);
-
-  const startsInHorizontalScroller = (target: EventTarget | null) => {
-    let node = target as HTMLElement | null;
-    while (node && node !== swipeArea.current) {
-      if (node.scrollWidth > node.clientWidth + 1) {
-        const overflowX = window.getComputedStyle(node).overflowX;
-        if (overflowX === "auto" || overflowX === "scroll") {
-          return true;
-        }
-      }
-      node = node.parentElement;
-    }
-    return false;
-  };
-
-  const onTouchStart = (event: React.TouchEvent) => {
-    const touch = event.touches[0];
-    swipeStart.current = {
-      x: touch.clientX,
-      y: touch.clientY,
-      locked: startsInHorizontalScroller(event.target),
-    };
-  };
-
-  const onTouchEnd = (event: React.TouchEvent) => {
-    const start = swipeStart.current;
-    swipeStart.current = null;
-    if (!start || start.locked) {
-      return;
-    }
-    const touch = event.changedTouches[0];
-    const dx = touch.clientX - start.x;
-    const dy = touch.clientY - start.y;
-    // Comfortably horizontal, and far enough to be deliberate.
-    if (Math.abs(dx) < SWIPE_THRESHOLD_PX || Math.abs(dx) < Math.abs(dy) * 1.5) {
-      return;
-    }
+  // Swiping moves to the neighbouring tab - see useSwipeNavigation for
+  // why a plain horizontal drag is not enough to act on.
+  const step = (delta: number) => {
     const index = tabs.findIndex((entry) => entry.id === activeTab);
-    const next = dx < 0 ? index + 1 : index - 1;
+    const next = index + delta;
     if (next >= 0 && next < tabs.length) {
       setTab(tabs[next].id);
     }
   };
+  const swipe = useSwipeNavigation({ onNext: () => step(1), onPrevious: () => step(-1) });
 
   if (!dfContentEntry) {
     //TODO: Make this more sensible
@@ -338,8 +287,6 @@ export const DfContentInfoItemDetail = ({ dfContentName, onClose }: DfContentInf
   const { contentInfo } = dfContentEntry;
   const { statusInfo } = dfContentEntry;
   const queuedContentAvailability = statusInfo.availability;
-
-  const swipeAreaProps = { onTouchStart, onTouchEnd };
 
   const media = (
     <Box sx={{ minWidth: 0 }}>
@@ -395,8 +342,7 @@ export const DfContentInfoItemDetail = ({ dfContentName, onClose }: DfContentInf
     <Stack
       spacing={2}
       sx={{ minWidth: 0, minHeight: 0, height: stableHeightPx ? "100%" : undefined }}
-      ref={swipeArea}
-      {...swipeAreaProps}
+      {...swipe}
     >
       {tabStrip}
 

@@ -19,16 +19,17 @@ import {
 } from "@mui/material";
 import { useCallback, useEffect, useState } from "react";
 import { useSelector } from "react-redux";
-import { Link, Outlet, useLocation } from "react-router-dom";
+import { Link, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { LiveStatusStrip } from "../../components/general/live-status-strip.component";
 import { ThemeSwitcher } from "../../components/general/theme-switcher.component";
 import { DfLogoIcon } from "../../icons/df-logo.component";
 import { selectDevConfigEnabled } from "../../store/config/config.selector.ts";
+import { useSwipeNavigation } from "../../hooks/use-swipe-navigation.ts";
 import { monoFontFamily, NARROW_RAIL_MAX_WIDTH } from "../../themes/build-theme";
 import { getStoredRailState, RailState, storeRailState } from "../../themes/ui-preferences";
 import { MobileTabBar } from "./mobile-tab-bar.component";
 import { useNavBadge } from "./nav-badges";
-import { findDestination, getDestinationPath, getPageTitle, NavDestination, navDestinations } from "./nav-destinations";
+import { findDestination, flattenSectionRoutes, getDestinationPath, getPageTitle, NavDestination, navDestinations } from "./nav-destinations";
 import { RailFoot } from "./rail-foot.component";
 import { SectionNav, SectionNavCompact } from "./section-nav.component";
 
@@ -348,10 +349,39 @@ const AppTopBar = ({ railWidth, showMenuButton, onMenuClick }: AppTopBarProps) =
  * pages are chosen from a column in here now, not from an accordion in the rail.
  */
 export const NavPage = () => {
+  const { pathname } = useLocation();
+  const navigate = useNavigate();
+  const devModeEnabled = useSelector(selectDevConfigEnabled);
+
+  /*
+    Swiping moves between the section's own pages - the same set the strip
+    above the content lists, in the same order. Tools and Analysis are
+    where this pays off, since those sections show that strip as their
+    only navigation, but it costs nothing to offer it wherever a section
+    has more than one page.
+
+    Touch-only by nature, so nothing changes on a desktop that never fires
+    these events. See useSwipeNavigation for why a horizontal drag alone
+    is not enough to act on - a settings table that scrolls sideways would
+    otherwise navigate away instead of scrolling.
+  */
+  const destination = findDestination(pathname);
+  const sectionRoutes = destination?.section
+    ? flattenSectionRoutes(destination.section).filter((route) => !route.devOnly || devModeEnabled)
+    : [];
+  const stepPage = (delta: number) => {
+    const index = sectionRoutes.findIndex((route) => route.path === pathname);
+    const next = index + delta;
+    if (index >= 0 && next >= 0 && next < sectionRoutes.length) {
+      navigate(sectionRoutes[next].path);
+    }
+  };
+  const swipe = useSwipeNavigation({ onNext: () => stepPage(1), onPrevious: () => stepPage(-1) });
+
   return (
     <Box sx={{ display: "flex", padding: { xs: 1.5, md: 4 }, width: "100%", minWidth: 0 }}>
       <SectionNav />
-      <Box sx={{ flex: "1 1 auto", minWidth: 0 }}>
+      <Box sx={{ flex: "1 1 auto", minWidth: 0 }} {...swipe}>
         <SectionNavCompact />
         <Outlet />
       </Box>
