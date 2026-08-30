@@ -394,7 +394,7 @@ export const DfContentInfoItemDetail = ({ dfContentName, onClose }: DfContentInf
   const panels = (
     <Stack
       spacing={2}
-      sx={{ minWidth: 0, minHeight: 0, height: stacked && stableHeightPx ? "100%" : undefined }}
+      sx={{ minWidth: 0, minHeight: 0, height: stableHeightPx ? "100%" : undefined }}
       ref={swipeArea}
       {...swipeAreaProps}
     >
@@ -410,8 +410,8 @@ export const DfContentInfoItemDetail = ({ dfContentName, onClose }: DfContentInf
       <Box
         sx={{
           minHeight: 0,
-          flex: stacked && stableHeightPx ? "1 1 auto" : undefined,
-          overflowY: stacked && stableHeightPx ? "auto" : "visible",
+          flex: stableHeightPx ? "1 1 auto" : undefined,
+          overflowY: stableHeightPx ? "auto" : "visible",
           "::-webkit-scrollbar": { display: "none" },
         }}
       >
@@ -483,10 +483,16 @@ export const DfContentInfoItemDetail = ({ dfContentName, onClose }: DfContentInf
   return (
     <ContentItemDetailContainer
       sx={
-        stacked && stableHeightPx
-          ? // Matches the modal's own ceiling, so the panel fills it rather
-            // than the modal sizing itself to the panel.
-            { height: `${stableHeightPx}px`, maxHeight: `${stableHeightPx}px` }
+        stableHeightPx
+          ? stacked
+            ? // Matches the modal's own ceiling, so the panel fills it rather
+              // than the modal sizing itself to the panel.
+              { height: `${stableHeightPx}px`, maxHeight: `${stableHeightPx}px` }
+            : // Split caps rather than fills: its height is set by the media
+              // and description, which do not change with the tab, so a short
+              // item should still get a short dialog. The cap is what gives
+              // the two columns a definite height to scroll within.
+              { maxHeight: `${stableHeightPx}px` }
           : undefined
       }
     >
@@ -570,12 +576,23 @@ export const DfContentInfoItemDetail = ({ dfContentName, onClose }: DfContentInf
             md: stacked ? "1fr" : "minmax(0, 1.15fr) minmax(0, 1fr)",
           },
           gap: 4,
-          alignItems: stacked && stableHeightPx ? "stretch" : "start",
-          flex: stacked && stableHeightPx ? "1 1 auto" : undefined,
+          alignItems: stableHeightPx ? "stretch" : "start",
+          flex: stableHeightPx ? "1 1 auto" : undefined,
           minHeight: 0,
         }}
       >
-        {!stacked && media}
+        {!stacked && (
+          <Box
+            sx={{
+              minWidth: 0,
+              minHeight: 0,
+              overflowY: stableHeightPx ? "auto" : "visible",
+              "::-webkit-scrollbar": { display: "none" },
+            }}
+          >
+            {media}
+          </Box>
+        )}
         {panels}
       </Box>
     </ContentItemDetailContainer>

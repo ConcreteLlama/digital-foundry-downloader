@@ -18,7 +18,7 @@ export const MiddleModal = (props: MiddleModalProps) => {
   const viewportHeight = useViewportHeight();
   return (
     <Modal {...other}>
-      <ResponsiveModalContainer sx={{ outline: "none" }}>
+      <ResponsiveModalContainer disableGutters maxWidth={false} sx={{ outline: "none" }}>
         {/*
           Shrink-wraps the panel, so "top right" below is the panel's own top
           right rather than the viewport's. The close button used to sit in a
@@ -29,12 +29,23 @@ export const MiddleModal = (props: MiddleModalProps) => {
           Outside the scrolling box on purpose: in it, the button would scroll
           away from a long page and leave no visible way out.
         */}
-        <Box sx={{ position: "relative", display: "flex", minHeight: 0, maxWidth: "99vw" }}>
+        <Box
+          sx={{
+            position: "relative",
+            display: "flex",
+            minHeight: 0,
+            // 99vw leaves a sliver of page down each edge, which reads as a
+            // misaligned dialog rather than as breathing room.
+            width: { xs: "100%", sm: "auto" },
+            maxWidth: { xs: "100%", sm: "99vw" },
+          }}
+        >
           <Box
             sx={{
               overflow: "auto",
               maxHeight: `${viewportHeight * 0.94}px`,
               maxWidth: "100%",
+              width: "100%",
               "::-webkit-scrollbar": {
                 display: "none",
               },
