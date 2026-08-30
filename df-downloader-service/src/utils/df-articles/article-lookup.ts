@@ -96,7 +96,7 @@ const MIN_TITLE_SCORE = 0.3;
  */
 const MAX_DATE_DISTANCE_DAYS = 120;
 
-type SitemapEntry = { url: string; slug: string; section: string; lastmod?: Date };
+export type SitemapEntry = { url: string; slug: string; section: string; lastmod?: Date };
 type CachedSitemap = { entries: SitemapEntry[]; fetchedAt: number };
 const sitemapCache = new Map<number, CachedSitemap>();
 
@@ -167,7 +167,7 @@ const parseSitemap = (xml: string): SitemapEntry[] => {
   return entries;
 };
 
-const fetchSitemap = async (year: number, priority?: number): Promise<SitemapEntry[]> => {
+export const fetchSitemap = async (year: number, priority?: number): Promise<SitemapEntry[]> => {
   const cached = sitemapCache.get(year);
   if (cached && Date.now() - cached.fetchedAt < SITEMAP_CACHE_TTL_MS) {
     return cached.entries;

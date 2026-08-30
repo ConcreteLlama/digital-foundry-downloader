@@ -45,6 +45,16 @@ const DfArticleIndexFile = z.object({
   version: z.string(),
   lastUpdated: z.coerce.date(),
   entries: z.record(z.string(), DfArticleIndexEntry),
+  /**
+   * How far the periodic article scan has read.
+   *
+   * Kept here rather than in a settings file because it is derived state,
+   * not a preference: losing it should mean re-reading some articles, not
+   * changing what the user asked for. Absent on a fresh install, which is
+   * what makes the first run apply its short lookback window instead of
+   * treating the whole back catalogue as new.
+   */
+  scanCursor: z.coerce.date().optional(),
 });
 type DfArticleIndexFile = z.infer<typeof DfArticleIndexFile>;
 
@@ -120,5 +130,14 @@ export class DfArticleStore {
 
   getAllIndexEntries(): Record<string, DfArticleIndexEntry> {
     return this.index.entries;
+  }
+
+  getScanCursor(): Date | undefined {
+    return this.index.scanCursor;
+  }
+
+  async setScanCursor(cursor: Date): Promise<void> {
+    this.index.scanCursor = cursor;
+    await this.writeIndex();
   }
 }

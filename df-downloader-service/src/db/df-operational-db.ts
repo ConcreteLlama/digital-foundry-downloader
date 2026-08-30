@@ -101,6 +101,9 @@ export abstract class DfDownloaderOperationalDb {
   abstract getDfArticleLookup(contentName: string): Promise<DfArticleLookupState | undefined>;
   /** Synchronous: the retry decision runs on every content-panel open. */
   abstract getDfArticleIndexEntry(contentName: string): { lastAttemptedAt: Date; missCount: number; hasArticle: boolean; url?: string; title?: string } | undefined;
+  /** How far the periodic article scan has read. Undefined until it first runs. */
+  abstract getDfArticleScanCursor(): Date | undefined;
+  abstract setDfArticleScanCursor(cursor: Date): Promise<void>;
   protected abstract doQuery(params: DfContentInfoQueryParams): Promise<DfDbQueryResult>;
 
   async setContentInfosWithAvailability(contentInfosWithStatuses: ContentInfoWithAvailability[], userTier: string) {

@@ -26,6 +26,16 @@ import { configService } from "./config/config.js";
 import { AiAnalysisConfig, AiAnalysisConfigUtils } from "df-downloader-common/config/ai-analysis-config.js";
 import { SubtitlesTaskPipelineExecution } from "./task-pipelines/subtitles-task-pipeline.js";
 import { ensureArticleForContent } from "./utils/df-articles/ensure-article.js";
+import { scanForNewArticles } from "./utils/df-articles/article-scan.js";
+
+/**
+ * How long after startup the first article scan waits.
+ *
+ * Long enough for the initial archive scan and any catch-up downloads to
+ * get going first. Nothing about article matching is time-critical, so it
+ * yields to everything that is.
+ */
+const ARTICLE_SCAN_STARTUP_DELAY_MS = 5 * 60 * 1000;
 import { ContentInfoWithAvailability, DfDownloaderOperationalDb, DownloadInfoWithName } from "./db/df-operational-db.js";
 import { forEachListingPage, fetchContentInfo, DfFetchOpts } from "./df-fetcher.js";
 import { DfFetchPriority } from "./df-request-queue.js";
@@ -229,6 +239,7 @@ export class DigitalFoundryContentManager {
       }
     });
     this.startContentPollLoop();
+    this.startArticleScanLoop();
   }
 
   /**
@@ -309,6 +320,51 @@ export class DigitalFoundryContentManager {
     // running until a whole contentCheckInterval has elapsed.
     void runCheck();
     setInterval(runCheck, contentCheckInterval);
+  }
+
+  /**
+   * The periodic sweep for newly published Digital Foundry articles.
+   *
+   * Separate from the content poll loop and much less frequent, because it
+   * is answering a different question. That loop asks "is there a new
+   * video", which is time-sensitive - an auto-download has an age window to
+   * fall inside. This asks "has an article appeared for a video I already
+   * have", which is not: Digital Foundry routinely publish the written
+   * piece days after the video, and finding it half a day later than it
+   * appeared costs nothing.
+   *
+   * Gated on sign-in even though articles are public and need no
+   * credentials. Not being signed in means nothing is being downloaded, so
+   * there is nothing for an article to be attached to that is urgent -
+   * and unconditional background polling against this site is precisely
+   * what got a real IP banned once already (see DfUserManager's
+   * schedulePeriodicRecheck).
+   *
+   * Unlike the content loop, the first run is delayed rather than
+   * immediate. Startup already has an archive scan to get through, and
+   * nothing here is worth adding to that burst.
+   */
+  private startArticleScanLoop() {
+    const config = configService.config.dfArticles;
+    if (!config.scanEnabled) {
+      logger.log("info", "Periodic Digital Foundry article scanning is disabled");
+      return;
+    }
+    logger.log("info", `Checking for new Digital Foundry articles every ${config.scanInterval}ms while signed in`);
+    const runScan = async () => {
+      if (!this.dfUserManager.isUserSignedIn()) {
+        return;
+      }
+      try {
+        await scanForNewArticles(this.db, configService.config.dfArticles);
+      } catch (e) {
+        logger.log("error", "Error during scheduled article scan", e);
+      }
+    };
+    setTimeout(() => {
+      void runScan();
+      setInterval(runScan, config.scanInterval);
+    }, ARTICLE_SCAN_STARTUP_DELAY_MS);
   }
 
   private async runInitialScan() {

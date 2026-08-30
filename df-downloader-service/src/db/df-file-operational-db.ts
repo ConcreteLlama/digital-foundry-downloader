@@ -164,6 +164,12 @@ export class DfFileOperationalDb extends DfDownloaderOperationalDb {
     getDfArticleIndexEntry(contentName: string) {
         return this.dfArticleStore.getIndexEntry(contentName);
     }
+    getDfArticleScanCursor() {
+        return this.dfArticleStore.getScanCursor();
+    }
+    async setDfArticleScanCursor(cursor: Date) {
+        return this.dfArticleStore.setScanCursor(cursor);
+    }
 
     async isFirstRunComplete() {
         return this.contentStatusDb.isFirstRunComplete();
