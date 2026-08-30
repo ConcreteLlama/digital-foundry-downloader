@@ -1,3 +1,4 @@
+import CloseIcon from "@mui/icons-material/Close";
 import FormatListBulletedIcon from "@mui/icons-material/FormatListBulleted";
 import FullscreenIcon from "@mui/icons-material/Fullscreen";
 import FullscreenExitIcon from "@mui/icons-material/FullscreenExit";
@@ -645,6 +646,8 @@ export const DownloadPlayer = ({
               position: "absolute",
               top: 8,
               right: 8,
+              // Above the panel, for the same reason as the button beside it.
+              zIndex: 2,
               color: "common.white",
               backgroundColor: "rgba(0, 0, 0, 0.45)",
               "&:hover": { backgroundColor: "rgba(0, 0, 0, 0.7)" },
@@ -667,12 +670,19 @@ export const DownloadPlayer = ({
               position: "absolute",
               top: 8,
               right: 52,
+              // Above the panel. The panel is full width on a phone and
+              // swallows taps so they do not reach the video behind it, so
+              // if it covers this button there is no way to dismiss it at
+              // all - which is exactly what happened.
+              zIndex: 2,
               color: "common.white",
               backgroundColor: "rgba(0, 0, 0, 0.45)",
               "&:hover": { backgroundColor: "rgba(0, 0, 0, 0.7)" },
             }}
           >
-            <FormatListBulletedIcon fontSize="small" />
+            {/* A close box while it is open - a list icon reads as "show me
+                the list" whichever state it is in. */}
+            {overlayOpen ? <CloseIcon fontSize="small" /> : <FormatListBulletedIcon fontSize="small" />}
           </IconButton>
         </Tooltip>
       )}
@@ -690,6 +700,9 @@ export const DownloadPlayer = ({
             maxWidth: "100%",
             overflowY: "auto",
             padding: 2,
+            // Clear of the buttons floating over its top-right corner.
+            paddingTop: 7,
+            zIndex: 1,
             backgroundColor: "rgba(0, 0, 0, 0.78)",
             backdropFilter: "blur(8px)",
           }}
