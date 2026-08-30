@@ -39,7 +39,24 @@ export const DfSettingsSectionForm = ({ sectionName, title, children, onSubmit }
           [sectionName]: currentSettings,
         }}
       >
-        <Box sx={{ height: "100%", width: "100%" }}>
+        {/*
+          A flex column filling the page, so the save bar below lands at the
+          bottom of the screen rather than wherever the content happens to
+          end. It is sticky, but sticky only pins while there is something to
+          scroll - on a short section the bar simply sat under the last
+          control with the rest of the screen empty beneath it.
+        */}
+        <Box
+          sx={{
+            minHeight: "100%",
+            width: "100%",
+            display: "flex",
+            flexDirection: "column",
+            // The form element itself has to carry the column too, or the
+            // save bar is laid out against the stack rather than the page.
+            "& > form": { flex: "1 1 auto", display: "flex", flexDirection: "column", minHeight: 0 },
+          }}
+        >
           <Typography variant="h5">{title}</Typography>
           <Divider sx={{ marginTop: 2, marginBottom: 4 }} />
           <FormContainer
@@ -53,7 +70,8 @@ export const DfSettingsSectionForm = ({ sectionName, title, children, onSubmit }
               logger.log("error", error);
             }}
           >
-            <SettingsStack>
+            {/* Takes the slack, which is what pushes the save bar down. */}
+            <SettingsStack sx={{ flex: "1 1 auto" }}>
               {children}
             </SettingsStack>
             <StickySaveBar sectionName={sectionName} />
