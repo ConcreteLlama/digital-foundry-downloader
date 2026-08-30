@@ -19,7 +19,7 @@ import {
 } from "df-downloader-common";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { estimateBackfill, fetchBackfillCandidates, runBackfill } from "../../../api/backfill.ts";
-import { BackfillConfirmDialog, BackfillTable, isMissing } from "./bulk-backfill.components.tsx";
+import { BackfillConfirmDialog, BackfillTable, isMissing, SKIP_REASONS } from "./bulk-backfill.components.tsx";
 
 /**
  * Bulk backfill: apply subtitles, AI analysis or article matching across
@@ -99,20 +99,27 @@ export const BulkBackfillPage = () => {
   const missing = useMemo(() => filtered.filter((candidate) => isMissing(candidate, target)), [filtered, target]);
 
   /**
-   * How many selected items the run would actually skip.
+   * The selected items the run would actually do something with.
    *
-   * Without this a run where everything is already done looks identical to
-   * one that did work: the task completes in milliseconds, never appears
-   * in Activity long enough to see, and the only message says it started
-   * on N items. Saying so up front is the difference between "nothing
-   * happened" and "nothing needed to happen".
+   * Items that already have the thing are dropped here rather than sent
+   * and skipped server-side. That keeps the cost estimate honest - it is
+   * priced per item, so including items that will not be worked on would
+   * quote money for work that never happens - and it means the count in
+   * the confirmation is the count of things about to occur.
+   *
+   * The dropped ones are still surfaced, because a run that skips
+   * everything otherwise looks identical to one that did work: it
+   * finishes in milliseconds and never lingers in Activity long enough
+   * to see.
    */
-  const willSkip = useMemo(() => {
-    if (force) {
-      return 0;
-    }
-    return candidates.filter((candidate) => selected.has(candidate.contentKey) && !isMissing(candidate, target)).length;
+  const runKeys = useMemo(() => {
+    const selectedKeys = candidates.filter((candidate) => selected.has(candidate.contentKey));
+    return (force ? selectedKeys : selectedKeys.filter((candidate) => isMissing(candidate, target))).map(
+      (candidate) => candidate.contentKey
+    );
   }, [candidates, selected, target, force]);
+
+  const willSkip = selected.size - runKeys.length;
 
   const toggle = (contentKey: string, isSelected: boolean) =>
     setSelected((current) => {
@@ -130,7 +137,7 @@ export const BulkBackfillPage = () => {
     setEstimate(null);
     setEstimating(true);
     try {
-      setEstimate(await estimateBackfill(target, [...selected], force));
+      setEstimate(await estimateBackfill(target, runKeys, force));
     } catch {
       setEstimate(null);
     } finally {
@@ -141,7 +148,7 @@ export const BulkBackfillPage = () => {
   const confirm = async () => {
     setConfirmOpen(false);
     try {
-      const response = await runBackfill(target, [...selected], force);
+      const response = await runBackfill(target, runKeys, force);
       setStarted(
         `Started on ${response.queued} ${response.queued === 1 ? "item" : "items"}` +
           (response.skipped ? `, skipped ${response.skipped} that could not take this action` : "")
@@ -240,10 +247,10 @@ export const BulkBackfillPage = () => {
             <Box sx={{ flex: "1 1 auto" }} />
             <Typography variant="body2" sx={{ color: "text.secondary" }}>
               {selected.size} selected
-              {willSkip > 0 && ` · ${willSkip} already done`}
+              {willSkip > 0 && ` · ${willSkip} will be skipped, ${SKIP_REASONS[target]}`}
             </Typography>
-            <Button variant="contained" size="small" disabled={selected.size === 0} onClick={openConfirm}>
-              Run
+            <Button variant="contained" size="small" disabled={runKeys.length === 0} onClick={openConfirm}>
+              Run ({runKeys.length})
             </Button>
           </Stack>
 
@@ -260,7 +267,7 @@ export const BulkBackfillPage = () => {
       <BackfillConfirmDialog
         open={confirmOpen}
         target={target}
-        count={selected.size}
+        count={runKeys.length}
         force={force}
         estimate={estimate}
         estimating={estimating}

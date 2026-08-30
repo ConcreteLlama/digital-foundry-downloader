@@ -53,6 +53,13 @@ export const isMissing = (candidate: BulkBackfillCandidate, target: BulkBackfill
   }
 };
 
+/** Why an item already in the selection would be passed over. */
+export const SKIP_REASONS: Record<BulkBackfillTarget, string> = {
+  subtitles: "they already have subtitles",
+  ai_analysis: "they have already been analysed",
+  df_article: "they already have an article, or were searched too recently to be worth asking again",
+};
+
 /** What this item already has, in the terms of the selected target. */
 const statusFor = (candidate: BulkBackfillCandidate, target: BulkBackfillTarget) => {
   switch (target) {
@@ -204,8 +211,8 @@ export const BackfillConfirmDialog = ({
 
           {willSkip > 0 && (
             <Alert severity="info" variant="outlined">
-              {willSkip} of these {willSkip === 1 ? "has" : "have"} this already and will be skipped, leaving{" "}
-              {count - willSkip} to work on. Turn on the re-run option above if you meant to redo them.
+              A further {willSkip} {willSkip === 1 ? "item is" : "items are"} selected but will not be touched, because{" "}
+              {SKIP_REASONS[target]}. Turn on the re-run option if you meant to redo them.
             </Alert>
           )}
 
