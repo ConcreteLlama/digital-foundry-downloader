@@ -1,19 +1,9 @@
-import CloseIcon from "@mui/icons-material/Close";
-import FormatListBulletedIcon from "@mui/icons-material/FormatListBulleted";
-import FullscreenIcon from "@mui/icons-material/Fullscreen";
-import FullscreenExitIcon from "@mui/icons-material/FullscreenExit";
-import { Alert, Box, CircularProgress, IconButton, Stack, Tooltip, Typography } from "@mui/material";
+import { Alert, Box, CircularProgress, Stack, Typography } from "@mui/material";
 import { Chapter, DfContentEntry, DfContentInfoUtils, PlaybackInfo, secondsToHHMMSS } from "df-downloader-common";
 import { DfContentDownloadInfo } from "df-downloader-common/models/df-content-download-info";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AnalysisJump } from "../ai-analysis/analysis-jumps.ts";
-import {
-  pauseOtherPlayers,
-  registerPlayer,
-  rememberPlaybackPosition,
-  rememberedPlaybackPosition,
-  subscribePlaybackPosition,
-} from "./playback-positions.ts";
+import { rememberPlaybackPosition, rememberedPlaybackPosition } from "./playback-positions.ts";
 import { apiIsCrossOrigin, getPlaybackInfo, playbackStreamUrl, playbackSubtitlesUrl } from "../../../api/playback.ts";
 import { useQuery } from "../../../hooks/use-query.ts";
 import { monoFontFamily } from "../../../themes/build-theme";
@@ -66,14 +56,12 @@ export type DownloadPlayerProps = {
    */
   onSeekReady?: (seek: (startMs: number) => void) => void;
   /**
-   * Announces entering and leaving full screen.
+   * Start here rather than where this file was last left off.
    *
-   * The host needs this to stop its layout changing underneath: going full
-   * screen resizes the viewport, which can flip a media query, which can
-   * swap this component to a different layout branch - remounting the very
-   * element that is currently full screen.
+   * Used when playback is opened from an analysis timestamp: the reader
+   * asked for a particular moment, which beats resuming.
    */
-  onImmersiveChange?: (immersive: boolean) => void;
+  startSeconds?: number;
 };
 
 /**
@@ -303,68 +291,10 @@ export const DownloadPlayer = ({
   analysisJumps,
   timelineMaxHeight = "none",
   onSeekReady,
-  onImmersiveChange,
+  startSeconds,
 }: DownloadPlayerProps) => {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const [positionSeconds, setPositionSeconds] = useState(0);
-  // Identifies this player among any others mounted at the same time.
-  const playerId = useRef(Symbol("player")).current;
-  /*
-    Immersive mode: the video filling the screen with the timeline available
-    over the top of it.
-
-    Fullscreen is requested on this wrapper rather than on the <video>, and
-    that distinction is the whole feature. A fullscreened video element is
-    handed to the browser's own fullscreen surface, which nothing can be
-    drawn over - which is exactly what the player's native fullscreen button
-    does, and why it cannot show the timeline. Fullscreening the element
-    *containing* the video keeps both it and our overlay on screen together.
-
-    The trade-off is that this only works where an arbitrary element can be
-    fullscreened. iOS Safari allows it for video elements only, so the button
-    is hidden there and the native control remains the way to fill the
-    screen, just without the overlay.
-  */
-  const stageRef = useRef<HTMLDivElement | null>(null);
-  const [immersive, setImmersive] = useState(false);
-  const [overlayOpen, setOverlayOpen] = useState(false);
-  /*
-    Set when a full-screen request went nowhere.
-
-    `fullscreenEnabled` promises only that the feature exists, not that this
-    request will be honoured - and asking hides the player's own fullscreen
-    button, so a refusal strands the user with a button that does nothing and
-    no other way to fill the screen. A review found the request can also
-    *hang*: no resolve, no reject, no event. So this is driven by "full screen
-    did not happen", not by a rejected promise, and giving the native button
-    back is the recovery.
-  */
-  const [immersiveRefused, setImmersiveRefused] = useState(false);
-
-  useEffect(() => {
-    const onFullscreenChange = () => {
-      const active = document.fullscreenElement === stageRef.current;
-      setImmersive(active);
-      if (active) {
-        // It worked after all - a slow transition, not a refusal.
-        setImmersiveRefused(false);
-      }
-      /*
-        Full screen starts as full screen - just the video. The timeline is a
-        tap away, and the button over the picture is what says so, which is
-        what auto-opening the panel was standing in for.
-      */
-      setOverlayOpen(false);
-    };
-    document.addEventListener("fullscreenchange", onFullscreenChange);
-    return () => document.removeEventListener("fullscreenchange", onFullscreenChange);
-  }, []);
-
-  // Separate from the listener above so the callback is never captured stale
-  // by an effect that only runs once.
-  useEffect(() => {
-    onImmersiveChange?.(immersive);
-  }, [immersive, onImmersiveChange]);
   const [playbackError, setPlaybackError] = useState<string | null>(null);
   // Captions are turned on once per file, not on every render - otherwise
   // switching them off in the player's own menu would be undone immediately.
@@ -437,7 +367,7 @@ export const DownloadPlayer = ({
       }
       const seconds = Math.floor(video.currentTime);
       setPositionSeconds((current) => (current === seconds ? current : seconds));
-      rememberPlaybackPosition(download.downloadLocation, seconds, playerId);
+      rememberPlaybackPosition(download.downloadLocation, seconds);
     };
     video.addEventListener("timeupdate", publish);
     video.addEventListener("seeked", publish);
@@ -445,7 +375,7 @@ export const DownloadPlayer = ({
       video.removeEventListener("timeupdate", publish);
       video.removeEventListener("seeked", publish);
     };
-  }, [supported, layout, download.downloadLocation, playerId]);
+  }, [supported, layout, download.downloadLocation]);
 
   /*
     Pick up where this file was left off.
@@ -469,6 +399,11 @@ export const DownloadPlayer = ({
         return;
       }
       restoredFor.current = download.downloadLocation;
+      // An explicitly requested moment wins: someone clicked a timestamp.
+      if (startSeconds != null) {
+        video.currentTime = startSeconds;
+        return;
+      }
       const seconds = rememberedPlaybackPosition(download.downloadLocation);
       if (seconds == null || seconds < 5) {
         return;
@@ -484,36 +419,7 @@ export const DownloadPlayer = ({
       restore();
     }
     return () => video.removeEventListener("loadedmetadata", restore);
-  }, [supported, layout, download.downloadLocation]);
-
-  /*
-    Follows the same file being played somewhere else.
-
-    Only while paused, and never from itself. The content panel plays inline
-    and the dialog plays the same download, so whichever one is not being
-    watched keeps up on its own - which means closing the dialog leaves the
-    inline copy where you actually got to, no matter which of the several
-    routes into the player was used. Catching up deliberately does not start
-    playback: this is staying in sync, not a request to watch.
-  */
-  useEffect(() => {
-    const location = download.downloadLocation;
-    return subscribePlaybackPosition(location, (seconds, source) => {
-      const video = videoRef.current;
-      if (source === playerId || !video || !video.paused) {
-        return;
-      }
-      // Seeking a video that has not loaded is discarded anyway, and doing it
-      // pre-empts this player's own restore - see the publish guard above.
-      if (video.readyState < 1) {
-        return;
-      }
-      if (Math.abs(video.currentTime - seconds) < 2) {
-        return;
-      }
-      video.currentTime = seconds;
-    });
-  }, [download.downloadLocation, playerId]);
+  }, [supported, layout, download.downloadLocation, startSeconds]);
 
   /*
     Hides the browser's own "Cast" entry, which cannot work here.
@@ -540,30 +446,6 @@ export const DownloadPlayer = ({
       video.disableRemotePlayback = true;
     }
   }, [supported, layout, download.downloadLocation]);
-
-  /*
-    One video at a time, wherever it was started from.
-
-    Two copies of the same file playing over each other is never wanted, and
-    this used to be handled only at the one call site that remembered to -
-    the content panel paused its inline player when opening the dialog, while
-    opening the same dialog from the Files tab left it playing behind the
-    modal. A rule the player enforces itself cannot be forgotten by a new
-    way of opening one.
-  */
-  useEffect(() => {
-    const video = videoRef.current;
-    if (!video) {
-      return;
-    }
-    const unregister = registerPlayer(playerId, video);
-    const onPlay = () => pauseOtherPlayers(playerId);
-    video.addEventListener("play", onPlay);
-    return () => {
-      video.removeEventListener("play", onPlay);
-      unregister();
-    };
-  }, [playerId, supported, layout, download.downloadLocation]);
 
   const seekTo = useCallback((startMs: number) => {
     const video = videoRef.current;
@@ -592,7 +474,7 @@ export const DownloadPlayer = ({
   const hasTimeline = timelineRows.length > 0;
   /*
     The cap is per-place, not per-player: in a page the list needs a ceiling
-    so it does not push everything below it off the bottom, but the immersive
+    so it does not push everything below it off the bottom, but the dialog
     overlay is its own scroller filling the screen height, and capping it
     there would strand the list in a short box inside a tall panel.
   */
@@ -638,11 +520,6 @@ export const DownloadPlayer = ({
       </Alert>
     );
   }
-
-  // Whether this browser will fullscreen an arbitrary element. iOS Safari
-  // will not - it allows it for video elements only - so there the native
-  // control has to stay, since ours cannot work.
-  const canImmerse = typeof document !== "undefined" && document.fullscreenEnabled;
 
   const videoElement = (
     <Box
@@ -714,14 +591,10 @@ export const DownloadPlayer = ({
       src={playbackStreamUrl(contentEntry.key, download.downloadLocation)}
       sx={{
         width: "100%",
-        // Immersive fills the screen and letterboxes rather than cropping;
-        // the ordinary case is capped so the timeline below stays in view.
-        maxHeight: immersive ? "100%" : maxHeight ?? "60vh",
-        height: immersive ? "100%" : undefined,
-        objectFit: immersive ? "contain" : undefined,
+        maxHeight: maxHeight ?? "60vh",
         minHeight: 0,
         backgroundColor: "common.black",
-        borderRadius: immersive ? 0 : 1,
+        borderRadius: 1,
       }}
     >
       {info.subtitleTracks.map((track, index) => (
@@ -736,164 +609,6 @@ export const DownloadPlayer = ({
           default={index === 0}
         />
       ))}
-    </Box>
-  );
-
-  /*
-    Everything that has to be inside the fullscreen element.
-
-    Only the fullscreened element and its descendants are rendered while
-    fullscreen is active, so the overlay has to live in here rather than
-    beside the video.
-  */
-
-  const stage = (
-    <Box
-      ref={stageRef}
-      onClick={
-        immersive
-          ? (event) => {
-              /*
-                Tap the picture to summon the timeline - but not on the strip
-                the native controls occupy. Those controls live in the video's
-                shadow DOM, so a press on play or the scrubber arrives here as
-                a click on the video itself and is indistinguishable from a tap
-                on the picture. Excluding the band they sit in is the only
-                thing that separates them, and it costs nothing: that band is
-                letterboxing most of the time.
-              */
-              const rect = event.currentTarget.getBoundingClientRect();
-              /*
-                A share of the height, capped - not a flat 96px. Measured on a
-                phone held sideways, 96px is a quarter of the stage, so a
-                quarter of the picture did nothing. The control bar does not
-                grow as the screen shrinks, so the cap is what matters on a
-                desktop and the proportion is what matters on a handset.
-              */
-              const band = Math.min(96, rect.height * 0.12);
-              if (rect.bottom - event.clientY < band) {
-                return;
-              }
-              setOverlayOpen((open) => !open);
-            }
-          : undefined
-      }
-      sx={{
-        position: "relative",
-        minWidth: 0,
-        ...(immersive && {
-          width: "100%",
-          height: "100%",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          backgroundColor: "common.black",
-        }),
-      }}
-    >
-      {videoElement}
-      {canImmerse && !immersiveRefused && (
-        <Tooltip title={immersive ? "Leave full screen" : "Full screen - tap the picture for the timeline"}>
-          <IconButton
-            size="small"
-            onClick={(event) => {
-              // Without this the tap handler above would toggle the overlay
-              // on the way out.
-              event.stopPropagation();
-              if (immersive) {
-                void document.exitFullscreen();
-              } else {
-                const stage = stageRef.current;
-                if (!stage?.requestFullscreen) {
-                  setImmersiveRefused(true);
-                  return;
-                }
-                stage.requestFullscreen().catch(() => setImmersiveRefused(true));
-                // The backstop for a request that never answers at all.
-                window.setTimeout(() => {
-                  if (document.fullscreenElement !== stage) {
-                    setImmersiveRefused(true);
-                  }
-                }, 1200);
-              }
-            }}
-            aria-label={immersive ? "Leave full screen" : "Full screen"}
-            sx={{
-              position: "absolute",
-              top: 8,
-              right: 8,
-              // Above the panel, for the same reason as the button beside it.
-              zIndex: 2,
-              color: "common.white",
-              backgroundColor: "rgba(0, 0, 0, 0.45)",
-              "&:hover": { backgroundColor: "rgba(0, 0, 0, 0.7)" },
-            }}
-          >
-            {immersive ? <FullscreenExitIcon fontSize="small" /> : <FullscreenIcon fontSize="small" />}
-          </IconButton>
-        </Tooltip>
-      )}
-      {immersive && hasTimeline && (
-        <Tooltip title={overlayOpen ? "Hide the timeline" : "Show the timeline"}>
-          <IconButton
-            size="small"
-            onClick={(event) => {
-              event.stopPropagation();
-              setOverlayOpen((open) => !open);
-            }}
-            aria-label={overlayOpen ? "Hide the timeline" : "Show the timeline"}
-            sx={{
-              position: "absolute",
-              top: 8,
-              right: 52,
-              // Above the panel. The panel is full width on a phone and
-              // swallows taps so they do not reach the video behind it, so
-              // if it covers this button there is no way to dismiss it at
-              // all - which is exactly what happened.
-              zIndex: 2,
-              color: "common.white",
-              backgroundColor: "rgba(0, 0, 0, 0.45)",
-              "&:hover": { backgroundColor: "rgba(0, 0, 0, 0.7)" },
-            }}
-          >
-            {/* A close box while it is open - a list icon reads as "show me
-                the list" whichever state it is in. */}
-            {overlayOpen ? <CloseIcon fontSize="small" /> : <FormatListBulletedIcon fontSize="small" />}
-          </IconButton>
-        </Tooltip>
-      )}
-      {immersive && overlayOpen && hasTimeline && (
-        <Box
-          // A tap inside the panel is for the panel - seeking, scrolling -
-          // and must not be read as a tap on the picture behind it.
-          onClick={(event) => event.stopPropagation()}
-          sx={{
-            position: "absolute",
-            top: 0,
-            right: 0,
-            bottom: 0,
-            /*
-              Never the full width, so there is always picture left to tap.
-
-              Tapping the video toggles this panel, which only works while
-              some video is reachable - at full width every tap landed on the
-              panel, which stops taps so they do not fall through to the
-              video, and the gesture that opened it could not close it.
-            */
-            width: { xs: "78%", sm: 420 },
-            maxWidth: "78%",
-            overflowY: "auto",
-            padding: 2,
-            // Clear of the buttons floating over its top-right corner.
-            paddingTop: 7,
-            zIndex: 1,
-            backgroundColor: "rgba(0, 0, 0, 0.78)",
-            backdropFilter: "blur(8px)",
-          }}
-        >
-          {renderTimeline("none")}
-        </Box>
-      )}
     </Box>
   );
 
@@ -941,7 +656,7 @@ export const DownloadPlayer = ({
               justifyContent: "center",
             }}
           >
-            {stage}
+            {videoElement}
             {belowVideo}
             {embeddedNote}
           </Box>
@@ -990,7 +705,7 @@ export const DownloadPlayer = ({
           pb: 1,
         }}
       >
-        {stage}
+        {videoElement}
         {belowVideo}
       </Box>
       {embeddedNote}

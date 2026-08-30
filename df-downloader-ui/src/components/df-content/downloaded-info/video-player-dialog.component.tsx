@@ -5,7 +5,7 @@ import { Box, Dialog, DialogContent, DialogTitle, IconButton, Stack, Tooltip, Ty
 import useMediaQuery from "@mui/material/useMediaQuery";
 import { DfContentEntry } from "df-downloader-common";
 import { DfContentDownloadInfo } from "df-downloader-common/models/df-content-download-info";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { monoFontFamily } from "../../../themes/build-theme";
 import { useAnalysisJumps } from "../ai-analysis/analysis-jumps.ts";
 import { DownloadPlayer } from "./download-player.component.tsx";
@@ -15,6 +15,8 @@ export type VideoPlayerDialogProps = {
   download: DfContentDownloadInfo;
   open: boolean;
   onClose: () => void;
+  /** Opens at a particular moment rather than where you left off. */
+  startSeconds?: number;
 };
 
 /**
@@ -36,7 +38,7 @@ export type VideoPlayerDialogProps = {
  * that is fetching them, since it is the part that knows which piece of
  * content is being played.
  */
-export const VideoPlayerDialog = ({ contentEntry, download, open, onClose }: VideoPlayerDialogProps) => {
+export const VideoPlayerDialog = ({ contentEntry, download, open, onClose, startSeconds }: VideoPlayerDialogProps) => {
   /*
     Theater needs room in both directions, which is why this is a raw query
     rather than a breakpoint.
@@ -50,18 +52,6 @@ export const VideoPlayerDialog = ({ contentEntry, download, open, onClose }: Vid
   const roomForTheater = useMediaQuery("(min-width:1200px) and (min-height:640px)");
   const [theater, setTheater] = useState(true);
 
-  /*
-    The layout is held still while the player is full screen.
-
-    Going full screen resizes the viewport, which flips the query above, which
-    swaps the player between its stacked and theater branches - and those are
-    different element trees, so the stage that is currently full screen gets
-    unmounted out from under the browser. What that looked like was pressing
-    full screen, getting full screen, and being shown the *enter* button again
-    with no timeline overlay; pressing it a second time then worked, because
-    by then the layout had settled.
-  */
-  const [playerImmersive, setPlayerImmersive] = useState(false);
 
   /*
     Back to theater every time it is opened.
@@ -77,14 +67,31 @@ export const VideoPlayerDialog = ({ contentEntry, download, open, onClose }: Vid
       setTheater(true);
     }
   }, [open]);
-  const preferredLayout = theater && roomForTheater;
-  // Written during render deliberately: reading it back an effect later would
-  // be one render too late, and that render is the one that does the damage.
-  const layoutWhileImmersive = useRef(preferredLayout);
-  if (!playerImmersive) {
-    layoutWhileImmersive.current = preferredLayout;
-  }
-  const inTheater = playerImmersive ? layoutWhileImmersive.current : preferredLayout;
+  /*
+    The layout is decided when the dialog opens and then left alone.
+
+    It used to follow the media query live, which sounds harmless and is not:
+    going full screen changes the viewport, that flips the query, the player
+    swaps between its stacked and theater branches, and those are different
+    element trees - so React rebuilds the <video>. Rebuilding the element that
+    is currently full screen drops the browser straight back out of it and
+    starts the file again from zero, which is exactly what full screen looked
+    like on a window narrower than the threshold.
+
+    Freezing it also stops the player rearranging itself mid-watch when a
+    window is resized or a phone is turned, which was never wanted either. The
+    theater button still switches it by hand.
+  */
+  const [roomAtOpen, setRoomAtOpen] = useState(roomForTheater);
+  useEffect(() => {
+    if (open) {
+      setRoomAtOpen(roomForTheater);
+    }
+    // Deliberately not depending on roomForTheater: re-reading it while open
+    // is the very thing this exists to avoid.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open]);
+  const inTheater = theater && roomAtOpen;
 
   // Only while open: a closed dialog is not worth a request, and the one
   // that matters is made the moment it opens.
@@ -119,7 +126,7 @@ export const VideoPlayerDialog = ({ contentEntry, download, open, onClose }: Vid
               {[download.mediaInfo.formatString, download.size].filter(Boolean).join("  ·  ")}
             </Typography>
           </Box>
-          {roomForTheater && (
+          {roomAtOpen && (
             <Tooltip title={theater ? "Timeline below the video" : "Theater mode - timeline beside the video"}>
               <IconButton onClick={() => setTheater((current) => !current)} aria-label="Toggle theater mode">
                 {theater ? <ViewStreamIcon /> : <ViewSidebarIcon />}
@@ -157,7 +164,7 @@ export const VideoPlayerDialog = ({ contentEntry, download, open, onClose }: Vid
             // player renders the timeline in both layouts, so "alongside or
             // below" falls out of the layout choice already being made.
             analysisJumps={jumps}
-            onImmersiveChange={setPlayerImmersive}
+            startSeconds={startSeconds}
           />
         )}
       </DialogContent>

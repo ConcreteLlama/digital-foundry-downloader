@@ -217,46 +217,26 @@ export const DfContentInfoItemDetail = ({ dfContentName, onClose }: DfContentInf
     });
   };
 
-  /**
-   * The player's seek, handed up by ContentMedia once a downloaded file is
-   * mounted. Held in a ref rather than state because nothing renders
-   * differently for having it - it is only ever called.
-   */
   // Below md the grid is one column whatever the stored preference says, so
-  // the media has nowhere else to live and needs a tab of its own. Declared
-  // here because the jump handler below has to know whether the video is
-  // on screen already.
+  // the media has nowhere else to live and needs a tab of its own.
   const stacked = belowMd || layout === "stacked";
 
-  const seekRef = useRef<((startMs: number) => void) | null>(null);
-  const onSeekReady = useCallback((seek: (startMs: number) => void) => {
-    seekRef.current = seek;
-  }, []);
-
   /**
-   * Jump the video to a moment an analysis finding refers to.
+   * Starts playback at a moment an analysis finding refers to.
    *
-   * Switches to the media first when it is behind a tab, because seeking
-   * something the reader cannot see looks like nothing happening. The
-   * Content tab stays mounted (see its TabPanel) precisely so the player
-   * still exists to be driven while the reader is on Analysis.
+   * Handed up by ContentMedia, which owns the player dialog. It used to seek
+   * a video mounted in the panel, which meant switching tabs first when that
+   * video was behind one - seeking something the reader cannot see looks like
+   * nothing happening. Playback is a dialog now, so it covers the panel
+   * wherever the reader happens to be and there is no tab to change.
    */
-  const jumpTo = useCallback(
-    (seconds: number) => {
-      if (!seekRef.current) {
-        return;
-      }
-      // Only when the media is actually behind a tab. Side by side it is
-      // already on screen, and there is no Content tab to switch to - asking
-      // for one there fell through to the first tab instead, so clicking a
-      // timestamp bounced the reader off the analysis they were reading.
-      if (stacked) {
-        setTab("content");
-      }
-      seekRef.current(seconds * 1000);
-    },
-    [stacked]
-  );
+  const playFromRef = useRef<((seconds: number) => void) | null>(null);
+  const onPlayFromReady = useCallback((playFrom: (seconds: number) => void) => {
+    playFromRef.current = playFrom;
+  }, []);
+  const jumpTo = useCallback((seconds: number) => {
+    playFromRef.current?.(seconds);
+  }, []);
 
   const [hasAnalysis, setHasAnalysis] = useState(false);
   const [hasArticle, setHasArticle] = useState(false);
@@ -331,7 +311,7 @@ export const DfContentInfoItemDetail = ({ dfContentName, onClose }: DfContentInf
     <Box sx={{ minWidth: 0 }}>
       {/* A downloaded file leads over the YouTube embed of the same video,
           with a switcher beneath when there is more than one source. */}
-      <ContentMedia contentEntry={dfContentEntry} onSeekReady={onSeekReady} />
+      <ContentMedia contentEntry={dfContentEntry} onPlayFromReady={onPlayFromReady} />
       <DfTagList tags={contentInfo.tags || []} sx={{ justifyContent: "flex-start", marginTop: 2 }} />
       {/* Descriptions are prose with real paragraph breaks (YouTube-sourced
           ones especially - blurb, links, then a chapter list). HTML collapses

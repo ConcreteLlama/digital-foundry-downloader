@@ -1,9 +1,7 @@
-import OpenInFullIcon from "@mui/icons-material/OpenInFull";
-import { Box, Button, ToggleButton, ToggleButtonGroup, Tooltip, Typography } from "@mui/material";
+import PlayArrowIcon from "@mui/icons-material/PlayArrow";
+import { Box, ToggleButton, ToggleButtonGroup, Typography } from "@mui/material";
 import { DfContentEntry, DfContentInfoUtils } from "df-downloader-common";
-import { useMemo, useState } from "react";
-import { useAnalysisJumps } from "../ai-analysis/analysis-jumps.ts";
-import { DownloadPlayer } from "../downloaded-info/download-player.component.tsx";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { VideoPlayerDialog } from "../downloaded-info/video-player-dialog.component.tsx";
 import { Thumb } from "../../general/thumb.component.tsx";
 import { YouTubeEmbed } from "../../general/youtube-embed.tsx";
@@ -11,12 +9,13 @@ import { YouTubeEmbed } from "../../general/youtube-embed.tsx";
 export type ContentMediaProps = {
   contentEntry: DfContentEntry;
   /**
-   * Passed straight through to the player, so the panel above can jump the
-   * video to a moment an analysis finding refers to. Only ever handed over
-   * for a downloaded file - a YouTube embed is somebody else's iframe and
-   * cannot be driven from here.
+   * Hands the panel above a way to start playback at a given moment, so a
+   * timestamp in the analysis can open the video where it is discussed.
+   *
+   * Only ever handed over for a downloaded file - a YouTube embed is
+   * somebody else's iframe and cannot be driven from here.
    */
-  onSeekReady?: (seek: (startMs: number) => void) => void;
+  onPlayFromReady?: (playFrom: (seconds: number) => void) => void;
 };
 
 type MediaSource = { kind: "download"; index: number } | { kind: "youtube" };
@@ -37,7 +36,7 @@ const sourceKey = (source: MediaSource) => (source.kind === "youtube" ? "youtube
  * between. With one download and no YouTube id there is nothing to choose,
  * and a control offering a single option is just noise.
  */
-export const ContentMedia = ({ contentEntry, onSeekReady }: ContentMediaProps) => {
+export const ContentMedia = ({ contentEntry, onPlayFromReady }: ContentMediaProps) => {
   const { contentInfo, downloads } = contentEntry;
   // Only media worth playing. An archive has nothing to show in a player, and
   // offering it as a source would be a dead end.
@@ -55,24 +54,33 @@ export const ContentMedia = ({ contentEntry, onSeekReady }: ContentMediaProps) =
     return list;
   }, [playable, hasYoutube]);
 
-  // What you have on disk wins the default; YouTube only when there is
-  // nothing downloaded.
-  const [selected, setSelected] = useState<string>(() =>
-    sourceKey(playable.length ? { kind: "download", index: 0 } : { kind: "youtube" })
-  );
+  /*
+    What you have on disk wins the default; YouTube only when there is
+    nothing downloaded.
+
+    Held as "what the user picked" rather than "what is selected", so the
+    default can keep following the data. A useState initialiser runs once and
+    never reconsiders, so an entry whose downloads had not arrived by the
+    first render locked this to YouTube permanently - the panel then offered
+    the embed for a video sitting on disk, which is the opposite of what it
+    is meant to do.
+  */
+  const [chosen, setChosen] = useState<string | null>(null);
+  const selected = chosen ?? sourceKey(playable.length ? { kind: "download", index: 0 } : { kind: "youtube" });
   const active = sources.find((source) => sourceKey(source) === selected) ?? sources[0];
 
-  /*
-    The analysis's own timestamps, merged into the player's chapter list.
-
-    Fetched here rather than in the player because the player knows about a
-    file and this knows about a piece of content. Only asked for when there
-    is a downloaded file to play - there is nothing to seek in a YouTube
-    iframe, so the request would be wasted.
-  */
-  const { jumps } = useAnalysisJumps(contentEntry.key, active?.kind === "download");
-
   const [playerOpen, setPlayerOpen] = useState(false);
+  const [startSeconds, setStartSeconds] = useState<number | undefined>(undefined);
+
+  const playFrom = useCallback((seconds?: number) => {
+    setStartSeconds(seconds);
+    setPlayerOpen(true);
+  }, []);
+  // Effect rather than during render: handing a function upward is a side
+  // effect, and doing it inline would fire on every render.
+  useEffect(() => {
+    onPlayFromReady?.((seconds: number) => playFrom(seconds));
+  }, [onPlayFromReady, playFrom]);
 
   const label = (source: MediaSource) => {
     if (source.kind === "youtube") {
@@ -104,7 +112,7 @@ export const ContentMedia = ({ contentEntry, onSeekReady }: ContentMediaProps) =
           // Null arrives when the active button is pressed again. There is
           // always a source playing, so that is a no-op rather than a deselect.
           if (next) {
-            setSelected(next);
+            setChosen(next);
           }
         }}
       >
@@ -121,62 +129,68 @@ export const ContentMedia = ({ contentEntry, onSeekReady }: ContentMediaProps) =
     </Box>
   );
 
-  /*
-    Playback was previously only reachable through the Files tab's overflow
-    menu, which is three interactions away from the video you are already
-    looking at. The button lives next to that video instead.
-  */
-  const openPlayerButton = (
-    <Tooltip title="Bigger video, with the timeline beside it">
-      <Button
-        size="small"
-        startIcon={<OpenInFullIcon fontSize="small" />}
-        onClick={() => setPlayerOpen(true)}
-        sx={{ textTransform: "none", flexShrink: 0, marginTop: 1 }}
-      >
-        Open player
-      </Button>
-    </Tooltip>
-  );
-
   if (active?.kind === "download") {
+    /*
+      A poster that opens the player, rather than a second live player.
+
+      The panel used to mount its own <video> as well as the dialog, and
+      almost every playback bug came from those two existing at once - two
+      copies playing over each other, a position that only carried across on
+      the one route that had been wired for it, and a timeline that had to be
+      kept in step in both places. One player, opened deliberately, removes
+      the whole class rather than fixing each case.
+
+      The poster is the affordance, so there is no separate button beside it:
+      a picture of the video with a play control on it is already the thing
+      you would press.
+    */
     return (
       <Box sx={{ minWidth: 0 }}>
-        <DownloadPlayer
-          contentEntry={contentEntry}
-          download={playable[active.index]}
-          // The content panel is not a player you deliberately opened - it is a
-          // panel you opened to read about something, so it must not start
-          // making noise on its own.
-          autoPlay={false}
-          maxHeight="52vh"
-          analysisJumps={jumps}
-          // Capped here, unlike in the dialog: this player sits in a panel
-          // with a page's worth of other things under it, and an uncapped
-          // timeline would push all of them off the bottom.
-          timelineMaxHeight={320}
-          // Under the video, above the timeline - next to what they change.
-          belowVideo={
-            <Box
-              sx={{
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "space-between",
-                gap: 1,
-                flexWrap: "wrap",
-              }}
-            >
-              {switcher || <Box />}
-              {openPlayerButton}
-            </Box>
-          }
-          onSeekReady={onSeekReady}
-        />
+        <Box
+          role="button"
+          tabIndex={0}
+          aria-label={`Play ${contentInfo.title}`}
+          onClick={() => playFrom(undefined)}
+          onKeyDown={(event) => {
+            if (event.key === "Enter" || event.key === " ") {
+              event.preventDefault();
+              playFrom(undefined);
+            }
+          }}
+          sx={{
+            position: "relative",
+            display: "block",
+            cursor: "pointer",
+            borderRadius: 1,
+            overflow: "hidden",
+            lineHeight: 0,
+            "&:hover .play-overlay, &:focus-visible .play-overlay": { backgroundColor: "rgba(0, 0, 0, 0.45)" },
+            "&:focus-visible": { outline: "2px solid", outlineColor: "primary.main", outlineOffset: 2 },
+          }}
+        >
+          <Thumb src={DfContentInfoUtils.getThumbnailUrl(contentInfo, 1200, 600)} alt={contentInfo.title} width="100%" />
+          <Box
+            className="play-overlay"
+            sx={{
+              position: "absolute",
+              inset: 0,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              backgroundColor: "rgba(0, 0, 0, 0.25)",
+              transition: "background-color 150ms",
+            }}
+          >
+            <PlayArrowIcon sx={{ fontSize: 72, color: "common.white" }} />
+          </Box>
+        </Box>
+        {switcher}
         <VideoPlayerDialog
           contentEntry={contentEntry}
           download={playable[active.index]}
           open={playerOpen}
           onClose={() => setPlayerOpen(false)}
+          startSeconds={startSeconds}
         />
       </Box>
     );
