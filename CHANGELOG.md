@@ -81,6 +81,8 @@ Downloads also play in the app itself now. Open a video you have already downloa
   - Your cast device fetches the video directly from this app, so it needs an address on your network it can actually reach. If it cannot work one out it says so rather than failing silently on the TV - set a public address under Settings then REST API if that happens
   - Casting does not weaken the sign-in on anything else. Pressing Cast creates a link to that one file, good for six hours, and it is the only thing a cast device is ever given - long enough that a link cannot expire midway through a Direct, and useless for reaching anything else
   - Very old cast devices cannot decode HEVC video, which most 4K downloads use. Where that is the problem it is named as the likely cause instead of leaving a black screen on the TV with no explanation
+  - The browser's own Cast option, in the video's overflow menu, is switched off. It hands your TV a link it is not allowed to open, so it only ever got as far as putting the Chrome logo on screen - the Cast button next to the video is the one that works, and the one that takes subtitles with it
+  - On a phone, cast from your media server instead. Browsers on phones do not offer the app the means to cast with subtitles, and a media server casting the same files does that and converts anything your TV cannot decode
 - An honest answer when a file will not play
   - Instead of a black rectangle you are told this machine has no decoder for the video, along with where the file is, so you can open it in a real player or through your media server
   - The check asks your browser what it can actually decode rather than assuming from the format, so an HEVC download is not refused on a machine that plays it perfectly well

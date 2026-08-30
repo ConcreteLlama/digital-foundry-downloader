@@ -517,6 +517,31 @@ export const DownloadPlayer = ({
   }, [download.downloadLocation, playerId]);
 
   /*
+    Hides the browser's own "Cast" entry, which cannot work here.
+
+    Chrome offers casting from the video's overflow menu, and it hands the
+    receiver the element's own src - which is this app's cookie-authed
+    playback URL. The receiver has no cookie, so it gets a 401 and shows its
+    idle screen: confirmed on a real device, where casting that way put the
+    Chrome logo on the television and nothing else. An affordance that looks
+    like the feature and silently fails is worse than no affordance, so it is
+    turned off, and the Cast button beside the video - which mints a signed
+    URL the receiver can actually fetch, and sideloads the subtitles - is the
+    one that remains.
+
+    Set as a property rather than an attribute because it is a boolean IDL
+    attribute React does not know about. Deliberately NOT done through
+    controlsList: that also switches off click-the-picture-to-pause, measured
+    directly. This one does not - also measured, having learned the first time.
+  */
+  useEffect(() => {
+    const video = videoRef.current;
+    if (video) {
+      video.disableRemotePlayback = true;
+    }
+  }, [supported, layout, download.downloadLocation]);
+
+  /*
     One video at a time, wherever it was started from.
 
     Two copies of the same file playing over each other is never wanted, and
