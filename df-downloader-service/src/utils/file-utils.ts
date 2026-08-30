@@ -217,13 +217,23 @@ export const writeFileAtomic = async (filePath: string, contents: string): Promi
       await new Promise((resolve) => setTimeout(resolve, delaysMs[attempt]));
     }
     try {
+      // ENOENT means the temp file went missing between writing it and
+      // renaming it - a sync client moving it aside does exactly this. The
+      // rename can never succeed on its own after that, since the source is
+      // gone, so put it back before trying again.
+      if (attempt > 0 && !fs.existsSync(tempPath)) {
+        await fs.promises.writeFile(tempPath, contents, { encoding: "utf-8" });
+      }
       await fs.promises.rename(tempPath, filePath);
       return;
     } catch (e) {
       const code = (e as NodeJS.ErrnoException)?.code;
-      // Only transient sharing violations are worth retrying. Anything
-      // else (a missing directory, a bad path) will not fix itself.
-      if (code !== "EPERM" && code !== "EACCES" && code !== "EBUSY") {
+      // Transient sharing violations, and a temp file pulled out from under
+      // us, are worth retrying. Anything else (a bad path, a genuinely
+      // missing directory) will not fix itself - though ENOENT for that
+      // reason still ends up here, and simply fails again on the fallback
+      // write below rather than being swallowed.
+      if (code !== "EPERM" && code !== "EACCES" && code !== "EBUSY" && code !== "ENOENT") {
         await fs.promises.rm(tempPath, { force: true }).catch(() => {});
         throw e;
       }
