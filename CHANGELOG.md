@@ -69,6 +69,11 @@ Articles are also picked up on their own from now on. It checks Digital Foundry'
 - Swipe between pages on a touch screen
   - Moves through the content panel's tabs, and through the pages of Tools, Analysis and Settings
   - Ignores a swipe that is mostly vertical, and one that starts on something which scrolls sideways itself, so scrolling a wide settings table still scrolls the table
+- A log you can actually read
+  - The app now writes its log to a file, and there is a Logs page under System to read it back - so working out what happened during a download no longer means having the container's console open at the time
+  - Filter by level or search the text, and follow it live while something is running
+  - Choose which levels reach the file, or turn file logging off entirely, under Settings then Logging
+  - The file is capped and rotates, so it cannot quietly fill the disk on a long-running install
 - Picking items in the Backfill list stays responsive with a few thousand of them, and the list is paged rather than cut short - the selection and the select-all buttons still apply across every page
 ### Bug Fixes
 - Fixed pop-up panels never reaching the edges of a phone screen
