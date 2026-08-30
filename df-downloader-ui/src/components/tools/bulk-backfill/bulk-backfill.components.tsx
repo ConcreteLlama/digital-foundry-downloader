@@ -158,6 +158,8 @@ export type BackfillConfirmDialogProps = {
   force: boolean;
   estimate: BulkBackfillEstimate | null;
   estimating: boolean;
+  /** How many of the selected items the run will skip as already done. */
+  willSkip: number;
   onCancel: () => void;
   onConfirm: () => void;
 };
@@ -181,6 +183,7 @@ export const BackfillConfirmDialog = ({
   force,
   estimate,
   estimating,
+  willSkip,
   onCancel,
   onConfirm,
 }: BackfillConfirmDialogProps) => (
@@ -196,6 +199,13 @@ export const BackfillConfirmDialog = ({
               {target === "subtitles" && "Items that already have subtitles will be transcribed again, replacing them."}
               {target === "ai_analysis" && "Items that have already been analysed will be analysed again, and charged for again."}
               {target === "df_article" && "Items that already have a matched article will be searched for again."}
+            </Alert>
+          )}
+
+          {willSkip > 0 && (
+            <Alert severity="info" variant="outlined">
+              {willSkip} of these {willSkip === 1 ? "has" : "have"} this already and will be skipped, leaving{" "}
+              {count - willSkip} to work on. Turn on the re-run option above if you meant to redo them.
             </Alert>
           )}
 

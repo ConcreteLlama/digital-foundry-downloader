@@ -98,6 +98,22 @@ export const BulkBackfillPage = () => {
   // not re-running is on.
   const missing = useMemo(() => filtered.filter((candidate) => isMissing(candidate, target)), [filtered, target]);
 
+  /**
+   * How many selected items the run would actually skip.
+   *
+   * Without this a run where everything is already done looks identical to
+   * one that did work: the task completes in milliseconds, never appears
+   * in Activity long enough to see, and the only message says it started
+   * on N items. Saying so up front is the difference between "nothing
+   * happened" and "nothing needed to happen".
+   */
+  const willSkip = useMemo(() => {
+    if (force) {
+      return 0;
+    }
+    return candidates.filter((candidate) => selected.has(candidate.contentKey) && !isMissing(candidate, target)).length;
+  }, [candidates, selected, target, force]);
+
   const toggle = (contentKey: string, isSelected: boolean) =>
     setSelected((current) => {
       const next = new Set(current);
@@ -138,7 +154,7 @@ export const BulkBackfillPage = () => {
   };
 
   return (
-    <Stack sx={{ gap: 1.5, height: "100%", minHeight: 0 }}>
+    <Stack sx={{ gap: 1.5, pb: 2 }}>
       <Box>
         <Typography variant="h6" sx={{ fontWeight: 700 }}>
           Backfill
@@ -221,6 +237,14 @@ export const BulkBackfillPage = () => {
             <Button size="small" disabled={selected.size === 0} onClick={() => setSelected(new Set())}>
               Clear
             </Button>
+            <Box sx={{ flex: "1 1 auto" }} />
+            <Typography variant="body2" sx={{ color: "text.secondary" }}>
+              {selected.size} selected
+              {willSkip > 0 && ` · ${willSkip} already done`}
+            </Typography>
+            <Button variant="contained" size="small" disabled={selected.size === 0} onClick={openConfirm}>
+              Run
+            </Button>
           </Stack>
 
           <Typography variant="caption" sx={{ color: "text.disabled" }}>
@@ -228,18 +252,8 @@ export const BulkBackfillPage = () => {
             {filtered.length !== candidates.length && ` · ${filtered.length} match the filter`}
           </Typography>
 
-          <Box sx={{ flex: "1 1 auto", minHeight: 0, overflowY: "auto" }}>
-            <BackfillTable candidates={filtered} target={target} selected={selected} onToggle={toggle} />
-          </Box>
+          <BackfillTable candidates={filtered} target={target} selected={selected} onToggle={toggle} />
 
-          <Stack direction="row" spacing={2} alignItems="center" sx={{ flex: "0 0 auto" }}>
-            <Typography variant="body2" sx={{ color: "text.secondary" }}>
-              {selected.size} selected
-            </Typography>
-            <Button variant="contained" disabled={selected.size === 0} onClick={openConfirm}>
-              Run
-            </Button>
-          </Stack>
         </>
       )}
 
@@ -250,6 +264,7 @@ export const BulkBackfillPage = () => {
         force={force}
         estimate={estimate}
         estimating={estimating}
+        willSkip={willSkip}
         onCancel={() => setConfirmOpen(false)}
         onConfirm={confirm}
       />
