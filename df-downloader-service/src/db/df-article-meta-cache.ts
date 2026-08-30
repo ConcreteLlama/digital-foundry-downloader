@@ -58,6 +58,18 @@ const DfArticleMeta = z.object({
   slug: z.string(),
   title: z.string(),
   author: z.string().optional(),
+  /**
+   * Whether this entry was written by a version that reads authors at all.
+   *
+   * Author parsing arrived after this cache did, and the entry schema had no
+   * author field before it - so zod stripped the parsed name on the way in
+   * and every entry cached before then has none. That makes "no author" the
+   * exact signature of a stale read rather than of an article without a
+   * byline, and this flag is what stops the two being confused: an entry
+   * re-read and still found to have no author is stamped, so it settles
+   * instead of being fetched again on every pass.
+   */
+  authorRead: z.boolean().optional(),
   /** Every YouTube video the page embeds, in document order. The whole point. */
   videoIds: z.array(z.string()),
   /** The sitemap's last-modified stamp when read, so an edited page can be re-read. */
@@ -95,6 +107,13 @@ export class DfArticleMetaCache {
         logger.log("warn", `Article metadata cache unreadable, starting empty: ${e}`);
       }
     }
+    const toReread = Object.values(cache.entries).filter((entry) => !entry.author && !entry.authorRead).length;
+    if (toReread) {
+      logger.log(
+        "info",
+        `${toReread} cached ${toReread === 1 ? "article" : "articles"} predate author parsing and will be read once more as the scan reaches them`
+      );
+    }
     return new DfArticleMetaCache(filePath, cache);
   }
 
@@ -113,6 +132,11 @@ export class DfArticleMetaCache {
   isFresh(url: string, lastmod?: Date): boolean {
     const entry = this.cache.entries[url];
     if (!entry) {
+      return false;
+    }
+    // Cached before authors were stored, so it is worth one more read - see
+    // authorRead. Only ever once per entry, whatever that read turns up.
+    if (!entry.author && !entry.authorRead) {
       return false;
     }
     if (!lastmod || !entry.lastmod) {
@@ -142,7 +166,9 @@ export class DfArticleMetaCache {
   }
 
   set(url: string, meta: DfArticleMeta): void {
-    this.cache.entries[url] = meta;
+    // Stamped here rather than at each call site, so a new caller cannot
+    // accidentally write an entry that looks like a pre-author one.
+    this.cache.entries[url] = { ...meta, authorRead: true };
     this.dirty = true;
     this.scheduleFlush();
   }
