@@ -14,6 +14,7 @@ export const DfArticlesSettingsForm = () => (
 const DfArticlesSettings = () => {
   const { control } = useFormContext<DfArticlesConfig>();
   const scanEnabled = useWatch({ control, name: "scanEnabled" });
+  const archiveWalkEnabled = useWatch({ control, name: "archiveWalkEnabled" });
 
   return (
     <Stack spacing={2}>
@@ -39,9 +40,9 @@ const DfArticlesSettings = () => {
               and cheap for a structural reason rather than by tuning. */}
           <Alert severity="info" variant="outlined">
             This reads each newly published article once and attaches it to whatever video it embeds, rather than
-            searching the site for every video you own. In practice that is a handful of requests a day. Going backwards
-            through older content is a separate, much larger job - use Tools → Backfill, which tells you what it will
-            cost first.
+            searching the site for every video you own. In practice that is a handful of requests a day. Older articles
+            are handled separately below, and Tools → Backfill is still there for matching a specific set of videos on
+            demand.
           </Alert>
           <ZodNumberField
             name="scanInterval"
@@ -58,6 +59,22 @@ const DfArticlesSettings = () => {
             label="Days of history on a new install"
             zodNumber={DfArticlesConfig.shape.initialLookbackDays}
           />
+
+          <ZodCheckboxField
+            name="archiveWalkEnabled"
+            label="Also work backwards through older articles"
+            zodBoolean={DfArticlesConfig.shape.archiveWalkEnabled}
+          />
+          {archiveWalkEnabled && (
+            /* The honest shape of it. "Reads the whole archive" invites the
+               assumption of a long crawl on first boot, which is the thing
+               this was built not to do. */
+            <Alert severity="info" variant="outlined">
+              Reads one index and up to the limit above per check, picking up where it left off, so the archive is
+              covered over days of ordinary running rather than in one go. It stops by itself once it has been through
+              everything.
+            </Alert>
+          )}
         </>
       )}
     </Stack>
