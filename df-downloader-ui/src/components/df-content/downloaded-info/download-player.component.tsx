@@ -7,6 +7,7 @@ import { Chapter, DfContentEntry, DfContentInfoUtils, PlaybackInfo, secondsToHHM
 import { DfContentDownloadInfo } from "df-downloader-common/models/df-content-download-info";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AnalysisJump } from "../ai-analysis/analysis-jumps.ts";
+import { rememberPlaybackPosition, rememberedPlaybackPosition } from "./playback-positions.ts";
 import { apiIsCrossOrigin, getPlaybackInfo, playbackStreamUrl, playbackSubtitlesUrl } from "../../../api/playback.ts";
 import { useQuery } from "../../../hooks/use-query.ts";
 import { monoFontFamily } from "../../../themes/build-theme";
@@ -66,6 +67,16 @@ export type DownloadPlayerProps = {
    * playing over each other, one of them behind a modal and unreachable.
    */
   onPauseReady?: (pause: () => void) => void;
+  /**
+   * Change this to have the player pick up the remembered position again.
+   *
+   * The content panel plays inline *and* can open the same file in the
+   * player dialog, and while that dialog is up this player sits paused
+   * behind it, going stale. Closing it would otherwise leave the inline copy
+   * offering to resume from wherever it was before you opened the dialog,
+   * discarding everything you watched in it.
+   */
+  positionResyncKey?: number;
 };
 
 /**
@@ -296,6 +307,7 @@ export const DownloadPlayer = ({
   timelineMaxHeight = "none",
   onSeekReady,
   onPauseReady,
+  positionResyncKey,
 }: DownloadPlayerProps) => {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const [positionSeconds, setPositionSeconds] = useState(0);
@@ -409,6 +421,7 @@ export const DownloadPlayer = ({
     const publish = () => {
       const seconds = Math.floor(video.currentTime);
       setPositionSeconds((current) => (current === seconds ? current : seconds));
+      rememberPlaybackPosition(download.downloadLocation, seconds);
     };
     video.addEventListener("timeupdate", publish);
     video.addEventListener("seeked", publish);
@@ -416,7 +429,62 @@ export const DownloadPlayer = ({
       video.removeEventListener("timeupdate", publish);
       video.removeEventListener("seeked", publish);
     };
-  }, [supported, layout]);
+  }, [supported, layout, download.downloadLocation]);
+
+  /*
+    Pick up where this file was left off.
+
+    Once per file, on metadata rather than on mount - the duration is needed
+    to tell "part way through" from "watched to the end", and with preload
+    off there is nothing to seek in until then anyway.
+
+    Two guards keep it from being worse than starting at zero: a position in
+    the first few seconds is not worth restoring, and one near the end would
+    drop you on the credits of something you already finished.
+  */
+  const restoredFor = useRef<string | null>(null);
+  useEffect(() => {
+    const video = videoRef.current;
+    if (!video) {
+      return;
+    }
+    const restore = () => {
+      if (restoredFor.current === download.downloadLocation) {
+        return;
+      }
+      restoredFor.current = download.downloadLocation;
+      const seconds = rememberedPlaybackPosition(download.downloadLocation);
+      if (seconds == null || seconds < 5) {
+        return;
+      }
+      if (Number.isFinite(video.duration) && seconds > video.duration - 15) {
+        return;
+      }
+      video.currentTime = seconds;
+    };
+    video.addEventListener("loadedmetadata", restore);
+    // Already loaded - a remount onto a cached file never fires the event.
+    if (video.readyState >= 1) {
+      restore();
+    }
+    return () => video.removeEventListener("loadedmetadata", restore);
+  }, [supported, layout, download.downloadLocation]);
+
+  // Deliberately does not start playback: this is catching up with what
+  // happened elsewhere, not a request to watch.
+  const resyncedFor = useRef(positionResyncKey);
+  useEffect(() => {
+    if (resyncedFor.current === positionResyncKey) {
+      return;
+    }
+    resyncedFor.current = positionResyncKey;
+    const video = videoRef.current;
+    const seconds = rememberedPlaybackPosition(download.downloadLocation);
+    if (!video || seconds == null || Math.abs(video.currentTime - seconds) < 2) {
+      return;
+    }
+    video.currentTime = seconds;
+  }, [positionResyncKey, download.downloadLocation]);
 
   const seekTo = useCallback((startMs: number) => {
     const video = videoRef.current;
