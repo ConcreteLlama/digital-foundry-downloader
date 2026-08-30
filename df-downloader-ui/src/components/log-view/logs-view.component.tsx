@@ -103,7 +103,12 @@ const fetchLogs = async (
 export const LogsView = () => {
   const levelStyles = useLevelStyles();
   const [entries, setEntries] = useState<LogEntry[]>([]);
-  const [levels, setLevels] = useState<Set<LogLevel>>(() => new Set(logLevels));
+  // Empty means every level, matching how filter chips work elsewhere in the
+  // app (see the platform filter on the comparison page): you start with
+  // everything and select to narrow, rather than starting fully selected and
+  // clicking to remove. The request simply omits the filter when this is
+  // empty, so "none selected" and "all selected" reach the server the same.
+  const [levels, setLevels] = useState<Set<LogLevel>>(() => new Set<LogLevel>());
   const [searchInput, setSearchInput] = useState("");
   const [search, setSearch] = useState("");
   const [live, setLive] = useState(true);
@@ -216,9 +221,9 @@ export const LogsView = () => {
       } else {
         next.add(level);
       }
-      // Nothing selected would mean an empty page with no way to tell it apart
-      // from a quiet log, so the last one can't be turned off.
-      return next.size ? next : current;
+      // Deselecting the last one is allowed, because empty means all rather
+      // than none - there is no state here that shows an empty page.
+      return next;
     });
   };
 
@@ -248,6 +253,13 @@ export const LogsView = () => {
             />
           );
         })}
+        {/* Says what no selection means, so an all-outlined row does not read
+            as "nothing is being shown". */}
+        {levels.size === 0 && (
+          <Typography variant="caption" color="text.disabled">
+            all levels
+          </Typography>
+        )}
       </Stack>
 
       <Stack direction="row" spacing={2} alignItems="center" sx={{ mb: 2 }} flexWrap="wrap" useFlexGap>
