@@ -379,7 +379,11 @@ export const NavPage = () => {
   const swipe = useSwipeNavigation({ onNext: () => stepPage(1), onPrevious: () => stepPage(-1) });
 
   return (
-    <Box sx={{ display: "flex", padding: { xs: 1.5, md: 4 }, width: "100%", minWidth: 0 }}>
+    // minHeight fills the scroll area rather than stopping at the content.
+    // Without it a short page - Metadata is two controls - leaves most of
+    // the screen outside the swipe handler, so the gesture works at the top
+    // and does nothing lower down.
+    <Box sx={{ display: "flex", padding: { xs: 1.5, md: 4 }, width: "100%", minWidth: 0, minHeight: "100%" }}>
       <SectionNav />
       <Box sx={{ flex: "1 1 auto", minWidth: 0 }} {...swipe}>
         <SectionNavCompact />
