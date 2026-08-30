@@ -23,6 +23,7 @@ import { selectConfigSection } from "../../../store/config/config.selector.ts";
 import { queryConfigSection } from "../../../store/config/config.action.ts";
 import { clearPipeline } from "../../../api/tasks.ts";
 import { useDfContentEntry } from "../../../hooks/use-df-content-entry.ts";
+import { useViewportHeight } from "../../../hooks/use-viewport-height.ts";
 import { fetchYtVideoMeta, refreshDfContentMeta } from "../../../store/df-content/df-content.action.ts";
 import { selectQueryPipelineIds } from "../../../store/df-tasks/tasks.selector.ts";
 import { store } from "../../../store/store.ts";
@@ -154,6 +155,17 @@ export const DfContentInfoItemDetail = ({ dfContentName, onClose }: DfContentInf
   const dfContentEntry = useDfContentEntry(dfContentName);
   const theme = useTheme();
   const belowMd = useMediaQuery(theme.breakpoints.down("md"));
+  const viewportHeight = useViewportHeight();
+  /**
+   * The fixed height, or nothing if the measurement is not believable.
+   *
+   * useViewportHeight reads window.innerHeight raw, which is zero in a
+   * backgrounded or not-yet-laid-out context. Pinning the panel to a
+   * fraction of zero collapses it to an unusable sliver, so an implausible
+   * reading falls back to the old shrink-wrap behaviour instead - worse
+   * than intended, but never broken.
+   */
+  const stableHeightPx = viewportHeight > 200 ? Math.round(viewportHeight * 0.94) : undefined;
   const [layout, setLayout] = useState<DetailLayout>(() => getStoredDetailLayout());
   const applyLayout = (next: DetailLayout) => {
     storeDetailLayout(next);
@@ -380,9 +392,29 @@ export const DfContentInfoItemDetail = ({ dfContentName, onClose }: DfContentInf
     opposite ends of a stack: they answer one question.
   */
   const panels = (
-    <Stack spacing={2} sx={{ minWidth: 0 }} ref={swipeArea} {...swipeAreaProps}>
+    <Stack
+      spacing={2}
+      sx={{ minWidth: 0, minHeight: 0, height: stacked && stableHeightPx ? "100%" : undefined }}
+      ref={swipeArea}
+      {...swipeAreaProps}
+    >
       {tabStrip}
 
+      {/*
+        Scrolls inside a fixed region rather than growing the dialog.
+        Tab contents differ enormously in height - an embed and a long
+        description against a one-line article link - so a shrink-wrapping
+        dialog resized every time you changed tab, which on a phone moved
+        the tab strip itself out from under your thumb.
+      */}
+      <Box
+        sx={{
+          minHeight: 0,
+          flex: stacked && stableHeightPx ? "1 1 auto" : undefined,
+          overflowY: stacked && stableHeightPx ? "auto" : "visible",
+          "::-webkit-scrollbar": { display: "none" },
+        }}
+      >
       {stacked && <TabPanel active={activeTab === "content"}>{media}</TabPanel>}
 
       <TabPanel active={activeTab === "files"}>
@@ -444,11 +476,20 @@ export const DfContentInfoItemDetail = ({ dfContentName, onClose }: DfContentInf
           ))}
         </Stack>
       </TabPanel>
+      </Box>
     </Stack>
   );
 
   return (
-    <ContentItemDetailContainer>
+    <ContentItemDetailContainer
+      sx={
+        stacked && stableHeightPx
+          ? // Matches the modal's own ceiling, so the panel fills it rather
+            // than the modal sizing itself to the panel.
+            { height: `${stableHeightPx}px`, maxHeight: `${stableHeightPx}px` }
+          : undefined
+      }
+    >
       {/* Title, layout toggle and close on one line - all three are chrome for
           this panel, and stacking them cost a band of empty space the width of
           the dialog. */}
@@ -529,7 +570,9 @@ export const DfContentInfoItemDetail = ({ dfContentName, onClose }: DfContentInf
             md: stacked ? "1fr" : "minmax(0, 1.15fr) minmax(0, 1fr)",
           },
           gap: 4,
-          alignItems: "start",
+          alignItems: stacked && stableHeightPx ? "stretch" : "start",
+          flex: stacked && stableHeightPx ? "1 1 auto" : undefined,
+          minHeight: 0,
         }}
       >
         {!stacked && media}
