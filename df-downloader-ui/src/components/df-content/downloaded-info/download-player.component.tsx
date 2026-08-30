@@ -1,3 +1,4 @@
+import FormatListBulletedIcon from "@mui/icons-material/FormatListBulleted";
 import FullscreenIcon from "@mui/icons-material/Fullscreen";
 import FullscreenExitIcon from "@mui/icons-material/FullscreenExit";
 import { Alert, Box, CircularProgress, IconButton, Stack, Tooltip, Typography } from "@mui/material";
@@ -321,10 +322,16 @@ export const DownloadPlayer = ({
     const onFullscreenChange = () => {
       const active = document.fullscreenElement === stageRef.current;
       setImmersive(active);
-      if (!active) {
-        // Leaving should not leave the panel primed to appear next time.
-        setOverlayOpen(false);
-      }
+      /*
+        Shown on the way in, hidden on the way out.
+
+        It started hidden, waiting for a tap. That is the right resting state
+        once you know it is there, and completely undiscoverable before -
+        full screen just looked like ordinary full screen. Showing it once on
+        entry is what tells you the timeline is available at all; the first
+        tap then dismisses it.
+      */
+      setOverlayOpen(active);
     };
     document.addEventListener("fullscreenchange", onFullscreenChange);
     return () => document.removeEventListener("fullscreenchange", onFullscreenChange);
@@ -503,6 +510,17 @@ export const DownloadPlayer = ({
       */
       preload={autoPlay ? "auto" : "none"}
       /*
+        Hides the control bar's own fullscreen button, leaving ours as the
+        only one.
+
+        The native button fullscreens the video element itself, which the
+        browser hands to a surface nothing can be drawn over - so it silently
+        produces a full screen with no timeline, sitting a few pixels from
+        the button that does. Two buttons that look like they do the same
+        thing and do not is worse than one.
+      */
+      controlsList="nofullscreen"
+      /*
         Only when the API really is on another origin - see apiIsCrossOrigin.
         Setting this unconditionally also forces the poster through CORS, and
         DF's thumbnail host sends no CORS headers, so the poster silently
@@ -615,7 +633,11 @@ export const DownloadPlayer = ({
               if (immersive) {
                 void document.exitFullscreen();
               } else {
-                void stageRef.current?.requestFullscreen?.();
+                stageRef.current?.requestFullscreen?.().catch(() => {
+                  // Refused (a permissions policy, or a browser that will
+                  // only fullscreen video elements). Nothing to recover -
+                  // the native path is still there.
+                });
               }
             }}
             aria-label={immersive ? "Leave full screen" : "Full screen"}
@@ -629,6 +651,28 @@ export const DownloadPlayer = ({
             }}
           >
             {immersive ? <FullscreenExitIcon fontSize="small" /> : <FullscreenIcon fontSize="small" />}
+          </IconButton>
+        </Tooltip>
+      )}
+      {immersive && hasTimeline && (
+        <Tooltip title={overlayOpen ? "Hide the timeline" : "Show the timeline"}>
+          <IconButton
+            size="small"
+            onClick={(event) => {
+              event.stopPropagation();
+              setOverlayOpen((open) => !open);
+            }}
+            aria-label={overlayOpen ? "Hide the timeline" : "Show the timeline"}
+            sx={{
+              position: "absolute",
+              top: 8,
+              right: 52,
+              color: "common.white",
+              backgroundColor: "rgba(0, 0, 0, 0.45)",
+              "&:hover": { backgroundColor: "rgba(0, 0, 0, 0.7)" },
+            }}
+          >
+            <FormatListBulletedIcon fontSize="small" />
           </IconButton>
         </Tooltip>
       )}
