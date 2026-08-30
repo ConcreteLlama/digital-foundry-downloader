@@ -48,8 +48,25 @@ export type DfArticle = z.infer<typeof DfArticle>;
  */
 export const DfArticleLookupState = z.object({
   contentKey: z.string(),
-  /** Present only when an article was found and verified. */
+  /**
+   * The companion piece: an article written about this video and this
+   * video alone. Present only when one was found and verified.
+   */
   article: DfArticle.optional(),
+  /**
+   * Other articles that embed this video without being about it.
+   *
+   * A round-up, a "week in tech" or a follow-up piece may carry several
+   * videos at once. Those are worth surfacing - they are genuinely
+   * related reading - but they are not the companion article, and they
+   * make poor grounding for analysis, because most of their text is
+   * about something else.
+   *
+   * These accumulate incidentally. Nothing searches for them; they turn
+   * up while verifying candidates for this video or for another one, and
+   * are kept because the page had already been fetched.
+   */
+  relatedArticles: z.array(DfArticle).default([]),
   /** When a lookup was last attempted, successful or not. Drives the retry cadence. */
   lastAttemptedAt: z.coerce.date(),
   /**
@@ -100,6 +117,36 @@ export const DfArticleUtils = {
     const backoffIndex = Math.min(state.missCount, ARTICLE_RETRY_BACKOFF_MS.length - 1);
     return now - state.lastAttemptedAt.getTime() >= ARTICLE_RETRY_BACKOFF_MS[backoffIndex];
   },
+  /**
+   * Folds newly-seen related articles into a lookup state.
+   *
+   * Deduplicated by URL, and never allowed to shadow the primary: the
+   * same page can be encountered repeatedly - once per retry, and again
+   * whenever it turns up while verifying some other video - and each
+   * encounter would otherwise add another copy.
+   */
+  withRelated: (state: DfArticleLookupState, articles: DfArticle[]): DfArticleLookupState => {
+    if (!articles.length) {
+      return state;
+    }
+    const byUrl = new Map(state.relatedArticles.map((article) => [article.url, article]));
+    for (const article of articles) {
+      if (article.url === state.article?.url) {
+        continue;
+      }
+      byUrl.set(article.url, article);
+    }
+    return { ...state, relatedArticles: [...byUrl.values()] };
+  },
+  /**
+   * Whether this candidate has already been fetched and classified.
+   *
+   * Stops a retry paying for a page it has already seen and decided is
+   * not the companion piece - which, without this, happened on every
+   * single retry for as long as the real article stayed unwritten.
+   */
+  alreadySeen: (state: DfArticleLookupState | undefined, url: string): boolean =>
+    Boolean(state?.relatedArticles.some((article) => article.url === url)),
   /** When the next attempt becomes due, for showing "checked recently" in the UI. */
   nextRetryAt: (state: DfArticleLookupState): Date | undefined => {
     if (state.article) {

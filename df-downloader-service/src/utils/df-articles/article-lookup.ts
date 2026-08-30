@@ -217,7 +217,11 @@ const yearsToSearch = (publishedDate: Date): number[] => {
  * another video about the same game, which is exactly the population most
  * likely to be in the library too.
  */
-export type ArticleByproduct = { article: DfArticle };
+export type ArticleByproduct = {
+  article: DfArticle;
+  /** Every video the page embeds - which decides what it can be filed as. */
+  videoIds: string[];
+};
 
 export type ArticleLookupOutcome = (
   | { status: "found"; article: DfArticle }
@@ -225,6 +229,14 @@ export type ArticleLookupOutcome = (
 ) & {
   /** Confirmed matches for other content, collected for free along the way. */
   byproducts: ArticleByproduct[];
+  /**
+   * Pages that embed the video being searched for without being about it.
+   *
+   * Returned on a miss as well as a match: they are worth keeping either
+   * way, and on a miss they also record that these particular candidates
+   * have been checked, so the next retry does not pay to fetch them again.
+   */
+  related: DfArticle[];
 };
 
 /**
@@ -237,16 +249,17 @@ export type ArticleLookupOutcome = (
  */
 export const findArticleForContent = async (
   contentInfo: DfContentInfo,
-  opts: { priority?: number } = {}
+  opts: { priority?: number; seenUrls?: Set<string> } = {}
 ): Promise<ArticleLookupOutcome> => {
   const { youtubeVideoId, title, publishedDate } = contentInfo;
   const byproducts: ArticleByproduct[] = [];
+  const related: DfArticle[] = [];
   if (!youtubeVideoId) {
     // Without a video ID there is nothing to verify a candidate against,
     // and title similarity alone is not good enough to attach an article
     // to content - a wrong one would be read by the analysis as
     // authoritative, which is worse than having none.
-    return { status: "not_found", reason: "No YouTube video ID for this content, so a match cannot be verified", byproducts };
+    return { status: "not_found", reason: "No YouTube video ID for this content, so a match cannot be verified", byproducts, related };
   }
 
   const published = publishedDate instanceof Date ? publishedDate : new Date(publishedDate);
@@ -260,7 +273,7 @@ export const findArticleForContent = async (
   }
 
   if (!entries.length) {
-    return { status: "not_found", reason: "Could not read Digital Foundry's article index", byproducts };
+    return { status: "not_found", reason: "Could not read Digital Foundry's article index", byproducts, related };
   }
 
   const publishedMs = published.getTime();
@@ -287,34 +300,56 @@ export const findArticleForContent = async (
     });
 
   if (!scored.length) {
-    return { status: "not_found", reason: "No article with a similar title published around the same time", byproducts };
+    return { status: "not_found", reason: "No article with a similar title published around the same time", byproducts, related };
   }
 
-  const toVerify = scored.slice(0, MAX_CANDIDATES_TO_VERIFY);
+  // Pages already fetched and classified on a previous attempt are not
+  // worth paying for again - without this, every retry for as long as the
+  // companion article stayed unwritten re-fetched the same round-ups.
+  const toVerify = scored.filter((candidate) => !opts.seenUrls?.has(candidate.url)).slice(0, MAX_CANDIDATES_TO_VERIFY);
+  if (!toVerify.length) {
+    return {
+      status: "not_found",
+      reason: "Every similarly-titled article has already been checked",
+      byproducts,
+      related,
+    };
+  }
   for (const candidate of toVerify) {
     const result = await verifyCandidate(candidate, youtubeVideoId, opts.priority);
+    if (result.kind === "unusable") {
+      continue;
+    }
+    const isAboutOneVideo = result.videoIds.length === 1;
     if (result.kind === "match") {
-      logger.log("info", `Matched article for ${contentInfo.key}: ${candidate.url}`);
-      return { status: "found", article: result.article, byproducts };
-    }
-    if (result.kind === "other") {
-      // Kept only when the page is unambiguously about one video. A
-      // roundup embedding several is not "the article for" any single one
-      // of them, and filing it against whichever happens to appear first
-      // would attach a page to content it merely mentions - a false
-      // positive that then gets fed to an analysis as grounding.
-      if (result.embedCount === 1) {
-        byproducts.push({ article: result.article });
-      } else {
-        logger.log("debug", `Not filing ${result.article.slug} - embeds ${result.embedCount} videos, so not specific to one`);
+      // Embedding the video is not the same as being about it. A page
+      // carrying one video is the companion piece; one carrying five is a
+      // round-up that happens to include it, and using that as grounding
+      // would feed an analysis mostly-irrelevant text as though it were
+      // written about this video.
+      if (isAboutOneVideo) {
+        logger.log("info", `Matched article for ${contentInfo.key}: ${candidate.url}`);
+        return { status: "found", article: result.article, byproducts, related };
       }
+      logger.log(
+        "debug",
+        `${result.article.slug} embeds ${contentInfo.key} among ${result.videoIds.length} videos - keeping as related, still looking`
+      );
+      related.push(result.article);
+      continue;
     }
+    // Positively identified as belonging to some other video. Whether it
+    // is that video's companion piece or merely related to it is the same
+    // question, answered the same way, so the caller gets the embed list
+    // and decides.
+    byproducts.push({ article: result.article, videoIds: result.videoIds });
   }
 
   return {
     status: "not_found",
-    reason: `Checked ${toVerify.length} similarly-titled article${toVerify.length === 1 ? "" : "s"}, none embedded this video`,
+    reason: `Checked ${toVerify.length} similarly-titled article${toVerify.length === 1 ? "" : "s"}, none was written about this video`,
     byproducts,
+    related,
   };
 };
 
@@ -326,8 +361,7 @@ export const findArticleForContent = async (
  * would be accepted and then fed to the analysis as fact.
  */
 type VerifyResult =
-  | { kind: "match"; article: DfArticle }
-  | { kind: "other"; article: DfArticle; embedCount: number }
+  | { kind: "match" | "other"; article: DfArticle; videoIds: string[] }
   | { kind: "unusable" };
 
 const verifyCandidate = async (
@@ -354,6 +388,7 @@ const verifyCandidate = async (
     if (parsed.youtubeVideoIds.includes(youtubeVideoId)) {
       return {
         kind: "match",
+        videoIds: parsed.youtubeVideoIds,
         article: {
           url: candidate.url,
           slug: candidate.slug,
@@ -374,7 +409,7 @@ const verifyCandidate = async (
     );
     return {
       kind: "other",
-      embedCount: parsed.youtubeVideoIds.length,
+      videoIds: parsed.youtubeVideoIds,
       article: {
         url: candidate.url,
         slug: candidate.slug,

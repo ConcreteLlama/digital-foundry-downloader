@@ -81,6 +81,8 @@ export const decideAiTag = async (contentKey: string, tag: string, status: AiTag
  */
 export const DfArticleLookupResponse = z.object({
   article: DfArticle.nullable(),
+  /** Pages that merely embed the video - related reading, not the companion piece. */
+  relatedArticles: z.array(DfArticle).default([]),
   lastAttemptedAt: z.coerce.date().nullable(),
   missCount: z.number().default(0),
   nextRetryAt: z.coerce.date().nullable(),

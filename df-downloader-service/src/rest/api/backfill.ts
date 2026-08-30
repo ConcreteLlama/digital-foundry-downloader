@@ -112,6 +112,9 @@ export const makeBackfillRouter = (contentManager: DigitalFoundryContentManager)
                 articleIndexEntry
                   ? {
                       contentKey: entry.key,
+                      // Only the retry cadence is being asked about, and
+                      // that is decided by the primary alone.
+                      relatedArticles: [],
                       lastAttemptedAt: articleIndexEntry.lastAttemptedAt,
                       missCount: articleIndexEntry.missCount,
                     }
