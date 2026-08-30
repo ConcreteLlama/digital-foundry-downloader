@@ -44,7 +44,11 @@ export const SectionNav = () => {
         borderColor: "divider",
         paddingRight: 2,
         marginRight: 4,
-        display: { xs: "none", md: "block" },
+        // lg, not md: the column costs 208px plus a gutter, which at md
+        // (900px) leaves the page itself cramped. It also matches
+        // SettingsElement, which already treats lg as the width where a
+        // settings page stops needing the whole screen.
+        display: { xs: "none", lg: "block" },
       }}
     >
       <Typography variant="overline" sx={{ paddingLeft: 2 }}>
@@ -134,7 +138,7 @@ export const SectionNavCompact = () => {
       sx={{
         // Normally the small-screen alternative to the column, but the
         // only nav for a section that opted out of the column entirely.
-        display: destination.section.compactNavOnly ? "flex" : { xs: "flex", md: "none" },
+        display: destination.section.compactNavOnly ? "flex" : { xs: "flex", lg: "none" },
         gap: 1,
         overflowX: "auto",
         paddingBottom: 1,
