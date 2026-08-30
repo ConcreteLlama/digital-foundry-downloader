@@ -10,6 +10,7 @@ import { queryConfigSection, updateConfigSection } from "../../store/config/conf
 import { selectConfigError, selectConfigLoading, selectConfigSection } from "../../store/config/config.selector";
 import { store } from "../../store/store";
 import { Loading } from "../general/loading.component.tsx";
+import { MOBILE_TAB_BAR_HEIGHT } from "../../routes/nav/mobile-tab-bar.component.tsx";
 
 export const CurrentSettingsContext = createContext<Partial<DfDownloaderConfig>>({});
 
@@ -150,7 +151,11 @@ const StickySaveBar = ({ sectionName }: { sectionName: keyof DfDownloaderConfig 
     <Box
       sx={{
         position: "sticky",
-        bottom: 0,
+        // Sticky offsets are measured against the scroll container's padding
+        // box, and the app reserves 56px there for the fixed mobile tab bar.
+        // At bottom:0 the pinned bar therefore sits behind that bar - the
+        // padding protects content in normal flow, not a pinned element.
+        bottom: { xs: `${MOBILE_TAB_BAR_HEIGHT}px`, md: 0 },
         display: "flex",
         alignItems: "center",
         justifyContent: "flex-end",
