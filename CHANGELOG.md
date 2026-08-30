@@ -2,7 +2,7 @@
 
 
 
-## 2.8.0 (2026-08-29)
+## 2.8.0 (2026-08-30)
 
 Your downloads can now be read as well as watched. Point it at an Anthropic API key and it will write a detailed summary and a separate verdict for each video, pull the hard numbers out into a table you can actually compare - per-platform resolutions and frame rates for a console face-off, the recommended settings for a PC review - and suggest tags. It costs a few pence a video and tells you roughly what a run will cost before you spend it.
 
@@ -14,7 +14,7 @@ There is also a new Backfill tool under Tools, for applying any of this to conte
 
 Articles are also picked up on their own from now on. It checks Digital Foundry's newly published pieces periodically and attaches each to whatever video it is about, so something you download today gains its written companion when that appears next week, with nothing to press.
 
-Downloads also play in the app itself now. Open a video you have already downloaded and it plays right there, with its subtitles and a clickable list of its chapters beside it, so checking what was actually said - or jumping to the one section you care about - no longer means finding the file on disk. Skipping to the last ten minutes of a four-gigabyte Direct is immediate rather than a wait for the whole thing, since only the part being watched is sent. Whether a given file plays is down to your own machine: h.264 downloads play anywhere, while HEVC ones need a decoder from your operating system, and where that is missing the player says so and points you at the file instead of sitting there black.
+Downloads also play in the app itself now. Press the still at the top of a downloaded video and it opens in a player with its subtitles, and beside it one list of what is in the video - the chapters written into the file and the moments the analysis found, in the order they happen, keeping up with the video as it plays. Checking what was actually said, or jumping to the one section you care about, no longer means finding the file on disk. Skipping to the last ten minutes of a four-gigabyte Direct is immediate rather than a wait for the whole thing, since only the part being watched is sent. Whether a given file plays is down to your own machine: h.264 downloads play anywhere, while HEVC ones need a decoder from your operating system, and where that is missing the player says so and points you at the file instead of sitting there black.
 
 ### Features
 - AI analysis of your content
@@ -60,18 +60,23 @@ Downloads also play in the app itself now. Open a video you have already downloa
 - Costs shown before you commit to them
   - Analysing a set of videos shows an estimated total first, worked out from real pricing of a few of the items you actually picked rather than a generic figure
   - Article matching shows how many requests it will make to Digital Foundry and roughly how long that takes, since it is deliberately slow - a whole-library run is measured in hours
-- Play a downloaded video in the app
-  - Once a video has been downloaded, the file itself is what the content panel shows, rather than the YouTube embed of the same thing. A small control under the video switches back to YouTube, or between downloads when you have more than one
-  - Theater mode gives the video nearly the whole window with the chapters in a column beside it, for actually watching something rather than glancing at it
-  - The video shows its thumbnail until you press play, and nothing is downloaded until then
-  - Play sits with the rest of a file's actions, on the Files tab of any video you have downloaded
+- Watch a downloaded video in the app
+  - Press the still at the top of a downloaded video's panel and it opens in a player, with its subtitles and a list of what is in the video beside it - so checking what was actually said, or jumping to the one section you care about, no longer means finding the file on disk
+  - One player, opened when you ask for it. The panel shows a still rather than a second video quietly loading behind whatever you are reading
+  - Theater mode gives the video nearly the whole window with that list in a column beside it, for actually watching something rather than glancing at it
+  - It remembers where you got to in each video for as long as the app is open, so closing the player and coming back does not start you at the beginning again. A different video still starts at its own beginning
+  - Full screen, seeking, volume, playback speed and the captions menu are the browser's own, so they behave the way they do on any other site rather than being reinvented here
+  - Play also sits with the rest of a file's actions on the Files tab, which is how you pick a particular file when a video was downloaded in more than one format
+  - A downloaded video leads over the YouTube version of the same thing, and a small control switches back to YouTube, or between downloads when you have several
   - The browser's own Cast option, in the video's overflow menu, is switched off. It hands your TV a link it is not allowed to open, so it only ever got as far as putting a logo on the screen - cast these files from your media server instead, which also converts anything your TV cannot decode
-  - Uses the browser's own player, so seeking, volume, fullscreen, playback speed and the captions menu all behave the way they do on any other site rather than being reinvented here
   - Only the part of the file being watched is sent, so a multi-gigabyte video starts almost immediately and seeking anywhere in it is instant. This matters more than it sounds - without it, playing a four-gigabyte Direct would mean transferring all four gigabytes before the first frame appeared
-- Chapters you can jump to
-  - The chapters already written into each download are listed beside the video, and clicking one jumps straight there
-  - Whichever chapter is playing is highlighted as it goes, so the list also tells you where you are
-  - Read out of the file itself each time you open it, so chapters refreshed since the download are the ones you see
+  - Nothing is fetched until you press play
+- One list of what is in a video, in the order it happens
+  - The chapters written into the file and the moments the analysis found are shown together in time order, rather than as two separate lists to read side by side
+  - Chapters read as headings, with the findings that fall inside them indented underneath, so the shape of the video is still there to see
+  - Whichever row you are inside is highlighted and keeps up as the video plays, so the list also tells you where you are
+  - Clicking any row jumps the video there
+  - Chapters are read out of the file each time you open it, so chapters refreshed since the download are the ones you see
 - Subtitles in the player
   - The .srt kept alongside a video is offered in the player's own captions menu, converted on the way out since browsers cannot read .srt directly
   - Subtitles embedded into the video instead cannot be shown - no browser can read subtitles back out of a video file. Rather than simply having no captions, the player explains why, and generating them again with the separate-.srt output is the way to get them
@@ -79,6 +84,9 @@ Downloads also play in the app itself now. Open a video you have already downloa
   - Instead of a black rectangle you are told this machine has no decoder for the video, along with where the file is, so you can open it in a real player or through your media server
   - The check asks your browser what it can actually decode rather than assuming from the format, so an HEVC download is not refused on a machine that plays it perfectly well
 ### Enhancements
+- Subtitles can now be written both ways at once
+  - The output setting gains a both option, alongside auto, embed and sidecar: it writes the subtitles into the video and keeps the .srt next to it
+  - Previously this was a choice. Embedded subtitles travel with the file to a media server, while the separate .srt is the one the in-app player can read - wanting both meant generating twice
 - A run checks each item again as it reaches it, rather than trusting the list from when it started. Over a few hundred items that gap matters: something can gain subtitles from an unrelated action while it waits its turn, and it now gets skipped rather than redone
 - The content panel is organised into tabs
   - Files, Analysis, Article, and Activity while something is running. Opening a video you have not downloaded now shows the formats you can fetch, instead of four headings each telling you there is nothing there yet

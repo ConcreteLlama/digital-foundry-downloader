@@ -23,6 +23,14 @@ Digital Foundry left their old host and relaunched independently at `digitalfoun
 - Stores content info and related download info to a file so it doesn't have to re-scan on restart
 - Ability to automatically generate subtitles for videos, either locally with Whisper (no API key, no per-video cost, and because it transcribes the downloaded file itself the timings always match it) or via Deepgram or Google STT (Google STT is quite slow due to using streaming recognize). Model, thread count and a term-correction list for jargon the transcriber mishears are all configurable
   - Note: subtitles used to be extractable from YouTube's own captions. That no longer works - YouTube stopped serving captions to anything that isn't a browser, returning an empty response without a proof-of-origin token - so the option was removed in 2.7.0. Existing configurations are migrated automatically on startup
+- Can analyse a video's content with Claude (needs your own Anthropic API key). Writes a summary and a separate verdict, and pulls the hard numbers into structured fields where the content supports it — per-platform resolutions/frame rates for a console face-off, the settings table for a PC review, a per-topic breakdown for a Q+A. Also suggests tags, which is the one part that works without a transcript. Costs a few pence a video and estimates a run's cost from a real token count before you commit to it
+  - Where a figure was never actually stated it says so rather than guessing. Findings also carry the moment they were said, located by having the model quote the transcript verbatim and then finding that quote in the subtitles — so a jump either lands where the thing was said or isn't offered
+- Finds Digital Foundry's own written article for a video where one exists, links it on the content, and reads it alongside the transcript when analysing (an article is written rather than transcribed, so its product names and figures are right where speech-to-text garbles them). A match is confirmed by checking the article embeds that exact video, not by titles looking similar. Newly published articles are also picked up periodically and attached on their own
+- An Analysis section reads across everything analysed rather than one video at a time — console comparisons side by side and filterable by platform, plus an index of what was covered per game
+- A Backfill tool (under Tools) applies subtitles, analysis or article matching across content you already have, as one background job you can watch and cancel, with a button that selects everything still missing whichever you picked
+- Plays downloaded files in the app, with their subtitles and a single time-ordered list of the chapters in the file and the moments the analysis found. Serves byte ranges, so a multi-gigabyte video starts immediately and seeking is instant rather than transferring the whole file first
+  - Whether a file plays is down to your machine, not the file: h.264 plays anywhere, HEVC needs a decoder from your OS. Where that's missing the player says so and points you at the file rather than showing a black rectangle
+- Writes a log file, with a Logs page in the UI to read it back and follow it live
 - A small status indicator in the UI's nav bar shows whether the tool is currently waiting on Digital Foundry (queued/rate-limited) or mid-archive-scan — click it for a breakdown
 
 # DF Login Cookie
@@ -37,6 +45,7 @@ Paste it into Settings → Digital Foundry → Autologin Cookie in the web UI, a
 
 - Can't log in using your Patreon credentials directly - you have to get the cookie from your browser as above.
 - There is no way to multi select videos to download or trigger a download for all previous videos, and there never will be.
+- No casting to a TV from the app. The browser's own cast option is deliberately switched off, because it hands the receiver a URL it isn't authorised to fetch and only ever produces a logo on screen. Point a media server at the same destination directory and cast from that — it also transcodes for devices that can't decode HEVC, which most 4K downloads use
 - Content whose data hasn't yet been confirmed against the current site (e.g. very old entries carried over from before the 2025/2026 relaunch that the tool hasn't been able to relocate) can't be downloaded until you use "Refresh Metadata" on that item — this is deliberate, since old cached download links are very likely dead.
 
 # Notes on behaviour
