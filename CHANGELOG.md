@@ -65,6 +65,7 @@ Downloads also play in the app itself now. Open a video you have already downloa
   - Theater mode gives the video nearly the whole window with the chapters in a column beside it, for actually watching something rather than glancing at it
   - The video shows its thumbnail until you press play, and nothing is downloaded until then
   - Play sits with the rest of a file's actions, on the Files tab of any video you have downloaded
+  - The browser's own Cast option, in the video's overflow menu, is switched off. It hands your TV a link it is not allowed to open, so it only ever got as far as putting a logo on the screen - cast these files from your media server instead, which also converts anything your TV cannot decode
   - Uses the browser's own player, so seeking, volume, fullscreen, playback speed and the captions menu all behave the way they do on any other site rather than being reinvented here
   - Only the part of the file being watched is sent, so a multi-gigabyte video starts almost immediately and seeking anywhere in it is instant. This matters more than it sounds - without it, playing a four-gigabyte Direct would mean transferring all four gigabytes before the first frame appeared
 - Chapters you can jump to
@@ -74,15 +75,6 @@ Downloads also play in the app itself now. Open a video you have already downloa
 - Subtitles in the player
   - The .srt kept alongside a video is offered in the player's own captions menu, converted on the way out since browsers cannot read .srt directly
   - Subtitles embedded into the video instead cannot be shown - no browser can read subtitles back out of a video file. Rather than simply having no captions, the player explains why, and generating them again with the separate-.srt output is the way to get them
-- Cast a downloaded video to a TV
-  - A Cast button on the player sends the file to a Chromecast or Android TV on your network, picking up from wherever you had got to rather than starting again
-  - Subtitles go with it, and the video's title and thumbnail show on the TV while it plays
-  - The button only appears when there is somewhere to send it - casting from the browser needs Chrome or Edge on a desktop, and there has to be a device switched on
-  - Your cast device fetches the video directly from this app, so it needs an address on your network it can actually reach. If it cannot work one out it says so rather than failing silently on the TV - set a public address under Settings then REST API if that happens
-  - Casting does not weaken the sign-in on anything else. Pressing Cast creates a link to that one file, good for six hours, and it is the only thing a cast device is ever given - long enough that a link cannot expire midway through a Direct, and useless for reaching anything else
-  - Very old cast devices cannot decode HEVC video, which most 4K downloads use. Where that is the problem it is named as the likely cause instead of leaving a black screen on the TV with no explanation
-  - The browser's own Cast option, in the video's overflow menu, is switched off. It hands your TV a link it is not allowed to open, so it only ever got as far as putting the Chrome logo on screen - the Cast button next to the video is the one that works, and the one that takes subtitles with it
-  - On a phone, cast from your media server instead. Browsers on phones do not offer the app the means to cast with subtitles, and a media server casting the same files does that and converts anything your TV cannot decode
 - An honest answer when a file will not play
   - Instead of a black rectangle you are told this machine has no decoder for the video, along with where the file is, so you can open it in a real player or through your media server
   - The check asks your browser what it can actually decode rather than assuming from the format, so an HEVC download is not refused on a machine that plays it perfectly well

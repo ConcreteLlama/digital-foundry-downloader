@@ -1,15 +1,5 @@
-import cors from "cors";
-import {
-  CastPlaybackUrls,
-  CastSubtitleTrack,
-  Chapter,
-  DfContentInfoUtils,
-  PlaybackInfo,
-  PlaybackSubtitleTrack,
-  PlaybackVideoCodec,
-  logger,
-} from "df-downloader-common";
-import express, { NextFunction, Request, Response } from "express";
+import { Chapter, PlaybackInfo, PlaybackSubtitleTrack, PlaybackVideoCodec, logger } from "df-downloader-common";
+import express, { Request, Response } from "express";
 import fs from "fs";
 import path from "path";
 import { DigitalFoundryContentManager } from "../../df-content-manager.js";
@@ -17,17 +7,7 @@ import { srtToVtt } from "../../media-utils/subtitles/vtt-utils.js";
 import { sanitizeContentName } from "../../utils/df-utils.js";
 import { extractBaseMetadata } from "../../utils/media-metadata.js";
 import { ServiceContentUtils } from "../../utils/service-content-utils.js";
-import {
-  CAST_EXPIRES_PARAM,
-  CAST_SIGNATURE_PARAM,
-  CAST_URL_LIFETIME_MS,
-  signCastUrl,
-  verifyCastUrl,
-} from "../auth/cast-url-signing.js";
-import { JwtManager } from "../auth/jwt.js";
-import { authenticateMiddleware } from "../middleware/authentication.js";
-import { AuthenticatedRequest, sendAuthErrorResponse } from "../utils/auth.js";
-import { getLanReachableAddress, sendError, sendResponse } from "../utils/utils.js";
+import { sendError, sendResponse } from "../utils/utils.js";
 
 /**
  * In-app playback of files this app has already downloaded.
@@ -52,16 +32,10 @@ import { getLanReachableAddress, sendError, sendResponse } from "../utils/utils.
  *    entry is a 404, so this cannot be walked around the destination
  *    directory - which is also why express.static is not used here.
  *
- * 3. Auth is decided per route here rather than by a blanket middleware in
- *    rest/api.ts, which is what casting forced. Ordinary browser playback
- *    still rides on the session cookie - a `<video src>` is a plain GET, so
- *    the cookie goes along on its own, including on the range requests the
- *    browser issues itself. But a cast receiver is a separate device with
- *    no cookie and no way to get one, so the two routes that serve bytes
- *    (`stream`, `subtitles`) additionally accept a signed URL, and `info`
- *    deliberately does not: a receiver never calls it, and the exemption is
- *    kept to exactly the routes that cannot work without it. See
- *    auth/cast-url-signing.ts.
+ * 3. Everything is behind the app's own JWT auth, mounted the same way as
+ *    every other route (see rest/api.ts). A `<video src>` is a plain GET, so
+ *    the cookie rides along on its own - including on the range requests
+ *    the browser issues by itself.
  *
  * A note for whoever picks up the AI-analysis timestamp linkage (roadmap
  * item 10's speculative follow-up): chapters are ALREADY available
@@ -131,37 +105,8 @@ const videoCodecFromProbe = (codecName?: string): PlaybackVideoCodec => {
   }
 };
 
-export const makePlaybackRouter = (contentManager: DigitalFoundryContentManager, jwtManager: JwtManager) => {
+export const makePlaybackRouter = (contentManager: DigitalFoundryContentManager) => {
   const router = express.Router();
-
-  /*
-    Establishes who the caller is without rejecting anyone.
-
-    `noReject` is the point: every route below decides for itself what it
-    will accept, so this only populates `req.user` when there is a valid
-    session. A route that needs one says so; the two that also take a signed
-    URL check that instead.
-  */
-  router.use(authenticateMiddleware(jwtManager, { noReject: true }));
-
-  /*
-    Cross-origin access, opened only for requests carrying a signed URL.
-
-    Cast fetches sideloaded subtitle tracks with CORS enforced, and the app's
-    own allowlist covers its own origins rather than a receiver's. Rather
-    than relaxing CORS globally, this applies only when the request presents
-    a token - which is already a capability for exactly one file, so allowing
-    any origin to use one grants nothing the holder did not already have.
-    Requests without a token fall through to the global policy untouched.
-  */
-  const castCors = cors({
-    origin: true,
-    methods: ["GET", "HEAD", "OPTIONS"],
-    allowedHeaders: ["Range", "Content-Type", "Accept-Encoding"],
-    exposedHeaders: ["Content-Length", "Content-Range", "Accept-Ranges", "Content-Type"],
-  });
-  const castCorsIfSigned = (req: Request, res: Response, next: NextFunction) =>
-    typeof req.query[CAST_SIGNATURE_PARAM] === "string" ? castCors(req, res, next) : next();
 
   /**
    * Resolves a request to a real file on disk, or explains why it cannot.
@@ -194,56 +139,7 @@ export const makePlaybackRouter = (contentManager: DigitalFoundryContentManager,
     return { ok: true, contentKey, entry, download, filePath, stat } as const;
   };
 
-  /**
-   * Resolves the file and establishes that the caller may have its bytes.
-   *
-   * The signature is checked **after** resolution, against the path the DB
-   * returned rather than the one the caller asked for. That ordering is the
-   * whole point: the signature only proves we minted this URL, while the DB
-   * lookup is what proves the path is a real download of that content. A
-   * valid signature is never a substitute for that check, so a signed URL
-   * cannot be pointed at a file this content does not own.
-   *
-   * Requests with neither a session nor a signature are turned away before
-   * any of that, so an unauthenticated caller cannot make us do database and
-   * filesystem work just by asking.
-   */
-  const resolveForBytes = async (req: AuthenticatedRequest, res: Response) => {
-    const hasSignature =
-      typeof req.query[CAST_SIGNATURE_PARAM] === "string" && typeof req.query[CAST_EXPIRES_PARAM] === "string";
-    if (!req.user && !hasSignature) {
-      sendAuthErrorResponse(res, req.authorizationError === "token-expired" ? "token-expired" : "no-token");
-      return undefined;
-    }
-    const resolved = await resolveDownload(req);
-    if (!resolved.ok) {
-      sendError(res, resolved.error, resolved.code);
-      return undefined;
-    }
-    if (
-      !req.user &&
-      !verifyCastUrl(
-        jwtManager.signingSecret,
-        resolved.contentKey,
-        resolved.download.downloadLocation,
-        req.query[CAST_EXPIRES_PARAM],
-        req.query[CAST_SIGNATURE_PARAM]
-      )
-    ) {
-      // Covers a forged signature, one for a different file, and an expired
-      // one - none of which are worth telling the caller apart.
-      sendAuthErrorResponse(res, "invalid-token");
-      return undefined;
-    }
-    return resolved;
-  };
-
-  // Session only, deliberately. A receiver never calls this, so it has no
-  // reason to be reachable with a signed URL.
-  router.get("/:contentKey/info", async (req: AuthenticatedRequest, res: Response) => {
-    if (!req.user) {
-      return sendAuthErrorResponse(res, req.authorizationError === "token-expired" ? "token-expired" : "no-token");
-    }
+  router.get("/:contentKey/info", async (req: Request, res: Response) => {
     const resolved = await resolveDownload(req);
     if (!resolved.ok) {
       return sendError(res, resolved.error, resolved.code);
@@ -297,10 +193,10 @@ export const makePlaybackRouter = (contentManager: DigitalFoundryContentManager,
    * by path, so the client never names a file. Small enough (tens of KB)
    * that converting per request is not worth caching.
    */
-  router.get("/:contentKey/subtitles/:trackIndex", castCorsIfSigned, async (req: AuthenticatedRequest, res: Response) => {
-    const resolved = await resolveForBytes(req, res);
-    if (!resolved) {
-      return;
+  router.get("/:contentKey/subtitles/:trackIndex", async (req: Request, res: Response) => {
+    const resolved = await resolveDownload(req);
+    if (!resolved.ok) {
+      return sendError(res, resolved.error, resolved.code);
     }
     const { download } = resolved;
     const trackIndex = Number.parseInt(req.params.trackIndex, 10);
@@ -324,10 +220,10 @@ export const makePlaybackRouter = (contentManager: DigitalFoundryContentManager,
    *
    * See point 1 in the file comment for why Range is mandatory here.
    */
-  router.get("/:contentKey/stream", castCorsIfSigned, async (req: AuthenticatedRequest, res: Response) => {
-    const resolved = await resolveForBytes(req, res);
-    if (!resolved) {
-      return;
+  router.get("/:contentKey/stream", async (req: Request, res: Response) => {
+    const resolved = await resolveDownload(req);
+    if (!resolved.ok) {
+      return sendError(res, resolved.error, resolved.code);
     }
     const { filePath, stat } = resolved;
     const size = stat.size;
@@ -387,85 +283,6 @@ export const makePlaybackRouter = (contentManager: DigitalFoundryContentManager,
       "Content-Length": end - start + 1,
     });
     return openStream(start, end);
-  });
-
-  /**
-   * Mints the signed URLs a cast receiver needs, on explicit request.
-   *
-   * A POST because it creates a credential rather than reading something.
-   * Nothing pre-generates these and no page embeds one: a URL good for hours
-   * is exactly the kind of thing that should not exist because a panel
-   * happened to render, so it is produced only when someone presses Cast.
-   *
-   * The address is resolved server-side. The browser sending this request
-   * may well be reaching us on localhost, which means something entirely
-   * different to a receiver across the room.
-   */
-  router.post("/:contentKey/cast-url", async (req: AuthenticatedRequest, res: Response) => {
-    if (!req.user) {
-      return sendAuthErrorResponse(res, req.authorizationError === "token-expired" ? "token-expired" : "no-token");
-    }
-    const resolved = await resolveDownload(req);
-    if (!resolved.ok) {
-      return sendError(res, resolved.error, resolved.code);
-    }
-    const { contentKey, entry, download, filePath } = resolved;
-
-    const baseAddress = getLanReachableAddress();
-    if (!baseAddress) {
-      // Better to say this plainly than to hand over a localhost URL that
-      // the receiver will fail to fetch with nothing to explain why.
-      return sendError(
-        res,
-        "No network address this server can be reached at was found. Set a public address under Settings > REST API so a cast device knows where to fetch from.",
-        409
-      );
-    }
-
-    const meta = await extractBaseMetadata(filePath, false).catch((e) => {
-      logger.log("warn", `Cast probe failed for ${filePath}: ${e}`);
-      return undefined;
-    });
-    const mimeType = mimeTypeForFile(filePath);
-    const expiresAt = Date.now() + CAST_URL_LIFETIME_MS;
-    const { signature } = signCastUrl(jwtManager.signingSecret, contentKey, download.downloadLocation, expiresAt);
-    const signedQuery = () => {
-      const params = new URLSearchParams();
-      params.set("downloadLocation", download.downloadLocation);
-      params.set(CAST_EXPIRES_PARAM, String(expiresAt));
-      params.set(CAST_SIGNATURE_PARAM, signature);
-      return params.toString();
-    };
-    const routeBase = `${baseAddress}/api/playback/${encodeURIComponent(contentKey)}`;
-
-    const subtitleTracks: CastSubtitleTrack[] = (download.subtitles ?? []).flatMap((subtitle, index) =>
-      subtitle.path
-        ? [
-            {
-              index,
-              language: subtitle.language,
-              label: subtitle.language.toLowerCase().startsWith("en") ? "English" : subtitle.language,
-              url: `${routeBase}/subtitles/${index}?${signedQuery()}`,
-            },
-          ]
-        : []
-    );
-
-    const castUrls: CastPlaybackUrls = {
-      contentKey,
-      title: entry.contentInfo.title,
-      streamUrl: `${routeBase}/stream?${signedQuery()}`,
-      mimeType,
-      videoCodec: videoCodecFromProbe(meta?.videoStream?.codecName),
-      durationSeconds: meta?.durationSeconds,
-      // DF's own CDN, which the receiver can fetch directly - it is not
-      // behind this app's auth and needs no signing.
-      thumbnailUrl: DfContentInfoUtils.getThumbnailUrl(entry.contentInfo, 1280, 720) || undefined,
-      subtitleTracks,
-      expiresAt,
-    };
-    logger.log("info", `Minted a cast URL for ${contentKey}, valid until ${new Date(expiresAt).toISOString()}`);
-    return sendResponse(res, castUrls);
   });
 
   return router;

@@ -1,5 +1,4 @@
 import { makeErrorResponse, makeSuccessResponse } from "df-downloader-common";
-import os from "os";
 import { CookieOptions, Request, Response } from "express";
 import { OutgoingHttpHeaders } from "http";
 import { z } from "zod";
@@ -126,65 +125,3 @@ export const getAllowOrigin = (defaultVal: string | string[] = "") => {
 
 export const generateCorsAllow = (allowOrigin: string | string[] | boolean) =>
   allowOrigin === true ? true : allowOrigin;
-
-
-const LOOPBACK_HOSTS = new Set(["127.0.0.1", "localhost", "::1", "[::1]"]);
-
-const isLoopbackAddress = (address: string) => {
-  try {
-    return LOOPBACK_HOSTS.has(new URL(address).hostname);
-  } catch {
-    return false;
-  }
-};
-
-/**
- * The first LAN-routable IPv4 this machine has, or undefined.
- *
- * Skips loopback and link-local (169.254.x.x, an address a machine gives
- * itself when DHCP failed - reachable by nothing).
- */
-const firstLanIpv4 = (): string | undefined => {
-  for (const addresses of Object.values(os.networkInterfaces())) {
-    for (const address of addresses ?? []) {
-      if (address.family !== "IPv4" || address.internal) {
-        continue;
-      }
-      if (address.address.startsWith("169.254.")) {
-        continue;
-      }
-      return address.address;
-    }
-  }
-  return undefined;
-};
-
-/**
- * A base address another device on the network can actually reach us at.
- *
- * `getPublicAddresses()` falls back to 127.0.0.1/localhost when nothing is
- * configured, which is correct for its usual callers and useless here: a
- * cast receiver is a different machine, and a loopback address there means
- * the receiver itself, not this server. Handing one over produces a cast
- * that fails with nothing to explain why.
- *
- * So a configured address wins (someone stating their address is better
- * evidence than anything guessable), and otherwise this machine's own LAN
- * address is used. Returning undefined - no configured address and no
- * non-loopback interface - is reported to the user as something to fix in
- * settings rather than papered over with a URL known not to work.
- */
-export const getLanReachableAddress = (): string | undefined => {
-  const configured = getPublicAddresses().find((address) => !isLoopbackAddress(address));
-  if (configured) {
-    return configured;
-  }
-  const lanIp = firstLanIpv4();
-  if (!lanIp) {
-    return undefined;
-  }
-  const restConfig = configService.config.restApi;
-  const protocol = restConfig.https ? "https" : "http";
-  const port = restConfig.http ? restConfig.http.port : restConfig.https!.port;
-  return `${protocol}://${lanIp}:${port}`;
-};

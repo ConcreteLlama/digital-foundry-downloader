@@ -1,4 +1,4 @@
-import { CastPlaybackUrls, PlaybackInfo, parseResponseBody } from "df-downloader-common";
+import { PlaybackInfo, parseResponseBody } from "df-downloader-common";
 import { API_URL } from "../config.ts";
 import { fetchJson } from "../utils/fetch.ts";
 
@@ -54,14 +54,3 @@ export const apiIsCrossOrigin = (): boolean => {
   }
 };
 
-/**
- * Asks the service for signed URLs a cast receiver can fetch for itself.
- *
- * A POST, and only ever called when Cast is pressed: what comes back is a
- * credential good for hours, not a view of something. See the service's
- * rest/auth/cast-url-signing.ts for what it is and why it lasts that long.
- */
-export const mintCastUrl = async (contentKey: string, downloadLocation: string) => {
-  const result = await fetchJson(playbackUrl(contentKey, downloadLocation, "cast-url"), { method: "POST" });
-  return parseResponseBody(result, CastPlaybackUrls).data;
-};

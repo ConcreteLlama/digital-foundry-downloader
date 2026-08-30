@@ -7,7 +7,6 @@ import { Chapter, DfContentEntry, DfContentInfoUtils, PlaybackInfo, secondsToHHM
 import { DfContentDownloadInfo } from "df-downloader-common/models/df-content-download-info";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AnalysisJump } from "../ai-analysis/analysis-jumps.ts";
-import { CastButton } from "./cast-button.component.tsx";
 import {
   pauseOtherPlayers,
   registerPlayer,
@@ -520,14 +519,15 @@ export const DownloadPlayer = ({
     Hides the browser's own "Cast" entry, which cannot work here.
 
     Chrome offers casting from the video's overflow menu, and it hands the
-    receiver the element's own src - which is this app's cookie-authed
-    playback URL. The receiver has no cookie, so it gets a 401 and shows its
-    idle screen: confirmed on a real device, where casting that way put the
-    Chrome logo on the television and nothing else. An affordance that looks
-    like the feature and silently fails is worse than no affordance, so it is
-    turned off, and the Cast button beside the video - which mints a signed
-    URL the receiver can actually fetch, and sideloads the subtitles - is the
-    one that remains.
+    receiver the element's own src - this app's cookie-authed playback URL.
+    The receiver has no cookie, gets a 401, and shows its idle screen:
+    confirmed on a real device, where casting that way put the Chrome logo on
+    the television and nothing else. There is no in-app cast to offer instead
+    (see ROADMAP item 11 for why that was built, measured and dropped), but an
+    affordance that looks like the feature and silently fails is still worse
+    than none - casting these files is a job for a media server pointed at the
+    same directory, which also transcodes for receivers that cannot decode
+    them.
 
     Set as a property rather than an attribute because it is a boolean IDL
     attribute React does not know about. Deliberately NOT done through
@@ -792,17 +792,6 @@ export const DownloadPlayer = ({
       }}
     >
       {videoElement}
-      {/* Not while immersive: the two buttons up there are already the exit
-          and the timeline, and casting is a thing you do instead of watching
-          here rather than while filling this screen. */}
-      {!immersive && (
-        <CastButton
-          contentEntry={contentEntry}
-          download={download}
-          currentSeconds={positionSeconds}
-          videoCodec={info.videoCodec}
-        />
-      )}
       {canImmerse && !immersiveRefused && (
         <Tooltip title={immersive ? "Leave full screen" : "Full screen - tap the picture for the timeline"}>
           <IconButton
