@@ -1,4 +1,4 @@
-import { DfArticle, DfArticleLookupState, DfArticleUtils, DfContentInfo, logger } from "df-downloader-common";
+import { DfArticle, DfArticleLookupState, DfArticleRef, DfArticleUtils, DfContentInfo, logger } from "df-downloader-common";
 import { DfDownloaderOperationalDb } from "../../db/df-operational-db.js";
 import { ArticleByproduct, findArticleForContent } from "./article-lookup.js";
 
@@ -58,6 +58,7 @@ export const ensureArticleForContent = async (
     outcome = await findArticleForContent(contentInfo, {
       priority: opts.priority,
       seenUrls: new Set((existing?.relatedArticles ?? []).map((article) => article.url)),
+      db,
     });
   } catch (e) {
     // A failure to reach the site is recorded like any other miss rather
@@ -124,8 +125,15 @@ const fileByproducts = async (
   byproducts: ArticleByproduct[],
   searchedFor: string
 ) => {
-  for (const { article, videoIds } of byproducts) {
+  for (const { ref, videoIds, text } of byproducts) {
     const isCompanionPiece = videoIds.length === 1;
+    // A companion piece is stored with the body an analysis reads, so it
+    // can only be filed when the page was actually fetched. On a cache
+    // hit there is nothing to file anyway - that filing happened the
+    // first time the page was read.
+    if (isCompanionPiece && !text) {
+      continue;
+    }
     for (const videoId of videoIds) {
       // Content keys are "yt-<videoId>" for anything with a YouTube link,
       // which is every item that could have matched an article in the
@@ -142,7 +150,7 @@ const fileByproducts = async (
         const existing = await db.getDfArticleLookup(otherKey);
         // Attributed to the video it is being filed against, so the stored
         // article says which of its embeds this record is about.
-        const attributed: DfArticle = { ...article, youtubeVideoId: videoId };
+        const attributed: DfArticleRef = { ...ref, youtubeVideoId: videoId };
 
         if (!isCompanionPiece) {
           const base: DfArticleLookupState = existing ?? {
@@ -156,7 +164,7 @@ const fileByproducts = async (
             continue;
           }
           await db.setDfArticleLookup(updated);
-          logger.log("debug", `Filed related article for ${otherKey} seen while searching for ${searchedFor}: ${article.url}`);
+          logger.log("debug", `Filed related article for ${otherKey} seen while searching for ${searchedFor}: ${ref.url}`);
           continue;
         }
 
@@ -165,12 +173,12 @@ const fileByproducts = async (
         }
         await db.setDfArticleLookup({
           contentKey: otherKey,
-          article: attributed,
+          article: { ...attributed, text: text! },
           relatedArticles: existing?.relatedArticles ?? [],
           lastAttemptedAt: new Date(),
           missCount: 0,
         });
-        logger.log("info", `Filed article for ${otherKey} found while searching for ${searchedFor}: ${article.url}`);
+        logger.log("info", `Filed article for ${otherKey} found while searching for ${searchedFor}: ${ref.url}`);
       } catch (e) {
         // A byproduct is a bonus - failing to file one must not fail the
         // lookup that was actually asked for.
@@ -185,7 +193,7 @@ const recordMiss = async (
   contentKey: string,
   existing: DfArticleLookupState | undefined,
   reason: string,
-  related: DfArticle[]
+  related: DfArticleRef[]
 ) => {
   await db.setDfArticleLookup(
     DfArticleUtils.withRelated(

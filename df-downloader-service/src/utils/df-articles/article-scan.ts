@@ -1,4 +1,4 @@
-import { DfArticle, DfArticleLookupState, DfArticleUtils, logger } from "df-downloader-common";
+import { DfArticle, DfArticleLookupState, DfArticleRef, DfArticleUtils, logger } from "df-downloader-common";
 import { DfArticlesConfig } from "df-downloader-common/config/df-articles-config.js";
 import { DfDownloaderOperationalDb } from "../../db/df-operational-db.js";
 import { DfFetchPriority, dfFetch } from "../../df-request-queue.js";
@@ -108,6 +108,13 @@ export const scanForNewArticles = async (
 
   let watermark = cursor;
   for (const entry of toRead) {
+    // Already read at this revision. Its lastmod moved for some reason
+    // other than a change we care about - or it was read by a lookup
+    // before the scan reached it - so there is nothing to pay for.
+    if (db.isDfArticleMetaFresh(entry.url, entry.lastmod)) {
+      watermark = entry.lastmod;
+      continue;
+    }
     const article = await readArticle(entry);
     // Only advance over articles that were actually read. A page that
     // could not be fetched stays ahead of the cursor and is retried.
@@ -116,6 +123,14 @@ export const scanForNewArticles = async (
     }
     result.articlesRead++;
     watermark = entry.lastmod;
+    db.setDfArticleMeta(entry.url, {
+      slug: entry.slug,
+      title: article.article.title,
+      author: article.article.author,
+      videoIds: article.videoIds,
+      lastmod: entry.lastmod,
+      cachedAt: new Date(),
+    });
     const filed = await fileAgainstLibrary(db, article.article, article.videoIds);
     result.primaryMatches += filed.primary;
     result.relatedMatches += filed.related;
@@ -191,7 +206,9 @@ const fileAgainstLibrary = async (
         continue;
       }
       const existing = await db.getDfArticleLookup(contentKey);
-      const attributed: DfArticle = { ...article, youtubeVideoId: videoId };
+      // Related entries never carry the body - see DfArticleLookupState.
+      const { text, ...ref } = article;
+      const attributed: DfArticleRef = { ...ref, youtubeVideoId: videoId };
 
       if (!isCompanionPiece) {
         const base: DfArticleLookupState = existing ?? {
@@ -214,7 +231,7 @@ const fileAgainstLibrary = async (
       }
       await db.setDfArticleLookup({
         contentKey,
-        article: attributed,
+        article: { ...attributed, text },
         relatedArticles: existing?.relatedArticles ?? [],
         lastAttemptedAt: new Date(),
         missCount: 0,

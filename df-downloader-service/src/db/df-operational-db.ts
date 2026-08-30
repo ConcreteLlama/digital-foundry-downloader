@@ -1,3 +1,4 @@
+import { DfArticleMeta } from "./df-article-meta-cache.js";
 import {
   DfContentAvailability,
   DfContentAvailabilityInfo,
@@ -101,6 +102,17 @@ export abstract class DfDownloaderOperationalDb {
   abstract getDfArticleLookup(contentName: string): Promise<DfArticleLookupState | undefined>;
   /** Synchronous: the retry decision runs on every content-panel open. */
   abstract getDfArticleIndexEntry(contentName: string): { lastAttemptedAt: Date; missCount: number; hasArticle: boolean; url?: string; title?: string } | undefined;
+  /**
+   * What is already known about an article page without fetching it.
+   *
+   * The embed list is the whole substance of article matching, and the
+   * only way to learn it is to fetch and parse the page - so remembering
+   * it is what stops the same round-ups being re-read on every retry,
+   * every similarly-titled search and every backfill run.
+   */
+  abstract getDfArticleMeta(url: string): DfArticleMeta | undefined;
+  abstract isDfArticleMetaFresh(url: string, lastmod?: Date): boolean;
+  abstract setDfArticleMeta(url: string, meta: DfArticleMeta): void;
   /** How far the periodic article scan has read. Undefined until it first runs. */
   abstract getDfArticleScanCursor(): Date | undefined;
   abstract setDfArticleScanCursor(cursor: Date): Promise<void>;

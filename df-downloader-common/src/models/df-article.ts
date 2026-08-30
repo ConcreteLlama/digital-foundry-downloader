@@ -12,7 +12,14 @@ import { z } from "zod";
  * frequently contains the settings table outright rather than as prose to
  * be reconstructed.
  */
-export const DfArticle = z.object({
+/**
+ * An article identified and attributed to a video, without its body.
+ *
+ * Everything needed to name it, link to it and prove the match. The text
+ * is deliberately not part of this: it is by far the largest field, and
+ * only one consumer - grounding an analysis - ever reads it.
+ */
+export const DfArticleRef = z.object({
   /** Absolute URL of the article. */
   url: z.string(),
   slug: z.string(),
@@ -23,10 +30,14 @@ export const DfArticle = z.object({
    * evidence that the candidate is about the same video.
    */
   youtubeVideoId: z.string(),
-  /** Article body as plain text, including any rendered tables. */
-  text: z.string(),
   author: z.string().optional(),
   matchedAt: z.coerce.date(),
+});
+export type DfArticleRef = z.infer<typeof DfArticleRef>;
+
+export const DfArticle = DfArticleRef.extend({
+  /** Article body as plain text, including any rendered tables. */
+  text: z.string(),
 });
 export type DfArticle = z.infer<typeof DfArticle>;
 
@@ -65,8 +76,13 @@ export const DfArticleLookupState = z.object({
    * These accumulate incidentally. Nothing searches for them; they turn
    * up while verifying candidates for this video or for another one, and
    * are kept because the page had already been fetched.
+   *
+   * Stored without their text, because nothing reads it. They exist to be
+   * listed and linked, never to ground an analysis - and a round-up filed
+   * against five videos would otherwise store five copies of a body that
+   * is mostly about the other four.
    */
-  relatedArticles: z.array(DfArticle).default([]),
+  relatedArticles: z.array(DfArticleRef).default([]),
   /** When a lookup was last attempted, successful or not. Drives the retry cadence. */
   lastAttemptedAt: z.coerce.date(),
   /**
@@ -125,7 +141,7 @@ export const DfArticleUtils = {
    * whenever it turns up while verifying some other video - and each
    * encounter would otherwise add another copy.
    */
-  withRelated: (state: DfArticleLookupState, articles: DfArticle[]): DfArticleLookupState => {
+  withRelated: (state: DfArticleLookupState, articles: DfArticleRef[]): DfArticleLookupState => {
     if (!articles.length) {
       return state;
     }

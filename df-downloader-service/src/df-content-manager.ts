@@ -31,9 +31,11 @@ import { scanForNewArticles } from "./utils/df-articles/article-scan.js";
 /**
  * How long after startup the first article scan waits.
  *
- * Long enough for the initial archive scan and any catch-up downloads to
- * get going first. Nothing about article matching is time-critical, so it
- * yields to everything that is.
+ * Not for the archive scan's sake - start() awaits that before it arms
+ * this loop at all. It is for what follows the scan and is not awaited:
+ * the deferred metadata refresh, the existing-file scan, and the content
+ * poll loop's deliberately-immediate first tick, all of which want the
+ * request queue more urgently than this does.
  */
 const ARTICLE_SCAN_STARTUP_DELAY_MS = 5 * 60 * 1000;
 import { ContentInfoWithAvailability, DfDownloaderOperationalDb, DownloadInfoWithName } from "./db/df-operational-db.js";
@@ -341,8 +343,11 @@ export class DigitalFoundryContentManager {
    * schedulePeriodicRecheck).
    *
    * Unlike the content loop, the first run is delayed rather than
-   * immediate. Startup already has an archive scan to get through, and
-   * nothing here is worth adding to that burst.
+   * immediate - see ARTICLE_SCAN_STARTUP_DELAY_MS for what it is yielding
+   * to. Note the one path where this loop can overlap an archive scan:
+   * signing in after startup runs runInitialScan() from the config
+   * handler while this is already armed. They share the request queue and
+   * these are BACKGROUND priority, so the scan still goes first.
    */
   private startArticleScanLoop() {
     const config = configService.config.dfArticles;
