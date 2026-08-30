@@ -365,16 +365,28 @@ export class DfTaskManager {
       },
       resumeFrom ? { resumeFrom: { stepIndex: resumeFrom.stepIndex, results: resumeFrom.results } } : {}
     );
+    logger.log(
+      "info",
+      `Queued download: "${dfContentInfo.title}" [${mediaInfo.formatString}]${
+        resumeFrom ? ` (resuming from step ${resumeFrom.stepIndex})` : ""
+      } -> ${destination}`
+    );
     serviceLocator.notifier.downloadQueued(dfContentInfo);
     downloadExecution.once("stepTaskStarted", () => {
+      logger.log("info", `Download started: "${dfContentInfo.title}" [${mediaInfo.formatString}]`);
       serviceLocator.notifier.downloadStarting(dfContentInfo, mediaInfo);
     });
     downloadExecution.once("completed", (result) => {
       const notifier = serviceLocator.notifier;
       if (isPipelineExecutionFailedResult(result)) {
+        logger.log("error", `Download failed: "${dfContentInfo.title}"`, result.error);
         notifier.downloadFailed(dfContentInfo, result.error);
         return;
       } else if (isPipelineExecutionSuccessResult(result)) {
+        logger.log(
+          "info",
+          `Download complete: "${dfContentInfo.title}" -> ${result.pipelineResult.downloadLocation}`
+        );
         const finalLocation = result.pipelineResult.downloadLocation;
         notifier.downloadComplete(
           dfContentInfo,
@@ -402,6 +414,13 @@ export class DfTaskManager {
       language,
       subtitleGenerators,
     });
+    const generatorNames = (Array.isArray(subtitleGenerators) ? subtitleGenerators : [subtitleGenerators])
+      .map((generator) => generator.serviceType)
+      .join(", ");
+    logger.log(
+      "info",
+      `Queued subtitle generation: "${dfContentInfo.title}" [${language}] using ${generatorNames || "no services"}`
+    );
     this.addTaskPipelineExecution(subtitleExecution);
     return subtitleExecution;
   }
@@ -423,6 +442,12 @@ export class DfTaskManager {
       articleUrl: opts.articleUrl,
       articleTitle: opts.articleTitle,
     });
+    logger.log(
+      "info",
+      `Queued AI analysis: "${entry.contentInfo.title}" using ${config.model}${
+        opts.articleText ? " (with DF article as grounding)" : " (no article found)"
+      }`
+    );
     this.addTaskPipelineExecution(analysisExecution);
     return analysisExecution;
   }
@@ -543,6 +568,10 @@ export class DfTaskManager {
         { maxConcurrent: BULK_BACKFILL_CONCURRENCY[target] }
       )
     );
+    logger.log(
+      "info",
+      `Queued bulk backfill: ${target} over ${contentKeys.length} item(s)${force ? " (forced)" : ""}`
+    );
     return this.trackTask(task);
   }
 
@@ -564,20 +593,24 @@ export class DfTaskManager {
     }, {
       maxConcurrent: 10,
     }));
+    logger.log("info", `Queued batch move of ${toMove.length} file(s)${overwrite ? " (overwriting)" : ""}`);
     return this.trackTask(fileMoveTask);
   }
 
   clearMissingFiles() {
+    logger.log("info", "Queued clear-missing-files scan");
     const removeMissingFilesTask = this.maintenanceOperationsTaskManager.addTask(ClearMissingFilesTask());
     return this.trackTask(removeMissingFilesTask);
   }
 
   scanForExistingContent(contentManager: DigitalFoundryContentManager) {
+    logger.log("info", "Queued scan for already-downloaded files in the destination directory");
     const scanForExistingContentTask = this.maintenanceOperationsTaskManager.addTask(ScanForExistingContentTask(contentManager));
     return this.trackTask(scanForExistingContentTask);
   }
 
   removeEmptyDirs(dir: string) {
+    logger.log("info", `Queued removal of empty directories under ${dir}`);
     const removeEmptyDirsTask = this.maintenanceOperationsTaskManager.addTask(RemoveEmptyDirsTask(dir));
     return this.trackTask(removeEmptyDirsTask);
   }

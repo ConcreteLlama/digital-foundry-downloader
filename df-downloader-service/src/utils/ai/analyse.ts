@@ -295,6 +295,41 @@ const extractStructuredData = async (
  * and did not work, rather than rendering identically to content nobody
  * has ever analysed.
  */
+/**
+ * Reports the outcome of a run at a glance.
+ *
+ * Worth a line of its own because "analysis succeeded" and "analysis produced
+ * anything useful" are different things - a run can come back clean having
+ * found no tags and no structured data, and without this the log would show
+ * only that it started.
+ */
+const logAnalysisOutcome = (
+  entryKey: string,
+  result: {
+    contentType: string;
+    tags: unknown[];
+    summary?: string | null;
+    structuredData?: unknown;
+    usage?: AiAnalysisUsage;
+  },
+  startedAt: Date
+) => {
+  const produced = [
+    `${result.tags.length} tag(s)`,
+    result.summary ? "summary" : null,
+    result.structuredData ? "structured data" : null,
+  ].filter(Boolean);
+  const tokens = result.usage
+    ? `, ${result.usage.inputTokens} in / ${result.usage.outputTokens} out tokens`
+    : "";
+  logger.log(
+    "info",
+    `AI analysis complete for ${entryKey}: ${result.contentType}, produced ${produced.join(" + ")} in ${
+      Date.now() - startedAt.getTime()
+    }ms${tokens}`
+  );
+};
+
 export const analyseContent = async (config: AiAnalysisConfig, inputs: AnalysisInputs): Promise<AiAnalysisResult> => {
   const started = new Date();
   const base = {
@@ -319,7 +354,7 @@ export const analyseContent = async (config: AiAnalysisConfig, inputs: AnalysisI
       const { parsed, usage } = await callStructured(
         client, config, WireTagOnly, prepared.system, prepared.content, buildTagOnlyInstruction(config)
       );
-      return {
+      const tagOnlyResult = {
         ...base,
         contentType: parsed.contentType,
         contentTypeConfidence: parsed.contentTypeConfidence,
@@ -327,6 +362,8 @@ export const analyseContent = async (config: AiAnalysisConfig, inputs: AnalysisI
         tags: config.features.tagging.enabled ? mapTags(parsed.tags, prepared.evidence, autoApply) : [],
         usage,
       };
+      logAnalysisOutcome(inputs.entry.key, tagOnlyResult, started);
+      return tagOnlyResult;
     }
 
     const { parsed: overview, usage: overviewUsage } = await callStructured(
@@ -344,7 +381,7 @@ export const analyseContent = async (config: AiAnalysisConfig, inputs: AnalysisI
       }
     }
 
-    return {
+    const result = {
       ...base,
       contentType: overview.contentType,
       contentTypeConfidence: overview.contentTypeConfidence,
@@ -357,6 +394,8 @@ export const analyseContent = async (config: AiAnalysisConfig, inputs: AnalysisI
       evidence: prepared.evidence,
       usage,
     };
+    logAnalysisOutcome(inputs.entry.key, result, started);
+    return result;
   } catch (e) {
     const message = e instanceof Error ? e.message : String(e);
     logger.log("error", `AI analysis failed for ${inputs.entry.key}: ${message}`);

@@ -60,6 +60,7 @@ const subtitlesTaskControls: TaskControls<GeneratedSubtitleInfo, SubtitlesTaskCo
     const { subtitleGenerators, dfContentInfo, filePath, language } = context;
     const generators = Array.isArray(subtitleGenerators) ? subtitleGenerators : [subtitleGenerators];
     const failures: string[] = [];
+    const startedAt = Date.now();
     const result = await asyncGetFirstMatch(generators, async (generator) => {
       context.currentSubtitleGenerator = generator;
       logger.log("info", `Generating subs for ${filePath} using ${generator.serviceType}`);
@@ -76,6 +77,15 @@ const subtitlesTaskControls: TaskControls<GeneratedSubtitleInfo, SubtitlesTaskCo
     if (!result) {
       throw new Error(summariseFailure(filePath, generators, failures));
     }
+    // Which service actually produced them matters: several are tried in
+    // priority order and the earlier ones can fail silently from the user's
+    // point of view, so "subtitles appeared" alone does not say what ran.
+    logger.log(
+      "info",
+      `Generated ${language} subs for ${filePath} using ${result.service} in ${Date.now() - startedAt}ms${
+        failures.length ? ` (after ${failures.length} failed generator(s))` : ""
+      }`
+    );
     return {
       status: "success",
       result,

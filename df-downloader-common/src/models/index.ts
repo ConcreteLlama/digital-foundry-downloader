@@ -31,3 +31,4 @@ export * from './df-article.js';
 export * from './game-index.js';
 export * from './platform-comparison.js';
 export * from './bulk-backfill.js';
+export * from "./logs.js";
