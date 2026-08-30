@@ -172,3 +172,47 @@ export const DfArticleUtils = {
     return new Date(state.lastAttemptedAt.getTime() + ARTICLE_RETRY_BACKOFF_MS[backoffIndex]);
   },
 };
+
+
+/**
+ * A video an article embeds, resolved against the library.
+ *
+ * An article records the YouTube ids it embeds; this is that id matched up
+ * with the content this app knows about, so a listing can link to it. An
+ * embedded video the library has never seen simply does not appear here -
+ * Digital Foundry publish plenty that predates or falls outside what has
+ * been scanned.
+ */
+export const DfArticleLinkedVideo = z.object({
+  contentKey: z.string(),
+  title: z.string(),
+  youtubeVideoId: z.string(),
+  /** Whether the file is on disk, so the listing can offer to open it. */
+  downloaded: z.boolean(),
+});
+export type DfArticleLinkedVideo = z.infer<typeof DfArticleLinkedVideo>;
+
+/**
+ * One row of the article listing.
+ *
+ * Built from the metadata cache rather than a fetch: everything here was
+ * already read and kept while matching articles to videos, so browsing the
+ * list costs Digital Foundry nothing.
+ */
+export const DfArticleListingItem = z.object({
+  url: z.string(),
+  slug: z.string(),
+  title: z.string(),
+  author: z.string().optional(),
+  lastmod: z.coerce.date().optional(),
+  cachedAt: z.coerce.date(),
+  /** Every embedded video id, including ones with no match in the library. */
+  videoIds: z.array(z.string()),
+  linkedVideos: z.array(DfArticleLinkedVideo),
+});
+export type DfArticleListingItem = z.infer<typeof DfArticleListingItem>;
+
+export const DfArticleListingResponse = z.object({
+  articles: z.array(DfArticleListingItem),
+});
+export type DfArticleListingResponse = z.infer<typeof DfArticleListingResponse>;

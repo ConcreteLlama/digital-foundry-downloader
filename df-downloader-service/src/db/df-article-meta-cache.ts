@@ -121,6 +121,26 @@ export class DfArticleMetaCache {
     return entry.lastmod.getTime() >= lastmod.getTime();
   }
 
+  /**
+   * Every article this installation has seen, newest first.
+   *
+   * The cache exists to answer "does this page embed that video" without a
+   * fetch, but it incidentally accumulates a record of the articles the app
+   * has encountered - everything the periodic scan has read plus every
+   * candidate weighed during a search. That is not Digital Foundry's whole
+   * archive and should not be presented as one, but it is a real list of
+   * what is known, which is enough to browse.
+   */
+  list(): (DfArticleMeta & { url: string })[] {
+    return Object.entries(this.cache.entries)
+      .map(([url, meta]) => ({ ...meta, url }))
+      .sort((a, b) => {
+        const aTime = (a.lastmod ?? a.cachedAt).getTime();
+        const bTime = (b.lastmod ?? b.cachedAt).getTime();
+        return bTime - aTime;
+      });
+  }
+
   set(url: string, meta: DfArticleMeta): void {
     this.cache.entries[url] = meta;
     this.dirty = true;

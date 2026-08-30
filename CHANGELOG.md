@@ -40,6 +40,11 @@ Downloads also play in the app itself now. Press the still at the top of a downl
   - This is cheap in a way that searching per video is not. It reads each new article once instead of asking the site about every video you own, which works out at a handful of requests a day
   - On a new install it only considers the last week, so setting the app up does not kick off a long crawl. Going back through older content is the Backfill tool's job, where it tells you what that costs first
   - Turn it off, or change how often it looks and how much it reads at a time, under Settings then DF Articles
+- An Articles page, under Analysis
+  - Every Digital Foundry article the app knows about, newest first, each linking out to the piece itself and to whichever of your videos it covers - click one to open that video
+  - Videos you have downloaded are marked, so it doubles as a way to see which written companions you have the video for
+  - This is what the app has come across rather than everything Digital Foundry have published: the pieces it read while checking for new ones, plus any it weighed up while looking for a video's companion article. The page says so rather than implying it is the full archive
+  - Costs nothing to browse - it reads what was already stored while matching articles to videos, so opening it never asks Digital Foundry for anything
 - A new Analysis section, reading across everything you have analysed
   - Platform comparisons: every analysed console face-off side by side, with Digital Foundry's own recommendation quoted against each
   - Filter it to the platforms you care about - the rows and the columns both narrow, so picking two consoles gives you those two beside each other instead of hiding among eight
@@ -84,6 +89,10 @@ Downloads also play in the app itself now. Press the still at the top of a downl
   - Instead of a black rectangle you are told this machine has no decoder for the video, along with where the file is, so you can open it in a real player or through your media server
   - The check asks your browser what it can actually decode rather than assuming from the format, so an HEVC download is not refused on a machine that plays it perfectly well
 ### Enhancements
+- The backfill list is easier to work through
+  - A "needs work only" switch hides everything already done, which is most of the list once you have been through it once
+  - "Select page" adds just the page you are looking at, alongside the existing buttons that select the whole filtered set - selection still adds up across pages
+  - On a phone each row now stacks instead of scrolling sideways, so the title, date and status are all visible at once
 - Subtitles can now be written both ways at once
   - The output setting gains a both option, alongside auto, embed and sidecar: it writes the subtitles into the video and keeps the .srt next to it
   - Previously this was a choice. Embedded subtitles travel with the file to a media server, while the separate .srt is the one the in-app player can read - wanting both meant generating twice
@@ -111,6 +120,9 @@ Downloads also play in the app itself now. Press the still at the top of a downl
   - The file is capped and rotates, so it cannot quietly fill the disk on a long-running install
 - Picking items in the Backfill list stays responsive with a few thousand of them, and the list is paged rather than cut short - the selection and the select-all buttons still apply across every page
 ### Bug Fixes
+- Starting one kind of backfill no longer stalls behind another
+  - Backfills of different kinds shared a single slot, so starting a subtitles run while articles were being matched put it in a queue behind hours of work and it looked like nothing had happened
+  - They use different things - matching articles waits on Digital Foundry, transcribing uses your processor, analysing calls the AI - so they now run alongside each other. Two runs of the same kind still queue, which is the case that genuinely competes
 - Thumbnails are sharp again everywhere they are shown large
   - Every thumbnail was being fetched at 300 pixels wide and then stretched to fit, so anywhere one was shown big - the top of a video's panel, the still behind the player before you press play - it was soft and blocky
   - The app had been asking for a larger image all along; the request was being quietly discarded because it was written for the address format Digital Foundry's old site used, and every thumbnail now comes from the new one

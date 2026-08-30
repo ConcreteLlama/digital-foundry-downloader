@@ -112,6 +112,7 @@ export abstract class DfDownloaderOperationalDb {
    */
   abstract getDfArticleMeta(url: string): DfArticleMeta | undefined;
   abstract isDfArticleMetaFresh(url: string, lastmod?: Date): boolean;
+  abstract listDfArticleMeta(): (DfArticleMeta & { url: string })[];
   abstract setDfArticleMeta(url: string, meta: DfArticleMeta): void;
   /** How far the periodic article scan has read. Undefined until it first runs. */
   abstract getDfArticleScanCursor(): Date | undefined;

@@ -172,6 +172,9 @@ export class DfFileOperationalDb extends DfDownloaderOperationalDb {
     isDfArticleMetaFresh(url: string, lastmod?: Date) {
         return this.dfArticleMetaCache.isFresh(url, lastmod);
     }
+    listDfArticleMeta() {
+        return this.dfArticleMetaCache.list();
+    }
     setDfArticleMeta(url: string, meta: DfArticleMeta) {
         this.dfArticleMetaCache.set(url, meta);
     }
