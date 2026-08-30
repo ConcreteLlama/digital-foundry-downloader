@@ -116,6 +116,7 @@ export const makeDfArticlesRouter = (contentManager: DigitalFoundryContentManage
               title: entry.contentInfo.title,
               youtubeVideoId: videoId ?? entry.contentInfo.youtubeVideoId ?? "",
               downloaded: (entry.downloads ?? []).length > 0,
+              thumbnailUrl: entry.contentInfo.thumbnailUrl || undefined,
             });
           };
           // Confirmed companions first - those are matches this app made and

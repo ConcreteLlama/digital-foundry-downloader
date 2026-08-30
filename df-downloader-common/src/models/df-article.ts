@@ -189,6 +189,11 @@ export const DfArticleLinkedVideo = z.object({
   youtubeVideoId: z.string(),
   /** Whether the file is on disk, so the listing can offer to open it. */
   downloaded: z.boolean(),
+  /**
+   * The video's own thumbnail, unsized - the client asks for the dimensions
+   * it will draw at (see DfContentInfoUtils.thumbnailUrlToSize).
+   */
+  thumbnailUrl: z.string().optional(),
 });
 export type DfArticleLinkedVideo = z.infer<typeof DfArticleLinkedVideo>;
 
