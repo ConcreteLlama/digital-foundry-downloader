@@ -20,6 +20,21 @@ export const ContentItemDetailContainer = styled(Paper)(({ theme }) => ({
   // tables used to do exactly that.
   maxWidth: "100%",
   overflowX: "hidden",
+  /*
+    A definite width, not one derived from the content.
+    
+    The modal shrink-wraps whatever it is given, so without this the panel
+    was as wide as whichever tab happened to be open - and the tabs differ a
+    lot, so switching between them resized the dialog under the cursor. The
+    same complaint as the height, on the other axis: sized to the widest
+    thing it has to hold, and then left alone.
+
+    Capped against the viewport so it can still fit a small window, and only
+    from sm up - below that the modal is deliberately full-bleed.
+  */
+  [theme.breakpoints.up("sm")]: {
+    width: "min(1100px, 94vw)",
+  },
   [theme.breakpoints.down("md")]: {
     padding: theme.spacing(2),
     paddingTop: theme.spacing(1.5),
