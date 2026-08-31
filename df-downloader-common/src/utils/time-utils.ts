@@ -48,9 +48,15 @@ const DURATION_UNITS: [suffix: string, ms: number][] = [
 /**
  * Milliseconds as the shortest thing a person would actually say.
  *
- * At most two parts, largest first: "12h", "1d", "1h 30m". Three would be
- * technically truer and harder to read, and these are intervals rather than
- * stopwatch readings - nobody sets a poll to 1h 30m 20s on purpose.
+ * Every non-zero part, largest first: "12h", "1d", "1h 30m", and "1h 1m 1s"
+ * for a value that genuinely is that.
+ *
+ * An earlier version capped this at two parts, on the grounds that nobody
+ * sets a poll to 1h 30m 20s deliberately. That was wrong in a way that
+ * matters here: this text is what a settings field shows for a stored value,
+ * so a truncated rendering states a value the config does not hold, and
+ * anything that re-commits the displayed text writes the truncation back.
+ * Exactness beats brevity when the string has to survive a round trip.
  */
 export const formatDurationMs = (ms: number): string => {
   if (!Number.isFinite(ms)) {
@@ -63,7 +69,7 @@ export const formatDurationMs = (ms: number): string => {
   let remaining = Math.abs(ms);
   const parts: string[] = [];
   for (const [suffix, size] of DURATION_UNITS) {
-    if (remaining < size || parts.length === 2) {
+    if (remaining < size) {
       continue;
     }
     const count = Math.floor(remaining / size);
