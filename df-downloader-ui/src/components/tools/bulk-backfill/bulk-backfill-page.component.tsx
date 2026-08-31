@@ -219,14 +219,6 @@ export const BulkBackfillPage = () => {
   const selectable = useMemo(() => filtered.filter(isSelectable), [filtered, isSelectable]);
   const visibleSelectable = useMemo(() => visible.filter(isSelectable), [visible, isSelectable]);
 
-  // Force is deliberately not a factor - see isMissing. This counts what
-  // is missing the thing, which is a useful subset to select whether or
-  // not re-running is on.
-  const missing = useMemo(
-    () => filtered.filter((candidate) => isMissing(candidate, target, workingKeys.has(candidate.contentKey))),
-    [filtered, target, workingKeys]
-  );
-
   /**
    * The selected items the run would actually do something with.
    *
@@ -385,32 +377,24 @@ export const BulkBackfillPage = () => {
               label="Needs work only"
               sx={{ marginLeft: 0, "& .MuiFormControlLabel-label": { fontSize: "0.8125rem" } }}
             />
-            {/* With re-run off this would be identical to "Select all needed"
-                beside it - two buttons, same count, same effect. It only says
-                something different once re-run widens what the others take. */}
-            {force && (
-              <Button
-                size="small"
-                variant="outlined"
-                disabled={missing.length === 0}
-                onClick={() => setSelected(new Set(missing.map((candidate) => candidate.contentKey)))}
-              >
-                Select all missing ({missing.length})
-              </Button>
-            )}
+            {/* Two buttons, not three: the same pair means different things
+                depending on re-run, so they say which. With it off they can
+                only take what is missing, because that is all the run would
+                act on; with it on they take everything they are offered. */}
             <Button
               size="small"
+              variant="outlined"
               disabled={selectable.length === 0}
               onClick={() => setSelected(new Set(selectable.map((candidate) => candidate.contentKey)))}
             >
-              {force ? "Select all" : "Select all needed"} ({selectable.length})
+              {force ? "Select all" : "Select all missing"} ({selectable.length})
             </Button>
             <Button
               size="small"
               disabled={visibleSelectable.length === 0}
               // Adds rather than replaces: selection deliberately accumulates
               // across pages, so this is for building one up a page at a time
-              // where the two buttons above act on the whole filtered set.
+              // where the button beside it acts on the whole filtered set.
               onClick={() =>
                 setSelected((previous) => {
                   const next = new Set(previous);
@@ -421,7 +405,7 @@ export const BulkBackfillPage = () => {
                 })
               }
             >
-              {force ? "Select page" : "Select page needed"} ({visibleSelectable.length})
+              {force ? "Select all on page" : "Select missing on page"} ({visibleSelectable.length})
             </Button>
             <Button size="small" disabled={selected.size === 0} onClick={() => setSelected(new Set())}>
               Clear
