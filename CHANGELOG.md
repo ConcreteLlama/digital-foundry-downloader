@@ -146,6 +146,7 @@ Downloads also play in the app itself now. Press the still at the top of a downl
   - An install left running could therefore sit there not picking up new videos, and appear to start working properly only because it had been restarted
   - The periodic checks are now started straight away. They still wait for the scan of the archive itself, which is the one thing they genuinely need in place first, but no longer for the slow work that follows it
 ### Security
+- Updated a bundled library that had a reported flaw in how it writes a generated identifier into a buffer. Nothing here ever called it that way, so this was not exploitable in practice - it is updated so the app does not ship a known-vulnerable version at all
 - Reading a file's embedded metadata now only works for files this app actually downloaded. It previously trusted the filename it was handed, so a signed-in user could have pointed it at any file on the machine and read its details back. The app itself only ever sent a real download, so nothing changes about how it is used
 ### Known Issues
 - Analysis needs something to read
