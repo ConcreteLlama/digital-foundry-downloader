@@ -10,7 +10,8 @@ import {
   DfContentInfoQueryParams,
   DfTagInfo,
   DfUserInfo,
-  UserInfo
+  UserInfo,
+  AiCostLogEntry,
 } from "df-downloader-common";
 import { DfContentDownloadInfo, DfContentSubtitleInfo } from "df-downloader-common/models/df-content-download-info.js";
 
@@ -96,6 +97,13 @@ export abstract class DfDownloaderOperationalDb {
   /** Synchronous: the index is held in memory precisely so list views can ask per row. */
   abstract getAiAnalysisIndex(): Record<string, AiAnalysisIndexEntry>;
   abstract getAiAnalysisIndexEntry(contentName: string): AiAnalysisIndexEntry | undefined;
+  /**
+   * Every analysis run ever recorded, and what it cost.
+   *
+   * Distinct from the stored analyses: those are replaced by a re-run, this is
+   * not - see AiCostLog.
+   */
+  abstract getAiCostLog(): { entries: AiCostLogEntry[]; startedAt: Date; costUsd: number; runCount: number };
   /** Every stored analysis, for cross-content views. Cached in the store - see AiAnalysisStore. */
   abstract getAllAiAnalysisResults(): Promise<{ contentKey: string; result: AiAnalysisResult }[]>;
   abstract setDfArticleLookup(state: DfArticleLookupState): Promise<void>;

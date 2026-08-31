@@ -82,12 +82,22 @@ export const CostsPage = () => {
 
       <Paper sx={{ padding: 2 }}>
         <Stack direction="row" spacing={3} sx={{ alignItems: "baseline", flexWrap: "wrap" }} useFlexGap>
+          {/* Leads, because it is the question people actually mean. The
+              figure beside it answers a different one and says so. */}
           <Box>
             <Typography sx={{ ...numberSx, fontSize: "1.75rem", lineHeight: 1.1 }}>
+              {formatTotal(ledger.lifetimeCostUsd)}
+            </Typography>
+            <Typography variant="caption" sx={{ display: "block", color: "text.disabled" }}>
+              spent across {ledger.lifetimeRunCount} {ledger.lifetimeRunCount === 1 ? "run" : "runs"}
+            </Typography>
+          </Box>
+          <Box>
+            <Typography sx={{ ...numberSx, fontSize: "1.25rem", lineHeight: 1.1, color: "text.secondary" }}>
               {formatTotal(ledger.totalCostUsd)}
             </Typography>
-            <Typography variant="caption" sx={{ color: "text.disabled" }}>
-              across {ledger.runCount} analysed {ledger.runCount === 1 ? "item" : "items"}
+            <Typography variant="caption" sx={{ display: "block", color: "text.disabled" }}>
+              to produce the {ledger.runCount} {ledger.runCount === 1 ? "analysis" : "analyses"} you hold
             </Typography>
           </Box>
           <Stack direction="row" spacing={1} sx={{ flexWrap: "wrap" }} useFlexGap>
@@ -102,11 +112,13 @@ export const CostsPage = () => {
             ))}
           </Stack>
         </Stack>
-        {/* Said plainly rather than left for someone to discover by adding
-            the rows up against a bill that does not match. */}
+        {/* Both figures explained, since two totals with different values is
+            otherwise the sort of thing that reads as a bug. */}
         <Typography variant="caption" sx={{ display: "block", marginTop: 1.5, color: "text.disabled" }}>
-          Re-analysing an item replaces its stored result, so this counts the analyses you hold now rather than
-          everything ever spent.
+          The two differ because re-analysing an item replaces its stored result: the run was charged for, and the
+          result it produced is gone. Spend is recorded from{" "}
+          {ledger.lifetimeFrom ? conciseFormatDate(ledger.lifetimeFrom) : "when this log began"} - anything analysed
+          before that counts in the figure on the right but not the one on the left.
         </Typography>
         {ledger.runsWithoutCost > 0 && (
           <Typography variant="caption" sx={{ display: "block", marginTop: 1.5, color: "text.disabled" }}>

@@ -62,7 +62,16 @@ export const buildCostLedger = async (db: DfDownloaderOperationalDb): Promise<Ai
   // Newest first: the run you just paid for is the one you came to look at.
   ledger.sort((a, b) => b.analysedAt.getTime() - a.analysedAt.getTime());
 
+  // The other question entirely: what has been spent, rather than what the
+  // analyses currently held cost to make. A re-analysed item appears in the
+  // log twice because it was charged twice, and appears above once because
+  // only one result survived.
+  const costLog = db.getAiCostLog();
+
   return {
+    lifetimeCostUsd: costLog.costUsd,
+    lifetimeRunCount: costLog.runCount,
+    lifetimeFrom: costLog.startedAt,
     entries: ledger,
     totalCostUsd,
     runCount: ledger.length,

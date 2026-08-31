@@ -6,6 +6,7 @@ import { DfContentInfoDb } from "./file-dbs/content-info-db.js";
 import { DfContentAvailabilityDb } from "./file-dbs/content-status-db.js";
 import { DfUserDb } from "./file-dbs/user-db.js";
 import { AiAnalysisStore } from "./ai-analysis-store.js";
+import { AiCostLog } from "./ai-cost-log.js";
 import { DfArticleStore } from "./df-article-store.js";
 import { DfArticleMeta, DfArticleMetaCache } from "./df-article-meta-cache.js";
 
@@ -46,9 +47,10 @@ export class DfFileOperationalDb extends DfDownloaderOperationalDb {
         const aiAnalysisStore = await AiAnalysisStore.create(dbDir);
         const dfArticleStore = await DfArticleStore.create(dbDir);
         const dfArticleMetaCache = await DfArticleMetaCache.create(dbDir);
-        return new DfFileOperationalDb(contentInfoDb, userDb, contentStatusDb, aiAnalysisStore, dfArticleStore, dfArticleMetaCache);
+        const aiCostLog = await AiCostLog.create(dbDir);
+        return new DfFileOperationalDb(contentInfoDb, userDb, contentStatusDb, aiAnalysisStore, dfArticleStore, dfArticleMetaCache, aiCostLog);
     }
-    private constructor(private readonly contentInfoDb: DfContentInfoDb, private readonly userDb: DfUserDb, private readonly contentStatusDb: DfContentAvailabilityDb, private readonly aiAnalysisStore: AiAnalysisStore, private readonly dfArticleStore: DfArticleStore, private readonly dfArticleMetaCache: DfArticleMetaCache) {
+    private constructor(private readonly contentInfoDb: DfContentInfoDb, private readonly userDb: DfUserDb, private readonly contentStatusDb: DfContentAvailabilityDb, private readonly aiAnalysisStore: AiAnalysisStore, private readonly dfArticleStore: DfArticleStore, private readonly dfArticleMetaCache: DfArticleMetaCache, private readonly aiCostLog: AiCostLog) {
         super();
     }
     async init() {
@@ -141,9 +143,24 @@ export class DfFileOperationalDb extends DfDownloaderOperationalDb {
     async setAiAnalysis(contentName: string, aiAnalysis: AiAnalysisResult | undefined) {
         if (aiAnalysis) {
             await this.aiAnalysisStore.set(contentName, aiAnalysis);
+            // Recorded here because every path that stores an analysis comes
+            // through here - a bulk run, a manual one, the automatic one after
+            // a download - so there is nowhere else it can be missed from. The
+            // log itself ignores a run it has already seen, which is what
+            // makes re-saving the same result harmless.
+            const title = (await this.getContentEntry(contentName))?.contentInfo.title;
+            await this.aiCostLog.record(contentName, aiAnalysis, title);
         } else {
             await this.aiAnalysisStore.remove(contentName);
         }
+    }
+
+    getAiCostLog() {
+        return {
+            entries: this.aiCostLog.list(),
+            startedAt: this.aiCostLog.startedAt(),
+            ...this.aiCostLog.total(),
+        };
     }
     async getAiAnalysis(contentName: string) {
         return this.aiAnalysisStore.get(contentName);
