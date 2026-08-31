@@ -67,6 +67,29 @@ export const isMissing = (
   }
 };
 
+/**
+ * What the analysis will have to work from, beyond the title and description
+ * it always has.
+ *
+ * Both matter to the result rather than being trivia: a transcript is what
+ * lets it quote what was actually said, and an article is written rather than
+ * transcribed, so its product names and figures are right where speech-to-text
+ * garbles exactly those. An item with neither can still be analysed, but from
+ * a title alone - which is worth seeing before choosing three hundred of them.
+ *
+ * "Subtitles" here means a subtitle file this app knows about. Analysis can
+ * also pull a transcript out of a video that carries one internally, which
+ * nothing recorded against the content would show - so this can understate
+ * what is available, never overstate it.
+ */
+export const analysisSourcesFor = (candidate: BulkBackfillCandidate) => {
+  const sources = [
+    candidate.hasSubtitles ? "transcript" : undefined,
+    candidate.hasArticle ? "article" : undefined,
+  ].filter(Boolean) as string[];
+  return { sources, count: sources.length };
+};
+
 /** Why an item already in the selection would be passed over. */
 export const SKIP_REASONS: Record<BulkBackfillTarget, string> = {
   subtitles: "they already have subtitles",
@@ -124,6 +147,25 @@ type BackfillRowProps = {
  * `selected` is a boolean rather than the selection Set, whose identity
  * changes on every toggle and would defeat the comparison entirely.
  */
+const SourcesLabel = ({ candidate }: { candidate: BulkBackfillCandidate }) => {
+  const { sources, count } = analysisSourcesFor(candidate);
+  return (
+    <Typography
+      variant="caption"
+      sx={{
+        flexShrink: 0,
+        whiteSpace: "nowrap",
+        fontSize: "0.68rem",
+        // Nothing to work from is the case worth noticing, so it is the only
+        // one that gets a colour.
+        color: count ? "text.disabled" : "warning.main",
+      }}
+    >
+      {count ? `${count} source${count === 1 ? "" : "s"}: ${sources.join(", ")}` : "title only"}
+    </Typography>
+  );
+};
+
 const StatusChip = ({ status }: { status: ReturnType<typeof statusFor> }) => (
   <Chip
     size="small"
@@ -180,6 +222,7 @@ const BackfillStackedRow = memo(({ candidate, target, selected, working, onToggl
             {conciseFormatDate(candidate.publishedDate)}
           </Typography>
           <StatusChip status={status} />
+          {target === "ai_analysis" && <SourcesLabel candidate={candidate} />}
         </Stack>
       </Box>
     </Stack>
@@ -212,7 +255,10 @@ const BackfillRow = memo(({ candidate, target, selected, working, onToggle }: Ba
         </Typography>
       </GridCell>
       <GridCell>
-        <StatusChip status={status} />
+        <Stack direction="row" spacing={1} sx={{ alignItems: "center" }}>
+          <StatusChip status={status} />
+          {target === "ai_analysis" && <SourcesLabel candidate={candidate} />}
+        </Stack>
       </GridCell>
     </GridRow>
   );

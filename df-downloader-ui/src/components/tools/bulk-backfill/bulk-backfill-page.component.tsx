@@ -111,6 +111,15 @@ export const BulkBackfillPage = () => {
   // Narrowing to what still needs doing is the common case - the list is
   // otherwise mostly rows that are already done and cannot be actioned.
   const [onlyNeedsWork, setOnlyNeedsWork] = useState(false);
+  /**
+   * Narrow to what the analysis will have something to work from.
+   *
+   * Analysis-only, because they are about the quality of the result rather
+   * than whether the action applies: transcribing does not care whether there
+   * is an article, and matching an article does not care about subtitles.
+   */
+  const [onlyWithSubs, setOnlyWithSubs] = useState(false);
+  const [onlyWithArticle, setOnlyWithArticle] = useState(false);
   const [page, setPage] = useState(0);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [confirmOpen, setConfirmOpen] = useState(false);
@@ -216,12 +225,20 @@ export const BulkBackfillPage = () => {
     if (onlyNeedsWork) {
       list = list.filter((candidate) => isMissing(candidate, target, workingKeys.has(candidate.contentKey)));
     }
+    // Only meaningful for analysis, and left inert elsewhere rather than
+    // quietly filtering a list whose controls are not on screen.
+    if (target === "ai_analysis" && onlyWithSubs) {
+      list = list.filter((candidate) => candidate.hasSubtitles);
+    }
+    if (target === "ai_analysis" && onlyWithArticle) {
+      list = list.filter((candidate) => candidate.hasArticle);
+    }
     return list;
-  }, [candidates, filterText, onlyNeedsWork, target, workingKeys]);
+  }, [candidates, filterText, onlyNeedsWork, onlyWithSubs, onlyWithArticle, target, workingKeys]);
 
   useEffect(() => {
     setPage(0);
-  }, [filterText, target, onlyNeedsWork]);
+  }, [filterText, target, onlyNeedsWork, onlyWithSubs, onlyWithArticle]);
 
   const pageCount = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
   // Clamped rather than reset: narrowing the filter can leave the current
@@ -448,6 +465,28 @@ export const BulkBackfillPage = () => {
               label="Needs work only"
               sx={{ marginLeft: 0, "& .MuiFormControlLabel-label": { fontSize: "0.8125rem" } }}
             />
+            {target === "ai_analysis" && (
+              <>
+                <FormControlLabel
+                  control={
+                    <Switch size="small" checked={onlyWithSubs} onChange={(e) => setOnlyWithSubs(e.target.checked)} />
+                  }
+                  label="Has subtitles"
+                  sx={{ marginLeft: 0, "& .MuiFormControlLabel-label": { fontSize: "0.8125rem" } }}
+                />
+                <FormControlLabel
+                  control={
+                    <Switch
+                      size="small"
+                      checked={onlyWithArticle}
+                      onChange={(e) => setOnlyWithArticle(e.target.checked)}
+                    />
+                  }
+                  label="Has article"
+                  sx={{ marginLeft: 0, "& .MuiFormControlLabel-label": { fontSize: "0.8125rem" } }}
+                />
+              </>
+            )}
             {/* Two buttons, not three: the same pair means different things
                 depending on re-run, so they say which. With it off they can
                 only take what is missing, because that is all the run would
