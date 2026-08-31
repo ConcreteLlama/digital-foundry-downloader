@@ -470,7 +470,7 @@ export class DfTaskManager {
    * run with settings that differ from the saved ones - which is what the
    * "analyse with a different model" path in the UI needs.
    */
-  analyseContent(entry: DfContentEntry, config: AiAnalysisConfig, opts: { chapters?: Chapter[]; articleText?: string; articleUrl?: string; articleTitle?: string; backfillJobId?: string } = {}) {
+  analyseContent(entry: DfContentEntry, config: AiAnalysisConfig, opts: { chapters?: Chapter[]; articleText?: string; articleUrl?: string; articleTitle?: string; backfillJobId?: string; force?: boolean } = {}) {
     const analysisExecution = this.aiAnalysisTaskPipeline.start({
       dfContentInfo: entry.contentInfo,
       entry,
@@ -480,6 +480,7 @@ export class DfTaskManager {
       articleUrl: opts.articleUrl,
       articleTitle: opts.articleTitle,
       backfillJobId: opts.backfillJobId,
+      force: opts.force,
     });
     logger.log(
       "info",
@@ -577,19 +578,26 @@ export class DfTaskManager {
    * result, so a bulk run that skipped it would produce systematically
    * worse analyses than analysing the same items one at a time.
    */
-  private async runAnalysisForContent(contentKey: string, config: AiAnalysisConfig) {
+  private async runAnalysisForContent(contentKey: string, config: AiAnalysisConfig, backfillJobId?: string, force?: boolean) {
     const db = serviceLocator.db;
     const entry = await db.getContentEntry(contentKey);
     if (!entry) {
       throw new Error(`Content ${contentKey} not found`);
     }
     const article = await ensureArticleForContent(db, entry.contentInfo).catch(() => undefined);
-    const execution = this.analyseContent(entry, config, {
+    // Queued and left to the queue, as the subtitle path is, so a run's items
+    // are all visible at once rather than one at a time.
+    //
+    // Safe to do here now: the analysis task re-checks immediately before
+    // spending anything, so an item that gets analysed while it waits its turn
+    // is not paid for twice. That check is what kept this awaiting.
+    this.analyseContent(entry, config, {
       articleText: article?.text,
       articleUrl: article?.url,
       articleTitle: article?.title,
+      backfillJobId,
+      force,
     });
-    await this.awaitPipeline(execution, `Analysis of ${entry.contentInfo.title}`);
     return "analysed";
   }
 
@@ -619,7 +627,7 @@ export class DfTaskManager {
             if (!config) {
               return Promise.reject(new Error("AI analysis is not configured"));
             }
-            return this.runAnalysisForContent(contentKey, config);
+            return this.runAnalysisForContent(contentKey, config, jobId, force);
           },
         },
         { maxConcurrent: BULK_BACKFILL_CONCURRENCY[target] }

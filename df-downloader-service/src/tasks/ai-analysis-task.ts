@@ -6,6 +6,7 @@ import { TaskControllerTaskBuilder, TaskControls } from "../task-manager/task/ta
 import { TaskManager, TaskManagerOpts } from "../task-manager/task-manager.js";
 import { Chapter } from "../utils/chatpers.js";
 import { analyseContent } from "../utils/ai/analyse.js";
+import { serviceLocator } from "../services/service-locator.js";
 
 type AiAnalysisTaskContext = {
   entry: DfContentEntry;
@@ -20,11 +21,43 @@ type AiAnalysisTaskContext = {
   transcriptLines?: SrtLine[];
   /** Set as the run progresses, purely so the UI can say what it is doing. */
   stage?: string;
+  /**
+   * Re-analyse even if there is already a result.
+   *
+   * Read at the moment the task runs rather than when it was queued, which is
+   * the whole point of it being here - see the check in start().
+   */
+  force?: boolean;
 };
 
 const aiAnalysisTaskControls: TaskControls<AiAnalysisResult, AiAnalysisTaskContext> = {
   start: async (context: AiAnalysisTaskContext) => {
     const { entry, config, chapters, articleText, articleUrl, articleTitle, transcriptText, transcriptLines } = context;
+    /*
+     * Checked here, immediately before spending money, rather than when this
+     * was queued.
+     *
+     * A bulk run queues every item at once so they are all visible, which
+     * means an item can sit in the queue for a long time - long enough for an
+     * automatic run after a download, or someone pressing analyse by hand, to
+     * have already done it. The check at queue time cannot see that, and the
+     * cost of getting it wrong is a second charge for an identical result.
+     *
+     * Returns what is already stored rather than inventing a skipped outcome:
+     * it is true, it costs nothing, and it cannot quietly leave the caller
+     * with no analysis at all.
+     */
+    if (!context.force) {
+      const existing = await serviceLocator.db.getAiAnalysis(entry.contentInfo.key);
+      if (existing && !existing.error) {
+        logger.log(
+          "info",
+          `Skipping analysis of ${entry.key} - it was analysed while this was queued`
+        );
+        context.stage = "Already analysed";
+        return { status: "success", result: existing };
+      }
+    }
     context.stage = "Analysing";
     logger.log("info", `Analysing ${entry.key} with ${config.model}`);
     const result = await analyseContent(config, { entry, chapters, articleText, articleUrl, articleTitle, transcriptText, transcriptLines });
