@@ -6,6 +6,7 @@ import { Box, IconButton, Stack, Tooltip, Typography, useMediaQuery, useTheme } 
 import { useEffect, useRef, useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import { controlAllTasks } from "../../api/tasks.ts";
+import { BasicDialog } from "../../components/general/basic-dialog.component.tsx";
 import { TaskList } from "../../components/tasks/task-list.component.tsx";
 import { triggerSnackbar } from "../../utils/snackbar.tsx";
 import { queryConfigSection, updateConfigSection } from "../../store/config/config.action.ts";
@@ -83,6 +84,14 @@ const DownloadsPageHeader = () => {
    * the result says what actually took rather than claiming everything did.
    */
   const [bulkBusy, setBulkBusy] = useState(false);
+  /**
+   * Confirmed first, because it reaches everything at once.
+   *
+   * One dialog rather than two: the wording is the only difference, and a
+   * pending action reads better than a pair of booleans that must never both
+   * be true.
+   */
+  const [pendingAction, setPendingAction] = useState<"pause" | "resume" | null>(null);
   const runBulk = async (action: "pause" | "resume") => {
     setBulkBusy(true);
     try {
@@ -109,6 +118,21 @@ const DownloadsPageHeader = () => {
       setBulkBusy(false);
     }
   };
+  const confirmCopy = {
+    pause: {
+      title: "Pause everything",
+      // Says what it cannot do as well as what it can - the alternative is a
+      // dialog that promises more than the button delivers.
+      content:
+        "Anything that can be paused stops where it is until you resume it. Work that cannot stop part-way - transcription and most post-processing - carries on regardless, and you will be told how much was left running.",
+      confirmButtonText: "Pause all",
+    },
+    resume: {
+      title: "Resume everything",
+      content: "Everything paused starts again, in queue order.",
+      confirmButtonText: "Resume all",
+    },
+  } as const;
   return (
     <Box
       sx={{
@@ -123,18 +147,33 @@ const DownloadsPageHeader = () => {
         borderColor: "divider",
       }}
     >
+      <BasicDialog
+        id="control-all-dialog"
+        open={pendingAction !== null}
+        onClose={() => setPendingAction(null)}
+        title={pendingAction ? confirmCopy[pendingAction].title : ""}
+        content={pendingAction ? confirmCopy[pendingAction].content : ""}
+        confirmButtonText={pendingAction ? confirmCopy[pendingAction].confirmButtonText : ""}
+        onConfirm={() => {
+          const action = pendingAction;
+          setPendingAction(null);
+          if (action) {
+            void runBulk(action);
+          }
+        }}
+      />
       <Typography variant="overline">Queue</Typography>
       <Stack direction="row" spacing={1} sx={{ alignItems: "center" }}>
         <Tooltip title="Pause everything that can be paused">
           <span>
-            <IconButton size="small" disabled={bulkBusy} onClick={() => void runBulk("pause")} aria-label="Pause all">
+            <IconButton size="small" disabled={bulkBusy} onClick={() => setPendingAction("pause")} aria-label="Pause all">
               <PauseIcon fontSize="small" />
             </IconButton>
           </span>
         </Tooltip>
         <Tooltip title="Resume everything that was paused">
           <span>
-            <IconButton size="small" disabled={bulkBusy} onClick={() => void runBulk("resume")} aria-label="Resume all">
+            <IconButton size="small" disabled={bulkBusy} onClick={() => setPendingAction("resume")} aria-label="Resume all">
               <PlayArrowIcon fontSize="small" />
             </IconButton>
           </span>
