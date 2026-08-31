@@ -29,7 +29,7 @@ import { DigitalFoundryContentManager } from "../../df-content-manager.js";
 import { DfFetchPriority, getDfRequestQueueStatus } from "../../df-request-queue.js";
 import { sanitizeContentName } from "../../utils/df-utils.js";
 import { extractMediaMeta } from "../../utils/media-metadata.js";
-import { queryParamToInteger, queryParamToString, queryParamToStringArray } from "../../utils/query-utils.js";
+import { queryParamToInteger, queryParamToString, queryParamToStringArray, queryParamToBoolean } from "../../utils/query-utils.js";
 import { ServiceContentUtils } from "../../utils/service-content-utils.js";
 import { sendError, sendErrorAsResponse, sendResponse, zodParseHttp } from "../utils/utils.js";
 
@@ -195,6 +195,7 @@ export const makeContentApiRouter = (contentManager: DigitalFoundryContentManage
     const tags = queryParamToStringArray(query.tags);
     const search = queryParamToString(query.search);
     const tagMode = (queryParamToString(query.tagMode) || "or").toLowerCase() === "and" ? "and" : "or";
+    const downloadedOnly = queryParamToBoolean(query.downloadedOnly);
     const result = await contentManager.db.query({
       page,
       limit,
@@ -202,6 +203,7 @@ export const makeContentApiRouter = (contentManager: DigitalFoundryContentManage
       tags,
       search,
       tagMode,
+      downloadedOnly,
     });
     const response: DfContentQueryResponse = {
       params: result.params,

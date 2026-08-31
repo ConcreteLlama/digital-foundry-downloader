@@ -208,12 +208,12 @@ export class DfFileOperationalDb extends DfDownloaderOperationalDb {
     }
 
     async doQuery(params: DfContentInfoQueryParams) {
-        let { page, limit, search, tags, tagMode, availability, sortBy, sortDirection } = params;
+        let { page, limit, search, tags, tagMode, availability, downloadedOnly, sortBy, sortDirection } = params;
         tags = tags?.map((tag) => tag.toLowerCase());
         search = search?.toLowerCase();
         const allContentEntries = await this.getAllContentEntries();
         const filtered =
-            search || tags || availability
+            search || tags || availability || downloadedOnly
                 ? allContentEntries.filter((contentEntry) => {
                     if (search) {
                         if (!contentEntry.contentInfo.title.toLowerCase().includes(search)) {
@@ -237,10 +237,18 @@ export class DfFileOperationalDb extends DfDownloaderOperationalDb {
                             }
                         }
                     }
-                    if (status) {
-                        if (!status.includes(contentEntry.statusInfo.availability)) {
+                    // `status` here was a typo for the destructured
+                    // `availability`, and it type-checked only because the DOM
+                    // lib declares a global of that name - in node it is a
+                    // ReferenceError, so every search, tag or availability
+                    // query threw rather than filtering.
+                    if (availability) {
+                        if (!availability.includes(contentEntry.statusInfo.availability)) {
                             return false;
                         }
+                    }
+                    if (downloadedOnly && !DfContentEntryUtils.hasDownload(contentEntry)) {
+                        return false;
                     }
                     return true;
                 })

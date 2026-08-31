@@ -1,3 +1,4 @@
+import DownloadDoneIcon from "@mui/icons-material/DownloadDone";
 import GridViewIcon from "@mui/icons-material/GridView";
 import ViewListIcon from "@mui/icons-material/ViewList";
 import DensitySmallIcon from "@mui/icons-material/DensitySmall";
@@ -11,6 +12,7 @@ import { queryConfigSection } from "../../../store/config/config.action.ts";
 import { selectConfigLoading } from "../../../store/config/config.selector.ts";
 import { resetState, updateDfContentQuery } from "../../../store/df-content/df-content.action.ts";
 import {
+  selectCurrentQuery,
   selectDfContentEntryCurrentKeys,
   selectPageInfo,
   selectTotalContentItems,
@@ -195,6 +197,7 @@ type TopBarProps = {
 
 const TopBar = ({ density, onDensity, view, onView, compact }: TopBarProps) => {
   const [quickSearchClear, setQuickSearchClear] = useState(false);
+  const downloadedOnly = Boolean(useSelector(selectCurrentQuery)?.downloadedOnly);
   return (
     <Box
       sx={{
@@ -208,6 +211,23 @@ const TopBar = ({ density, onDensity, view, onView, compact }: TopBarProps) => {
       <DfQuickSearch clear={quickSearchClear} setClear={setQuickSearchClear} />
       <DfAdvancedSearchButton onClick={() => setQuickSearchClear(true)} />
       <ClearDfSearchButton onClick={() => setQuickSearchClear(true)} />
+      {/* Out here rather than in the advanced filter panel: "only the ones I
+          can actually play" is a thing you flip on and off while browsing,
+          not a query you sit down to compose. Cleared rather than set false,
+          so it leaves no trace in the query when off. */}
+      <ToggleButton
+        size="small"
+        value="downloadedOnly"
+        selected={downloadedOnly}
+        onChange={() =>
+          store.dispatch(updateDfContentQuery({ downloadedOnly: downloadedOnly ? undefined : true }))
+        }
+        sx={{ paddingY: 0.25 }}
+      >
+        <Tooltip title={downloadedOnly ? "Showing downloaded only" : "Show downloaded only"}>
+          <DownloadDoneIcon fontSize="small" />
+        </Tooltip>
+      </ToggleButton>
       {/* Shown at every width: hiding these below md meant a phone that
           landed in grid view had no way back out of it. Density is desktop-only
           because the mobile row has a single density. */}

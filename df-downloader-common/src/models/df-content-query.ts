@@ -7,6 +7,13 @@ export const DfContentInfoQueryParams = z.object({
   page: z.number(),
   limit: z.number(),
   availability: z.array(z.nativeEnum(DfContentAvailability)).optional(),
+  /**
+   * Only content with at least one download recorded against it.
+   *
+   * Distinct from `availability`, which is what Digital Foundry will let this
+   * account watch - this is what is actually on the disk.
+   */
+  downloadedOnly: z.boolean().optional(),
   tags: z.array(z.string()).optional(),
   tagMode: z.enum(["or", "and"]),
   sortBy: z.enum(["date", "name"]),

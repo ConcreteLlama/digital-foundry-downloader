@@ -25,6 +25,15 @@ export const DfContentEntrySearchBody = z.object({
     sortDirection: "desc",
   }),
   filter: ContentFilter.optional(),
+  /**
+   * Narrow to content with at least one download on disk.
+   *
+   * Top-level rather than part of `filter`, because include filters are OR'd
+   * against each other - expressed there it would widen the results rather
+   * than narrow them, which is the opposite of what it says. Applied after
+   * include and exclude, so it always narrows whatever they produced.
+   */
+  downloadedOnly: z.boolean().optional(),
 });
 export type DfContentEntrySearchBody = z.infer<typeof DfContentEntrySearchBody>;
 export type DfContentEntrySearchBodyInput = z.input<typeof DfContentEntrySearchBody>;
@@ -33,11 +42,14 @@ export const DfContentEntrySearchUtils = {
     searchParams: DfContentEntrySearchBody,
     dfContentEntries: DfContentEntry[]
   ): DfContentEntrySearchResponse => {
-    const { page, limit, filter, sort } = searchParams;
+    const { page, limit, filter, sort, downloadedOnly } = searchParams;
     const { sortBy, sortDirection } = sort;
     const { include, exclude } = filter || {};
     dfContentEntries = include ? filterContentEntries(include, dfContentEntries).include : dfContentEntries;
     dfContentEntries = exclude ? filterContentEntries(exclude, dfContentEntries).exclude : dfContentEntries;
+    if (downloadedOnly) {
+      dfContentEntries = dfContentEntries.filter((entry) => (entry.downloads ?? []).length > 0);
+    }
     dfContentEntries = dfContentEntries.sort((a, b) => {
       const aActual = sortDirection === "asc" ? a : b;
       const bActual = sortDirection === "asc" ? b : a;
