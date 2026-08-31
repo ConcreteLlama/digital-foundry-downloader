@@ -53,9 +53,21 @@ export const TaskControls = ({ pipelineId, size = "medium" }: TaskControlsProps)
   return (
     <ButtonGroup>
       {startButton}
-      <IconButton size={size} disabled={!cancelEnabled} onClick={() => controlPipeline(pipelineId, "cancel")}>
-        <StopButton fontSize={size} />
-      </IconButton>
+      {/* Named, like the rest of these. An icon button with only a tooltip has
+          no accessible name, so a screen reader announces "button" and
+          nothing else - and it cannot be found by name at all. */}
+      <Tooltip title="Stop">
+        <span>
+          <IconButton
+            size={size}
+            disabled={!cancelEnabled}
+            aria-label="Stop this task"
+            onClick={() => controlPipeline(pipelineId, "cancel")}
+          >
+            <StopButton fontSize={size} />
+          </IconButton>
+        </span>
+      </Tooltip>
     </ButtonGroup>
   );
 };
@@ -68,7 +80,12 @@ type ActionButtonProps = {
 const ResumeButton = ({ pipelineId, disabled, size = "medium" }: ActionButtonProps) => {
   return (
     <Tooltip title="Resume">
-      <IconButton size={size} disabled={disabled} onClick={() => controlPipeline(pipelineId, "resume")}>
+      <IconButton
+        size={size}
+        disabled={disabled}
+        aria-label="Resume this task"
+        onClick={() => controlPipeline(pipelineId, "resume")}
+      >
         <ResumeIcon fontSize={size} />
       </IconButton>
     </Tooltip>
@@ -78,7 +95,12 @@ const ResumeButton = ({ pipelineId, disabled, size = "medium" }: ActionButtonPro
 const PauseButton = ({ pipelineId, disabled, size = "medium" }: ActionButtonProps) => {
   return (
     <Tooltip title="Pause">
-      <IconButton size={size} disabled={disabled} onClick={() => controlPipeline(pipelineId, "pause")}>
+      <IconButton
+        size={size}
+        disabled={disabled}
+        aria-label="Pause this task"
+        onClick={() => controlPipeline(pipelineId, "pause")}
+      >
         <PauseButtonIcon fontSize={size} />
       </IconButton>
     </Tooltip>
@@ -109,7 +131,7 @@ const ForceStartButton = ({ pipelineId, disabled, size = "medium" }: ActionButto
         onConfirm={onConfirm}
       />
       <Tooltip title="Force Start">
-        <IconButton size={size} disabled={disabled} onClick={openConfirmDialog}>
+        <IconButton size={size} disabled={disabled} aria-label="Force start this task" onClick={openConfirmDialog}>
           <StartButtonIcon fontSize={size} />
         </IconButton>
       </Tooltip>

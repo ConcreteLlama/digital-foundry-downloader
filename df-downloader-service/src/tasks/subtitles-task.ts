@@ -91,8 +91,15 @@ const subtitlesTaskControls: TaskControls<GeneratedSubtitleInfo, SubtitlesTaskCo
       result,
     };
   },
-  getStatusMessage: ({ context, state }) => {
-    return `Generating ${context.language} subs for ${context.filePath} using ${context.currentSubtitleGenerator?.serviceType}: ${state}`;
+  getStatusMessage: ({ context }) => {
+    // No generator is chosen until the task starts, so a queued one used to
+    // read "using undefined". The state is dropped too: the UI renders it
+    // beside this, which made a waiting task say "Idle: ... : idle".
+    const generator = context.currentSubtitleGenerator?.serviceType;
+    const file = context.filePath.split(/[\/]/).pop() ?? context.filePath;
+    return generator
+      ? `Generating ${context.language} subs for ${file} with ${generator}`
+      : `Waiting to generate ${context.language} subs for ${file}`;
   },
   getStatus: (context) => ({ progress: context.progress }),
 };
