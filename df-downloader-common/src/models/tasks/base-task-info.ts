@@ -138,6 +138,19 @@ export const BasicTaskInfo = z.object({
   carriedOver: z.boolean().optional(),
   type: z.literal("task"),
   taskType: z.string(),
+  /**
+   * The job this task was queued on behalf of, if any.
+   *
+   * A bulk run queues its items as ordinary tasks so they inherit the
+   * queue everything else has - a position, shift up and down, cancel
+   * before it ever starts. That is the whole point: a queued item you
+   * cannot see or reach is the thing this exists to fix.
+   *
+   * It also stops them landing in Activity as N unrelated top-level rows.
+   * The client groups children under their job, so a five hundred item
+   * run stays one row until you open it.
+   */
+  parentTaskId: z.string().optional(),
   capabilities: TaskCapabilities.array(),
   status: TaskStatus.nullable(),
   priority: z.number(),
