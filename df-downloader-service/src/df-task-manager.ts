@@ -767,6 +767,57 @@ export class DfTaskManager {
     this.controlTaskManagerTask(task, controlTaskRequest.action);
   }
 
+  /**
+   * Pause or resume everything that will take it.
+   *
+   * Deliberately best-effort. Not every running step can stop where it is - a
+   * remux mid-file, an API call already in flight - and the useful behaviour
+   * is to pause what can pause and carry on, rather than refuse the lot
+   * because one step will not. Anything that declines is counted rather than
+   * thrown, so the caller can say what actually happened.
+   *
+   * One pass over both collections, with a single change notification at the
+   * end: pausing thirty things should redraw the page once, not thirty times.
+   */
+  async controlAll(action: "pause" | "resume"): Promise<{ affected: number; skipped: number }> {
+    let affected = 0;
+    let skipped = 0;
+    const apply = (managedTask?: GenericManagedTask) => {
+      // Finished work is not skipped, it is simply not a candidate - counting
+      // it would make "12 skipped" mean nothing.
+      if (!managedTask?.task || managedTask.isCompleted()) {
+        return;
+      }
+      // Asked, not attempted. task.pause() on something that cannot pause -
+      // transcription, most of the post-processing steps - returns perfectly
+      // happily and does nothing, so counting calls that did not throw
+      // reported four paused tasks while all four carried on running. This is
+      // the same capability list the UI uses to decide whether to offer a
+      // pause button on the row, so the two now agree.
+      if (!makeTaskInfo(managedTask, null).capabilities.includes("pause")) {
+        skipped++;
+        return;
+      }
+      try {
+        this.controlTaskManagerTask(managedTask, action);
+        affected++;
+      } catch {
+        skipped++;
+      }
+    };
+    for (const pipeline of this.pipelineExecutions.values()) {
+      if (pipeline.isCompleted) {
+        continue;
+      }
+      apply(pipeline.getCurrentStep()?.managedTask as GenericManagedTask | undefined);
+    }
+    for (const task of this.tasks.values()) {
+      apply(task);
+    }
+    this.notifyChanged();
+    return { affected, skipped };
+  }
+
   async control(controlRequest: ControlRequest) {
     if (isControlPipelineRequest(controlRequest)) {
       await this.controlPipeline(controlRequest);

@@ -1,9 +1,13 @@
 import AddIcon from "@mui/icons-material/Add";
+import PauseIcon from "@mui/icons-material/Pause";
+import PlayArrowIcon from "@mui/icons-material/PlayArrow";
 import RemoveIcon from "@mui/icons-material/Remove";
 import { Box, IconButton, Stack, Tooltip, Typography, useMediaQuery, useTheme } from "@mui/material";
 import { useEffect, useRef, useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
+import { controlAllTasks } from "../../api/tasks.ts";
 import { TaskList } from "../../components/tasks/task-list.component.tsx";
+import { triggerSnackbar } from "../../utils/snackbar.tsx";
 import { queryConfigSection, updateConfigSection } from "../../store/config/config.action.ts";
 import { selectConfigSection } from "../../store/config/config.selector.ts";
 import { monoFontFamily } from "../../themes/build-theme.ts";
@@ -72,6 +76,39 @@ const DownloadsPageHeader = () => {
       );
     }, 500);
   };
+  /**
+   * Pause or resume the lot.
+   *
+   * Best-effort by design - some running work cannot stop where it is - so
+   * the result says what actually took rather than claiming everything did.
+   */
+  const [bulkBusy, setBulkBusy] = useState(false);
+  const runBulk = async (action: "pause" | "resume") => {
+    setBulkBusy(true);
+    try {
+      const { affected, skipped } = await controlAllTasks(action);
+      if (!affected && !skipped) {
+        triggerSnackbar(`Nothing running to ${action}`, { variant: "info" });
+      } else if (!affected) {
+        // Everything running was of a kind that cannot stop where it is, which
+        // is worth saying plainly rather than reporting "paused 0".
+        triggerSnackbar(
+          `Nothing could be ${action}d - ${skipped} running ${skipped === 1 ? "task does" : "tasks do"} not support it`,
+          { variant: "warning" }
+        );
+      } else {
+        triggerSnackbar(
+          `${action === "pause" ? "Paused" : "Resumed"} ${affected} ${affected === 1 ? "task" : "tasks"}` +
+            (skipped ? ` - ${skipped} could not be ${action}d` : ""),
+          { variant: skipped ? "warning" : "success" }
+        );
+      }
+    } catch (e) {
+      triggerSnackbar(e instanceof Error ? e.message : `Could not ${action} everything`, { variant: "error" });
+    } finally {
+      setBulkBusy(false);
+    }
+  };
   return (
     <Box
       sx={{
@@ -87,7 +124,23 @@ const DownloadsPageHeader = () => {
       }}
     >
       <Typography variant="overline">Queue</Typography>
-      <ConcurrencyStepper value={maxConcurrentDownloads} onChange={setMaxConcurrentDownloads} />
+      <Stack direction="row" spacing={1} sx={{ alignItems: "center" }}>
+        <Tooltip title="Pause everything that can be paused">
+          <span>
+            <IconButton size="small" disabled={bulkBusy} onClick={() => void runBulk("pause")} aria-label="Pause all">
+              <PauseIcon fontSize="small" />
+            </IconButton>
+          </span>
+        </Tooltip>
+        <Tooltip title="Resume everything that was paused">
+          <span>
+            <IconButton size="small" disabled={bulkBusy} onClick={() => void runBulk("resume")} aria-label="Resume all">
+              <PlayArrowIcon fontSize="small" />
+            </IconButton>
+          </span>
+        </Tooltip>
+        <ConcurrencyStepper value={maxConcurrentDownloads} onChange={setMaxConcurrentDownloads} />
+      </Stack>
     </Box>
   );
 };

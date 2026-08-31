@@ -1,4 +1,4 @@
-import { AddTaskRequest, ControlRequest, DownloadContentResponse, ManualDownloadRequest, TasksResponse, DfContentAvailability, getBestMediaInfoMatch, mapFilterEmpty } from "df-downloader-common";
+import { AddTaskRequest, ControlRequest, DownloadContentResponse, ManualDownloadRequest, TasksResponse, DfContentAvailability, getBestMediaInfoMatch, mapFilterEmpty, ControlAllRequest } from "df-downloader-common";
 import express, { Request, Response } from "express";
 import { DigitalFoundryContentManager } from "../../df-content-manager.js";
 import { makeTaskPipelineInfo, makeTaskPipelineInfoFromPersisted } from "../../df-task-manager.js";
@@ -31,6 +31,16 @@ export const makeDownloadsApiRouter = (contentManager: DigitalFoundryContentMana
         sendErrorAsResponse(res, e, {
           code: 500,
         });
+      }
+    });
+  });
+
+  router.post("/control-all", async (req: Request, res: Response) => {
+    await zodParseHttp(ControlAllRequest, req, res, async (data) => {
+      try {
+        sendResponse(res, await taskManager.controlAll(data.action));
+      } catch (e) {
+        sendErrorAsResponse(res, e, { code: 500 });
       }
     });
   });

@@ -99,6 +99,25 @@ export const ControlTaskRequest = z.object({
 });
 export type ControlTaskRequest = z.infer<typeof ControlTaskRequest>;
 
+/**
+ * Pause or resume everything at once.
+ *
+ * Only these two: cancelling everything is not a thing anyone wants a single
+ * button for, and reordering has no meaning applied to the whole queue.
+ */
+export const ControlAllRequest = z.object({
+  action: z.enum(["pause", "resume"]),
+});
+export type ControlAllRequest = z.infer<typeof ControlAllRequest>;
+
+/** What a bulk pause or resume actually managed to do. */
+export const ControlAllResponse = z.object({
+  affected: z.number().default(0),
+  /** Running work that would not take the instruction - see controlAll. */
+  skipped: z.number().default(0),
+});
+export type ControlAllResponse = z.infer<typeof ControlAllResponse>;
+
 export const ControlRequest = z.union([ControlPipelineRequest, ControlTaskRequest]);
 export type ControlRequest = z.infer<typeof ControlRequest>;
 

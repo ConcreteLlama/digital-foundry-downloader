@@ -1,4 +1,4 @@
-import { ControlRequest, TaskAction } from "df-downloader-common";
+import { ControlAllResponse, ControlRequest, TaskAction, parseResponseBody } from "df-downloader-common";
 import { controlTaskAction } from "../store/df-tasks/tasks.action.ts";
 import { store } from "../store/store.ts";
 import { postJson } from "../utils/fetch.ts";
@@ -28,4 +28,21 @@ export const controlPipeline = async (pipelineExecutionId: string, action: TaskA
         action,
         pipelineExecutionId,
     });
+};
+
+/**
+ * Pause or resume the whole queue.
+ *
+ * A single request rather than one per task: the point is one instruction, and
+ * firing thirty would have thirty chances to half-apply. Best-effort by
+ * design - the response says how much of it took, because some running work
+ * cannot stop where it is.
+ */
+export const controlAllTasks = async (action: "pause" | "resume"): Promise<ControlAllResponse> => {
+    const response = await postJson(`${API_URL}/tasks/control-all`, { action });
+    const parsed = parseResponseBody(response, ControlAllResponse);
+    if (parsed.error || parsed.data === undefined) {
+        throw new Error(parsed.error?.message ?? "Unexpected response from the server");
+    }
+    return parsed.data;
 };
