@@ -47,7 +47,7 @@ const DfArticlesSettings = () => {
           </Alert>
           <ZodDurationField
             name="scanInterval"
-            label="Check every (ms)"
+            label="Check every"
             zodNumber={DfArticlesConfig.shape.scanInterval}
           />
           <ZodNumberField
@@ -91,7 +91,7 @@ const DfArticlesSettings = () => {
               />
               <ZodDurationField
                 name="archiveWalkInterval"
-                label="Pass through older articles every (ms)"
+                label="Pass through older articles every"
                 zodNumber={DfArticlesConfig.shape.archiveWalkInterval}
               />
             </>
