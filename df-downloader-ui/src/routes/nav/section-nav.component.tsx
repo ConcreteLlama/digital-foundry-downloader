@@ -151,6 +151,14 @@ export const SectionNavCompact = () => {
   if (routes.length <= 1) {
     return null;
   }
+  // Grouped here too. This was left flat on the grounds that headings do not
+  // belong in a horizontal strip, which was wrong twice over: the strip
+  // already scrolls, so a label costs nothing it does not have, and this is
+  // the nav most of the phone-sized use goes through - grouping only the
+  // column meant grouping it where it was least needed.
+  const groups = groupSectionRoutes(destination.section)
+    .map((group) => ({ ...group, routes: group.routes.filter((r) => !r.devOnly || devModeEnabled) }))
+    .filter((group) => group.routes.length > 0);
   return (
     <Box
       sx={{
@@ -165,7 +173,27 @@ export const SectionNavCompact = () => {
         borderColor: "divider",
       }}
     >
-      {routes.map((route) => {
+      {groups.map((group, groupIndex) => (
+        <Box key={group.label ?? "__ungrouped"} sx={{ display: "flex", alignItems: "center", gap: 1, flex: "0 0 auto" }}>
+          {group.label && (
+            <Typography
+              variant="overline"
+              sx={{
+                flex: "0 0 auto",
+                color: "text.disabled",
+                lineHeight: 1,
+                whiteSpace: "nowrap",
+                // A rule before every group but the first, so the boundary
+                // reads even once the label has scrolled past.
+                borderLeft: groupIndex > 0 ? "1px solid" : undefined,
+                borderColor: "divider",
+                paddingLeft: groupIndex > 0 ? 1.5 : 0,
+              }}
+            >
+              {group.label}
+            </Typography>
+          )}
+          {group.routes.map((route) => {
         const selected = pathname === route.path;
         return (
           <ListItemButton
@@ -187,7 +215,9 @@ export const SectionNavCompact = () => {
             />
           </ListItemButton>
         );
-      })}
+          })}
+        </Box>
+      ))}
     </Box>
   );
 };
