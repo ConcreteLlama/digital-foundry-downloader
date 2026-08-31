@@ -10,6 +10,7 @@ import {
   ToggleButton,
   ToggleButtonGroup,
   Typography,
+  Chip,
 } from "@mui/material";
 import {
   BulkBackfillCandidate,
@@ -26,7 +27,14 @@ import { selectPipelinesInCompletionState } from "../../../store/df-tasks/tasks.
 import { store } from "../../../store/store.ts";
 import { estimateBackfill, fetchBackfillCandidates, runBackfill, stopBackfillJobs } from "../../../api/backfill.ts";
 import { triggerSnackbar } from "../../../utils/snackbar.tsx";
-import { BackfillConfirmDialog, BackfillTable, formatCost, isMissing, SKIP_REASONS } from "./bulk-backfill.components.tsx";
+import {
+  analysisImprovable,
+  BackfillConfirmDialog,
+  BackfillTable,
+  formatCost,
+  isMissing,
+  SKIP_REASONS,
+} from "./bulk-backfill.components.tsx";
 
 /**
  * Bulk backfill: apply subtitles, AI analysis or article matching across
@@ -110,7 +118,20 @@ export const BulkBackfillPage = () => {
   const [filterText, setFilterText] = useState("");
   // Narrowing to what still needs doing is the common case - the list is
   // otherwise mostly rows that are already done and cannot be actioned.
-  const [onlyNeedsWork, setOnlyNeedsWork] = useState(false);
+  /**
+   * One question with mutually exclusive answers, rather than a switch each.
+   *
+   * "Needs work" and "could be improved" were separate toggles, and turning
+   * both on always gave an empty list: the first keeps only items with no
+   * analysis, the second only items with one. They are two answers to the same
+   * question - what state is this in - so they are one control now, and the
+   * impossible combination stops existing rather than being something to
+   * notice and avoid.
+   *
+   * Sources stay independent below, because those genuinely combine: having a
+   * transcript and having an article are separate facts about an item.
+   */
+  const [statusFilter, setStatusFilter] = useState<"all" | "needs" | "improvable" | "done">("all");
   /**
    * Narrow to what the analysis will have something to work from.
    *
@@ -216,17 +237,15 @@ export const BulkBackfillPage = () => {
     }
   };
 
-  const filtered = useMemo(() => {
+  const sourceFiltered = useMemo(() => {
     const needle = filterText.trim().toLowerCase();
     let list = candidates;
     if (needle) {
       list = list.filter((candidate) => candidate.title.toLowerCase().includes(needle));
     }
-    if (onlyNeedsWork) {
-      list = list.filter((candidate) => isMissing(candidate, target, workingKeys.has(candidate.contentKey)));
-    }
-    // Only meaningful for analysis, and left inert elsewhere rather than
-    // quietly filtering a list whose controls are not on screen.
+    // Sources first, and only where they mean something: transcribing does not
+    // care whether there is an article. Applied before the counts below, so
+    // those describe the list you are actually looking at.
     if (target === "ai_analysis" && onlyWithSubs) {
       list = list.filter((candidate) => candidate.hasSubtitles);
     }
@@ -234,11 +253,69 @@ export const BulkBackfillPage = () => {
       list = list.filter((candidate) => candidate.hasArticle);
     }
     return list;
-  }, [candidates, filterText, onlyNeedsWork, onlyWithSubs, onlyWithArticle, target, workingKeys]);
+  }, [candidates, filterText, onlyWithSubs, onlyWithArticle, target]);
+
+  /**
+   * The same three states, named for the action in front of you.
+   *
+   * "Upgradeable" exists only for analysis, because it is the only target
+   * where having done the work once does not settle it: a transcript or an
+   * article arriving afterwards makes a better result possible.
+   */
+  const statusOptions = useMemo(() => {
+    const needsLabel =
+      target === "subtitles" ? "No subtitles" : target === "df_article" ? "No article" : "Not analysed";
+    const doneLabel = target === "subtitles" ? "Has subtitles" : target === "df_article" ? "Matched" : "Complete";
+    return [
+      { value: "all" as const, label: "All" },
+      { value: "needs" as const, label: needsLabel },
+      ...(target === "ai_analysis" ? [{ value: "improvable" as const, label: "Upgradeable" }] : []),
+      { value: "done" as const, label: doneLabel },
+    ];
+  }, [target]);
+
+  // Switching target can strip the selected status out from under it, which
+  // would filter to nothing with no control on screen explaining why.
+  useEffect(() => {
+    if (!statusOptions.some((option) => option.value === statusFilter)) {
+      setStatusFilter("all");
+    }
+  }, [statusOptions, statusFilter]);
+
+  /** Which bucket an item is in - exactly one of them, by construction. */
+  const statusOf = useCallback(
+    (candidate: BulkBackfillCandidate): "needs" | "improvable" | "done" => {
+      if (isMissing(candidate, target, workingKeys.has(candidate.contentKey))) {
+        return "needs";
+      }
+      return target === "ai_analysis" && analysisImprovable(candidate) ? "improvable" : "done";
+    },
+    [target, workingKeys]
+  );
+
+  /**
+   * How many are in each state, shown on the control itself.
+   *
+   * This is the part that answers "what shape is my library in" without
+   * filtering anything first - which was the actual question behind wanting
+   * to see what needs analysis and what could be better.
+   */
+  const statusCounts = useMemo(() => {
+    const counts = { all: sourceFiltered.length, needs: 0, improvable: 0, done: 0 };
+    for (const candidate of sourceFiltered) {
+      counts[statusOf(candidate)]++;
+    }
+    return counts;
+  }, [sourceFiltered, statusOf]);
+
+  const filtered = useMemo(
+    () => (statusFilter === "all" ? sourceFiltered : sourceFiltered.filter((c) => statusOf(c) === statusFilter)),
+    [sourceFiltered, statusFilter, statusOf]
+  );
 
   useEffect(() => {
     setPage(0);
-  }, [filterText, target, onlyNeedsWork, onlyWithSubs, onlyWithArticle]);
+  }, [filterText, target, statusFilter, onlyWithSubs, onlyWithArticle]);
 
   const pageCount = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
   // Clamped rather than reset: narrowing the filter can leave the current
@@ -454,36 +531,41 @@ export const BulkBackfillPage = () => {
               onChange={(event) => setFilterText(event.target.value)}
               sx={{ maxWidth: 260, flex: "1 1 180px" }}
             />
-            <FormControlLabel
-              control={
-                <Switch
-                  size="small"
-                  checked={onlyNeedsWork}
-                  onChange={(event) => setOnlyNeedsWork(event.target.checked)}
-                />
-              }
-              label="Needs work only"
-              sx={{ marginLeft: 0, "& .MuiFormControlLabel-label": { fontSize: "0.8125rem" } }}
-            />
+            {/* One control, one question. Each option carries how many are in
+                that state, so the shape of the library reads before anything
+                is filtered - which is the thing people actually came to find
+                out. Counts follow the source chips, so they describe the list
+                in front of you rather than an abstract total. */}
+            <ToggleButtonGroup
+              size="small"
+              exclusive
+              value={statusFilter}
+              onChange={(_, next) => next && setStatusFilter(next)}
+            >
+              {statusOptions.map(({ value, label }) => (
+                <ToggleButton key={value} value={value} sx={{ paddingY: 0.25, textTransform: "none" }}>
+                  {label} ({statusCounts[value]})
+                </ToggleButton>
+              ))}
+            </ToggleButtonGroup>
+            {/* Chips rather than switches: these combine with the status above
+                and with each other, where a row of identical switches gave no
+                hint which were related to which. */}
             {target === "ai_analysis" && (
               <>
-                <FormControlLabel
-                  control={
-                    <Switch size="small" checked={onlyWithSubs} onChange={(e) => setOnlyWithSubs(e.target.checked)} />
-                  }
-                  label="Has subtitles"
-                  sx={{ marginLeft: 0, "& .MuiFormControlLabel-label": { fontSize: "0.8125rem" } }}
+                <Chip
+                  size="small"
+                  label="With transcript"
+                  variant={onlyWithSubs ? "filled" : "outlined"}
+                  color={onlyWithSubs ? "primary" : "default"}
+                  onClick={() => setOnlyWithSubs((on) => !on)}
                 />
-                <FormControlLabel
-                  control={
-                    <Switch
-                      size="small"
-                      checked={onlyWithArticle}
-                      onChange={(e) => setOnlyWithArticle(e.target.checked)}
-                    />
-                  }
-                  label="Has article"
-                  sx={{ marginLeft: 0, "& .MuiFormControlLabel-label": { fontSize: "0.8125rem" } }}
+                <Chip
+                  size="small"
+                  label="With article"
+                  variant={onlyWithArticle ? "filled" : "outlined"}
+                  color={onlyWithArticle ? "primary" : "default"}
+                  onClick={() => setOnlyWithArticle((on) => !on)}
                 />
               </>
             )}
@@ -543,6 +625,15 @@ export const BulkBackfillPage = () => {
 
           {/* Deliberately says "roughly": a handful of the chosen items are
               priced properly and scaled, rather than a token count per item. */}
+          {/* These have all been analysed already, so a run skips every one of
+              them unless re-analyse is on - which is the whole point of
+              selecting them, and easy to miss. */}
+          {statusFilter === "improvable" && !force && (
+            <Alert severity="warning" variant="outlined">
+              These have already been analysed, so turn on "Re-analyse items that have already been analysed" or the run
+              will skip all of them.
+            </Alert>
+          )}
           {inlineEstimate && (
             <Typography variant="caption" sx={{ color: "text.secondary" }}>
               {inlineEstimate.estimatedCostUsd === undefined

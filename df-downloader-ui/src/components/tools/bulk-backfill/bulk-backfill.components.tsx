@@ -19,6 +19,7 @@ import {
   BulkBackfillEstimate,
   BulkBackfillTarget,
   BulkBackfillTargetLabels,
+  AiEvidenceSourceLabels,
 } from "df-downloader-common";
 import { memo } from "react";
 import { ColumnInfo, GridCell, GridRow, GridTable, GridTextCell } from "../../general/grid-table.tsx";
@@ -82,6 +83,27 @@ export const isMissing = (
  * nothing recorded against the content would show - so this can understate
  * what is available, never overstate it.
  */
+/**
+ * Whether a stored analysis could be redone better than it was.
+ *
+ * The evidence recorded against it says what it actually read; the flags say
+ * what exists now. Something available now and not used then is the whole
+ * case for re-running it - an analysis written before a transcript existed is
+ * working from a title and an article, and will be visibly thinner for it.
+ *
+ * An analysis with no evidence recorded predates the field and cannot be
+ * judged, so it is left alone rather than guessed at.
+ */
+export const analysisImprovable = (candidate: BulkBackfillCandidate): boolean => {
+  if (!candidate.hasAnalysis || !candidate.analysisEvidence.length) {
+    return false;
+  }
+  const used = new Set(candidate.analysisEvidence);
+  return (
+    (candidate.hasSubtitles && !used.has("transcript")) || (candidate.hasArticle && !used.has("article"))
+  );
+};
+
 export const analysisSourcesFor = (candidate: BulkBackfillCandidate) => {
   const sources = [
     candidate.hasSubtitles ? "transcript" : undefined,
@@ -148,6 +170,25 @@ type BackfillRowProps = {
  * changes on every toggle and would defeat the comparison entirely.
  */
 const SourcesLabel = ({ candidate }: { candidate: BulkBackfillCandidate }) => {
+  // An analysed item is described by what it read, not by what it could read:
+  // the second is only interesting as the difference between the two.
+  if (candidate.hasAnalysis && candidate.analysisEvidence.length) {
+    const improvable = analysisImprovable(candidate);
+    const used = candidate.analysisEvidence.map((source) => AiEvidenceSourceLabels[source].toLowerCase()).join(", ");
+    return (
+      <Typography
+        variant="caption"
+        sx={{
+          flexShrink: 0,
+          whiteSpace: "nowrap",
+          fontSize: "0.68rem",
+          color: improvable ? "warning.main" : "text.disabled",
+        }}
+      >
+        {improvable ? `read ${used} - more available now` : `read ${used}`}
+      </Typography>
+    );
+  }
   const { sources, count } = analysisSourcesFor(candidate);
   return (
     <Typography

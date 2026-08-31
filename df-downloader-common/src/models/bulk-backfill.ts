@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { AiEvidenceSource } from "./ai-analysis.js";
 
 /**
  * Bulk backfill: applying subtitle generation, AI analysis or Digital
@@ -43,6 +44,15 @@ export const BulkBackfillCandidate = z.object({
   /** Subtitles recorded against at least one download, in the requested language. */
   hasSubtitles: z.boolean().default(false),
   hasAnalysis: z.boolean().default(false),
+  /**
+   * What the stored analysis was actually based on.
+   *
+   * Not the same question as what is available now, which is the point: an
+   * analysis run before a transcript existed is worth redoing, and comparing
+   * these two is the only way to tell which those are. Empty when nothing has
+   * been analysed, and for analyses stored before this was recorded.
+   */
+  analysisEvidence: z.array(AiEvidenceSource).default([]),
   /** A confirmed article match is stored for this item. */
   hasArticle: z.boolean().default(false),
   /**

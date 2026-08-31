@@ -106,6 +106,7 @@ export const makeBackfillRouter = (contentManager: DigitalFoundryContentManager)
           hasDownload: DfContentEntryUtils.hasDownload(entry),
           hasSubtitles: DfContentEntryUtils.hasSubtitles(entry, language),
           hasAnalysis: Boolean(analysisIndexEntry),
+          analysisEvidence: analysisIndexEntry?.evidence ?? [],
           hasArticle: Boolean(articleIndexEntry?.hasArticle),
           articleLookupDue: articleIndexEntry?.hasArticle
             ? false
