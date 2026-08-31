@@ -102,7 +102,9 @@ export class AiCostLog {
       outputTokens: result.usage.outputTokens,
     });
     try {
-      await writeFileAtomic(this.filePath, JSON.stringify(this.log, null, 2));
+      // Compact, like the other stores: this one only grows - a row per
+      // analysis run, kept forever - so the indentation compounds.
+      await writeFileAtomic(this.filePath, JSON.stringify(this.log));
     } catch (e) {
       logger.log("error", `Could not write the AI cost log: ${e}`);
     }

@@ -51,7 +51,7 @@ export class FileDb<T> {
             // observed here as EBUSY from the Nextcloud client, which killed the
             // service before it finished booting. writeFileAtomic already treats
             // EBUSY/EPERM/EACCES/ENOENT as worth retrying; a raw write does not.
-            await writeFileAtomic(filename, JSON.stringify(data, null, 2));
+            await writeFileAtomic(filename, JSON.stringify(data));
             return new FileDb<T>(filename, data);
         } catch (e) {
             if (fs.existsSync(backupLocation)) {
@@ -100,7 +100,16 @@ export class FileDb<T> {
             .addWork(async () => {
                 this.writePending = false;
                 logger.log("debug", "Writing to DB");
-                await fs.promises.writeFile(this.filename, JSON.stringify(this.data, null, 2));
+                // Atomic, and compact. Writing the target path directly leaves a
+                // truncated file behind if the process dies mid-write, which for
+                // the content DB is the whole library; writeFileAtomic writes a
+                // temp file and renames over it, and retries the transient
+                // Windows/synced-folder errors that a rename can hit.
+                //
+                // Compact because nothing reads these by hand - the indentation
+                // was a third of the bytes on a multi-megabyte file, paid on
+                // every write and every startup parse.
+                await writeFileAtomic(this.filename, JSON.stringify(this.data));
                 logger.log("debug", "Wrote to DB");
             });
     }
@@ -111,7 +120,10 @@ export class FileDb<T> {
     }
     public updateDbSync(data: T) {
         this.data = data;
-        fs.writeFileSync(this.filename, JSON.stringify(this.data, null, 2));
+        // Sync, so it stays a direct write - it exists for shutdown paths where
+        // there is no event loop left to await a rename on. Compact for the
+        // same reason as above.
+        fs.writeFileSync(this.filename, JSON.stringify(this.data));
     }
     public getData() {
         return this.data;
