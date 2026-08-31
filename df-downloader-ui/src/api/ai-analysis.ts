@@ -7,6 +7,7 @@ import {
   GameIndexResponse,
   PlatformComparisonResponse,
   parseResponseBody,
+  AiCostLedgerResponse,
 } from "df-downloader-common";
 import { z } from "zod";
 import { ZodTypeAny } from "zod";
@@ -120,4 +121,10 @@ export const fetchGameIndex = async (): Promise<GameIndexResponse> => {
 export const fetchPlatformComparison = async (): Promise<PlatformComparisonResponse> => {
   const response = await fetchJson(`${API_URL}/ai-analysis/platform-comparison`);
   return unwrap(response, PlatformComparisonResponse);
+};
+
+/** What analysis has cost, run by run. Aggregated server-side. */
+export const fetchAiCosts = async (): Promise<AiCostLedgerResponse> => {
+  const response = await fetchJson(`${API_URL}/ai-analysis/costs`);
+  return unwrap(response, AiCostLedgerResponse);
 };

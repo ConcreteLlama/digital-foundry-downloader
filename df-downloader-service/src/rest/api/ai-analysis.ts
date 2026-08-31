@@ -12,6 +12,7 @@ import { configService } from "../../config/config.js";
 import { DigitalFoundryContentManager } from "../../df-content-manager.js";
 import { estimateAnalysisCost } from "../../utils/ai/analyse.js";
 import { buildGameIndex } from "../../utils/ai/game-index.js";
+import { buildCostLedger } from "../../utils/ai/cost-ledger.js";
 import { buildPlatformComparison } from "../../utils/ai/platform-comparison.js";
 import { ensureArticleForContent } from "../../utils/df-articles/ensure-article.js";
 import { DfFetchPriority } from "../../df-request-queue.js";
@@ -90,6 +91,20 @@ export const makeAiAnalysisRouter = (contentManager: DigitalFoundryContentManage
   router.get("/game-index", async (_req, res) => {
     try {
       return sendResponse(res, await buildGameIndex(contentManager.db));
+    } catch (e) {
+      return sendErrorAsResponse(res, e);
+    }
+  });
+
+  /**
+   * What analysis has cost, run by run.
+   *
+   * Aggregated server-side for the same reason as the two below - drawing
+   * one table is no reason to ship every result to the browser.
+   */
+  router.get("/costs", async (_req, res) => {
+    try {
+      return sendResponse(res, await buildCostLedger(contentManager.db));
     } catch (e) {
       return sendErrorAsResponse(res, e);
     }

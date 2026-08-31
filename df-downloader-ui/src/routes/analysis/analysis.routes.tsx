@@ -1,7 +1,9 @@
 import InsightsIcon from "@mui/icons-material/Insights";
+import PaidIcon from "@mui/icons-material/Paid";
 import SportsEsportsIcon from "@mui/icons-material/SportsEsports";
 import TableChartIcon from "@mui/icons-material/TableChart";
 import { GameIndexPage } from "../../components/analysis/game-index-page.component.tsx";
+import { CostsPage } from "../../components/analysis/costs-page.component.tsx";
 import { PlatformComparisonPage } from "../../components/analysis/platform-comparison-page.component.tsx";
 import { NestedSubRoute } from "../nav/nested-routes.tsx";
 
@@ -33,6 +35,12 @@ export const analysisRouteDefinitions: NestedSubRoute = {
       element: <GameIndexPage />,
       name: "Games",
       icon: SportsEsportsIcon,
+    },
+    {
+      path: "/analysis/costs",
+      element: <CostsPage />,
+      name: "Costs",
+      icon: PaidIcon,
     },
   ],
 };

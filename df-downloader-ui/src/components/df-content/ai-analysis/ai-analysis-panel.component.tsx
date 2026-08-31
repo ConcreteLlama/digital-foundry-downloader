@@ -475,6 +475,10 @@ export const AiAnalysisPanel = ({ contentKey, enabled, onHasContent, onJumpTo }:
  * every summary makes the price the headline of a feature whose output is
  * the point, and at a penny a video it is not information anyone needs on
  * every read.
+ *
+ * The button says cost is in here, though. Keeping the number off the face
+ * is the decision; leaving no clue where it went was just an oversight, and
+ * a disclosure nobody opens hides it as effectively as not storing it.
  */
 const RunDetails = ({ result }: { result: AiAnalysisResult }) => {
   const [open, setOpen] = useState(false);
@@ -488,7 +492,7 @@ const RunDetails = ({ result }: { result: AiAnalysisResult }) => {
         onClick={() => setOpen((wasOpen) => !wasOpen)}
         sx={{ color: "text.disabled", textTransform: "none", px: 0.5, minWidth: 0 }}
       >
-        {open ? "Hide run details" : "Run details"}
+        {open ? "Hide cost and run details" : "Cost and run details"}
       </Button>
       <Collapse in={open}>
         <Stack
