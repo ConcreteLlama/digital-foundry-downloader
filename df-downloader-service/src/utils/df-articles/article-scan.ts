@@ -115,25 +115,29 @@ export const scanForNewArticles = async (
       watermark = entry.lastmod;
       continue;
     }
-    const article = await readArticle(entry);
+    const read = await readArticle(entry);
     // Only advance over articles that were actually read. A page that
-    // could not be fetched stays ahead of the cursor and is retried.
-    if (!article) {
+    // could not be fetched stays ahead of the cursor and is retried; one
+    // that was read but embeds no video is still read, and is recorded so
+    // it is not fetched again on every pass.
+    if (read.outcome === "unreadable") {
       continue;
     }
     result.articlesRead++;
     watermark = entry.lastmod;
     db.setDfArticleMeta(entry.url, {
       slug: entry.slug,
-      title: article.article.title,
-      author: article.article.author,
-      videoIds: article.videoIds,
+      title: read.title || entry.slug,
+      author: read.author,
+      videoIds: read.videoIds,
       lastmod: entry.lastmod,
       cachedAt: new Date(),
     });
-    const filed = await fileAgainstLibrary(db, article.article, article.videoIds);
-    result.primaryMatches += filed.primary;
-    result.relatedMatches += filed.related;
+    if (read.article) {
+      const filed = await fileAgainstLibrary(db, read.article, read.videoIds);
+      result.primaryMatches += filed.primary;
+      result.relatedMatches += filed.related;
+    }
   }
 
   await db.setDfArticleScanCursor(watermark);
@@ -147,9 +151,25 @@ export const scanForNewArticles = async (
   return result;
 };
 
-const readArticle = async (
-  entry: SitemapEntry
-): Promise<{ article: DfArticle; videoIds: string[] } | undefined> => {
+/**
+ * The outcome of looking at one article page.
+ *
+ * "read" and "unreadable" have to be told apart, and conflating them caused
+ * a livelock: plenty of Digital Foundry's writing embeds no video at all,
+ * and treating those the same as a failed fetch meant they were never
+ * recorded as read. The newest hundred of them then sat at the top of the
+ * unread list and were fetched again on every single pass, forever, while
+ * the walk never reached anything behind them.
+ *
+ * So a page that was fetched and understood is "read" whether or not it had
+ * anything to attach - that is a finding, and it is worth remembering.
+ * Only a page that could not be fetched is worth another go.
+ */
+type ArticleRead =
+  | { outcome: "read"; title?: string; author?: string; videoIds: string[]; article?: DfArticle }
+  | { outcome: "unreadable" };
+
+const readArticle = async (entry: SitemapEntry): Promise<ArticleRead> => {
   try {
     const response = await dfFetch(
       entry.url,
@@ -157,15 +177,19 @@ const readArticle = async (
       { priority: DfFetchPriority.BACKGROUND, label: `Article scan: ${entry.slug.slice(0, 40)}` }
     );
     if (!response.ok) {
-      return undefined;
+      logger.log("warn", `Article scan got HTTP ${response.status} for ${entry.url} - will try again later`);
+      return { outcome: "unreadable" };
     }
     const parsed = parseArticlePage(await response.text());
-    // No embed means nothing to attach it to. Not a failure - plenty of
-    // Digital Foundry's writing is not about a video at all.
+    // Read, and there is simply nothing here to attach to a video. Recorded
+    // as such rather than retried - see ArticleRead.
     if (!parsed?.text.trim() || !parsed.youtubeVideoIds.length) {
-      return undefined;
+      return { outcome: "read", title: parsed?.title, author: parsed?.author, videoIds: [] };
     }
     return {
+      outcome: "read",
+      title: parsed.title,
+      author: parsed.author,
       videoIds: parsed.youtubeVideoIds,
       article: {
         url: entry.url,
@@ -179,7 +203,7 @@ const readArticle = async (
     };
   } catch (e) {
     logger.log("warn", `Article scan could not read ${entry.url}: ${e instanceof Error ? e.message : String(e)}`);
-    return undefined;
+    return { outcome: "unreadable" };
   }
 };
 
@@ -346,22 +370,24 @@ export const walkArticleArchive = async (
     );
 
     for (const entry of toRead) {
-      const article = await readArticle(entry);
-      if (!article) {
+      const read = await readArticle(entry);
+      if (read.outcome === "unreadable") {
         continue;
       }
       result.articlesRead++;
       db.setDfArticleMeta(entry.url, {
         slug: entry.slug,
-        title: article.article.title,
-        author: article.article.author,
-        videoIds: article.videoIds,
+        title: read.title || entry.slug,
+        author: read.author,
+        videoIds: read.videoIds,
         lastmod: entry.lastmod,
         cachedAt: new Date(),
       });
-      const filed = await fileAgainstLibrary(db, article.article, article.videoIds);
-      result.primaryMatches += filed.primary;
-      result.relatedMatches += filed.related;
+      if (read.article) {
+        const filed = await fileAgainstLibrary(db, read.article, read.videoIds);
+        result.primaryMatches += filed.primary;
+        result.relatedMatches += filed.related;
+      }
     }
 
     // Stay on this year. Anything read is fresh next time, so `unread`
