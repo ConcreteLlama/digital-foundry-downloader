@@ -96,21 +96,19 @@ const DownloadsPageHeader = () => {
     setBulkBusy(true);
     try {
       const { affected, skipped } = await controlAllTasks(action);
-      if (!affected && !skipped) {
-        triggerSnackbar(`Nothing running to ${action}`, { variant: "info" });
-      } else if (!affected) {
-        // Everything running was of a kind that cannot stop where it is, which
-        // is worth saying plainly rather than reporting "paused 0".
+      if (action === "pause") {
+        // The hold is the part that always took, so it leads. The counts are
+        // about the work already in flight, which is the part that may not
+        // have stopped.
+        const running = skipped
+          ? ` - ${skipped} already running ${skipped === 1 ? "task cannot stop" : "tasks cannot stop"} part-way and will finish`
+          : "";
         triggerSnackbar(
-          `Nothing could be ${action}d - ${skipped} running ${skipped === 1 ? "task does" : "tasks do"} not support it`,
-          { variant: "warning" }
-        );
-      } else {
-        triggerSnackbar(
-          `${action === "pause" ? "Paused" : "Resumed"} ${affected} ${affected === 1 ? "task" : "tasks"}` +
-            (skipped ? ` - ${skipped} could not be ${action}d` : ""),
+          `Queue held${affected ? `, ${affected} paused` : ""}${running}` + (!affected && !skipped ? " - nothing was running" : ""),
           { variant: skipped ? "warning" : "success" }
         );
+      } else {
+        triggerSnackbar(`Queue released${affected ? `, ${affected} resumed` : ""}`, { variant: "success" });
       }
     } catch (e) {
       triggerSnackbar(e instanceof Error ? e.message : `Could not ${action} everything`, { variant: "error" });
@@ -121,15 +119,15 @@ const DownloadsPageHeader = () => {
   const confirmCopy = {
     pause: {
       title: "Pause everything",
-      // Says what it cannot do as well as what it can - the alternative is a
-      // dialog that promises more than the button delivers.
+      // Leads with the guarantee rather than the caveat: holding the queue
+      // always works, and stopping work already in flight may not.
       content:
-        "Anything that can be paused stops where it is until you resume it. Work that cannot stop part-way - transcription and most post-processing - carries on regardless, and you will be told how much was left running.",
+        "Nothing new will start until you resume. Anything already running that can stop where it is will pause; work that cannot be interrupted part-way - transcription in particular - finishes first, and you will be told how much that was.",
       confirmButtonText: "Pause all",
     },
     resume: {
       title: "Resume everything",
-      content: "Everything paused starts again, in queue order.",
+      content: "The queue starts again, in order, and anything paused resumes.",
       confirmButtonText: "Resume all",
     },
   } as const;

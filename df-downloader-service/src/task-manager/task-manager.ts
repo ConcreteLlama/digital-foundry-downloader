@@ -125,7 +125,42 @@ export class TaskManager {
    * Gets a list of tasks that are eligible to run.
    * @returns
    */
+  /**
+   * While held, nothing new starts.
+   *
+   * A queued task cannot be paused individually - pause() is implemented per
+   * task type and does nothing to one that has not begun - so "pause
+   * everything" could stop nothing at all: the running task carried on, and
+   * the moment it finished the next one started. Holding the queue is the
+   * behaviour that was actually wanted, and it belongs here, in the one place
+   * that decides what runs next, rather than in every task implementation.
+   *
+   * Deliberately not persisted. A service restart clears it, which is the
+   * safer default for a flag whose failure mode is "nothing ever runs again
+   * and nobody remembers why".
+   */
+  private queueHeld = false;
+
+  isQueueHeld() {
+    return this.queueHeld;
+  }
+
+  setQueueHeld(held: boolean) {
+    if (this.queueHeld === held) {
+      return;
+    }
+    this.queueHeld = held;
+    if (!held) {
+      // Releasing has to kick the queue: nothing else will happen until some
+      // other event asks for the next task, and there may not be one.
+      void this.startEligibleTasks();
+    }
+  }
+
   getEligibleStartableTasks() {
+    if (this.queueHeld) {
+      return [];
+    }
     // We need startable and running as we're basically trying to get the top of the list of
     // tasks that should currently be running
     const startableAndRunningTasks = this.priorityItemManager.getFirstXItems(

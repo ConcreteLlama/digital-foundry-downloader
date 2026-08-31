@@ -112,9 +112,18 @@ export type ControlAllRequest = z.infer<typeof ControlAllRequest>;
 
 /** What a bulk pause or resume actually managed to do. */
 export const ControlAllResponse = z.object({
+  /** Running tasks that took the instruction. */
   affected: z.number().default(0),
-  /** Running work that would not take the instruction - see controlAll. */
+  /** Running work that would not take it - see controlAll. */
   skipped: z.number().default(0),
+  /**
+   * Whether the queues are now held.
+   *
+   * The part that always works, and usually the part that matters: nothing
+   * new starts while it is true, however little of the running work could be
+   * stopped where it stood.
+   */
+  queueHeld: z.boolean().default(false),
 });
 export type ControlAllResponse = z.infer<typeof ControlAllResponse>;
 

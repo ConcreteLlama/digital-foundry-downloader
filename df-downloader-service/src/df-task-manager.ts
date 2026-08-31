@@ -120,6 +120,14 @@ export class DfTaskManager {
   readonly bulkOperationsTaskManagers: Record<BulkBackfillTarget, TaskManager>;
 
   readonly pipelineExecutions = new Map<string, PipelineExecutionTypes>();
+  /**
+   * Every queue, so "pause everything" can hold all of them.
+   *
+   * The work is spread across a manager per concern - downloads, subtitles,
+   * media processing, one per backfill target - and holding only some of them
+   * would stop some of the queue, which is worse than stopping none.
+   */
+  private readonly allTaskManagers: TaskManager[] = [];
   readonly tasks = new Map<string, ManagedTask<any, any>>();
 
   /**
@@ -155,11 +163,13 @@ export class DfTaskManager {
         retryDelayMultiplier: 2,
       },
     });
+    this.allTaskManagers.push(downloadTaskManager);
     // Genuinely light filesystem work (ffprobe a file, stat it) - cheap
     // enough that running several at once costs nothing.
     const fileTaskManager = new TaskManager({
       concurrentTasks: 5,
     });
+    this.allTaskManagers.push(fileTaskManager);
     // Whole-file work: an ffmpeg remux to embed metadata, and moving a
     // finished download into place. Both read and write multi-gigabyte files
     // end to end, so they're bound by the disk rather than the CPU and
@@ -169,18 +179,22 @@ export class DfTaskManager {
     const mediaProcessingTaskManager = new TaskManager({
       concurrentTasks: 1,
     });
+    this.allTaskManagers.push(mediaProcessingTaskManager);
     const dfFetchTaskManager = new TaskManager({
       concurrentTasks: 1,
     });
+    this.allTaskManagers.push(dfFetchTaskManager);
     const youtubeFetchTaskManager = new TaskManager({
       concurrentTasks: 1,
     });
+    this.allTaskManagers.push(youtubeFetchTaskManager);
     const subtitlesTaskManager = new SubtitlesTaskManager({
       // See SubtitlesConfig.maxConcurrent - defaults to 1 because local
       // transcription is CPU-bound and each run already uses most of the
       // machine's cores.
       concurrentTasks: configService.config.subtitles?.maxConcurrent ?? 1,
     });
+    this.allTaskManagers.push(subtitlesTaskManager);
     this.subtitleTaskPipeline = createSubtitlesTaskPipeline({
       subtitlesTaskManager: subtitlesTaskManager,
       mediaProcessingTaskManager: mediaProcessingTaskManager,
@@ -188,6 +202,7 @@ export class DfTaskManager {
     // One manager shared by both pipelines, so the concurrency cap covers
     // every analysis in flight rather than being applied twice over.
     const aiAnalysisTaskManager = new AiAnalysisTaskManager();
+    this.allTaskManagers.push(aiAnalysisTaskManager);
     this.downloadTaskPipeline = createDownloadTaskPipeline({
       downloadTaskManager: downloadTaskManager,
       subtitlesTaskManager: subtitlesTaskManager,
@@ -202,9 +217,11 @@ export class DfTaskManager {
       dfFetchTaskManager,
       youtubeFetchTaskManager,
     });
+    // Registered below with the rest, once constructed.
     this.maintenanceOperationsTaskManager = new TaskManager({
       concurrentTasks: 1,
     });
+    this.allTaskManagers.push(this.maintenanceOperationsTaskManager);
     /*
       One slot per kind of bulk run, rather than one slot for all of them.
 
@@ -226,6 +243,7 @@ export class DfTaskManager {
     */
     this.bulkOperationsTaskManagers = BulkBackfillTarget.options.reduce((managers, target) => {
       managers[target] = new TaskManager({ concurrentTasks: 1 });
+      this.allTaskManagers.push(managers[target]);
       return managers;
     }, {} as Record<BulkBackfillTarget, TaskManager>);
     this.aiAnalysisTaskPipeline = createAiAnalysisTaskPipeline({
@@ -779,21 +797,43 @@ export class DfTaskManager {
    * One pass over both collections, with a single change notification at the
    * end: pausing thirty things should redraw the page once, not thirty times.
    */
-  async controlAll(action: "pause" | "resume"): Promise<{ affected: number; skipped: number }> {
+  async controlAll(action: "pause" | "resume"): Promise<{ affected: number; skipped: number; queueHeld: boolean }> {
+    /*
+     * Two separate things, and only together do they mean "pause everything".
+     *
+     * Holding the queues is the part that always works: nothing new starts
+     * until it is released. This matters more than it sounds, because a queued
+     * task cannot be paused on its own - pause() is implemented per task type
+     * and does nothing to one that has not begun. Without the hold, pausing a
+     * queue of five transcriptions stopped none of them: the running one
+     * carried on and the next started the instant it finished.
+     *
+     * Pausing the already-running tasks is the part that is best-effort, since
+     * some cannot stop where they are. Those are counted and reported rather
+     * than quietly left out.
+     */
+    const held = action === "pause";
+    for (const manager of this.allTaskManagers) {
+      manager.setQueueHeld(held);
+    }
+
     let affected = 0;
     let skipped = 0;
     const apply = (managedTask?: GenericManagedTask) => {
-      // Finished work is not skipped, it is simply not a candidate - counting
-      // it would make "12 skipped" mean nothing.
       if (!managedTask?.task || managedTask.isCompleted()) {
         return;
       }
-      // Asked, not attempted. task.pause() on something that cannot pause -
-      // transcription, most of the post-processing steps - returns perfectly
-      // happily and does nothing, so counting calls that did not throw
-      // reported four paused tasks while all four carried on running. This is
-      // the same capability list the UI uses to decide whether to offer a
-      // pause button on the row, so the two now agree.
+      const state = managedTask.task.getTaskState();
+      // Only what is actually in flight. Queued work is covered by the hold,
+      // and counting it here would inflate the number with tasks that were
+      // never going to be touched.
+      const relevant = action === "pause" ? state === "running" : state === "paused";
+      if (!relevant) {
+        return;
+      }
+      // task.pause() on something that cannot pause returns happily and does
+      // nothing, so this asks the same capability list the UI uses to decide
+      // whether to offer a pause button, rather than trusting the call.
       if (!makeTaskInfo(managedTask, null).capabilities.includes("pause")) {
         skipped++;
         return;
@@ -815,7 +855,7 @@ export class DfTaskManager {
       apply(task);
     }
     this.notifyChanged();
-    return { affected, skipped };
+    return { affected, skipped, queueHeld: held };
   }
 
   async control(controlRequest: ControlRequest) {
