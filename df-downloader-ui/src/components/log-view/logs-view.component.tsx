@@ -1,3 +1,5 @@
+import ContentCopyIcon from "@mui/icons-material/ContentCopy";
+import DownloadIcon from "@mui/icons-material/Download";
 import RefreshIcon from "@mui/icons-material/Refresh";
 import {
   Alert,
@@ -14,7 +16,7 @@ import {
   useTheme,
 } from "@mui/material";
 import { LogEntry, LogLevel, LogsResponse, logLevels, parseResponseBody } from "df-downloader-common";
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { type KeyboardEvent as ReactKeyboardEvent, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { API_URL } from "../../config";
 import { monoFontFamily } from "../../themes/build-theme";
 import { fetchJson } from "../../utils/fetch";
@@ -293,6 +295,100 @@ export const LogsView = () => {
     });
   };
 
+  /** Reverts on its own - a button stuck on "Copied" stops meaning anything. */
+  const [copied, setCopied] = useState<"idle" | "ok" | "failed">("idle");
+  useEffect(() => {
+    if (copied === "idle") {
+      return;
+    }
+    const timer = setTimeout(() => setCopied("idle"), 2000);
+    return () => clearTimeout(timer);
+  }, [copied]);
+
+  /**
+   * What the copy and download buttons hand over.
+   *
+   * Rebuilt from the entries rather than scraped from the DOM: each row is a
+   * flex line of three spans, so a selection across it copies as a run-on
+   * without the separation that makes a log readable.
+   */
+  const plainText = useMemo(
+    () =>
+      entries
+        .map((entry) => `${entry.timestamp.replace("T", " ").replace("Z", "")} ${entry.level.toUpperCase()} ${entry.message}`)
+        .join("\n"),
+    [entries]
+  );
+
+  const copyAll = async () => {
+    // navigator.clipboard needs a secure context, and this is normally
+    // reached over plain http on a LAN address, where it is simply absent.
+    // execCommand is deprecated but is the only thing that works there, so
+    // it is a fallback rather than a preference.
+    if (navigator.clipboard?.writeText) {
+      try {
+        await navigator.clipboard.writeText(plainText);
+        setCopied("ok");
+        return;
+      } catch {
+        // Permission refused or blocked - the textarea route may still work.
+      }
+    }
+    const area = document.createElement("textarea");
+    area.value = plainText;
+    area.setAttribute("readonly", "");
+    area.style.position = "fixed";
+    area.style.top = "0";
+    area.style.opacity = "0";
+    document.body.appendChild(area);
+    let ok = false;
+    try {
+      area.select();
+      ok = document.execCommand("copy");
+    } catch {
+      ok = false;
+    } finally {
+      document.body.removeChild(area);
+    }
+    setCopied(ok ? "ok" : "failed");
+  };
+
+  const downloadAll = () => {
+    const blob = new Blob([plainText], { type: "text/plain;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `df-downloader-log-${new Date().toISOString().replace(/[:.]/g, "-")}.txt`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
+
+  /**
+   * Confines select-all to the log itself.
+   *
+   * Ctrl+A anywhere on the page selects the whole page, filters and all,
+   * which is useless for getting the log out of here. With the pane focused
+   * this selects its contents and nothing else, so the ordinary copy
+   * shortcut then does what it looks like it should.
+   */
+  const selectAllInLog = (event: ReactKeyboardEvent<HTMLDivElement>) => {
+    if (!(event.ctrlKey || event.metaKey) || event.key.toLowerCase() !== "a") {
+      return;
+    }
+    const node = scrollRef.current;
+    if (!node) {
+      return;
+    }
+    event.preventDefault();
+    const selection = window.getSelection();
+    const range = document.createRange();
+    range.selectNodeContents(node);
+    selection?.removeAllRanges();
+    selection?.addRange(range);
+  };
+
   return (
     <Paper sx={{ padding: 2, display: "flex", flexDirection: "column" }}>
       <Typography variant="h5">Logs</Typography>
@@ -348,6 +444,20 @@ export const LogsView = () => {
             </Button>
           </span>
         </Tooltip>
+        <Tooltip title={`Copy all ${entries.length} shown entries`}>
+          <span>
+            <Button startIcon={<ContentCopyIcon />} onClick={() => void copyAll()} disabled={!entries.length}>
+              {copied === "ok" ? "Copied" : copied === "failed" ? "Press Ctrl+C" : "Copy"}
+            </Button>
+          </span>
+        </Tooltip>
+        <Tooltip title="Save the shown entries as a text file">
+          <span>
+            <Button startIcon={<DownloadIcon />} onClick={downloadAll} disabled={!entries.length}>
+              Download
+            </Button>
+          </span>
+        </Tooltip>
       </Stack>
 
       {meta && !meta.fileLoggingEnabled && (
@@ -370,7 +480,11 @@ export const LogsView = () => {
       <Box
         ref={scrollRef}
         onScroll={onScroll}
+        tabIndex={0}
+        onKeyDown={selectAllInLog}
         sx={{
+          userSelect: "text",
+          "&:focus-visible": { outline: "2px solid", outlineColor: "primary.main", outlineOffset: 2 },
           // A definite height, not flexGrow, and deliberately so. This page
           // renders inside NavPage, which is content-height - so "fill the
           // space" has no space to resolve against, and the pane simply grew
