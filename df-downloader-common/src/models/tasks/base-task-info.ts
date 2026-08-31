@@ -81,6 +81,17 @@ export const TaskStatus = z.object({
   attempt: z.number().default(1),
   error: z.any().optional(),
   isComplete: z.boolean(),
+  /**
+   * Held out of the queue by hand, rather than paused mid-run.
+   *
+   * Pausing a task that has not started yet is meaningless to the task itself
+   * - there is nothing running to suspend - so the task manager keeps it out
+   * of its own selection instead. The state still reads "paused", because
+   * that is what the user did and what they expect to undo; this says which
+   * of the two happened, so the UI can keep Stop available on work that never
+   * began.
+   */
+  held: z.boolean().optional(),
   /** See TaskProgress - present only for tasks that can report progress. */
   progress: TaskProgress.optional(),
   /**

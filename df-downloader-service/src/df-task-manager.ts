@@ -763,10 +763,22 @@ export class DfTaskManager {
     } else {
       switch (action) {
         case "pause":
-          managedTask.task.pause("manual");
+          // Nothing running means nothing to pause, so it is held out of the
+          // queue instead - see TaskManager.setTaskHeld. Without this, pausing
+          // a queued item returned success and left it to start anyway.
+          if (managedTask.task.getTaskState() === "running") {
+            managedTask.task.pause("manual");
+          } else {
+            managedTask.taskManager.setTaskHeld(managedTask.task.id, true);
+          }
           break;
         case "resume":
-          managedTask.resume();
+          managedTask.taskManager.setTaskHeld(managedTask.task.id, false);
+          // Only a task that genuinely paused has anything to resume; one that
+          // was merely held is already startable again by releasing it.
+          if (managedTask.task.getTaskState() === "paused") {
+            managedTask.resume();
+          }
           break;
         case "cancel":
           managedTask.task.cancel();
@@ -805,6 +817,10 @@ export class DfTaskManager {
       throw new Error(`No curent task for taskInfo ${pipelineExecutionId}`);
     }
     this.controlTaskManagerTask(managedTask, action);
+    // Holding a task does not change the task's own state, so the
+    // taskStateChanged event that normally pushes a fresh snapshot never
+    // fires - without this the hold is invisible until something else moves.
+    this.notifyChanged();
   }
 
   controlTask(controlTaskRequest: ControlTaskRequest) {
@@ -817,6 +833,7 @@ export class DfTaskManager {
       throw new Error(`No task with id ${controlTaskRequest.taskId}`);
     }
     this.controlTaskManagerTask(task, controlTaskRequest.action);
+    this.notifyChanged();
   }
 
   /**
@@ -1391,9 +1408,14 @@ const makeCommonTaskStatusInfo = (managedTask: GenericManagedTask): TaskStatus =
   // Tasks opt into progress reporting by returning it from getStatus() - see
   // TaskProgress. Most don't, in which case this is simply absent.
   const statusDetail = task.getStatus() as { progress?: TaskProgress } | undefined;
+  // A held task is idle as far as it knows - the hold lives in the task
+  // manager's selection, not in the task - so it is reported as paused here.
+  // Otherwise pausing a queued item looked like it had done nothing.
+  const held = managedTask.taskManager?.isTaskHeld(task.id) ?? false;
   return {
-    state: taskState,
-    pauseTrigger: task.pauseTrigger || undefined,
+    state: held && !task.isCompleted() ? "paused" : taskState,
+    held: held || undefined,
+    pauseTrigger: held ? "manual" : task.pauseTrigger || undefined,
     isComplete: task.isCompleted(),
     attempt: managedTask.attempt,
     message: task.getStatusMessage(),

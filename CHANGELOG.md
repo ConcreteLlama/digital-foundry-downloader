@@ -207,6 +207,12 @@ This release also fixes a long-standing gap where newly published videos could g
 - A job now shows both how long it has been going and how long it has actually been working
   - The single duration kept counting while a download was paused, which is right for one question and wrong for the other
   - Paused jobs show both, so 'Elapsed 6m 29s, Active 2m 14s' tells you the pause is why it is taking a while
+- Stop and pause now work on queued jobs, whatever kind of work they are
+  - Stop did nothing at all on a subtitles job. The button was greyed out, and pressing it would not have helped: it asked the job itself to stop, which means nothing to something that has not started yet
+  - Anything sitting in the queue can now be stopped, whatever it is - it is simply taken out of the queue. Whether a job can be stopped once it is actually running is a separate question, and the button says so honestly: transcribing cannot be interrupted part-way, so it stays unavailable there rather than pretending
+  - Queued jobs can also be held where they are, which previously was not offered at all - the only thing you could do to a queued job was push it to the front. Holding one lets the rest of the queue carry on past it, so putting off a long transcription no longer means stopping everything behind it
+  - A held job says it is paused and offers to resume, so putting one back is the same gesture as any other pause
+- A Stop all button on the Activity page, for abandoning a queue rather than cancelling it a job at a time. It warns first, and says how many can actually be stopped now against how many are already running and will have to finish
 - Fixed several things a job could do without telling you anything
   - A paused download kept its progress bar - pausing at 60% used to empty the bar completely, which looked like the transfer had been thrown away
   - A queued, paused or waiting job now says so in words. It could previously show a title, an empty bar and two buttons with no explanation anywhere - which mattered most for exactly the case the app pauses deliberately, when it is spacing out its requests to Digital Foundry

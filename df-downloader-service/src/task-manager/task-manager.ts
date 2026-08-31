@@ -141,6 +141,36 @@ export class TaskManager {
    */
   private queueHeld = false;
 
+  /**
+   * Individual tasks held back from starting.
+   *
+   * Pausing something that has not begun has nowhere to go in the task FSM -
+   * pause() is implemented per task type and does nothing when there is
+   * nothing running - so a queued item could be forced to start but never held
+   * back, which is a strange thing to be able to do in only one direction.
+   *
+   * This is the same mechanism as the queue hold above, narrowed to one task.
+   * Anything with actual progress behind it still has to be paused by the task
+   * itself; this is only ever about not starting something in the first place.
+   */
+  private readonly heldTasks = new Set<string>();
+
+  isTaskHeld(taskId: string) {
+    return this.heldTasks.has(taskId);
+  }
+
+  setTaskHeld(taskId: string, held: boolean) {
+    if (held) {
+      this.heldTasks.add(taskId);
+      return;
+    }
+    if (this.heldTasks.delete(taskId)) {
+      // Releasing has to kick the queue, or nothing runs until some unrelated
+      // event next asks for the next task.
+      void this.startEligibleTasks();
+    }
+  }
+
   isQueueHeld() {
     return this.queueHeld;
   }
@@ -161,11 +191,21 @@ export class TaskManager {
     if (this.queueHeld) {
       return [];
     }
+    return this.selectStartableTasks();
+  }
+
+  private selectStartableTasks() {
     // We need startable and running as we're basically trying to get the top of the list of
     // tasks that should currently be running
+    // Held tasks are passed over rather than filtered out afterwards. Filtering
+    // after the fact would let a held task occupy one of the concurrency slots,
+    // so holding the one item at the front of a queue running one at a time
+    // would stall everything behind it - the opposite of what holding a single
+    // item should do.
     const startableAndRunningTasks = this.priorityItemManager.getFirstXItems(
       this._concurrentTasks,
-      (task) => task.isStartable() || task.task.getTaskState() === "running"
+      (task) =>
+        (!this.heldTasks.has(task.task.id) && task.isStartable()) || task.task.getTaskState() === "running"
     );
 
     const startableTasks = startableAndRunningTasks.filter((task) => task.isStartable());

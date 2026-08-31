@@ -108,6 +108,11 @@ export const StandaloneTaskInfo = ({ taskId }: StandaloneTaskInfoProps) => {
   const capabilities = task.capabilities ?? [];
   const isComplete = Boolean(status?.isComplete);
   const paused = state === "paused" || state === "pausing";
+  // Work that has not started can always be held out of the queue and always
+  // dropped from it, whatever the task itself declares it can do once running.
+  const queued = state === "idle";
+  const canPause = capabilities.includes("pause") || queued;
+  const canCancel = capabilities.includes("cancel") || queued;
   const backfill = isBulkBackfillTaskInfo(task) ? task.status?.backfill : undefined;
 
   const control = (action: "pause" | "resume" | "cancel" | "clear") =>
@@ -189,7 +194,7 @@ export const StandaloneTaskInfo = ({ taskId }: StandaloneTaskInfoProps) => {
         )}
 
         <Stack direction="row" spacing={1} sx={{ marginTop: 1 }}>
-          {!isComplete && capabilities.includes("pause") && (
+          {!isComplete && canPause && (
             <Button
               size="small"
               // The card opens details; a control is not a request to do that.
@@ -198,10 +203,10 @@ export const StandaloneTaskInfo = ({ taskId }: StandaloneTaskInfoProps) => {
                 control(paused ? "resume" : "pause");
               }}
             >
-              {paused ? "Resume" : "Pause"}
+              {paused ? "Resume" : queued ? "Hold" : "Pause"}
             </Button>
           )}
-          {!isComplete && capabilities.includes("cancel") && (
+          {!isComplete && canCancel && (
             <Button
               size="small"
               color="error"

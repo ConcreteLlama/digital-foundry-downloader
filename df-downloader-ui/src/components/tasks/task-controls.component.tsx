@@ -34,13 +34,35 @@ export const TaskControls = ({ pipelineId, size = "medium" }: TaskControlsProps)
   const capabilities = useSelector(selectBasicTaskField(pipelineId, currentStep || "", "capabilities"));
   const isComplete = useSelector(selectIsComplete(pipelineId));
   const pauseTrigger = useSelector(selectTaskStatusField(pipelineId, currentStep || "", "pauseTrigger"));
+  /** Held out of the queue by hand rather than paused mid-run - see TaskStatus.held. */
+  const held = Boolean(useSelector(selectTaskStatusField(pipelineId, currentStep || "", "held")));
   const isPausingOrCancelling = taskState === "pausing" || taskState === "cancelling";
   const buttonsDisabled = isComplete || isPausingOrCancelling;
+  /*
+   * Queued work gets both: jump the queue, or hold it where it is.
+   *
+   * Holding a queued task used to be impossible - the only control offered was
+   * Force start - even though "don't run this one yet" is the most obvious
+   * thing to want from a queue you can see. The task itself has nothing to
+   * suspend, so the service holds it out of its selection instead; a held task
+   * reports itself paused, which is why it falls through to Resume below.
+   */
   const startButton =
-    pauseTrigger === "auto" || taskState === "idle" ? (
+    pauseTrigger === "auto" ? (
       <ForceStartButton pipelineId={pipelineId} disabled={buttonsDisabled} size={size} />
     ) : taskState === "running" ? (
       <PauseButton pipelineId={pipelineId} disabled={buttonsDisabled} size={size} />
+    ) : taskState === "idle" ? (
+      <Fragment>
+        <ForceStartButton pipelineId={pipelineId} disabled={buttonsDisabled} size={size} />
+        <PauseButton
+          pipelineId={pipelineId}
+          disabled={buttonsDisabled}
+          size={size}
+          label="Hold in the queue"
+          ariaLabel="Hold this task in the queue"
+        />
+      </Fragment>
     ) : (
       <ResumeButton pipelineId={pipelineId} disabled={buttonsDisabled} size={size} />
     );
@@ -57,7 +79,9 @@ export const TaskControls = ({ pipelineId, size = "medium" }: TaskControlsProps)
    * offering one.
    */
   const cancelEnabled =
-    !isComplete && taskState !== "cancelling" && (taskState === "idle" || Boolean(capabilities?.includes("cancel")));
+    !isComplete &&
+    taskState !== "cancelling" &&
+    (taskState === "idle" || held || Boolean(capabilities?.includes("cancel")));
   // The isComplete branch that used to live here rendered a per-pipeline Clear
   // button, but it was unreachable: TaskStatusDetail returns
   // CompletedTaskStatusDetail before TaskControls is ever rendered for a
@@ -89,6 +113,10 @@ type ActionButtonProps = {
   pipelineId: string;
   disabled: boolean;
   size?: "small" | "medium";
+  /** Overrides the tooltip - a queued task is held, not paused. */
+  label?: string;
+  /** The full accessible name, since it does not always read as "<label> this task". */
+  ariaLabel?: string;
 };
 const ResumeButton = ({ pipelineId, disabled, size = "medium" }: ActionButtonProps) => {
   return (
@@ -105,13 +133,19 @@ const ResumeButton = ({ pipelineId, disabled, size = "medium" }: ActionButtonPro
   );
 };
 
-const PauseButton = ({ pipelineId, disabled, size = "medium" }: ActionButtonProps) => {
+const PauseButton = ({
+  pipelineId,
+  disabled,
+  size = "medium",
+  label = "Pause",
+  ariaLabel = "Pause this task",
+}: ActionButtonProps) => {
   return (
-    <Tooltip title="Pause">
+    <Tooltip title={label}>
       <IconButton
         size={size}
         disabled={disabled}
-        aria-label="Pause this task"
+        aria-label={ariaLabel}
         onClick={() => controlPipeline(pipelineId, "pause")}
       >
         <PauseButtonIcon fontSize={size} />
