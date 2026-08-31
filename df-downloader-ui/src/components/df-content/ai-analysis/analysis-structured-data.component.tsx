@@ -15,8 +15,12 @@ import {
 } from "@mui/material";
 import {
   AiConsoleComparisonData,
+  AiHardwareReviewData,
   AiPcReviewSettingsData,
-  AiQaRoundtableData,
+  AiPlatformAnalysisData,
+  AiPlatformComparison,
+  AiPreviewData,
+  AiQaSegment,
   AiStructuredData,
   secondsToHHMMSS,
 } from "df-downloader-common";
@@ -163,16 +167,22 @@ const PcReviewSettings = ({ data, onJumpTo }: { data: AiPcReviewSettingsData; on
  * read by comparing across platforms, and a table of every platform-mode
  * combination forces horizontal scrolling in a narrow dialog.
  */
-const ConsoleComparison = ({ data, onJumpTo }: { data: AiConsoleComparisonData; onJumpTo?: (seconds: number) => void }) => (
-  <Stack spacing={2}>
-    {(data.game || data.developer) && (
-      <Typography variant="body2" sx={{ color: "text.secondary" }}>
-        {data.game}
-        {data.developer ? ` · ${data.developer}` : ""}
-      </Typography>
-    )}
+/**
+ * The per-platform mode table.
+ *
+ * Shared because a platform analysis is structurally a face-off with fewer
+ * platforms - same modes, same numbers - so rendering it differently would
+ * be a difference with no meaning behind it.
+ */
+const PlatformGrid = ({
+  platforms,
+  onJumpTo,
+}: {
+  platforms: AiPlatformComparison[];
+  onJumpTo?: (seconds: number) => void;
+}) => (
     <Box sx={{ display: "grid", gap: 1.5, gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))" }}>
-      {data.platforms.map((platform) => (
+      {platforms.map((platform) => (
         <Paper key={platform.platform} variant="outlined" sx={{ overflow: "hidden" }}>
           <Typography
             sx={{ px: 1.5, py: 1, fontWeight: 600, fontSize: "0.8125rem", bgcolor: "background.default" }}
@@ -215,23 +225,43 @@ const ConsoleComparison = ({ data, onJumpTo }: { data: AiConsoleComparisonData; 
         </Paper>
       ))}
     </Box>
-    {data.knownIssues.length > 0 && (
-      <Box>
-        <SectionLabel>Known issues</SectionLabel>
-        <Box component="ul" sx={{ m: 0, mt: 0.5, pl: 2.5, color: "text.secondary" }}>
-          {data.knownIssues.map((known, index) => (
-            <Typography component="li" variant="body2" key={index}>
-              {known.issue}
-              {known.timestampSeconds != null && onJumpTo && (
-                <Box component="span" sx={{ ml: 0.75, verticalAlign: "middle" }}>
-                  <JumpChip seconds={known.timestampSeconds} onJumpTo={onJumpTo} />
-                </Box>
-              )}
-            </Typography>
-          ))}
-        </Box>
+);
+
+const KnownIssues = ({
+  issues,
+  onJumpTo,
+}: {
+  issues: AiConsoleComparisonData["knownIssues"];
+  onJumpTo?: (seconds: number) => void;
+}) =>
+  issues.length ? (
+    <Box>
+      <SectionLabel>Known issues</SectionLabel>
+      <Box component="ul" sx={{ m: 0, mt: 0.5, pl: 2.5, color: "text.secondary" }}>
+        {issues.map((known, index) => (
+          <Typography component="li" variant="body2" key={index}>
+            {known.issue}
+            {known.timestampSeconds != null && onJumpTo && (
+              <Box component="span" sx={{ ml: 0.75, verticalAlign: "middle" }}>
+                <JumpChip seconds={known.timestampSeconds} onJumpTo={onJumpTo} />
+              </Box>
+            )}
+          </Typography>
+        ))}
       </Box>
+    </Box>
+  ) : null;
+
+const ConsoleComparison = ({ data, onJumpTo }: { data: AiConsoleComparisonData; onJumpTo?: (seconds: number) => void }) => (
+  <Stack spacing={2}>
+    {(data.game || data.developer) && (
+      <Typography variant="body2" sx={{ color: "text.secondary" }}>
+        {data.game}
+        {data.developer ? ` · ${data.developer}` : ""}
+      </Typography>
     )}
+    <PlatformGrid platforms={data.platforms} onJumpTo={onJumpTo} />
+    <KnownIssues issues={data.knownIssues} onJumpTo={onJumpTo} />
     {data.recommendation && (
       <Box>
         <SectionLabel>Recommendation</SectionLabel>
@@ -283,14 +313,29 @@ const JumpChip = ({ seconds, onJumpTo }: { seconds?: number | null; onJumpTo?: (
   );
 };
 
-const QaRoundtable = ({ data, onJumpTo }: { data: AiQaRoundtableData; onJumpTo?: (seconds: number) => void }) => (
+/**
+ * A sequence of independent items - a Q+A, a Direct, a year-end list.
+ *
+ * One renderer for all three because they are the same structure, and each
+ * item names the game it concerns where it has one. That chip is the visible
+ * half of what makes a Direct findable under the games it covered.
+ */
+const SegmentList = ({ segments, onJumpTo }: { segments: AiQaSegment[]; onJumpTo?: (seconds: number) => void }) => (
   <Stack spacing={1}>
-    {data.segments.map((segment, index) => (
+    {segments.map((segment, index) => (
       <Paper key={index} variant="outlined" sx={{ p: 1.5 }}>
         <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 0.5 }} flexWrap="wrap" useFlexGap>
           <Typography variant="body2" sx={{ fontWeight: 600 }}>
             {segment.topic}
           </Typography>
+          {segment.game && (
+            <Chip
+              size="small"
+              variant="outlined"
+              label={segment.game}
+              sx={{ height: 20, fontSize: "0.65rem" }}
+            />
+          )}
           <JumpChip seconds={segment.timestampSeconds} onJumpTo={onJumpTo} />
         </Stack>
         {segment.summary && (
@@ -312,6 +357,148 @@ const QaRoundtable = ({ data, onJumpTo }: { data: AiQaRoundtableData; onJumpTo?:
   </Stack>
 );
 
+const PlatformAnalysis = ({
+  data,
+  onJumpTo,
+}: {
+  data: AiPlatformAnalysisData;
+  onJumpTo?: (seconds: number) => void;
+}) => (
+  <Stack spacing={2}>
+    {(data.game || data.developer) && (
+      <Typography variant="body2" sx={{ color: "text.secondary" }}>
+        {data.game}
+        {data.developer ? ` · ${data.developer}` : ""}
+      </Typography>
+    )}
+    {/* First, not last: this format is usually about a delta - what a patch
+        or port changed - and that is the answer people came for. */}
+    {data.changeSummary && (
+      <Box>
+        <SectionLabel>What changed</SectionLabel>
+        <Typography variant="body2" sx={{ mt: 0.5 }}>
+          {data.changeSummary}
+        </Typography>
+      </Box>
+    )}
+    <PlatformGrid platforms={data.platforms} onJumpTo={onJumpTo} />
+    <KnownIssues issues={data.knownIssues} onJumpTo={onJumpTo} />
+    {data.verdict && (
+      <Box>
+        <SectionLabel>Verdict</SectionLabel>
+        <Typography variant="body2" sx={{ mt: 0.5 }}>
+          {data.verdict}
+        </Typography>
+      </Box>
+    )}
+  </Stack>
+);
+
+/**
+ * A preview, deliberately without a numbers table.
+ *
+ * The format is provisional by design, so this shows what was seen and what
+ * the presenters said not to conclude from it - rather than a tidy grid that
+ * would imply a precision nobody claimed.
+ */
+const HandsOnPreview = ({ data, onJumpTo }: { data: AiPreviewData; onJumpTo?: (seconds: number) => void }) => (
+  <Stack spacing={2}>
+    {(data.game || data.platforms.length > 0 || data.buildState) && (
+      <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap alignItems="center">
+        {data.game && (
+          <Typography variant="body2" sx={{ color: "text.secondary" }}>
+            {data.game}
+          </Typography>
+        )}
+        {data.platforms.map((platform) => (
+          <Chip key={platform} size="small" variant="outlined" label={platform} sx={{ height: 20, fontSize: "0.65rem" }} />
+        ))}
+        {data.buildState && (
+          <Typography variant="caption" sx={{ color: "text.disabled" }}>
+            {data.buildState}
+          </Typography>
+        )}
+      </Stack>
+    )}
+    {data.observations.length > 0 && (
+      <Box>
+        <SectionLabel>What was shown</SectionLabel>
+        <Box component="ul" sx={{ m: 0, mt: 0.5, pl: 2.5, color: "text.secondary" }}>
+          {data.observations.map((item, index) => (
+            <Typography component="li" variant="body2" key={index}>
+              {item.observation}
+              {item.timestampSeconds != null && onJumpTo && (
+                <Box component="span" sx={{ ml: 0.75, verticalAlign: "middle" }}>
+                  <JumpChip seconds={item.timestampSeconds} onJumpTo={onJumpTo} />
+                </Box>
+              )}
+            </Typography>
+          ))}
+        </Box>
+      </Box>
+    )}
+    {data.caveats && (
+      <Box>
+        <SectionLabel>Caveats</SectionLabel>
+        <Typography variant="body2" sx={{ mt: 0.5, color: "text.secondary" }}>
+          {data.caveats}
+        </Typography>
+      </Box>
+    )}
+  </Stack>
+);
+
+const HardwareReview = ({ data, onJumpTo }: { data: AiHardwareReviewData; onJumpTo?: (seconds: number) => void }) => (
+  <Stack spacing={2}>
+    {data.products.length > 0 && (
+      <Box sx={{ display: "grid", gap: 1.5, gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))" }}>
+        {data.products.map((product, index) => (
+          <Paper key={`${product.name}-${index}`} variant="outlined" sx={{ p: 1.5 }}>
+            <Stack direction="row" spacing={0.75} alignItems="center" flexWrap="wrap" useFlexGap>
+              <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                {product.name}
+              </Typography>
+              {product.productClass && (
+                <Typography variant="caption" sx={{ color: "text.disabled" }}>
+                  {product.productClass}
+                </Typography>
+              )}
+              <JumpChip seconds={product.timestampSeconds} onJumpTo={onJumpTo} />
+            </Stack>
+            {product.verdict && (
+              <Typography variant="body2" sx={{ color: "text.secondary", mt: 0.5 }}>
+                {product.verdict}
+              </Typography>
+            )}
+          </Paper>
+        ))}
+      </Box>
+    )}
+    <KnownIssues issues={data.knownIssues} onJumpTo={onJumpTo} />
+    {data.verdict && (
+      <Box>
+        <SectionLabel>Verdict</SectionLabel>
+        <Typography variant="body2" sx={{ mt: 0.5 }}>
+          {data.verdict}
+        </Typography>
+      </Box>
+    )}
+    {/* Labelled as tests rather than coverage - these games are instruments
+        here, and listing them plainly would read as though the video was
+        about them. */}
+    {data.gamesTested.length > 0 && (
+      <Box>
+        <SectionLabel>Tested with</SectionLabel>
+        <Stack direction="row" spacing={0.75} flexWrap="wrap" useFlexGap sx={{ mt: 0.5 }}>
+          {data.gamesTested.map((game) => (
+            <Chip key={game} size="small" variant="outlined" label={game} sx={{ height: 20, fontSize: "0.65rem" }} />
+          ))}
+        </Stack>
+      </Box>
+    )}
+  </Stack>
+);
+
 export const AnalysisStructuredData = ({
   data,
   onJumpTo,
@@ -324,8 +511,16 @@ export const AnalysisStructuredData = ({
       return <PcReviewSettings data={data} onJumpTo={onJumpTo} />;
     case "console_comparison":
       return <ConsoleComparison data={data} onJumpTo={onJumpTo} />;
+    case "platform_analysis":
+      return <PlatformAnalysis data={data} onJumpTo={onJumpTo} />;
+    case "hands_on_preview":
+      return <HandsOnPreview data={data} onJumpTo={onJumpTo} />;
+    case "hardware_review":
+      return <HardwareReview data={data} onJumpTo={onJumpTo} />;
     case "qa_roundtable":
-      return <QaRoundtable data={data} onJumpTo={onJumpTo} />;
+    case "news_discussion":
+    case "roundup_list":
+      return <SegmentList segments={data.segments} onJumpTo={onJumpTo} />;
     default:
       return null;
   }

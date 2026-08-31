@@ -37,9 +37,16 @@ const nullableNumber = () => z.number().nullable();
 
 export const WireContentType = z.enum([
   "console_comparison",
+  "platform_analysis",
   "pc_review_settings",
   "hands_on_preview",
+  "game_retrospective",
+  "hardware_review",
+  "tech_explainer",
+  "interview",
   "qa_roundtable",
+  "news_discussion",
+  "roundup_list",
   "other",
 ]);
 export type WireContentType = z.infer<typeof WireContentType>;
@@ -59,6 +66,21 @@ export const WireTag = z.object({
 export const WireOverview = z.object({
   contentType: WireContentType,
   contentTypeConfidence: z.number().min(0).max(1),
+  /**
+   * The single game this is about, or null when it is about none.
+   *
+   * Asked for on the first call so every content type can answer it, not
+   * just the few with a structured extraction - which is what previously
+   * made a preview or a Switch 2 port analysis impossible to file.
+   */
+  primaryGame: nullableString(),
+  /**
+   * Every game meaningfully covered, including primaryGame.
+   *
+   * A discussion show has no primary game but covers several; this is how
+   * those still surface under each one.
+   */
+  games: z.array(z.string()),
   summary: nullableString(),
   /**
    * Nullable on purpose, and the prompt says so explicitly: hands-on
@@ -75,6 +97,21 @@ export type WireOverview = z.infer<typeof WireOverview>;
 export const WireTagOnly = z.object({
   contentType: WireContentType,
   contentTypeConfidence: z.number().min(0).max(1),
+  /**
+   * The single game this is about, or null when it is about none.
+   *
+   * Asked for on the first call so every content type can answer it, not
+   * just the few with a structured extraction - which is what previously
+   * made a preview or a Switch 2 port analysis impossible to file.
+   */
+  primaryGame: nullableString(),
+  /**
+   * Every game meaningfully covered, including primaryGame.
+   *
+   * A discussion show has no primary game but covers several; this is how
+   * those still surface under each one.
+   */
+  games: z.array(z.string()),
   tags: z.array(WireTag),
 });
 export type WireTagOnly = z.infer<typeof WireTagOnly>;
@@ -164,6 +201,8 @@ export type WirePcReviewSettings = z.infer<typeof WirePcReviewSettings>;
 
 export const WireQaSegment = z.object({
   topic: z.string(),
+  /** The game this item is about, or null when it is not about one. */
+  game: nullableString(),
   summary: nullableString(),
   conclusion: nullableString(),
   /**
@@ -175,6 +214,52 @@ export const WireQaSegment = z.object({
    */
   quote: nullableString(),
 });
+
+/** Second call, platform_analysis branch. Same platform shape as a face-off. */
+export const WirePlatformAnalysis = z.object({
+  game: nullableString(),
+  developer: nullableString(),
+  platforms: z.array(WirePlatform),
+  /** What changed against a previous version, patch or platform. */
+  changeSummary: nullableString(),
+  knownIssues: z.array(WireKnownIssue),
+  verdict: nullableString(),
+});
+export type WirePlatformAnalysis = z.infer<typeof WirePlatformAnalysis>;
+
+export const WireHardwareProduct = z.object({
+  name: z.string(),
+  productClass: nullableString(),
+  verdict: nullableString(),
+  /** A span copied verbatim out of the transcript, or null if none exists. */
+  quote: nullableString(),
+});
+
+/** Second call, hardware_review branch. */
+export const WireHardwareReview = z.object({
+  products: z.array(WireHardwareProduct),
+  /** Titles used as benchmarks - instruments, not the subject. */
+  gamesTested: z.array(z.string()),
+  verdict: nullableString(),
+  knownIssues: z.array(WireKnownIssue),
+});
+export type WireHardwareReview = z.infer<typeof WireHardwareReview>;
+
+export const WireObservation = z.object({
+  observation: z.string(),
+  /** A span copied verbatim out of the transcript, or null if none exists. */
+  quote: nullableString(),
+});
+
+/** Second call, hands_on_preview branch. No numbers table by design. */
+export const WirePreview = z.object({
+  game: nullableString(),
+  platforms: z.array(z.string()),
+  buildState: nullableString(),
+  observations: z.array(WireObservation),
+  caveats: nullableString(),
+});
+export type WirePreview = z.infer<typeof WirePreview>;
 
 /** Second call, qa_roundtable branch. 3 union params. */
 export const WireQaSegments = z.object({

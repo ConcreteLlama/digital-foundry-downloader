@@ -1,5 +1,6 @@
 import {
   AiAnalysisResult,
+  resolveAnalysisGames,
   GameGroup,
   GameIndexItem,
   GameIndexResponse,
@@ -24,22 +25,26 @@ import { DfDownloaderOperationalDb } from "../../db/df-operational-db.js";
  * docs/AI_CONTENT_ANALYSIS_PLAN.md for the full reasoning.
  */
 
-const pickGameName = (result: AiAnalysisResult): string | undefined => {
+/**
+ * The game a piece is *about*, as opposed to one it merely covers.
+ *
+ * Falls through to the structured payload for results written before
+ * `primaryGame` existed, where the game for the two types that had one was
+ * the subject by definition.
+ */
+const primaryGameOf = (result: AiAnalysisResult): string | undefined => {
+  if (result.primaryGame?.trim()) {
+    return result.primaryGame.trim();
+  }
   const data = result.structuredData;
-  if (!data) {
-    return undefined;
-  }
-  if (data.contentType === "console_comparison" || data.contentType === "pc_review_settings") {
-    return data.game?.trim() || undefined;
-  }
-  // qa_roundtable covers many games or none, so it belongs to no single
-  // group. Forcing it into one would be worse than leaving it out.
-  return undefined;
+  return data && "game" in data && data.game?.trim() ? data.game.trim() : undefined;
 };
 
 const platformsFor = (result: AiAnalysisResult): { labels: string[]; viaAlias: boolean } => {
   const data = result.structuredData;
-  if (data?.contentType !== "console_comparison") {
+  // platform_analysis carries the same per-platform shape as a face-off - it
+  // is the same data with fewer platforms, so it reads the same way here.
+  if (data?.contentType !== "console_comparison" && data?.contentType !== "platform_analysis") {
     return { labels: [], viaAlias: false };
   }
   let viaAlias = false;
@@ -56,6 +61,24 @@ const platformsFor = (result: AiAnalysisResult): { labels: string[]; viaAlias: b
   return { labels, viaAlias };
 };
 
+/** Whichever verdict field this content type actually carries. */
+const conclusionOf = (result: AiAnalysisResult): string | undefined => {
+  if (result.conclusion) {
+    return result.conclusion;
+  }
+  const data = result.structuredData;
+  if (!data) {
+    return undefined;
+  }
+  if (data.contentType === "pc_review_settings" || data.contentType === "platform_analysis") {
+    return data.verdict ?? undefined;
+  }
+  if (data.contentType === "hardware_review") {
+    return data.verdict ?? undefined;
+  }
+  return undefined;
+};
+
 export const buildGameIndex = async (db: DfDownloaderOperationalDb): Promise<GameIndexResponse> => {
   const results = await db.getAllAiAnalysisResults();
   const libraryCount = (await db.getAllContentNames()).length;
@@ -64,8 +87,11 @@ export const buildGameIndex = async (db: DfDownloaderOperationalDb): Promise<Gam
   let ungroupedCount = 0;
 
   for (const { contentKey, result } of results) {
-    const rawGame = pickGameName(result);
-    if (!rawGame) {
+    // One field, whatever the content type. This used to read the game out of
+    // the structured payload, which only two of the schemas had - so a preview
+    // or a port analysis, each about exactly one game, could never appear.
+    const gameNames = resolveAnalysisGames(result);
+    if (!gameNames.length) {
       ungroupedCount++;
       continue;
     }
@@ -77,39 +103,48 @@ export const buildGameIndex = async (db: DfDownloaderOperationalDb): Promise<Gam
       continue;
     }
 
-    const canonical = canonicaliseGame(rawGame);
     const platforms = platformsFor(result);
     const data = result.structuredData;
+    const primary = primaryGameOf(result)?.toLowerCase();
 
-    const item: GameIndexItem = {
-      contentKey,
-      title: entry.contentInfo.title,
-      publishedDate: entry.contentInfo.publishedDate,
-      contentType: result.contentType,
-      // Whichever verdict field this content type actually carries.
-      conclusion:
-        result.conclusion ?? (data?.contentType === "pc_review_settings" ? data.verdict : undefined) ?? undefined,
-      platforms: platforms.labels,
-      engine: data?.contentType === "pc_review_settings" ? data.engine : undefined,
-      developer: data?.contentType === "console_comparison" ? data.developer : undefined,
-      hasArticle: result.evidence.includes("article"),
-      usedTranscript: result.evidence.includes("transcript"),
-    };
+    // A piece can cover several games and belongs under each of them - that is
+    // the whole point of a Direct being findable under what it discussed.
+    for (const rawGame of gameNames) {
+      const canonical = canonicaliseGame(rawGame);
+      const item: GameIndexItem = {
+        contentKey,
+        title: entry.contentInfo.title,
+        publishedDate: entry.contentInfo.publishedDate,
+        contentType: result.contentType,
+        conclusion: conclusionOf(result),
+        platforms: platforms.labels,
+        engine: data?.contentType === "pc_review_settings" ? data.engine : undefined,
+        developer:
+          data?.contentType === "console_comparison" || data?.contentType === "platform_analysis"
+            ? data.developer
+            : undefined,
+        hasArticle: result.evidence.includes("article"),
+        usedTranscript: result.evidence.includes("transcript"),
+        // No primary game means nothing here is the subject - a Direct is not
+        // "about" any of the games it moved through.
+        isPrimary: Boolean(primary) && rawGame.trim().toLowerCase() === primary,
+      };
 
-    const existing = groups.get(canonical.key);
-    if (existing) {
-      existing.items.push(item);
-      existing.rawNames.add(rawGame.trim());
-      existing.mergedByAlias = existing.mergedByAlias || canonical.viaAlias;
-    } else {
-      groups.set(canonical.key, {
-        key: canonical.key,
-        name: canonical.label,
-        variants: [],
-        mergedByAlias: canonical.viaAlias,
-        items: [item],
-        rawNames: new Set([rawGame.trim()]),
-      });
+      const existing = groups.get(canonical.key);
+      if (existing) {
+        existing.items.push(item);
+        existing.rawNames.add(rawGame.trim());
+        existing.mergedByAlias = existing.mergedByAlias || canonical.viaAlias;
+      } else {
+        groups.set(canonical.key, {
+          key: canonical.key,
+          name: canonical.label,
+          variants: [],
+          mergedByAlias: canonical.viaAlias,
+          items: [item],
+          rawNames: new Set([rawGame.trim()]),
+        });
+      }
     }
   }
 

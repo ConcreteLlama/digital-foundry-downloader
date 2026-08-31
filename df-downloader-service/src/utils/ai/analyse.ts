@@ -3,6 +3,7 @@ import {
   AiAnalysisCostEstimate,
   AiAnalysisResult,
   AiAnalysisUsage,
+  AiContentTypeGameSubject,
   AiEvidenceSource,
   AiStructuredData,
   AiTagSuggestion,
@@ -24,6 +25,9 @@ import {
 import { ResolvedTranscript, locateQuote, resolveTranscript, srtLinesToTextWithOffsets } from "./transcript.js";
 import {
   WireConsoleComparison,
+  WireHardwareReview,
+  WirePlatformAnalysis,
+  WirePreview,
   WireContentType,
   WireOverview,
   WirePcReviewSettings,
@@ -47,7 +51,16 @@ const ESTIMATED_OUTPUT_TOKENS_TAGS_ONLY = 200;
 const THINKING_OUTPUT_MULTIPLIER = 3;
 
 /** The types worth a second, structure-extracting call. */
-const EXTRACTABLE_TYPES: WireContentType[] = ["console_comparison", "pc_review_settings", "qa_roundtable"];
+const EXTRACTABLE_TYPES: WireContentType[] = [
+  "console_comparison",
+  "platform_analysis",
+  "pc_review_settings",
+  "hands_on_preview",
+  "hardware_review",
+  "qa_roundtable",
+  "news_discussion",
+  "roundup_list",
+];
 
 export type AnalysisInputs = {
   entry: DfContentEntry;
@@ -159,6 +172,72 @@ export const prepareAnalysis = async (config: AiAnalysisConfig, inputs: Analysis
 };
 
 /**
+ * One de-duplicated list of every game a run turned up.
+ *
+ * Three sources, because they see different things: the primary subject, the
+ * overview call's own list, and the games named by individual segments of a
+ * discussion show - which the overview never considers one at a time.
+ *
+ * Case-insensitive de-duplication only. Anything cleverer belongs in
+ * canonicaliseGame, which the index already applies, and doing it twice in
+ * two places would just give two subtly different answers.
+ */
+const mergeGames = (
+  contentType: WireContentType,
+  primaryGame?: string | null,
+  games?: string[] | null,
+  structuredData?: AiStructuredData
+): string[] => {
+  const segmented =
+    structuredData &&
+    (structuredData.contentType === "qa_roundtable" ||
+      structuredData.contentType === "news_discussion" ||
+      structuredData.contentType === "roundup_list")
+      ? structuredData
+      : undefined;
+  const segmentGames = segmented ? segmented.segments.map((segment) => segment.game).filter(Boolean) : [];
+
+  /*
+   * For a show made of items, the items are the authority on what it covered.
+   *
+   * The overview call sees the whole transcript at once and reads "covers"
+   * generously - a single Q+A came back listing fourteen games where only two
+   * were actually discussed, the rest being passing comparisons and bits of
+   * history. Filing the episode under all fourteen would put it in front of
+   * anyone looking for a game it merely name-dropped. The per-item pass has
+   * already decided what each segment is about, so where it found anything,
+   * that list wins.
+   */
+  /*
+   * What counts as coverage depends on the kind of video, so the taxonomy
+   * decides rather than the model's judgement.
+   *
+   * A type that is about exactly one game covers exactly that game: anything
+   * else the model listed is a comparison, a series predecessor or - measured
+   * on a real preview - not a game at all ("Unreal Engine 5"). Asking the
+   * prompt for restraint here did not hold; the schema already knows the
+   * answer, so it is taken rather than requested.
+   */
+  const subject = AiContentTypeGameSubject[contentType];
+  const covered =
+    subject === "single"
+      ? primaryGame
+        ? []
+        : games ?? []
+      : segmentGames.length
+        ? segmentGames
+        : games ?? [];
+  const out: string[] = [];
+  for (const name of [primaryGame, ...covered]) {
+    const trimmed = name?.trim();
+    if (trimmed && !out.some((existing) => existing.toLowerCase() === trimmed.toLowerCase())) {
+      out.push(trimmed);
+    }
+  }
+  return out;
+};
+
+/**
  * Resolves each quoted finding to the moment it was said.
  *
  * Walks the structured payload rather than being folded into extraction,
@@ -183,9 +262,21 @@ const anchorFindings = (data: AiStructuredData, transcript?: ResolvedTranscript)
         platforms: data.platforms.map((platform) => ({ ...platform, modes: platform.modes.map(at) })),
         knownIssues: data.knownIssues.map(at),
       };
+    case "platform_analysis":
+      return {
+        ...data,
+        platforms: data.platforms.map((platform) => ({ ...platform, modes: platform.modes.map(at) })),
+        knownIssues: data.knownIssues.map(at),
+      };
     case "pc_review_settings":
       return { ...data, settings: data.settings.map(at) };
+    case "hands_on_preview":
+      return { ...data, observations: data.observations.map(at) };
+    case "hardware_review":
+      return { ...data, products: data.products.map(at), knownIssues: data.knownIssues.map(at) };
     case "qa_roundtable":
+    case "news_discussion":
+    case "roundup_list":
       return { ...data, segments: data.segments.map(at) };
   }
 };
@@ -324,12 +415,62 @@ const extractStructuredData = async (
           usage,
         };
       }
-      case "qa_roundtable": {
+      case "platform_analysis": {
+        const { parsed, usage } = await callStructured(
+          client, config, WirePlatformAnalysis, prepared.system, prepared.content, instruction
+        );
+        return {
+          data: {
+            contentType: "platform_analysis",
+            game: parsed.game,
+            developer: parsed.developer,
+            platforms: parsed.platforms,
+            changeSummary: parsed.changeSummary,
+            knownIssues: parsed.knownIssues,
+            verdict: parsed.verdict,
+          },
+          usage,
+        };
+      }
+      case "hands_on_preview": {
+        const { parsed, usage } = await callStructured(
+          client, config, WirePreview, prepared.system, prepared.content, instruction
+        );
+        return {
+          data: {
+            contentType: "hands_on_preview",
+            game: parsed.game,
+            platforms: parsed.platforms,
+            buildState: parsed.buildState,
+            observations: parsed.observations,
+            caveats: parsed.caveats,
+          },
+          usage,
+        };
+      }
+      case "hardware_review": {
+        const { parsed, usage } = await callStructured(
+          client, config, WireHardwareReview, prepared.system, prepared.content, instruction
+        );
+        return {
+          data: {
+            contentType: "hardware_review",
+            products: parsed.products,
+            gamesTested: parsed.gamesTested,
+            verdict: parsed.verdict,
+            knownIssues: parsed.knownIssues,
+          },
+          usage,
+        };
+      }
+      case "qa_roundtable":
+      case "news_discussion":
+      case "roundup_list": {
         const { parsed, usage } = await callStructured(
           client, config, WireQaSegments, prepared.system, prepared.content, instruction
         );
         return parsed.segments.length
-          ? { data: { contentType: "qa_roundtable", segments: parsed.segments }, usage }
+          ? { data: { contentType, segments: parsed.segments }, usage }
           : { usage };
       }
       default:
@@ -391,6 +532,10 @@ export const analyseContent = async (config: AiAnalysisConfig, inputs: AnalysisI
     model: config.model,
     tags: [] as AiTagSuggestion[],
     evidence: [] as AiEvidenceSource[],
+    // Present even on the failure paths: a stored result with no games is a
+    // truthful "covers nothing", where a missing field would be indistinguishable
+    // from a record written before the field existed.
+    games: [] as string[],
   };
 
   let client: Anthropic;
@@ -412,6 +557,8 @@ export const analyseContent = async (config: AiAnalysisConfig, inputs: AnalysisI
         ...base,
         contentType: parsed.contentType,
         contentTypeConfidence: parsed.contentTypeConfidence,
+        primaryGame: parsed.primaryGame,
+        games: mergeGames(parsed.contentType, parsed.primaryGame, parsed.games),
         evidence: prepared.evidence,
         tags: config.features.tagging.enabled ? mapTags(parsed.tags, prepared.evidence, autoApply) : [],
         usage,
@@ -439,6 +586,11 @@ export const analyseContent = async (config: AiAnalysisConfig, inputs: AnalysisI
       ...base,
       contentType: overview.contentType,
       contentTypeConfidence: overview.contentTypeConfidence,
+      primaryGame: overview.primaryGame,
+      // Segments name games the overview call never saw individually, so the
+      // two sources are merged - that is the whole point of a Direct being
+      // findable under each game it discussed.
+      games: mergeGames(overview.contentType, overview.primaryGame, overview.games, structuredData),
       articleUrl: inputs.articleUrl,
       articleTitle: inputs.articleTitle,
       summary: config.features.summary ? overview.summary : undefined,

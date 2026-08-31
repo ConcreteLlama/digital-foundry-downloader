@@ -166,6 +166,15 @@ export const GameIndexItem = z.object({
   developer: z.string().nullish(),
   hasArticle: z.boolean().default(false),
   usedTranscript: z.boolean().default(false),
+  /**
+   * Whether this content is *about* this game, or merely covers it.
+   *
+   * A tech review of a game and a Direct that spent four minutes on it both
+   * belong under that game, but they are not the same claim. Without this the
+   * second would sit in the list looking like dedicated coverage, which
+   * overstates what the archive actually holds on that title.
+   */
+  isPrimary: z.boolean().default(true),
 });
 export type GameIndexItem = z.infer<typeof GameIndexItem>;
 

@@ -55,9 +55,36 @@ export const analysisJumpsFrom = (data: StructuredData): AnalysisJump[] => {
         push(setting.timestampSeconds, setting.name, setting.recommendation ?? undefined);
       }
       break;
+    case "platform_analysis":
+      for (const platform of data.platforms) {
+        for (const mode of platform.modes) {
+          push(mode.timestampSeconds, `${platform.platform} · ${mode.label}`, mode.resolution ?? undefined);
+        }
+      }
+      for (const known of data.knownIssues) {
+        push(known.timestampSeconds, known.issue);
+      }
+      break;
+    case "hands_on_preview":
+      for (const observation of data.observations) {
+        push(observation.timestampSeconds, observation.observation);
+      }
+      break;
+    case "hardware_review":
+      for (const product of data.products) {
+        push(product.timestampSeconds, product.name, product.verdict ?? undefined);
+      }
+      for (const known of data.knownIssues) {
+        push(known.timestampSeconds, known.issue);
+      }
+      break;
     case "qa_roundtable":
+    case "news_discussion":
+    case "roundup_list":
       for (const segment of data.segments) {
-        push(segment.timestampSeconds, segment.topic, segment.conclusion ?? undefined);
+        // The game, where the item names one - it identifies the item far
+        // better than the topic phrasing does when scanning a Direct.
+        push(segment.timestampSeconds, segment.game ?? segment.topic, segment.conclusion ?? undefined);
       }
       break;
   }

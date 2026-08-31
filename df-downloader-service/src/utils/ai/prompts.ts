@@ -36,11 +36,39 @@ const TRANSCRIPT_CAVEAT = `The transcript is machine-generated and has not been 
 
 const ARTICLE_PRECEDENCE = `You have both Digital Foundry's own written article and a machine transcript. Prefer the article for any name, spelling or figure the two disagree on - it was written, not transcribed, so it cannot contain a mishearing. Use the transcript for anything the article does not cover.`;
 
-const CONTENT_TYPES = `- console_comparison: a technical comparison of one game across consoles - per-platform resolutions, frame rates, and modes.
+const CONTENT_TYPES = `- console_comparison: a technical comparison of one game across two or more consoles - per-platform resolutions, frame rates, and modes.
+- platform_analysis: one game examined on a single platform, or a small number, outside a full face-off - a port, a patch, an upgrade, a "have they fixed it yet" revisit, a single-platform review. Choose this over console_comparison when the point is that game on that hardware rather than a comparison between platforms.
 - pc_review_settings: a PC technical review, usually with per-setting performance analysis and recommended "optimised settings".
 - hands_on_preview: an early look at unreleased or just-revealed content, typically hedged and provisional.
-- qa_roundtable: a discussion or Q+A show covering several unrelated topics in sequence.
-- other: anything that does not clearly match the above - retrospectives, interviews, hardware reviews, and so on.`;
+- game_retrospective: a look back at an older game, or an anniversary re-release.
+- hardware_review: a review or test of hardware - a GPU, CPU, handheld, display or complete machine. Games appearing in it are benchmarks, not the subject.
+- tech_explainer: a piece about a technology rather than a product - upscaling, ray tracing, frame generation, an engine feature.
+- interview: a conversation with developers, or a behind-the-scenes piece built around one.
+- qa_roundtable: a Q+A show answering viewer questions across unrelated topics.
+- news_discussion: a news or discussion show moving through several unrelated items - a Direct, a showcase reaction.
+- roundup_list: a year-end list, best-of or worst-of covering many games at once.
+- other: anything that genuinely does not match the above.`;
+
+/**
+ * How the two game fields get filled, for every content type.
+ *
+ * Asked on the first call rather than during extraction, so types with no
+ * structured payload still get filed under their game. The split is the
+ * point: forcing a primary game onto a Direct would invent a subject it does
+ * not have, while treating a Direct as gameless throws away the only record
+ * this tool holds of what was said about the games it covered.
+ */
+const GAME_IDENTIFICATION = `Identify the games this video covers, in two separate fields.
+
+The video's title is the most reliable source for which game is the subject, and it usually names it outright. Prefer it over the transcript: the transcript is machine-generated, garbles titles, and frequently discusses other games - including earlier entries in the same series - while the video itself is about the one in the title. A preview titled "Metro 2039" is about Metro 2039 even if the presenters mention Metro Exodus repeatedly. Only override the title when the video's content plainly contradicts it.
+
+"primaryGame": the single game the video is about, or null. Most Digital Foundry content is about exactly one game - a tech review, a port or patch analysis, a hands-on, a retrospective - and this should name it. Set it to null when there is no single subject: a Direct or Q+A moves between unrelated items, a hardware review is about hardware, and a year-end list is about many games at once. Do not promote one of several games to primary just because it came first or was discussed longest.
+
+"games": every game the video actually covers, including primaryGame when it is set. Covering a game means it is the subject of the video or of one of its items - a news story about it, a segment discussing it, an entry in a list. It is a high bar and most videos clear it only once or twice.
+
+Be strict about this. Do NOT include a game that is mentioned as an example, a comparison, a bit of history, or an aside - "it stutters the way Jedi Survivor did", "back when Ridge Racer did this on PS3". A discussion show name-drops many titles it is not covering, and listing those files the video under games it barely mentions, which is worse than listing none. If you would not expect someone searching for that game to want this video, leave it out. Leave the array empty when no specific game is covered.
+
+Write each name as it would normally be written, not as the transcript renders it - transcription garbles titles badly, so "Crisis" is Crysis, "Elden Ring" may arrive misspelt, and numbers get mangled. Exclude games used purely as benchmarks in a hardware review: those are instruments, not coverage.`;
 
 export type PromptFlags = { hasTranscript: boolean; hasArticle: boolean };
 
@@ -73,7 +101,7 @@ const buildTaggingInstruction = (config: AiAnalysisConfig): string => {
 
 /** Task instruction for call one: classify, summarise, tag. */
 export const buildOverviewInstruction = (config: AiAnalysisConfig): string => {
-  const sections = [`Classify this video as exactly one of:\n${CONTENT_TYPES}`];
+  const sections = [`Classify this video as exactly one of:\n${CONTENT_TYPES}`, GAME_IDENTIFICATION];
 
   if (config.features.summary) {
     sections.push(
@@ -101,10 +129,12 @@ export const buildOverviewInstruction = (config: AiAnalysisConfig): string => {
 /**
  * Task instruction for call two, per content type.
  *
- * Only called for the three types that carry extractable structure -
- * hands_on_preview and other never reach here, by design: their real
- * content is hedged, exploratory opinion, and tabulating it would
- * manufacture precision the source does not have.
+ * Types with no extractable structure return "" and never make the call.
+ * hands_on_preview now does make it, but deliberately asks for no numbers:
+ * the earlier reasoning - that tabulating provisional impressions
+ * manufactures precision the source does not have - was right about the
+ * figures and wrong about the game, which is unambiguous and was being
+ * dropped along with them.
  */
 /**
  * Asks each finding to cite itself.
@@ -134,8 +164,34 @@ ${QUOTE_INSTRUCTION}`;
       return `Extract the PC settings analysis. For each graphics setting discussed, record the levels tested, the performance cost as a percentage if one is actually stated, any console-equivalent comparison made, and the recommended level. Record the main performance bottleneck if the video identifies one, and the before/after result of the optimised settings if it gives one. A setting described only qualitatively ("barely costs anything") has a null percentage - do not convert words into a number.
 
 ${QUOTE_INSTRUCTION}`;
+    case "platform_analysis":
+      return `Extract the technical analysis of this game. For each platform covered, record each display or performance mode, with the resolution as described (including upscaling where stated), the target frame rate, and the measured average frame rate only if one is actually given. Where the video is about a change - a patch, a port, a revisit, a new platform version - record what changed in changeSummary, since that delta is usually the point of the piece rather than the raw numbers. Record known bugs or performance problems it calls out, and the overall verdict. Remember that an unstated number is null, not an estimate.
+
+${QUOTE_INSTRUCTION}`;
+    case "hands_on_preview":
+      return `Record what was actually shown, not what it might mean. Name the game, the platforms it was seen running on, and what kind of build it was - preview build, beta, demo, near-final - if the video says. List concrete observations rather than general impressions where the video supports them. Put whatever the presenters explicitly said not to conclude yet into caveats.
+
+Do not produce performance figures here even if some are mentioned in passing. This format is provisional by design, and a number from an early build implies a precision nobody claimed.
+
+${QUOTE_INSTRUCTION}`;
+    case "hardware_review":
+      return `Extract the hardware under review. For each product, record its name, what class of thing it is (GPU, CPU, handheld, display, complete machine), and the verdict reached on it specifically. Record the overall verdict separately, and any known issues or caveats raised.
+
+Record the games used as benchmarks in gamesTested. These are test instruments rather than subjects - the video is not coverage of those games, and they must not be presented as though it were.
+
+${QUOTE_INSTRUCTION}`;
+    case "news_discussion":
+      return `Break this show into its distinct items, in order. For each, give the topic, and set "game" to the specific game it is about, or null where the item is not about one - a hardware rumour, an industry story. Give a summary of what was said and the conclusion reached, or null where the participants disagreed or left it open, which is common and should not be smoothed over into false agreement.
+
+Getting "game" right matters more here than anywhere else: this is frequently the only record of what Digital Foundry said about that title, and an item filed under no game is invisible.
+
+${QUOTE_INSTRUCTION}`;
+    case "roundup_list":
+      return `Break this round-up into its entries, in order. For each, give the topic - the game or the category - set "game" to the title it concerns, and record the reasoning given for its inclusion as the summary, with the verdict or placement as the conclusion.
+
+${QUOTE_INSTRUCTION}`;
     case "qa_roundtable":
-      return `Break this discussion into its distinct topics, in order. For each, give the topic, a summary of what was said, and the conclusion reached - or null where the participants disagreed or left it open, which is common and should not be smoothed over into false agreement. Do not record who asked a question: usernames cannot be transcribed reliably and there is nothing to check them against.
+      return `Break this discussion into its distinct topics, in order. For each, give the topic, a summary of what was said, and the conclusion reached - or null where the participants disagreed or left it open, which is common and should not be smoothed over into false agreement. Set "game" to the specific game a topic concerns, or null where it is not about one. Do not record who asked a question: usernames cannot be transcribed reliably and there is nothing to check them against.
 
 ${QUOTE_INSTRUCTION}`;
     default:
@@ -147,6 +203,7 @@ export const buildTagOnlyInstruction = (config: AiAnalysisConfig): string =>
   [
     `You are working from the title and description only - there is no transcript. Judge only what those support, and keep your confidence values low enough to reflect that.`,
     `Classify this video as exactly one of:\n${CONTENT_TYPES}`,
+    GAME_IDENTIFICATION,
     buildTaggingInstruction(config),
   ].join("\n\n");
 

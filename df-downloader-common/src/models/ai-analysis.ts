@@ -16,19 +16,62 @@ import { AiAnalysisModel } from "../config/ai-analysis-config.js";
  */
 export const AiContentType = z.enum([
   "console_comparison",
+  "platform_analysis",
   "pc_review_settings",
   "hands_on_preview",
+  "game_retrospective",
+  "hardware_review",
+  "tech_explainer",
+  "interview",
   "qa_roundtable",
+  "news_discussion",
+  "roundup_list",
   "other",
 ]);
 export type AiContentType = z.infer<typeof AiContentType>;
 
 export const AiContentTypeLabels: Record<AiContentType, string> = {
   console_comparison: "Console comparison",
+  platform_analysis: "Platform analysis",
   pc_review_settings: "PC review & optimised settings",
   hands_on_preview: "Hands-on preview",
-  qa_roundtable: "Q+A / discussion",
+  game_retrospective: "Retrospective",
+  hardware_review: "Hardware review",
+  tech_explainer: "Tech explainer",
+  interview: "Interview",
+  qa_roundtable: "Q+A",
+  news_discussion: "News & discussion",
+  roundup_list: "Round-up",
   other: "Other",
+};
+
+/**
+ * Whether a type is inherently about one game, may be, or never is.
+ *
+ * Drives what the extraction asks for. A type that is always about one game
+ * is asked for it directly; one that never is has no primary game to offer,
+ * and asking would invite an invented answer. The middle case is real and
+ * common - a hardware review is about a GPU, but "Inside 007 First Light" is
+ * an engine piece about exactly one game - so those are asked for it and
+ * allowed to answer null.
+ *
+ * Note that "never has a primary game" is not "never mentions games": a DF
+ * Direct has no single subject but its segments cover specific titles, and
+ * those still belong in `games` so the piece surfaces under each of them.
+ */
+export const AiContentTypeGameSubject: Record<AiContentType, "single" | "maybe" | "none"> = {
+  console_comparison: "single",
+  platform_analysis: "single",
+  pc_review_settings: "single",
+  hands_on_preview: "single",
+  game_retrospective: "single",
+  hardware_review: "maybe",
+  tech_explainer: "maybe",
+  interview: "maybe",
+  qa_roundtable: "none",
+  news_discussion: "none",
+  roundup_list: "none",
+  other: "maybe",
 };
 
 /**
@@ -202,6 +245,15 @@ export type AiPcReviewSettingsData = z.infer<typeof AiPcReviewSettingsData>;
  */
 export const AiQaSegment = z.object({
   topic: z.string(),
+  /**
+   * The game this segment is about, when it is about one.
+   *
+   * A discussion show has no single subject, but its individual items very
+   * often do - a Direct covering a remaster announcement is the only record
+   * this tool has of what was said about that game. Without this the piece
+   * is invisible under the game entirely.
+   */
+  game: z.string().nullish(),
   summary: z.string().nullish(),
   conclusion: z.string().nullish(),
   ...AiAnchorFields,
@@ -215,6 +267,102 @@ export const AiQaRoundtableData = z.object({
 export type AiQaRoundtableData = z.infer<typeof AiQaRoundtableData>;
 
 /**
+ * One game examined on one or more platforms, outside a full face-off.
+ *
+ * The single largest category in the library and the one that had no schema
+ * at all: a Switch 2 port, a PS5 Pro patch, a "have they fixed it yet"
+ * revisit. Structurally it is a face-off with fewer platforms, so it reuses
+ * the same per-platform shape rather than inventing a parallel one - which
+ * also means these can feed the platform comparison view later.
+ *
+ * `changeSummary` is what makes it distinct: this format is usually about a
+ * delta - what a patch altered, how a port differs from the original - and
+ * that is the thing a reader wants and a bare mode table cannot express.
+ */
+export const AiPlatformAnalysisData = z.object({
+  contentType: z.literal("platform_analysis"),
+  game: z.string().nullish(),
+  developer: z.string().nullish(),
+  platforms: z.array(AiPlatformComparison).default([]),
+  /** What changed relative to a previous version, patch or platform. */
+  changeSummary: z.string().nullish(),
+  knownIssues: z.array(AiKnownIssue).default([]),
+  verdict: z.string().nullish(),
+});
+export type AiPlatformAnalysisData = z.infer<typeof AiPlatformAnalysisData>;
+
+export const AiHardwareProduct = z.object({
+  name: z.string(),
+  /** GPU, CPU, handheld, display, laptop - as described, not from a fixed list. */
+  productClass: z.string().nullish(),
+  verdict: z.string().nullish(),
+  ...AiAnchorFields,
+});
+export type AiHardwareProduct = z.infer<typeof AiHardwareProduct>;
+
+/**
+ * A hardware review.
+ *
+ * `gamesTested` is deliberately separate from the analysis's `games`: the
+ * titles benchmarked are instruments, not the subject. A GPU review that
+ * happens to test Cyberpunk should not file itself under Cyberpunk as though
+ * it were coverage of that game.
+ */
+export const AiHardwareReviewData = z.object({
+  contentType: z.literal("hardware_review"),
+  products: z.array(AiHardwareProduct).default([]),
+  /** Titles used as benchmarks, which are not what the video is about. */
+  gamesTested: z.array(z.string()).default([]),
+  verdict: z.string().nullish(),
+  knownIssues: z.array(AiKnownIssue).default([]),
+});
+export type AiHardwareReviewData = z.infer<typeof AiHardwareReviewData>;
+
+/**
+ * An early look at something unreleased.
+ *
+ * Deliberately lighter than the other schemas. The premise of the format is
+ * that it is too early to say, and the earlier decision not to give previews
+ * a schema at all was right about that - a settings table here would
+ * manufacture certainty the presenters explicitly disclaimed. What it was
+ * wrong about is the game: a preview is about exactly one, which makes it the
+ * easiest thing in the library to file and it was being dropped entirely.
+ *
+ * So: the game, what was actually shown, and the caveats - no numbers table.
+ */
+export const AiPreviewData = z.object({
+  contentType: z.literal("hands_on_preview"),
+  game: z.string().nullish(),
+  platforms: z.array(z.string()).default([]),
+  /** Preview build, beta, demo, near-final - whatever the video says it saw. */
+  buildState: z.string().nullish(),
+  observations: z.array(z.object({ observation: z.string(), ...AiAnchorFields })).default([]),
+  /** What the presenters said not to conclude from this yet. */
+  caveats: z.string().nullish(),
+});
+export type AiPreviewData = z.infer<typeof AiPreviewData>;
+
+/**
+ * A show that moves through unrelated items - a Direct, a showcase reaction.
+ *
+ * Same shape as a Q+A because structurally it is the same thing: a sequence
+ * of topics, each of which may name a game. Kept as its own content type
+ * rather than merged so the label can be honest about which format it is.
+ */
+export const AiNewsDiscussionData = z.object({
+  contentType: z.literal("news_discussion"),
+  segments: z.array(AiQaSegment).default([]),
+});
+export type AiNewsDiscussionData = z.infer<typeof AiNewsDiscussionData>;
+
+/** A year-end list or best-of, where every entry is a game with a reason. */
+export const AiRoundupData = z.object({
+  contentType: z.literal("roundup_list"),
+  segments: z.array(AiQaSegment).default([]),
+});
+export type AiRoundupData = z.infer<typeof AiRoundupData>;
+
+/**
  * Structured payload, discriminated by content type.
  *
  * Only the two types the source material genuinely supports have a schema.
@@ -225,8 +373,13 @@ export type AiQaRoundtableData = z.infer<typeof AiQaRoundtableData>;
  */
 export const AiStructuredData = z.discriminatedUnion("contentType", [
   AiConsoleComparisonData,
+  AiPlatformAnalysisData,
   AiPcReviewSettingsData,
+  AiPreviewData,
+  AiHardwareReviewData,
   AiQaRoundtableData,
+  AiNewsDiscussionData,
+  AiRoundupData,
 ]);
 export type AiStructuredData = z.infer<typeof AiStructuredData>;
 
@@ -254,6 +407,27 @@ export const AiAnalysisResult = z.object({
   contentTypeConfidence: z.number().min(0).max(1).optional(),
   summary: z.string().nullish(),
   conclusion: z.string().nullish(),
+  /**
+   * The single game this content is about, or null when it is about none.
+   *
+   * Top level rather than inside `structuredData` because grouping should not
+   * have to know which content types happen to carry a game. It previously
+   * did: only two of the schemas had the field, so a preview or a Switch 2
+   * port analysis - unambiguously about one game each - could never appear
+   * under it, and adding a content type silently meant "invisible in Games".
+   */
+  primaryGame: z.string().nullish(),
+  /**
+   * Every game this content meaningfully covers, including `primaryGame`.
+   *
+   * Separate from `primaryGame` because plenty of content covers games
+   * without being about one. A Direct has no primary game but its segments
+   * discuss several, and a year-end round-up is nothing but a list of them -
+   * so both belong under each game they cover even though neither has a
+   * subject. Benchmarks are deliberately excluded: a GPU review tests games
+   * rather than covering them (see AiHardwareReviewData.gamesTested).
+   */
+  games: z.array(z.string()).default([]),
   structuredData: AiStructuredData.nullish(),
   tags: z.array(AiTagSuggestion).default([]),
   /**
@@ -319,6 +493,12 @@ export const AiAnalysisIndexEntry = z.object({
   /** Drives the "tags waiting for you" affordance without loading the tags. */
   pendingTagCount: z.number().int().default(0),
   evidence: z.array(AiEvidenceSource).default([]),
+  /**
+   * Carried into the index so grouping and filtering by game never has to
+   * open every result file - the whole reason this index exists.
+   */
+  primaryGame: z.string().nullish(),
+  games: z.array(z.string()).default([]),
 });
 export type AiAnalysisIndexEntry = z.infer<typeof AiAnalysisIndexEntry>;
 
@@ -329,7 +509,37 @@ export const makeAiAnalysisIndexEntry = (result: AiAnalysisResult): AiAnalysisIn
   hasError: Boolean(result.error),
   pendingTagCount: result.tags.filter((tag) => tag.status === "suggested").length,
   evidence: result.evidence,
+  primaryGame: result.primaryGame,
+  games: resolveAnalysisGames(result),
 });
+
+/**
+ * Every game an analysis covers, tolerating records written before the
+ * top-level fields existed.
+ *
+ * Those older results still hold a game inside `structuredData` for the two
+ * types that had one, so reading through to it keeps them grouped instead of
+ * silently dropping out of the index until they are re-analysed.
+ */
+export const resolveAnalysisGames = (result: {
+  primaryGame?: string | null;
+  games?: string[];
+  structuredData?: AiStructuredData | null;
+}): string[] => {
+  const names = [...(result.games ?? [])];
+  // Only some payload types carry a game, so this reads through defensively
+  // rather than narrowing on contentType - the set of types that have one has
+  // already changed once and will again.
+  const structuredGame =
+    result.structuredData && "game" in result.structuredData ? result.structuredData.game : undefined;
+  const fallbacks = [result.primaryGame, structuredGame];
+  for (const name of fallbacks) {
+    if (name && !names.some((existing) => existing.toLowerCase() === name.toLowerCase())) {
+      names.push(name);
+    }
+  }
+  return names.filter((name) => Boolean(name?.trim()));
+};
 
 /** Request body for triggering analysis by hand from the UI. */
 export const AnalyseContentRequest = z.object({
