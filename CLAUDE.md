@@ -177,7 +177,12 @@ with `@deepgram/sdk`, see `deepgram.ts`).
   clarify which one.
 - Tasks/downloads run through a generic FSM-based pipeline system
   (`fsm/`, `task-manager/`, `download/`) — reuse it for new async multi-step work
-  rather than building bespoke state tracking.
+  rather than building bespoke state tracking. **`docs/TASKS_AND_PIPELINES.md` is
+  required reading before touching queueing, the Activity page, or anything that
+  pauses/cancels/reorders work** — the non-obvious semantics there have caused
+  repeat bugs (there is no single queue; `pause()`/`cancel()` silently do nothing
+  to work that hasn't started; displacing a running task that can't pause makes
+  the manager start another one on top of it).
 - The REST response envelope is always `{success, data}` / `{success:false, error}`,
   unwrapped client-side via `df-downloader-common`'s `parseResponseBody()` against a
   zod schema. New endpoints should follow this pattern (`sendResponse`/`sendError` in

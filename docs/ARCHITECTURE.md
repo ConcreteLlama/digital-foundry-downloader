@@ -103,6 +103,13 @@ hatch (a genuine one-off request, e.g. the manual download button specifically).
 
 ### Task/pipeline system
 
+> **Read `docs/TASKS_AND_PIPELINES.md` before changing any of this.** The map
+> below is accurate but says nothing about the semantics, and those are where
+> the bugs live: there is no single queue (nine `TaskManager`s, positions are
+> per-manager), `pause()`/`cancel()` are no-ops on work that hasn't started,
+> and displacing a running task that can't pause silently over-subscribes the
+> queue.
+
 A generic FSM-based task framework (`src/fsm/`, `src/task-manager/`) underlies
 everything that runs asynchronously with progress/retry/pause/cancel semantics:
 - `Task` — single unit of work with an FSM (idle → running → success/failed, plus
