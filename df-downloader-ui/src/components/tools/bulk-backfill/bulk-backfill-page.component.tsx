@@ -24,7 +24,8 @@ import { queryConfigSection } from "../../../store/config/config.action.ts";
 import { selectConfigSection } from "../../../store/config/config.selector.ts";
 import { selectPipelinesInCompletionState } from "../../../store/df-tasks/tasks.selector.ts";
 import { store } from "../../../store/store.ts";
-import { estimateBackfill, fetchBackfillCandidates, runBackfill } from "../../../api/backfill.ts";
+import { estimateBackfill, fetchBackfillCandidates, runBackfill, stopBackfillJobs } from "../../../api/backfill.ts";
+import { triggerSnackbar } from "../../../utils/snackbar.tsx";
 import { BackfillConfirmDialog, BackfillTable, formatCost, isMissing, SKIP_REASONS } from "./bulk-backfill.components.tsx";
 
 /**
@@ -172,6 +173,34 @@ export const BulkBackfillPage = () => {
     () => inFlight.filter((pipeline) => pipeline.pipelineDetails.backfillJobId).length,
     [inFlight]
   );
+  /**
+   * The runs with work still in flight, so the banner can stop exactly what it
+   * just counted rather than "everything".
+   */
+  const spawnedJobIds = useMemo(
+    () => [...new Set(inFlight.map((pipeline) => pipeline.pipelineDetails.backfillJobId).filter(Boolean))] as string[],
+    [inFlight]
+  );
+  const [stopping, setStopping] = useState(false);
+  const stopSpawned = async () => {
+    setStopping(true);
+    try {
+      const { cancelled } = await stopBackfillJobs(spawnedJobIds);
+      setStarted(null);
+      setError(null);
+      // Says what it stopped rather than assuming: an item that finished
+      // between the click and the request is simply no longer there to stop.
+      triggerSnackbar(
+        cancelled ? `Stopped ${cancelled} queued ${cancelled === 1 ? "item" : "items"}` : "Nothing left to stop",
+        { variant: cancelled ? "success" : "info" }
+      );
+      void load();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Could not stop the run");
+    } finally {
+      setStopping(false);
+    }
+  };
 
   const filtered = useMemo(() => {
     const needle = filterText.trim().toLowerCase();
@@ -365,7 +394,15 @@ export const BulkBackfillPage = () => {
           above - the question it answers is "am I already doing this?", which
           outlives the moment you pressed the button. */}
       {spawnedInFlight > 0 && (
-        <Alert severity="info" variant="outlined">
+        <Alert
+          severity="info"
+          variant="outlined"
+          action={
+            <Button color="inherit" size="small" disabled={stopping} onClick={() => void stopSpawned()}>
+              {stopping ? "Stopping…" : "Stop"}
+            </Button>
+          }
+        >
           {spawnedInFlight} {spawnedInFlight === 1 ? "item" : "items"} queued from here{" "}
           {spawnedInFlight === 1 ? "is" : "are"} still going. Anything being worked on is marked and left out of the
           selection buttons, so starting another run will not queue it twice.

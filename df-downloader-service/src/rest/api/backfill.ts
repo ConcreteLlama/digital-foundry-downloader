@@ -3,6 +3,7 @@ import {
   BulkBackfillEstimate,
   BulkBackfillEstimateRequest,
   BulkBackfillRequest,
+  BulkBackfillStopRequest,
   BulkBackfillTarget,
   DfArticleUtils,
   DfContentEntry,
@@ -203,6 +204,27 @@ export const makeBackfillRouter = (contentManager: DigitalFoundryContentManager)
             ? "Re-analysing charges again for items that already have an analysis."
             : undefined,
         } satisfies BulkBackfillEstimate);
+      } catch (e) {
+        return sendErrorAsResponse(res, e);
+      }
+    });
+  });
+
+  /**
+   * Stop what one or more runs queued.
+   *
+   * The run itself is long gone by the time anyone wants this - it finishes as
+   * soon as it has dispatched - so this cancels the work still carrying its
+   * id.
+   */
+  router.post("/stop", async (req, res) => {
+    await zodParseHttp(BulkBackfillStopRequest, req, res, async ({ backfillJobIds }) => {
+      try {
+        const cancelled = backfillJobIds.reduce(
+          (total, jobId) => total + contentManager.taskManager.cancelBackfillJob(jobId).cancelled,
+          0
+        );
+        return sendResponse(res, { cancelled });
       } catch (e) {
         return sendErrorAsResponse(res, e);
       }

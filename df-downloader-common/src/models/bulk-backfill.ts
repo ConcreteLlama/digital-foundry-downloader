@@ -133,3 +133,20 @@ export const BulkBackfillEstimate = z.object({
   note: z.string().optional(),
 });
 export type BulkBackfillEstimate = z.infer<typeof BulkBackfillEstimate>;
+
+/**
+ * Stop the work a run left in the queue.
+ *
+ * By run id rather than "stop everything": a run finishes dispatching almost
+ * immediately, so several can have work in flight at once, and stopping one
+ * must not take the others - or anything queued by hand - with it.
+ */
+export const BulkBackfillStopRequest = z.object({
+  backfillJobIds: z.array(z.string()).min(1),
+});
+export type BulkBackfillStopRequest = z.infer<typeof BulkBackfillStopRequest>;
+
+export const BulkBackfillStopResponse = z.object({
+  cancelled: z.number().default(0),
+});
+export type BulkBackfillStopResponse = z.infer<typeof BulkBackfillStopResponse>;

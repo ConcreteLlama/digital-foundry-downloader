@@ -4,6 +4,7 @@ import {
   BulkBackfillStartedResponse,
   BulkBackfillTarget,
   parseResponseBody,
+  BulkBackfillStopResponse,
 } from "df-downloader-common";
 import { z, ZodTypeAny } from "zod";
 import { API_URL } from "../config.ts";
@@ -49,4 +50,16 @@ export const runBackfill = async (
 ): Promise<BulkBackfillStartedResponse> => {
   const response = await postJson(`${API_URL}/backfill/run`, { target, contentKeys, force });
   return unwrap(response, BulkBackfillStartedResponse);
+};
+
+/**
+ * Stop the work one or more runs left in the queue.
+ *
+ * By run id: a run finishes dispatching almost at once, so several can have
+ * work in flight together, and stopping one must not take the others - or
+ * anything queued by hand - with it.
+ */
+export const stopBackfillJobs = async (backfillJobIds: string[]): Promise<BulkBackfillStopResponse> => {
+  const response = await postJson(`${API_URL}/backfill/stop`, { backfillJobIds });
+  return unwrap(response, BulkBackfillStopResponse);
 };

@@ -797,6 +797,46 @@ export class DfTaskManager {
    * One pass over both collections, with a single change notification at the
    * end: pausing thirty things should redraw the page once, not thirty times.
    */
+  /**
+   * Stop what one bulk run queued.
+   *
+   * The run itself cannot be cancelled once it has dispatched - it is a
+   * dispatcher and finishes the moment the last item is queued - so
+   * "stop that run" has to mean the work it left behind. Every pipeline it
+   * queued carries its id for exactly this.
+   *
+   * Work already finished is left alone, and so is anything queued by hand or
+   * by a different run: stopping one run must not take the rest of the queue
+   * with it.
+   */
+  cancelBackfillJob(backfillJobId: string): { cancelled: number } {
+    let cancelled = 0;
+    for (const pipeline of this.pipelineExecutions.values()) {
+      if (pipeline.isCompleted) {
+        continue;
+      }
+      const context = pipeline.context as { backfillJobId?: string };
+      if (context?.backfillJobId !== backfillJobId) {
+        continue;
+      }
+      const managedTask = pipeline.getCurrentStep()?.managedTask as GenericManagedTask | undefined;
+      if (!managedTask?.task || managedTask.isCompleted()) {
+        continue;
+      }
+      try {
+        managedTask.task.cancel();
+        cancelled++;
+      } catch {
+        // Already stopping, or past the point of stopping. Not counted, since
+        // the number is meant to say what this call did.
+      }
+    }
+    if (cancelled) {
+      this.notifyChanged();
+    }
+    return { cancelled };
+  }
+
   async controlAll(action: "pause" | "resume"): Promise<{ affected: number; skipped: number; queueHeld: boolean }> {
     /*
      * Two separate things, and only together do they mean "pause everything".
