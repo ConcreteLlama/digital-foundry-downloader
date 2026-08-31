@@ -26,98 +26,147 @@ import { DfArticlesSettingsForm } from "../../components/settings/df-articles-se
 import { LoggingSettingsForm } from "../../components/settings/logging-settings-form.component";
 import { SubtitlesSettingsForm } from "../../components/settings/subtitles-settings-form.component";
 import { DfLogoIcon } from "../../icons/df-logo.component";
-import { NestedSubRoute } from "../nav/nested-routes.ts";
+import { NestedRouteElement, NestedSubRoute } from "../nav/nested-routes.ts";
 import { SettingsElement } from "./settings.component.tsx";
 import { MediaFormatsSettingsForm } from "../../components/settings/media-format-settings-component.tsx";
 
+/**
+ * Wraps each page in the settings shell, leaving group nodes alone.
+ *
+ * Recursive rather than a flat map: groups carry no element of their own, so
+ * mapping over them blindly wraps an undefined and drops the pages inside.
+ */
+const withSettingsShell = (routes: NestedRouteElement[]): NestedRouteElement[] =>
+  routes.map((route) =>
+    "routes" in route
+      ? { ...route, routes: withSettingsShell(route.routes) }
+      : { ...route, element: <SettingsElement>{route.element}</SettingsElement> }
+  );
+
+/**
+ * Grouped by the life of a video - where it comes from, fetching it, what is
+ * done to it afterwards, then the app itself.
+ *
+ * The grouping is presentation only and deliberately does not mirror
+ * config.yaml: each page still binds to exactly one config section, and two
+ * pages under one heading are no more related on disk than they were before.
+ * Fourteen pages in a flat column had no order anyone could state, which is
+ * the actual problem being solved.
+ */
 export const settingsRouteDefinitions: NestedSubRoute = {
   name: "Settings",
   icon: SettingsIcon,
-  routes: [
+  routes: withSettingsShell([
     {
-      path: "/settings/df",
-      element: <DfSettingsForm />,
       name: "Digital Foundry",
-      icon: DfLogoIcon,
+      routes: [
+        {
+          // Just the autologin cookie. "Digital Foundry" named the whole
+          // group as much as this page, which said nothing about either.
+          path: "/settings/df",
+          element: <DfSettingsForm />,
+          name: "Auth",
+          icon: DfLogoIcon,
+        },
+        {
+          path: "/settings/content-detection",
+          element: <ContentDetectionSettingsForm />,
+          name: "Content Detection",
+          icon: RadarIcon,
+        },
+        {
+          path: "/settings/df-articles",
+          element: <DfArticlesSettingsForm />,
+          name: "DF Articles",
+          icon: ArticleIcon,
+        },
+      ],
     },
     {
-      path: "/settings/content-detection",
-      element: <ContentDetectionSettingsForm />,
-      name: "Content Detection",
-      icon: RadarIcon,
+      name: "Downloading",
+      routes: [
+        {
+          path: "/settings/automatic-downloads",
+          element: <AutomaticDownloadsSettingsForm />,
+          name: "Automatic Downloads",
+          icon: DownloadingIcon,
+        },
+        {
+          path: "/settings/downloads",
+          element: <DownloadsSettingsForm />,
+          name: "Downloads",
+          icon: DownloadIcon,
+        },
+        {
+          path: "/settings/media-formats",
+          element: <MediaFormatsSettingsForm />,
+          name: "Media Formats",
+          icon: VideoSettingsIcon,
+        },
+        {
+          // Destination and work directories - where downloads are written,
+          // which is part of fetching rather than of processing.
+          path: "/settings/content-management",
+          element: <ContentManagementSettingsForm />,
+          name: "Content Management",
+          icon: FolderIcon,
+        },
+      ],
     },
     {
-      path: "/settings/automatic-downloads",
-      element: <AutomaticDownloadsSettingsForm />,
-      name: "Automatic Downloads",
-      icon: DownloadingIcon,
+      // The Activity page already calls these steps post-processing; using a
+      // second word for the same operations would be the confusing part.
+      name: "Post-processing",
+      routes: [
+        {
+          path: "/settings/subtitles",
+          element: <SubtitlesSettingsForm />,
+          name: "Subtitles",
+          icon: SubtitlesIcon,
+        },
+        {
+          path: "/settings/ai-analysis",
+          element: <AiAnalysisSettingsForm />,
+          name: "AI Analysis",
+          icon: AutoAwesomeIcon,
+        },
+        {
+          path: "/settings/metadata",
+          element: <MetadataSettingsForm />,
+          name: "Metadata",
+          icon: DataObjectIcon,
+        },
+      ],
     },
     {
-      path: "/settings/content-management",
-      element: <ContentManagementSettingsForm />,
-      name: "Content Management",
-      icon: FolderIcon,
+      name: "Application",
+      routes: [
+        {
+          path: "/settings/notifications",
+          element: <NotificationSettingsForm />,
+          name: "Notifications",
+          icon: NotificationsIcon,
+        },
+        {
+          path: "/settings/appearance",
+          element: <AppearanceSettingsForm />,
+          name: "Appearance",
+          icon: PaletteIcon,
+        },
+        {
+          path: "/settings/logging",
+          element: <LoggingSettingsForm />,
+          name: "Logging",
+          icon: SubjectIcon,
+        },
+        {
+          path: "/settings/dev",
+          element: <DevSettingsForm />,
+          name: "Dev",
+          icon: CodeIcon,
+          devOnly: true,
+        },
+      ],
     },
-    {
-      path: "/settings/downloads",
-      element: <DownloadsSettingsForm />,
-      name: "Downloads",
-      icon: DownloadIcon,
-    },
-    {
-      path: "/settings/media-formats",
-      element: <MediaFormatsSettingsForm />,
-      name: "Media Formats",
-      icon: VideoSettingsIcon,
-    },
-    {
-      path: "/settings/metadata",
-      element: <MetadataSettingsForm />,
-      name: "Metadata",
-      icon: DataObjectIcon,
-    },
-    {
-      path: "/settings/subtitles",
-      element: <SubtitlesSettingsForm />,
-      name: "Subtitles",
-      icon: SubtitlesIcon,
-    },
-    {
-      path: "/settings/ai-analysis",
-      element: <AiAnalysisSettingsForm />,
-      name: "AI Analysis",
-      icon: AutoAwesomeIcon,
-    },
-    {
-      path: "/settings/df-articles",
-      element: <DfArticlesSettingsForm />,
-      name: "DF Articles",
-      icon: ArticleIcon,
-    },
-    {
-      path: "/settings/notifications",
-      element: <NotificationSettingsForm />,
-      name: "Notifications",
-      icon: NotificationsIcon,
-    },
-    {
-      path: "/settings/logging",
-      element: <LoggingSettingsForm />,
-      name: "Logging",
-      icon: SubjectIcon,
-    },
-    {
-      path: "/settings/appearance",
-      element: <AppearanceSettingsForm />,
-      name: "Appearance",
-      icon: PaletteIcon,
-    },
-    {
-      path: "/settings/dev",
-      element: <DevSettingsForm />,
-      name: "Dev",
-      icon: CodeIcon,
-      devOnly: true,
-    },
-  ].map((route) => ({ ...route, element: <SettingsElement>{route.element}</SettingsElement> })),
+  ]),
 };

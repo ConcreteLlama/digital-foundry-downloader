@@ -4,7 +4,7 @@ import { useSelector } from "react-redux";
 import { Link, useLocation } from "react-router-dom";
 import { selectDevConfigEnabled } from "../../store/config/config.selector";
 import { useDirtySections } from "../../components/settings/dirty-sections";
-import { findDestination, flattenSectionRoutes } from "./nav-destinations";
+import { findDestination, flattenSectionRoutes, groupSectionRoutes } from "./nav-destinations";
 
 /**
  * A section's own pages, rendered as a column inside the page rather than as a
@@ -34,6 +34,12 @@ export const SectionNav = () => {
     // A single-page section doesn't need a column to choose from.
     return null;
   }
+  // Headings kept, unlike the flat list above - fourteen settings pages in one
+  // run is a wall to read rather than a list to scan. Groups that empty out
+  // once dev-only pages are hidden are dropped, so no heading stands alone.
+  const groups = groupSectionRoutes(destination.section)
+    .map((group) => ({ ...group, routes: group.routes.filter((r) => !r.devOnly || devModeEnabled) }))
+    .filter((group) => group.routes.length > 0);
   return (
     <Box
       component="nav"
@@ -54,8 +60,18 @@ export const SectionNav = () => {
       <Typography variant="overline" sx={{ paddingLeft: 2 }}>
         {destination.label}
       </Typography>
-      <List dense disablePadding>
-        {routes.map((route) => {
+      {groups.map((group) => (
+        <Box key={group.label ?? "__ungrouped"} sx={{ marginBottom: 1.5 }}>
+          {group.label && (
+            <Typography
+              variant="overline"
+              sx={{ display: "block", paddingLeft: 2, color: "text.disabled", lineHeight: 2 }}
+            >
+              {group.label}
+            </Typography>
+          )}
+          <List dense disablePadding>
+            {group.routes.map((route) => {
           const selected = pathname === route.path;
           const RouteIcon = route.icon;
           return (
@@ -96,8 +112,10 @@ export const SectionNav = () => {
               )}
             </ListItemButton>
           );
-        })}
-      </List>
+            })}
+          </List>
+        </Box>
+      ))}
     </Box>
   );
 };

@@ -55,6 +55,42 @@ export const navDestinations: NavDestination[] = [
 export const flattenSectionRoutes = (section: NestedSubRoute): NestedRoute[] =>
   section.routes.flatMap((route) => (isNestedRoute(route) ? [route] : flattenSectionRoutes(route)));
 
+/** A run of pages under one heading, or an unlabelled run before the first. */
+export type SectionRouteGroup = {
+  label?: string;
+  routes: NestedRoute[];
+};
+
+/**
+ * A section's pages with one level of grouping kept.
+ *
+ * flattenSectionRoutes above throws the structure away, which is right for
+ * the router and for a horizontal strip of links, and wrong for a column of
+ * fourteen: without headings that list is a wall to be read rather than
+ * scanned.
+ *
+ * Only one level is kept deliberately. The route type nests arbitrarily, but
+ * a settings column with headings inside headings is a worse answer than
+ * fewer pages would be, and nothing needs it.
+ */
+export const groupSectionRoutes = (section: NestedSubRoute): SectionRouteGroup[] => {
+  const groups: SectionRouteGroup[] = [];
+  for (const route of section.routes) {
+    if (isNestedRoute(route)) {
+      // Pages sitting directly in the section, before any heading.
+      const first = groups[0];
+      if (first && first.label === undefined) {
+        first.routes.push(route);
+      } else {
+        groups.unshift({ routes: [route] });
+      }
+      continue;
+    }
+    groups.push({ label: route.name, routes: flattenSectionRoutes(route) });
+  }
+  return groups;
+};
+
 /**
  * Where a rail item points. A section navigates to its first page, so clicking
  * "Settings" lands somewhere real rather than on an empty shell.
