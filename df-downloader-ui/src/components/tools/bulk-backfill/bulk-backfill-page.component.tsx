@@ -25,7 +25,7 @@ import { selectConfigSection } from "../../../store/config/config.selector.ts";
 import { selectPipelinesInCompletionState } from "../../../store/df-tasks/tasks.selector.ts";
 import { store } from "../../../store/store.ts";
 import { estimateBackfill, fetchBackfillCandidates, runBackfill } from "../../../api/backfill.ts";
-import { BackfillConfirmDialog, BackfillTable, isMissing, SKIP_REASONS } from "./bulk-backfill.components.tsx";
+import { BackfillConfirmDialog, BackfillTable, formatCost, isMissing, SKIP_REASONS } from "./bulk-backfill.components.tsx";
 
 /**
  * Bulk backfill: apply subtitles, AI analysis or article matching across
@@ -256,6 +256,35 @@ export const BulkBackfillPage = () => {
     });
   }, []);
 
+  /**
+   * Cost for the current selection, asked for rather than volunteered.
+   *
+   * The confirmation already prices a run, but only once you have decided to
+   * start one. This is the same question asked earlier, while you are still
+   * choosing what to include - the single-item panel has had it all along,
+   * and picking two hundred items is exactly when it matters more.
+   *
+   * Cleared whenever the selection or the terms change, because a price for a
+   * different set of items is worse than no price at all.
+   */
+  const [inlineEstimate, setInlineEstimate] = useState<BulkBackfillEstimate | null>(null);
+  const [inlineEstimating, setInlineEstimating] = useState(false);
+  useEffect(() => {
+    setInlineEstimate(null);
+  }, [selected, force, target]);
+
+  const runInlineEstimate = async () => {
+    setInlineEstimating(true);
+    setInlineEstimate(null);
+    try {
+      setInlineEstimate(await estimateBackfill(target, runKeys, force));
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Could not estimate the cost");
+    } finally {
+      setInlineEstimating(false);
+    }
+  };
+
   const openConfirm = async () => {
     setConfirmOpen(true);
     setEstimate(null);
@@ -407,6 +436,17 @@ export const BulkBackfillPage = () => {
             >
               {force ? "Select all on page" : "Select missing on page"} ({visibleSelectable.length})
             </Button>
+            {/* Only where there is money at stake. The other targets cost
+                time and requests, which the confirmation already states. */}
+            {target === "ai_analysis" && (
+              <Button
+                size="small"
+                disabled={runKeys.length === 0 || inlineEstimating}
+                onClick={() => void runInlineEstimate()}
+              >
+                {inlineEstimating ? "Estimating…" : "Estimate cost"}
+              </Button>
+            )}
             <Button size="small" disabled={selected.size === 0} onClick={() => setSelected(new Set())}>
               Clear
             </Button>
@@ -419,6 +459,21 @@ export const BulkBackfillPage = () => {
               Run ({runKeys.length})
             </Button>
           </Stack>
+
+          {/* Deliberately says "roughly": a handful of the chosen items are
+              priced properly and scaled, rather than a token count per item. */}
+          {inlineEstimate && (
+            <Typography variant="caption" sx={{ color: "text.secondary" }}>
+              {inlineEstimate.estimatedCostUsd === undefined
+                ? `No charge for ${inlineEstimate.itemCount} ${inlineEstimate.itemCount === 1 ? "item" : "items"}`
+                : `Roughly ${formatCost(inlineEstimate.estimatedCostUsd)} for ${inlineEstimate.itemCount} ${
+                    inlineEstimate.itemCount === 1 ? "item" : "items"
+                  }`}
+              {inlineEstimate.sampledCount > 0 &&
+                ` · from ${inlineEstimate.sampledCount} priced exactly`}
+              {inlineEstimate.note && ` · ${inlineEstimate.note}`}
+            </Typography>
+          )}
 
           <Typography variant="caption" sx={{ color: "text.disabled" }}>
             {candidates.length} of {libraryCount.toLocaleString()} items can take this action

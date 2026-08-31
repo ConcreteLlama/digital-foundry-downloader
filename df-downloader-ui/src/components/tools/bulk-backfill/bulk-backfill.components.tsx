@@ -282,7 +282,7 @@ export type BackfillConfirmDialogProps = {
   onConfirm: () => void;
 };
 
-const formatCost = (costUsd: number) => (costUsd < 0.01 ? "<$0.01" : `$${costUsd.toFixed(2)}`);
+export const formatCost = (costUsd: number) => (costUsd < 0.01 ? "<$0.01" : `$${costUsd.toFixed(2)}`);
 
 /**
  * Confirmation, carrying the cost of what is about to happen.
