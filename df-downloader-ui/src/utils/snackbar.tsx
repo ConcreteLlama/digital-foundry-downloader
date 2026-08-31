@@ -15,7 +15,7 @@ import {
   SnackbarProvider,
   VariantType,
 } from "notistack";
-import { forwardRef } from "react";
+import { forwardRef, useRef, useState } from "react";
 
 /**
  * Toasts, built to the same rules as the rest of the app: a hairline-bordered
@@ -64,8 +64,29 @@ const getVariantSpec = (variant: VariantType) => variantSpecs[variant] ?? varian
 const signalColor = (spec: VariantSpec) => (theme: Theme) =>
   spec.signal ? theme.palette[spec.signal].main : theme.palette.text.secondary;
 
+/** How far a toast has to be dragged before letting go dismisses it. */
+const SWIPE_DISMISS_PX = 72;
+/** Past this, the gesture is a swipe and must not also register as a click. */
+const SWIPE_CLICK_CANCEL_PX = 8;
+
 const SignalSnackbar = forwardRef<HTMLDivElement, CustomContentProps>((props, ref) => {
   const { id, message, variant, action, persist, style, className } = props;
+  /**
+   * Swipe to dismiss.
+   *
+   * Persistent toasts are included, even though they deliberately refuse
+   * click-to-dismiss. That rule exists so a stray click on a toast that drifted
+   * under the cursor cannot lose an error report - a swipe is not something
+   * that happens by accident, so it carries no such risk and is the obvious
+   * gesture on the phone where these are most in the way.
+   *
+   * Pointer events rather than touch: the same handler covers a trackpad drag
+   * and a finger, and setPointerCapture keeps the gesture alive when it leaves
+   * the toast, which it will since the toast is moving out from under it.
+   */
+  const [dragX, setDragX] = useState(0);
+  const [dragging, setDragging] = useState(false);
+  const gesture = useRef<{ startX: number; moved: boolean } | null>(null);
   const spec = getVariantSpec(variant);
   const Icon = spec.Icon;
   const color = signalColor(spec);
@@ -79,8 +100,65 @@ const SignalSnackbar = forwardRef<HTMLDivElement, CustomContentProps>((props, re
         // Anything that auto-hides can also just be clicked away. Persistent
         // ones deliberately cannot - a stray click on a passing toast should not
         // be able to lose an error report - so they get an explicit close.
-        onClick={persist ? undefined : () => closeSnackbar(id)}
+        onClick={() => {
+          // A swipe ends in a pointerup over the toast, which the browser also
+          // reports as a click; without this, dragging a persistent toast a few
+          // pixels and letting go would dismiss it by the click path instead.
+          if (gesture.current?.moved) {
+            return;
+          }
+          if (!persist) {
+            closeSnackbar(id);
+          }
+        }}
+        onPointerDown={(event) => {
+          // Not right-clicks, and not drags starting on the action button.
+          if (event.button !== 0) {
+            return;
+          }
+          gesture.current = { startX: event.clientX, moved: false };
+          setDragging(true);
+          event.currentTarget.setPointerCapture(event.pointerId);
+        }}
+        onPointerMove={(event) => {
+          if (!gesture.current) {
+            return;
+          }
+          const delta = event.clientX - gesture.current.startX;
+          if (Math.abs(delta) > SWIPE_CLICK_CANCEL_PX) {
+            gesture.current.moved = true;
+          }
+          setDragX(delta);
+        }}
+        onPointerUp={(event) => {
+          const delta = gesture.current ? event.clientX - gesture.current.startX : 0;
+          setDragging(false);
+          if (Math.abs(delta) >= SWIPE_DISMISS_PX) {
+            // Carries on in the direction it was thrown rather than stopping
+            // dead, then closes - the toast leaves the way it was pushed.
+            setDragX(delta > 0 ? window.innerWidth : -window.innerWidth);
+            closeSnackbar(id);
+            return;
+          }
+          setDragX(0);
+          // Cleared on a frame boundary so the click that follows this pointerup
+          // still sees `moved` and can suppress itself.
+          requestAnimationFrame(() => {
+            gesture.current = null;
+          });
+        }}
+        onPointerCancel={() => {
+          setDragging(false);
+          setDragX(0);
+          gesture.current = null;
+        }}
         sx={{
+          transform: dragX ? `translateX(${dragX}px)` : undefined,
+          // Fades as it goes, so a half-committed swipe shows how close it is.
+          opacity: dragX ? Math.max(0.25, 1 - Math.abs(dragX) / (SWIPE_DISMISS_PX * 2.5)) : 1,
+          transition: dragging ? "none" : "transform 180ms ease-out, opacity 180ms ease-out",
+          // Vertical scrolling still belongs to the page; horizontal is ours.
+          touchAction: "pan-y",
           // The stack's width is set on notistack's container in buildTheme, so
           // every toast is the same width; this just fills it.
           width: "100%",
