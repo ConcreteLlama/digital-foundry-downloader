@@ -73,13 +73,35 @@ export class FileDb<T> {
             dropPendingOnClose: false,
         });
     }
+    /**
+     * Collapses writes that would produce the same file.
+     *
+     * The queued write serialises `this.data` when it runs, not when it was
+     * queued, so a write already waiting will include anything changed since.
+     * Queueing a second one therefore rewrites the same file with the same
+     * bytes - which was invisible while callers trickled in one at a time, and
+     * became the dominant cost the moment a bulk run queued three hundred
+     * pipelines at once: three hundred full rewrites of a file holding all
+     * three hundred, back to back.
+     *
+     * The flag is cleared as the write begins rather than when it finishes, so
+     * a change arriving mid-write schedules another rather than being folded
+     * into one that has already serialised. Erring towards an extra write is
+     * the right direction for something whose whole job is not losing data.
+     */
+    private writePending = false;
     public async updateDb(data: T) {
         this.data = data;
+        if (this.writePending) {
+            return;
+        }
+        this.writePending = true;
         await this.writeQueue
             .addWork(async () => {
-                logger.log("info", "Writing to DB");
+                this.writePending = false;
+                logger.log("debug", "Writing to DB");
                 await fs.promises.writeFile(this.filename, JSON.stringify(this.data, null, 2));
-                logger.log("info", "Wrote to DB");
+                logger.log("debug", "Wrote to DB");
             });
     }
     public scheduleUpdateDb(data: T) {
