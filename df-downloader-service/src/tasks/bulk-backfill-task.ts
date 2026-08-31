@@ -16,10 +16,15 @@ import { ensureArticleForContent } from "../utils/df-articles/ensure-article.js"
  * operations has for its own reasons.
  *
  * The per-item work is deliberately delegated to the existing single-item
- * paths rather than reimplemented. Each item's real pipeline is started
- * and awaited, so it shows up in Activity like any other, obeys its own
- * task manager's concurrency, and cannot drift from the behaviour of the
- * single-item action it is supposed to be a bulk version of.
+ * paths rather than reimplemented, so it cannot drift from the behaviour of
+ * the single-item action it is supposed to be a bulk version of.
+ *
+ * For subtitles the run is purely a dispatcher: it queues each item's real
+ * pipeline and moves on. That is what makes a run's queue visible - an
+ * awaited item exists nowhere the UI can see until its turn comes, so a
+ * four-item run looked like a one-item run. Queued, they are ordinary
+ * subtitle pipelines that can be reordered, paused or cancelled
+ * individually, exactly like one started from the content page.
  */
 
 export type BulkBackfillTaskOpts = {
@@ -147,9 +152,10 @@ export const isBulkBackfillTask = (task: any): task is BulkBackfillTask => task.
  * happens here.
  */
 export const BULK_BACKFILL_CONCURRENCY: Record<BulkBackfillTarget, number> = {
-  // Transcription is CPU-bound and its own manager serialises it anyway;
-  // queueing more here just builds a backlog that cannot be cancelled as
-  // cleanly.
+  // Only the rate items are handed to the subtitle queue, since that is all
+  // this run does for them now - the transcription itself is serialised by
+  // its own manager, and the backlog this builds is the point rather than
+  // something to avoid: it is what you can see and reorder.
   subtitles: 1,
   // Matches the analysis task manager's own default - the work is a remote
   // API call, so a couple in flight costs this machine nothing.

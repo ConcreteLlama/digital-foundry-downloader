@@ -422,7 +422,9 @@ export class DfTaskManager {
     mediaInfo: MediaInfo,
     fileLocation: string,
     language: LanguageCode | string,
-    subtitleGenerators: SubtitleGenerator | SubtitleGenerator[]
+    subtitleGenerators: SubtitleGenerator | SubtitleGenerator[],
+    /** Set when a bulk run queued this - see TaskPipelineDetails.backfillJobId. */
+    backfillJobId?: string
   ) {
     const subtitleExecution = this.subtitleTaskPipeline.start({
       dfContentInfo,
@@ -430,6 +432,7 @@ export class DfTaskManager {
       fileLocation,
       language,
       subtitleGenerators,
+      backfillJobId,
     });
     const generatorNames = (Array.isArray(subtitleGenerators) ? subtitleGenerators : [subtitleGenerators])
       .map((generator) => generator.serviceType)
@@ -449,7 +452,7 @@ export class DfTaskManager {
    * run with settings that differ from the saved ones - which is what the
    * "analyse with a different model" path in the UI needs.
    */
-  analyseContent(entry: DfContentEntry, config: AiAnalysisConfig, opts: { chapters?: Chapter[]; articleText?: string; articleUrl?: string; articleTitle?: string } = {}) {
+  analyseContent(entry: DfContentEntry, config: AiAnalysisConfig, opts: { chapters?: Chapter[]; articleText?: string; articleUrl?: string; articleTitle?: string; backfillJobId?: string } = {}) {
     const analysisExecution = this.aiAnalysisTaskPipeline.start({
       dfContentInfo: entry.contentInfo,
       entry,
@@ -458,6 +461,7 @@ export class DfTaskManager {
       articleText: opts.articleText,
       articleUrl: opts.articleUrl,
       articleTitle: opts.articleTitle,
+      backfillJobId: opts.backfillJobId,
     });
     logger.log(
       "info",
@@ -498,7 +502,7 @@ export class DfTaskManager {
    * gains subtitles but nothing in the library knows, so the next bulk run
    * would generate them all over again.
    */
-  private async runSubtitlesForContent(contentKey: string, language: string) {
+  private async runSubtitlesForContent(contentKey: string, language: string, backfillJobId?: string) {
     const db = serviceLocator.db;
     const entry = await db.getContentEntry(contentKey);
     if (!entry) {
@@ -518,17 +522,32 @@ export class DfTaskManager {
       download.mediaInfo,
       download.downloadLocation,
       language,
-      generators
+      generators,
+      backfillJobId
     );
-    const result = await this.awaitPipeline(execution, `Subtitles for ${entry.contentInfo.title}`);
-    const generated = result?.pipelineResult;
-    if (generated) {
-      await db.subsGenerated(contentKey, download.downloadLocation, {
-        language: generated.language,
-        service: generated.service,
-        path: generated.path,
-      });
-    }
+    // Queued and left to the queue, rather than awaited here.
+    //
+    // Awaiting was what made a bulk run's items invisible: the run held each
+    // one until it finished, so only the item currently running had a
+    // pipeline to show and the rest existed nowhere the UI could see. A run
+    // is a dispatcher - what it queues is the same work the content page
+    // queues, and once queued it is an ordinary subtitle pipeline that can
+    // be reordered, paused or cancelled like any other.
+    //
+    // The result is recorded from the completion event for the same reason
+    // the single-item endpoint does it that way: there is no longer anyone
+    // waiting to record it.
+    execution.on("completed", (result) => {
+      if (result.status !== "success") {
+        return;
+      }
+      const { language: generatedLanguage, service, path } = result.pipelineResult;
+      db.subsGenerated(contentKey, download.downloadLocation, {
+        language: generatedLanguage,
+        service,
+        path,
+      }).catch((e) => logger.log("error", `Could not record generated subtitles for ${contentKey}: ${e}`));
+    });
     return "subtitles";
   }
 
@@ -564,6 +583,9 @@ export class DfTaskManager {
    * see stillNeedsWork in bulk-backfill-task.ts.
    */
   bulkBackfill(contentKeys: string[], target: BulkBackfillTarget, force: boolean, language: string) {
+    // Assigned the moment the task exists, which is after these options are
+    // built - the closures below only run later, once it is dispatching.
+    let jobId: string | undefined;
     const task = this.bulkOperationsTaskManagers[target].addTask(
       BulkBackfillTask(
         contentKeys.map((contentKey) => ({ contentKey })),
@@ -573,7 +595,7 @@ export class DfTaskManager {
           language,
           db: serviceLocator.db,
           aiAnalysisConfig: configService.config.aiAnalysis,
-          runSubtitles: (contentKey: string) => this.runSubtitlesForContent(contentKey, language),
+          runSubtitles: (contentKey: string) => this.runSubtitlesForContent(contentKey, language, jobId),
           runAnalysis: (contentKey: string) => {
             const config = configService.config.aiAnalysis;
             if (!config) {
@@ -585,6 +607,7 @@ export class DfTaskManager {
         { maxConcurrent: BULK_BACKFILL_CONCURRENCY[target] }
       )
     );
+    jobId = task.task.id;
     logger.log(
       "info",
       `Queued bulk backfill: ${target} over ${contentKeys.length} item(s)${force ? " (forced)" : ""}`
@@ -1028,6 +1051,10 @@ export const makeTaskPipelineInfo = (
       id,
       type: pipelineType,
       queuedTime: startTime,
+      backfillJobId:
+        "backfillJobId" in taskPipelineExecution.context
+          ? (taskPipelineExecution.context.backfillJobId as string | undefined)
+          : undefined,
       dfContent: taskPipelineExecution.context.dfContentInfo,
       mediaFormat: mediaInfo?.formatString || "",
       stepOrder: steps.map(({ step }) => step.id),

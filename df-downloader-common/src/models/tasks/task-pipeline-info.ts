@@ -44,6 +44,20 @@ export const TaskPipelineDetails = z.object({
     type: DfPipelineType,
     id: z.string(),
     queuedTime: z.coerce.date().optional(),
+    /**
+     * The bulk run that queued this, if one did.
+     *
+     * A bulk backfill dispatches the ordinary single-item work rather than
+     * reimplementing it, so what it queues is indistinguishable from what
+     * the content page queues - which is the point, and why these appear in
+     * Activity like anything else. This is only so a run can still say how
+     * its own items are getting on, and so stopping a run can reach the
+     * items it queued.
+     *
+     * Optional and additive, so persisted records written before it existed
+     * parse unchanged.
+     */
+    backfillJobId: z.string().optional(),
     dfContent: DfContentInfo,
     mediaFormat: z.string(),
     destinationPath: z.string().optional(),

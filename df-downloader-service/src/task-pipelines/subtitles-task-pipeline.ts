@@ -24,6 +24,8 @@ export const createSubtitlesTaskPipeline = (opts: SubtitlesTaskPipelineCreatorOp
       fileLocation: string;
       language: LanguageCode | string;
       subtitleGenerators: SubtitleGenerator | SubtitleGenerator[];
+      /** Set when a bulk run queued this - see TaskPipelineDetails.backfillJobId. */
+      backfillJobId?: string;
     },
     "subtitles"
   >("subtitles")

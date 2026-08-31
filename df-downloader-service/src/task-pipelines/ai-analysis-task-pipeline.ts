@@ -72,6 +72,8 @@ export const createAiAnalysisTaskPipeline = (opts: AiAnalysisTaskPipelineCreator
       articleText?: string;
       articleUrl?: string;
       articleTitle?: string;
+      /** Set when a bulk run queued this - see TaskPipelineDetails.backfillJobId. */
+      backfillJobId?: string;
     },
     "ai_analysis"
   >("ai_analysis")
