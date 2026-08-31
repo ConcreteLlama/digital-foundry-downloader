@@ -50,7 +50,16 @@ export type DraggableTaskInfoData = {
   position: number;
   stepId: string;
 };
-export const DraggableTaskInfo = ({ pipelineId }: TaskInfoProps) => {
+/**
+ * A reorderable row.
+ *
+ * `locked` pins work that is running and cannot be suspended. Moving such a
+ * task out of the concurrency window makes the task manager requeue it, which
+ * is a pause - and a task type that never implemented pause ignores it, so the
+ * manager frees a slot that is still occupied and starts another job beside
+ * it. Pinning is what keeps that from being reachable by dragging.
+ */
+export const DraggableTaskInfo = ({ pipelineId, locked = false }: TaskInfoProps & { locked?: boolean }) => {
   const [detailsOpen, setDetailsOpen] = useState(false);
   const stepId = useSelector(selectCurrentStep(pipelineId));
   const itemPosition = useSelector(selectBasicTaskField(pipelineId, stepId!, "position"));
@@ -62,6 +71,7 @@ export const DraggableTaskInfo = ({ pipelineId }: TaskInfoProps) => {
   const { setNodeRef: droppableSetNodeRef } = useDroppable({
     id: pipelineId,
     data,
+    disabled: locked,
   });
   const {
     attributes,
@@ -71,6 +81,7 @@ export const DraggableTaskInfo = ({ pipelineId }: TaskInfoProps) => {
   } = useDraggable({
     id: pipelineId,
     data,
+    disabled: locked,
   });
 
   const style = transform
@@ -86,11 +97,15 @@ export const DraggableTaskInfo = ({ pipelineId }: TaskInfoProps) => {
       <TaskInfoCard ref={droppableSetNodeRef} sx={{ ...style }}>
         <TaskHeaderItem
           pipelineId={pipelineId}
-          draggableProps={{
-            ref: draggableSetNodeRef,
-            listeners,
-            attributes,
-          }}
+          draggableProps={
+            locked
+              ? undefined
+              : {
+                  ref: draggableSetNodeRef,
+                  listeners,
+                  attributes,
+                }
+          }
         />
         <Tooltip title="Show details" enterDelay={700}>
           <Box onClick={() => setDetailsOpen(true)} sx={{ cursor: "pointer", width: "100%" }}>

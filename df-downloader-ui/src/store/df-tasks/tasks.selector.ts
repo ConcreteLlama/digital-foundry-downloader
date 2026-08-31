@@ -297,6 +297,71 @@ export const selectTask = (taskId: string) =>
   Deep-equal so a snapshot that changes nothing about the split does not hand
   back a new array and re-render the groups.
 */
+/**
+ * One live pipeline, reduced to what the Activity page needs to lay it out.
+ *
+ * Computed in a single pass rather than by the list asking per row, because
+ * grouping, filtering and the drag lock all need the same few facts about
+ * every item at once - and a hook per row cannot be called inside a loop.
+ */
+export type LaneItem = {
+  pipelineId: string;
+  pipelineType: DfPipelineType;
+  state?: TaskState;
+  /** Held out of the queue by hand - see TaskStatus.held. */
+  held: boolean;
+  running: boolean;
+  /**
+   * Whether this can be suspended once running.
+   *
+   * Load-bearing for reordering, not just for the buttons. Moving a running
+   * task out of the concurrency window makes the task manager requeue it,
+   * which is `pause("auto")` - and on a task that never implemented pause
+   * that is a no-op, so the manager would believe it had freed the slot and
+   * start another alongside work that is still going. Transcription is
+   * exactly that case, so those rows are pinned.
+   */
+  canPause: boolean;
+  /** Queue position, which running tasks occupy too - they are not a separate plane. */
+  position: number;
+  /**
+   * The kind of work the current step is, which is also which queue it sits in.
+   *
+   * There is no single queue: downloads, media processing, DF requests and
+   * bulk operations each have their own TaskManager and their own concurrency,
+   * so `position` only means anything relative to others of the same kind.
+   * Reordering across two of them would be comparing indices in different
+   * lists, so the lane only offers dragging when its items agree on this.
+   */
+  taskType?: string;
+};
+
+export const selectLiveLaneItems = createDeepEqualSelector(
+  [selectPipelineIds, selectPipelines],
+  (ids, pipelines): LaneItem[] =>
+    mapFilterEmpty(ids, (id) => {
+      const pipeline = pipelines[id];
+      if (!pipeline || pipeline.pipelineStatus.isComplete) {
+        return undefined;
+      }
+      const currentStep = pipeline.pipelineStatus.currentStep;
+      const task = currentStep ? pipeline.stepTasks[currentStep] : undefined;
+      const state = task?.status?.state;
+      return {
+        pipelineId: pipeline.id,
+        pipelineType: pipeline.pipelineType,
+        state,
+        held: Boolean(task?.status?.held),
+        running: state === "running",
+        canPause: Boolean(task?.capabilities?.includes("pause")),
+        taskType: task?.taskType,
+        // A step marked "not needed" has no task at all; sort those last
+        // rather than letting NaN scramble the whole lane.
+        position: task?.position ?? Number.MAX_SAFE_INTEGER,
+      };
+    }).sort((a, b) => a.position - b.position)
+);
+
 export const selectActiveTaskIds = createDeepEqualSelector(selectTaskIds, selectTasks, (ids, tasks) =>
   ids.filter((id) => !tasks[id]?.status?.isComplete)
 );

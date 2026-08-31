@@ -25,6 +25,7 @@
 import {
   BasicTaskInfo,
   DfContentInfo,
+  DfPipelineType,
   DownloadProgressInfo,
   DownloadTaskInfo,
   MediaInfo,
@@ -142,6 +143,16 @@ type StepFixture = {
    * them stay equal could not exercise the split at all.
    */
   activeSecondsSoFar?: number;
+  /**
+   * What this step can be asked to do while running. Defaults to the download
+   * step's ["pause","cancel"].
+   *
+   * Settable because most task types declare none at all - transcription
+   * cannot be interrupted part-way - and that is what pins a running row in
+   * place rather than letting it be dragged out of the concurrency window.
+   * A fixture that always claimed "pause" could not reproduce that.
+   */
+  capabilities?: BasicTaskInfo["capabilities"];
   position?: number;
 };
 
@@ -191,7 +202,7 @@ const makeStepTask = (pipelineId: string, index: number, fixture: StepFixture): 
   const common = {
     id: stepId(pipelineId, index),
     type: "task" as const,
-    capabilities: ["pause", "cancel"] as BasicTaskInfo["capabilities"],
+    capabilities: (fixture.capabilities ?? ["pause", "cancel"]) as BasicTaskInfo["capabilities"],
     priority: 0,
     position: fixture.position ?? 0,
     priorityPosition: fixture.position ?? 0,
@@ -273,6 +284,74 @@ const makePipeline = (fixture: PipelineFixture): TaskPipelineInfo => {
       }
       return acc;
     }, {} as TaskPipelineInfo["stepTasks"]),
+  };
+};
+
+/**
+ * A one-step pipeline of some kind other than a download.
+ *
+ * Subtitles and analysis runs queued from the content page are their own
+ * pipelines rather than steps of a download, which is what gives the Activity
+ * page more than one lane. Every fixture here was a download before this, so
+ * nothing exercised the case the lanes exist for.
+ */
+const makeLanePipeline = ({
+  id,
+  pipelineType,
+  stepName,
+  taskType,
+  content,
+  statusMessage,
+  step,
+}: {
+  id: string;
+  pipelineType: DfPipelineType;
+  stepName: string;
+  taskType: string;
+  content: DfContentInfo;
+  statusMessage: string;
+  step: StepFixture;
+}): TaskPipelineInfo => {
+  const onlyStep = `${id}-step-0`;
+  return {
+    id,
+    type: "pipeline",
+    pipelineType,
+    pipelineDetails: {
+      id,
+      type: pipelineType,
+      queuedTime: new Date(Date.now() - 5 * 60_000),
+      dfContent: content,
+      mediaFormat: "h264",
+      stepOrder: [onlyStep],
+      steps: { [onlyStep]: { id: onlyStep, name: stepName } },
+    },
+    pipelineStatus: {
+      currentStep: onlyStep,
+      statusMessage,
+      isComplete: false,
+    },
+    stepTasks: {
+      [onlyStep]: {
+        id: onlyStep,
+        type: "task",
+        taskType,
+        capabilities: (step.capabilities ?? []) as BasicTaskInfo["capabilities"],
+        priority: 0,
+        position: step.position ?? 0,
+        priorityPosition: step.position ?? 0,
+        startTime: step.startedSecondsAgo ? new Date(Date.now() - step.startedSecondsAgo * 1000) : undefined,
+        status: {
+          state: step.state,
+          isComplete: false,
+          attempt: step.attempt ?? 1,
+          message: step.message,
+          held: step.pauseTrigger === "manual" && step.state === "paused" ? true : undefined,
+          pauseTrigger: step.pauseTrigger,
+          progress: step.progress,
+        },
+      } as BasicTaskInfo,
+    },
   };
 };
 
@@ -569,6 +648,103 @@ const scenarios: FixtureScenario[] = [
       tasks: [],
       scheduledDownloads: [],
     }),
+  },
+  {
+    id: "mixed-lanes",
+    label: "Mixed lanes",
+    description:
+      "A download, a transcription that cannot be interrupted, and two analyses - all running at once, behind a queue of fourteen transcriptions. The case the lanes exist for: the analyses hold the highest queue positions, so one flat list ordered by position buries them under the backlog.",
+    animated: true,
+    build: (tick) => {
+      const contents = Object.values(CONTENT);
+      const percent = cyclePercent(tick, 0.6, 0);
+      const totalBytes = 5 * GIB;
+      const downloading = makePipeline({
+        id: "fixture-lane-download",
+        content: contents[0],
+        currentStep: STEP.download,
+        statusMessage: "Downloading",
+        steps: {
+          [STEP.download]: {
+            state: "running",
+            message: "Downloading",
+            position: 0,
+            startedSecondsAgo: 120,
+            download: {
+              percentComplete: percent,
+              totalBytes,
+              totalBytesDownloaded: (percent / 100) * totalBytes,
+              currentBytesPerSecond: 22 * 1024 * 1024,
+            },
+          },
+        },
+      });
+      // Declares no capabilities, like the real transcription task: it cannot
+      // be paused, so it must not be draggable out of the running slot.
+      const transcribing = makeLanePipeline({
+        id: "fixture-lane-subs-running",
+        pipelineType: "subtitles",
+        stepName: "Generate Subtitles",
+        taskType: "subtitles",
+        content: contents[1],
+        statusMessage: "Transcribing",
+        step: {
+          state: "running",
+          message: "Transcribing",
+          position: 0,
+          startedSecondsAgo: 400,
+          capabilities: [],
+          progress: { percent: cyclePercent(tick, 0.3, 12), detail: "Transcribing audio" },
+        },
+      });
+      const subsQueue = Array.from({ length: 14 }, (_unused, index) =>
+        makeLanePipeline({
+          id: `fixture-lane-subs-${index}`,
+          pipelineType: "subtitles",
+          stepName: "Generate Subtitles",
+          taskType: "subtitles",
+          content: contents[(index + 2) % contents.length],
+          statusMessage: "Waiting to transcribe",
+          step: { state: "idle", message: "Queued", position: index + 1, capabilities: [] },
+        })
+      );
+      // Deliberately the highest positions in the whole queue - these are the
+      // rows that used to sit below all fourteen above despite running.
+      const analysing = [0, 1].map((index) =>
+        makeLanePipeline({
+          id: `fixture-lane-ai-running-${index}`,
+          pipelineType: "ai_analysis",
+          stepName: "Analyse Content",
+          taskType: "ai_analysis",
+          content: contents[(index + 3) % contents.length],
+          statusMessage: "Analysing",
+          step: {
+            state: "running",
+            message: "Analysing",
+            position: 20 + index,
+            startedSecondsAgo: 40 + index * 15,
+            capabilities: [],
+            progress: { percent: cyclePercent(tick, 0.9, index * 30), detail: "Reading transcript" },
+          },
+        })
+      );
+      const analysisQueue = [0, 1].map((index) =>
+        makeLanePipeline({
+          id: `fixture-lane-ai-queued-${index}`,
+          pipelineType: "ai_analysis",
+          stepName: "Analyse Content",
+          taskType: "ai_analysis",
+          content: contents[(index + 1) % contents.length],
+          statusMessage: "Waiting to analyse",
+          step: { state: "idle", message: "Queued", position: 22 + index, capabilities: [] },
+        })
+      );
+      return {
+        taskPipelines: [downloading, transcribing, ...subsQueue, ...analysing, ...analysisQueue],
+        tasks: [],
+        scheduledDownloads: [],
+      };
+    },
   },
   {
     id: "long-queue",

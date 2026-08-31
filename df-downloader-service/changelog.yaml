@@ -189,6 +189,13 @@ versions:
         - "A job now shows both how long it has been going and how long it has actually been working":
           - "The single duration kept counting while a download was paused, which is right for one question and wrong for the other"
           - "Paused jobs show both, so 'Elapsed 6m 29s, Active 2m 14s' tells you the pause is why it is taking a while"
+        - "The Activity page is now grouped by the kind of work, not by stage":
+          - "Downloads, subtitles and analysis each get their own section, so a job that is actually running is visible instead of buried. Previously everything after the download shared one list ordered by queue position, so starting an analysis while a few hundred transcriptions were waiting put it at the very bottom of the page - running, but below all of them"
+          - "This also matches how the app really works: those kinds of work do not compete for one slot, they have separate limits and genuinely run alongside each other, which one merged list actively misrepresented"
+          - "Each section says how many are queued and shows a marker when something in it is running, and long queues show the first few with the rest folded away rather than hundreds of near-identical rows"
+          - "Buttons to show everything, or only what is running, queued or held - so 'what is this machine doing right now' is one press rather than a scroll"
+          - "Queued items can be reordered in more places than before, not just downloads. Where reordering would not mean anything it is not offered rather than being offered and ignored"
+          - "Work that is running and cannot be interrupted is pinned in place. Dragging something above it would have pushed it out of the running slot, and since that kind of job cannot actually be paused it would have carried on regardless while the app started another one on top of it"
         - "Stop and pause now work on queued jobs, whatever kind of work they are":
           - "Stop did nothing at all on a subtitles job. The button was greyed out, and pressing it would not have helped: it asked the job itself to stop, which means nothing to something that has not started yet"
           - "Anything sitting in the queue can now be stopped, whatever it is - it is simply taken out of the queue. Whether a job can be stopped once it is actually running is a separate question, and the button says so honestly: transcribing cannot be interrupted part-way, so it stays unavailable there rather than pretending"
