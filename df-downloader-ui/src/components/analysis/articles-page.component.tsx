@@ -204,7 +204,13 @@ export const ArticlesPage = () => {
   const [loading, setLoading] = useState(true);
   const [failed, setFailed] = useState(false);
   const [search, setSearch] = useState("");
-  const [onlyLinked, setOnlyLinked] = useState(false);
+  /**
+   * Articles that relate to one of your videos are what this page is for, so
+   * they are what it shows. The scan also reads plenty of Digital Foundry
+   * writing with no video in it at all - recorded so it is never fetched
+   * twice, and available here on request rather than diluting the list.
+   */
+  const [showUnlinked, setShowUnlinked] = useState(false);
   const [contentKey, setContentKey] = useState<string | null>(null);
   const [page, setPage] = useState(1);
 
@@ -232,17 +238,17 @@ export const ArticlesPage = () => {
           article.linkedVideos.some((video) => video.title.toLowerCase().includes(needle))
       );
     }
-    if (onlyLinked) {
+    if (!showUnlinked) {
       list = list.filter((article) => article.linkedVideos.length > 0);
     }
     return list;
-  }, [articles, search, onlyLinked]);
+  }, [articles, search, showUnlinked]);
 
   // Back to the first page whenever the list underneath changes, or a filter
   // that narrows it would leave you stranded past the end.
   useEffect(() => {
     setPage(1);
-  }, [search, onlyLinked]);
+  }, [search, showUnlinked]);
 
   const numPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
   const currentPage = Math.min(page, numPages);
@@ -323,9 +329,13 @@ export const ArticlesPage = () => {
               />
               <FormControlLabel
                 control={
-                  <Switch size="small" checked={onlyLinked} onChange={(event) => setOnlyLinked(event.target.checked)} />
+                  <Switch
+                    size="small"
+                    checked={showUnlinked}
+                    onChange={(event) => setShowUnlinked(event.target.checked)}
+                  />
                 }
-                label="Linked only"
+                label="Show articles with no video"
                 sx={{ marginLeft: 0, "& .MuiFormControlLabel-label": { fontSize: "0.8125rem" } }}
               />
             </Stack>

@@ -71,13 +71,6 @@ export const makeDfArticlesRouter = (contentManager: DigitalFoundryContentManage
       const drafts = new Map<string, Draft>();
 
       for (const meta of contentManager.db.listDfArticleMeta()) {
-        // The cache records every page the scan has looked at, including the
-        // many Digital Foundry write that embed no video - recorded so they
-        // are read once and never fetched again. They are not what this page
-        // is for, though, so they are remembered without being listed.
-        if (!meta.videoIds.length) {
-          continue;
-        }
         drafts.set(meta.url, {
           url: meta.url,
           slug: meta.slug,
