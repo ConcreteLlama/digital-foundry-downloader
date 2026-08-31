@@ -141,31 +141,6 @@ export const BulkBackfillPage = () => {
     void load();
   }, [load]);
 
-  const filtered = useMemo(() => {
-    const needle = filterText.trim().toLowerCase();
-    let list = candidates;
-    if (needle) {
-      list = list.filter((candidate) => candidate.title.toLowerCase().includes(needle));
-    }
-    if (onlyNeedsWork) {
-      list = list.filter((candidate) => isMissing(candidate, target));
-    }
-    return list;
-  }, [candidates, filterText, onlyNeedsWork, target]);
-
-  useEffect(() => {
-    setPage(0);
-  }, [filterText, target, onlyNeedsWork]);
-
-  const pageCount = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
-  // Clamped rather than reset: narrowing the filter can leave the current
-  // page past the end, which would otherwise show an empty table.
-  const currentPage = Math.min(page, pageCount - 1);
-  const visible = useMemo(
-    () => filtered.slice(currentPage * PAGE_SIZE, (currentPage + 1) * PAGE_SIZE),
-    [filtered, currentPage]
-  );
-
   /**
    * What is being worked on right now, from the live task state.
    *
@@ -197,6 +172,52 @@ export const BulkBackfillPage = () => {
     () => inFlight.filter((pipeline) => pipeline.pipelineDetails.backfillJobId).length,
     [inFlight]
   );
+
+  const filtered = useMemo(() => {
+    const needle = filterText.trim().toLowerCase();
+    let list = candidates;
+    if (needle) {
+      list = list.filter((candidate) => candidate.title.toLowerCase().includes(needle));
+    }
+    if (onlyNeedsWork) {
+      list = list.filter((candidate) => isMissing(candidate, target, workingKeys.has(candidate.contentKey)));
+    }
+    return list;
+  }, [candidates, filterText, onlyNeedsWork, target, workingKeys]);
+
+  useEffect(() => {
+    setPage(0);
+  }, [filterText, target, onlyNeedsWork]);
+
+  const pageCount = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+  // Clamped rather than reset: narrowing the filter can leave the current
+  // page past the end, which would otherwise show an empty table.
+  const currentPage = Math.min(page, pageCount - 1);
+  const visible = useMemo(
+    () => filtered.slice(currentPage * PAGE_SIZE, (currentPage + 1) * PAGE_SIZE),
+    [filtered, currentPage]
+  );
+
+  /**
+   * What the bulk buttons may pick up: only what the run would act on.
+   *
+   * Never anything already in flight, whatever else is set - queueing an item
+   * that is mid-transcription just transcribes it twice, and with re-run on
+   * nothing downstream would catch it.
+   *
+   * And with re-run off, never anything already done, because the run skips
+   * those anyway (the same rule runKeys applies below). Ticking a box that is
+   * guaranteed to do nothing is a worse way to learn that than the box simply
+   * not being ticked, so the buttons now select exactly what will be worked
+   * on and their counts say how many that is.
+   */
+  const isSelectable = useCallback(
+    (candidate: BulkBackfillCandidate) =>
+      !workingKeys.has(candidate.contentKey) && (force || isMissing(candidate, target)),
+    [workingKeys, force, target]
+  );
+  const selectable = useMemo(() => filtered.filter(isSelectable), [filtered, isSelectable]);
+  const visibleSelectable = useMemo(() => visible.filter(isSelectable), [visible, isSelectable]);
 
   // Force is deliberately not a factor - see isMissing. This counts what
   // is missing the thing, which is a useful subset to select whether or
@@ -364,37 +385,43 @@ export const BulkBackfillPage = () => {
               label="Needs work only"
               sx={{ marginLeft: 0, "& .MuiFormControlLabel-label": { fontSize: "0.8125rem" } }}
             />
+            {/* With re-run off this would be identical to "Select all needed"
+                beside it - two buttons, same count, same effect. It only says
+                something different once re-run widens what the others take. */}
+            {force && (
+              <Button
+                size="small"
+                variant="outlined"
+                disabled={missing.length === 0}
+                onClick={() => setSelected(new Set(missing.map((candidate) => candidate.contentKey)))}
+              >
+                Select all missing ({missing.length})
+              </Button>
+            )}
             <Button
               size="small"
-              variant="outlined"
-              disabled={missing.length === 0}
-              onClick={() => setSelected(new Set(missing.map((candidate) => candidate.contentKey)))}
+              disabled={selectable.length === 0}
+              onClick={() => setSelected(new Set(selectable.map((candidate) => candidate.contentKey)))}
             >
-              Select all missing ({missing.length})
+              {force ? "Select all" : "Select all needed"} ({selectable.length})
             </Button>
             <Button
               size="small"
-              onClick={() => setSelected(new Set(filtered.map((candidate) => candidate.contentKey)))}
-            >
-              Select all ({filtered.length})
-            </Button>
-            <Button
-              size="small"
-              disabled={visible.length === 0}
+              disabled={visibleSelectable.length === 0}
               // Adds rather than replaces: selection deliberately accumulates
               // across pages, so this is for building one up a page at a time
               // where the two buttons above act on the whole filtered set.
               onClick={() =>
                 setSelected((previous) => {
                   const next = new Set(previous);
-                  for (const candidate of visible) {
+                  for (const candidate of visibleSelectable) {
                     next.add(candidate.contentKey);
                   }
                   return next;
                 })
               }
             >
-              Select page ({visible.length})
+              {force ? "Select page" : "Select page needed"} ({visibleSelectable.length})
             </Button>
             <Button size="small" disabled={selected.size === 0} onClick={() => setSelected(new Set())}>
               Clear
