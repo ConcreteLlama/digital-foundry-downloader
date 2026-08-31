@@ -34,6 +34,15 @@ export const ZodDurationField = ({ name, label, zodNumber, helperText }: ZodDura
     typeof field.value === "number" ? formatDurationMs(field.value) : ""
   );
   const [invalid, setInvalid] = useState(false);
+  /**
+   * The format is only worth explaining while you are about to use it.
+   *
+   * A help icon on each of these would be nine permanent affordances for one
+   * sentence you read once, and the hint is no use sitting in the description
+   * where it competes with what the setting actually does. On focus it costs
+   * nothing at rest and arrives exactly when it is needed.
+   */
+  const [focused, setFocused] = useState(false);
 
   // Follows the value when something else changes it - a section reset, or the
   // saved config arriving after first render - but not while being edited,
@@ -60,13 +69,12 @@ export const ZodDurationField = ({ name, label, zodNumber, helperText }: ZodDura
     field.onChange(parsed);
   };
 
+  // Number.isFinite, not a null check: an unbounded zod number reports its
+  // limit as Infinity rather than undefined, which rendered as the genuinely
+  // unhelpful "at most Infinity".
   const bounds = [
-    schema.minValue !== null && schema.minValue !== undefined
-      ? `at least ${formatDurationMs(schema.minValue)}`
-      : undefined,
-    schema.maxValue !== null && schema.maxValue !== undefined
-      ? `at most ${formatDurationMs(schema.maxValue)}`
-      : undefined,
+    Number.isFinite(schema.minValue) ? `at least ${formatDurationMs(schema.minValue!)}` : undefined,
+    Number.isFinite(schema.maxValue) ? `at most ${formatDurationMs(schema.maxValue!)}` : undefined,
   ].filter(Boolean);
 
   const description = helperText ?? getZodDescription(zodNumber);
@@ -84,7 +92,9 @@ export const ZodDurationField = ({ name, label, zodNumber, helperText }: ZodDura
       label={label}
       value={text}
       onChange={(event) => commit(event.target.value)}
+      onFocus={() => setFocused(true)}
       onBlur={() => {
+        setFocused(false);
         // Canonicalised on the way out, so "90m" settles as "1h 30m" and the
         // stored value and the box agree about what was set.
         if (typeof field.value === "number" && !invalid) {
@@ -93,7 +103,12 @@ export const ZodDurationField = ({ name, label, zodNumber, helperText }: ZodDura
         field.onBlur();
       }}
       error={Boolean(error)}
-      helperText={error ?? [description, bounds.join(", ")].filter(Boolean).join(" ")}
+      helperText={
+        error ??
+        (focused
+          ? 'Type it how you would say it: "12h", "30m", "5m 30s", "1d 6h" - or a plain number of milliseconds'
+          : [description, bounds.join(", ")].filter(Boolean).join(" "))
+      }
     />
   );
 };
