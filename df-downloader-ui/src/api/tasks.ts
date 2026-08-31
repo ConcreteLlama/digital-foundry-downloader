@@ -38,7 +38,7 @@ export const controlPipeline = async (pipelineExecutionId: string, action: TaskA
  * design - the response says how much of it took, because some running work
  * cannot stop where it is.
  */
-export const controlAllTasks = async (action: "pause" | "resume"): Promise<ControlAllResponse> => {
+export const controlAllTasks = async (action: "pause" | "resume" | "stop"): Promise<ControlAllResponse> => {
     const response = await postJson(`${API_URL}/tasks/control-all`, { action });
     const parsed = parseResponseBody(response, ControlAllResponse);
     if (parsed.error || parsed.data === undefined) {

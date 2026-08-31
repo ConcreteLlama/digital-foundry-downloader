@@ -1,8 +1,10 @@
 import AddIcon from "@mui/icons-material/Add";
 import PauseIcon from "@mui/icons-material/Pause";
+import StopIcon from "@mui/icons-material/Stop";
 import PlayArrowIcon from "@mui/icons-material/PlayArrow";
 import RemoveIcon from "@mui/icons-material/Remove";
-import { Box, IconButton, Stack, Tooltip, Typography, useMediaQuery, useTheme } from "@mui/material";
+import {
+  Alert, Box, IconButton, Stack, Tooltip, Typography, useMediaQuery, useTheme } from "@mui/material";
 import { useEffect, useRef, useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import { controlAllTasks } from "../../api/tasks.ts";
@@ -91,12 +93,19 @@ const DownloadsPageHeader = () => {
    * pending action reads better than a pair of booleans that must never both
    * be true.
    */
-  const [pendingAction, setPendingAction] = useState<"pause" | "resume" | null>(null);
-  const runBulk = async (action: "pause" | "resume") => {
+  const [pendingAction, setPendingAction] = useState<"pause" | "resume" | "stop" | null>(null);
+  const runBulk = async (action: "pause" | "resume" | "stop") => {
     setBulkBusy(true);
     try {
       const { affected, skipped } = await controlAllTasks(action);
-      if (action === "pause") {
+      if (action === "stop") {
+        const running = skipped
+          ? ` - ${skipped} already running ${skipped === 1 ? "item cannot be interrupted and will finish" : "items cannot be interrupted and will finish"}`
+          : "";
+        triggerSnackbar(affected ? `Stopped ${affected} queued ${affected === 1 ? "item" : "items"}${running}` : running.replace(/^ - /, "") || "Nothing to stop", {
+          variant: skipped ? "warning" : affected ? "success" : "info",
+        });
+      } else if (action === "pause") {
         // The hold is the part that always took, so it leads. The counts are
         // about the work already in flight, which is the part that may not
         // have stopped.
@@ -125,12 +134,25 @@ const DownloadsPageHeader = () => {
         "Nothing new will start until you resume. Anything already running that can stop where it is will pause; work that cannot be interrupted part-way - transcription in particular - finishes first, and you will be told how much that was.",
       confirmButtonText: "Pause all",
     },
+    stop: {
+      title: "Stop everything?",
+      // The only one of the three that destroys work, so it says so plainly
+      // rather than relying on the button's colour to carry the warning.
+      content: (
+        <Alert severity="error" variant="outlined" sx={{ marginBottom: 1 }}>
+          This cancels everything queued and in progress. Anything not yet started is dropped from the queue and will
+          not run; work already part-way through is lost, not paused. Nothing here can be undone - the items have to be
+          queued again.
+        </Alert>
+      ),
+      confirmButtonText: "Stop everything",
+    },
     resume: {
       title: "Resume everything",
       content: "The queue starts again, in order, and anything paused resumes.",
       confirmButtonText: "Resume all",
     },
-  } as const;
+  } satisfies Record<string, { title: string; content: React.ReactNode; confirmButtonText: string }>;
   return (
     <Box
       sx={{
@@ -166,6 +188,19 @@ const DownloadsPageHeader = () => {
           <span>
             <IconButton size="small" disabled={bulkBusy} onClick={() => setPendingAction("pause")} aria-label="Pause all">
               <PauseIcon fontSize="small" />
+            </IconButton>
+          </span>
+        </Tooltip>
+        <Tooltip title="Stop everything, queued and running">
+          <span>
+            <IconButton
+              size="small"
+              color="error"
+              disabled={bulkBusy}
+              onClick={() => setPendingAction("stop")}
+              aria-label="Stop all"
+            >
+              <StopIcon fontSize="small" />
             </IconButton>
           </span>
         </Tooltip>

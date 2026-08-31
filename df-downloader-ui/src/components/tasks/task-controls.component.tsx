@@ -44,7 +44,20 @@ export const TaskControls = ({ pipelineId, size = "medium" }: TaskControlsProps)
     ) : (
       <ResumeButton pipelineId={pipelineId} disabled={buttonsDisabled} size={size} />
     );
-  const cancelEnabled = capabilities?.includes("cancel") && taskState !== "cancelling";
+  /*
+   * Stop asks the pipeline, not the step task, so the step's own capabilities
+   * are the wrong thing to gate on for queued work.
+   *
+   * Anything not yet started can always be stopped - it is taken out of the
+   * queue, whatever kind of task it is - which is why this was greyed out on a
+   * queue of transcriptions that could perfectly well be dropped. Once running,
+   * it comes down to whether the task can be interrupted, and there the
+   * declared capability is the honest signal: transcription cannot stop
+   * part-way, and offering a button that does nothing is worse than not
+   * offering one.
+   */
+  const cancelEnabled =
+    !isComplete && taskState !== "cancelling" && (taskState === "idle" || Boolean(capabilities?.includes("cancel")));
   // The isComplete branch that used to live here rendered a per-pipeline Clear
   // button, but it was unreachable: TaskStatusDetail returns
   // CompletedTaskStatusDetail before TaskControls is ever rendered for a

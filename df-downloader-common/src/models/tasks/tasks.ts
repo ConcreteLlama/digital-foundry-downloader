@@ -106,7 +106,12 @@ export type ControlTaskRequest = z.infer<typeof ControlTaskRequest>;
  * button for, and reordering has no meaning applied to the whole queue.
  */
 export const ControlAllRequest = z.object({
-  action: z.enum(["pause", "resume"]),
+  /**
+   * "stop" cancels everything in flight rather than holding it, so unlike the
+   * other two it throws work away. Reordering has no meaning applied to a
+   * whole queue, which is why it is not here.
+   */
+  action: z.enum(["pause", "resume", "stop"]),
 });
 export type ControlAllRequest = z.infer<typeof ControlAllRequest>;
 

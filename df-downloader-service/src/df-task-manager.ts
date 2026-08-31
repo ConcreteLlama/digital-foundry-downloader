@@ -790,6 +790,15 @@ export class DfTaskManager {
     if (!pipeline) {
       throw new Error(`No task with id ${pipelineExecutionId}`);
     }
+    // Cancelling goes through the pipeline, not its current task. Cancelling
+    // the task does nothing when nothing has started yet, which is the state
+    // most of a queued run is in - so Stop on a queued item used to return
+    // success and leave it in the queue to start later. Same fix the bulk stop
+    // already had; this is the per-item control catching up.
+    if (action === "cancel" && !stepId) {
+      pipeline.cancel();
+      return;
+    }
     const step = stepId ? pipeline.getStepById(stepId) : pipeline.getCurrentStep();
     const managedTask = step?.managedTask as GenericManagedTask | undefined;
     if (!managedTask?.task) {
@@ -874,7 +883,52 @@ export class DfTaskManager {
     return { cancelled, stillRunning };
   }
 
-  async controlAll(action: "pause" | "resume"): Promise<{ affected: number; skipped: number; queueHeld: boolean }> {
+  async controlAll(
+    action: "pause" | "resume" | "stop"
+  ): Promise<{ affected: number; skipped: number; queueHeld: boolean }> {
+    if (action === "stop") {
+      /*
+       * Cancels rather than holds, so this is the one that throws work away.
+       *
+       * Goes through the pipeline for the same reason the per-item Stop does:
+       * cancelling the current task does nothing to anything that has not
+       * begun, which is most of a queue. Counted the same way too - a queued
+       * item is definitely stopped, a running one is asked and may decline.
+       */
+      let cancelled = 0;
+      let stillRunning = 0;
+      for (const pipeline of this.pipelineExecutions.values()) {
+        if (pipeline.isCompleted) {
+          continue;
+        }
+        const runningNow =
+          (pipeline.getCurrentStep()?.managedTask as GenericManagedTask | undefined)?.task?.getTaskState() ===
+          "running";
+        try {
+          if (pipeline.cancel()) {
+            runningNow ? stillRunning++ : cancelled++;
+          }
+        } catch {
+          // Already past the point of stopping.
+        }
+      }
+      for (const task of this.tasks.values()) {
+        if (task.isCompleted()) {
+          continue;
+        }
+        try {
+          task.task.cancel();
+          cancelled++;
+        } catch {
+          stillRunning++;
+        }
+      }
+      this.notifyChanged();
+      // The hold is left exactly as it was: stopping is about the work in
+      // flight, and silently releasing a hold someone set would start the next
+      // thing the moment it was queued.
+      return { affected: cancelled, skipped: stillRunning, queueHeld: this.allTaskManagers.some((m) => m.isQueueHeld()) };
+    }
     /*
      * Two separate things, and only together do they mean "pause everything".
      *
