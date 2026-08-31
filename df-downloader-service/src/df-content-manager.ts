@@ -1596,14 +1596,6 @@ export class DigitalFoundryContentManager {
   }
 
   private async resumePipeline(record: PersistedPipeline) {
-    if (record.pipelineType !== "download") {
-      // Subtitle and metadata-refresh pipelines act on a file that's already
-      // in place, so nothing is lost by not resuming them - and they can be
-      // re-triggered from the UI. Only downloads represent work that would
-      // otherwise have to be redone over the network.
-      logger.log("info", `Not resuming ${record.pipelineType} pipeline for ${record.contentKey} - re-run it if needed`);
-      return;
-    }
     if (record.resumeAttempts >= DigitalFoundryContentManager.MAX_RESUME_ATTEMPTS) {
       logger.log(
         "warn",
@@ -1614,6 +1606,34 @@ export class DigitalFoundryContentManager {
     const entry = await this.db.getContentEntry(record.contentKey);
     if (!entry?.contentInfo) {
       logger.log("warn", `Can't resume ${record.contentKey} - it's no longer in the database`);
+      return;
+    }
+    if (record.pipelineType === "subtitles") {
+      /*
+       * Re-queued, which is what resuming means here.
+       *
+       * A restart never fully resumed a download either - the transfer starts
+       * again, and what survives is the pipeline's position and its place in
+       * the queue. Subtitles were skipped entirely on the reasoning that they
+       * act on a file already present and can just be re-triggered, which held
+       * while a subtitle run meant one item someone had asked for by hand. A
+       * bulk run now queues hundreds at once, and "re-trigger it" means
+       * rebuilding the whole selection.
+       *
+       * Transcription has no partial state to resume into, so an item caught
+       * mid-run starts over. That is the same deal downloads get.
+       */
+      const language = record.context.language ?? "en";
+      await this.taskManager
+        .runSubtitlesForContent(record.contentKey, language, record.context.backfillJobId, record.context.fileLocation)
+        .catch((e) => logger.log("warn", `Could not resume subtitles for ${record.contentKey}: ${e}`));
+      return;
+    }
+    if (record.pipelineType !== "download") {
+      // Analysis is deliberately not resumed: it is the one kind of work here
+      // that costs money to redo, and a queue restored automatically after a
+      // restart is a poor place to spend it without being asked.
+      logger.log("info", `Not resuming ${record.pipelineType} pipeline for ${record.contentKey} - re-run it if needed`);
       return;
     }
     const contentInfo = entry.contentInfo;

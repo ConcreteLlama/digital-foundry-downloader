@@ -521,13 +521,23 @@ export class DfTaskManager {
    * gains subtitles but nothing in the library knows, so the next bulk run
    * would generate them all over again.
    */
-  private async runSubtitlesForContent(contentKey: string, language: string, backfillJobId?: string) {
+  /**
+   * Public because resuming after a restart needs exactly this - queue the
+   * work and record the result - and a second copy of it in the resume path
+   * would be a second place for the two to drift apart.
+   */
+  async runSubtitlesForContent(contentKey: string, language: string, backfillJobId?: string, downloadLocation?: string) {
     const db = serviceLocator.db;
     const entry = await db.getContentEntry(contentKey);
     if (!entry) {
       throw new Error(`Content ${contentKey} not found`);
     }
-    const download = entry.downloads.find((candidate) => candidate.mediaInfo.type === "VIDEO");
+    // The specific file when one was named - a resumed run should carry on
+    // with the download it was queued against, not whichever video comes
+    // first on an entry that has several.
+    const download = downloadLocation
+      ? entry.downloads.find((candidate) => candidate.downloadLocation === downloadLocation)
+      : entry.downloads.find((candidate) => candidate.mediaInfo.type === "VIDEO");
     if (!download) {
       throw new Error(`No downloaded video for ${entry.contentInfo.title}`);
     }
@@ -1085,6 +1095,11 @@ export const makePersistedPipeline = (taskPipelineExecution: PipelineExecutionTy
       downloadLocation: context?.downloadLocation,
       finalLocation: context?.finalLocation,
       fileAtFinalLocation: context?.fileAtFinalLocation,
+      // What a non-download pipeline needs to be rebuilt, and the run that
+      // queued it, so a restart does not orphan it from its own Stop button.
+      fileLocation: context?.fileLocation,
+      language: typeof context?.language === "string" ? context.language : undefined,
+      backfillJobId: context?.backfillJobId,
     },
     resumeAttempts: context?.resumeAttempts ?? 0,
   };

@@ -70,6 +70,21 @@ export const PersistedPipeline = z.object({
     downloadLocation: z.string().optional(),
     finalLocation: z.string().optional(),
     fileAtFinalLocation: z.boolean().optional(),
+    /**
+     * The file a non-download pipeline is working on, and in what language.
+     *
+     * A subtitle pipeline is rebuilt from these rather than from the download
+     * record, because the two can disagree: the run was queued against a
+     * particular file, and that is the one to carry on with.
+     */
+    fileLocation: z.string().optional(),
+    language: z.string().optional(),
+    /**
+     * Carried across a restart so a resumed item is still reachable by the run
+     * that queued it - otherwise Stop loses track of everything it dispatched
+     * the moment the service bounces.
+     */
+    backfillJobId: z.string().optional(),
   }),
   /**
    * How many times this pipeline has been resumed after a restart. Capped so
