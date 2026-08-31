@@ -22,6 +22,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useSelector } from "react-redux";
 import { queryConfigSection } from "../../../store/config/config.action.ts";
 import { selectConfigSection } from "../../../store/config/config.selector.ts";
+import { selectPipelinesInCompletionState } from "../../../store/df-tasks/tasks.selector.ts";
 import { store } from "../../../store/store.ts";
 import { estimateBackfill, fetchBackfillCandidates, runBackfill } from "../../../api/backfill.ts";
 import { BackfillConfirmDialog, BackfillTable, isMissing, SKIP_REASONS } from "./bulk-backfill.components.tsx";
@@ -165,10 +166,45 @@ export const BulkBackfillPage = () => {
     [filtered, currentPage]
   );
 
+  /**
+   * What is being worked on right now, from the live task state.
+   *
+   * Read from the store rather than asked of the server, so it follows a
+   * run as it happens - and so this page does not need its own idea of what
+   * is in flight. The article target has no pipeline of its own (that work
+   * is done inline by the run), so nothing is ever marked working for it.
+   */
+  const inFlight = useSelector(useMemo(() => selectPipelinesInCompletionState("incomplete"), []));
+  const workingPipelineType = target === "subtitles" ? "subtitles" : target === "ai_analysis" ? "ai_analysis" : null;
+  const workingKeys = useMemo(() => {
+    if (!workingPipelineType) {
+      return new Set<string>();
+    }
+    return new Set(
+      inFlight
+        .filter((pipeline) => pipeline.pipelineType === workingPipelineType)
+        .map((pipeline) => pipeline.pipelineDetails.dfContent.key)
+    );
+  }, [inFlight, workingPipelineType]);
+
+  /**
+   * How much of what is in flight this page put there.
+   *
+   * Not an Activity replacement - it is only here to answer "am I already
+   * doing this?" before you set another run going on top of the last one.
+   */
+  const spawnedInFlight = useMemo(
+    () => inFlight.filter((pipeline) => pipeline.pipelineDetails.backfillJobId).length,
+    [inFlight]
+  );
+
   // Force is deliberately not a factor - see isMissing. This counts what
   // is missing the thing, which is a useful subset to select whether or
   // not re-running is on.
-  const missing = useMemo(() => filtered.filter((candidate) => isMissing(candidate, target)), [filtered, target]);
+  const missing = useMemo(
+    () => filtered.filter((candidate) => isMissing(candidate, target, workingKeys.has(candidate.contentKey))),
+    [filtered, target, workingKeys]
+  );
 
   /**
    * The selected items the run would actually do something with.
@@ -283,6 +319,16 @@ export const BulkBackfillPage = () => {
           {started} · follow it on the Activity page.
         </Alert>
       )}
+      {/* Persists while the work does, unlike the dismissible "started" note
+          above - the question it answers is "am I already doing this?", which
+          outlives the moment you pressed the button. */}
+      {spawnedInFlight > 0 && (
+        <Alert severity="info" variant="outlined">
+          {spawnedInFlight} {spawnedInFlight === 1 ? "item" : "items"} queued from here{" "}
+          {spawnedInFlight === 1 ? "is" : "are"} still going. Anything being worked on is marked and left out of the
+          selection buttons, so starting another run will not queue it twice.
+        </Alert>
+      )}
 
       {loading ? (
         <Stack direction="row" spacing={1} alignItems="center" sx={{ py: 2 }}>
@@ -370,7 +416,13 @@ export const BulkBackfillPage = () => {
             {willSkip > 0 && ` · ${willSkip} of the ${selected.size} selected will be skipped, ${SKIP_REASONS[target]}`}
           </Typography>
 
-          <BackfillTable candidates={visible} target={target} selected={selected} onToggle={toggle} />
+          <BackfillTable
+            candidates={visible}
+            target={target}
+            selected={selected}
+            workingKeys={workingKeys}
+            onToggle={toggle}
+          />
 
           {pageCount > 1 && (
             <Stack direction="row" spacing={1} alignItems="center">

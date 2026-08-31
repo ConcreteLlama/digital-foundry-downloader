@@ -39,7 +39,19 @@ import { monoFontFamily } from "../../../themes/build-theme.ts";
  * (stillNeedsWork in bulk-backfill-task.ts), which does consider it, and
  * not here.
  */
-export const isMissing = (candidate: BulkBackfillCandidate, target: BulkBackfillTarget): boolean => {
+export const isMissing = (
+  candidate: BulkBackfillCandidate,
+  target: BulkBackfillTarget,
+  /**
+   * Already being worked on right now - so not missing anything, whatever
+   * the database still says. The work is in flight and about to land, and
+   * offering it again just queues the same transcription twice.
+   */
+  working = false
+): boolean => {
+  if (working) {
+    return false;
+  }
   switch (target) {
     case "subtitles":
       return !candidate.hasSubtitles;
@@ -63,7 +75,13 @@ export const SKIP_REASONS: Record<BulkBackfillTarget, string> = {
 };
 
 /** What this item already has, in the terms of the selected target. */
-const statusFor = (candidate: BulkBackfillCandidate, target: BulkBackfillTarget) => {
+const statusFor = (candidate: BulkBackfillCandidate, target: BulkBackfillTarget, working = false) => {
+  // Beats what the database says: an item mid-transcription still has no
+  // subtitles, and reading "No subtitles" next to a running job is how you
+  // end up queueing it a second time.
+  if (working) {
+    return { label: "Working", tone: "working" as const };
+  }
   switch (target) {
     case "subtitles":
       return candidate.hasSubtitles
@@ -87,6 +105,8 @@ type BackfillRowProps = {
   candidate: BulkBackfillCandidate;
   target: BulkBackfillTarget;
   selected: boolean;
+  /** A primitive, not the set it came from - see the note on memoisation. */
+  working: boolean;
   onToggle: (contentKey: string, selected: boolean) => void;
 };
 
@@ -115,9 +135,11 @@ const StatusChip = ({ status }: { status: ReturnType<typeof statusFor> }) => (
       flexShrink: 0,
       ...(status.tone === "done"
         ? { color: "success.main", borderColor: "success.main" }
-        : status.tone === "waiting"
-          ? { color: "text.disabled" }
-          : { color: "warning.main", borderColor: "warning.main" }),
+        : status.tone === "working"
+          ? { color: "info.main", borderColor: "info.main" }
+          : status.tone === "waiting"
+            ? { color: "text.disabled" }
+            : { color: "warning.main", borderColor: "warning.main" }),
     }}
   />
 );
@@ -133,8 +155,8 @@ const StatusChip = ({ status }: { status: ReturnType<typeof statusFor> }) => (
  * Memoised for the same reason the grid row is: the article target lists
  * thousands of rows and the parent re-renders on every tick of a checkbox.
  */
-const BackfillStackedRow = memo(({ candidate, target, selected, onToggle }: BackfillRowProps) => {
-  const status = statusFor(candidate, target);
+const BackfillStackedRow = memo(({ candidate, target, selected, working, onToggle }: BackfillRowProps) => {
+  const status = statusFor(candidate, target, working);
   return (
     <Stack
       direction="row"
@@ -165,8 +187,8 @@ const BackfillStackedRow = memo(({ candidate, target, selected, onToggle }: Back
 });
 BackfillStackedRow.displayName = "BackfillStackedRow";
 
-const BackfillRow = memo(({ candidate, target, selected, onToggle }: BackfillRowProps) => {
-  const status = statusFor(candidate, target);
+const BackfillRow = memo(({ candidate, target, selected, working, onToggle }: BackfillRowProps) => {
+  const status = statusFor(candidate, target, working);
   return (
     <GridRow sx={{ alignItems: "center" }}>
       <GridCell>
@@ -201,6 +223,8 @@ export type BackfillTableProps = {
   candidates: BulkBackfillCandidate[];
   target: BulkBackfillTarget;
   selected: Set<string>;
+  /** Content currently being worked on, whoever started it. */
+  workingKeys: Set<string>;
   onToggle: (contentKey: string, selected: boolean) => void;
 };
 
@@ -211,7 +235,7 @@ const BACKFILL_COLUMNS: ColumnInfo[] = [
   { name: "Status", size: "min-content" },
 ];
 
-export const BackfillTable = ({ candidates, target, selected, onToggle }: BackfillTableProps) => {
+export const BackfillTable = ({ candidates, target, selected, workingKeys, onToggle }: BackfillTableProps) => {
   const stacked = useMediaQuery("(max-width:899.95px)");
   if (stacked) {
     return (
@@ -222,6 +246,7 @@ export const BackfillTable = ({ candidates, target, selected, onToggle }: Backfi
             candidate={candidate}
             target={target}
             selected={selected.has(candidate.contentKey)}
+            working={workingKeys.has(candidate.contentKey)}
             onToggle={onToggle}
           />
         ))}
@@ -236,6 +261,7 @@ export const BackfillTable = ({ candidates, target, selected, onToggle }: Backfi
           candidate={candidate}
           target={target}
           selected={selected.has(candidate.contentKey)}
+          working={workingKeys.has(candidate.contentKey)}
           onToggle={onToggle}
         />
       ))}
