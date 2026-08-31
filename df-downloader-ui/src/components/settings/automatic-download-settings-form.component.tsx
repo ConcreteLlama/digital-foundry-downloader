@@ -4,6 +4,7 @@ import { useWatch } from "react-hook-form-mui";
 import { FilterList } from "../general/filters/filter-list.component";
 import { ZodCheckboxField } from "../zod-fields/zod-checkbox-field.component";
 import { ZodNumberField } from "../zod-fields/zod-number-field.component";
+import { ZodDurationField } from "../zod-fields/zod-duration-field.component";
 import { DfSettingsSectionForm } from "./df-settings-section-form.component";
 
 export const AutomaticDownloadsSettingsForm = () => {
@@ -27,12 +28,12 @@ const AutomaticDownloadConfigSettings = () => {
       />
       {enabled && (
         <Fragment>
-          <ZodNumberField
+          <ZodDurationField
             name="downloadDelayMinMs"
             label="Download Delay - Minimum"
             zodNumber={AutomaticDownloadsConfig.shape.downloadDelayMinMs}
           />
-          <ZodNumberField
+          <ZodDurationField
             name="downloadDelayMaxMs"
             label="Download Delay - Maximum"
             zodNumber={AutomaticDownloadsConfig.shape.downloadDelayMaxMs}

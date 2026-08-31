@@ -68,7 +68,9 @@ export const scanForNewArticles = async (
   if (!storedCursor) {
     logger.log(
       "info",
-      `First article scan - looking back ${config.initialLookbackDays} days only. Use Tools → Backfill to match older content.`
+      config.archiveWalkEnabled
+        ? `First article scan - looking back ${config.initialLookbackDays} days. Older articles are read separately, working backwards through the archive.`
+        : `First article scan - looking back ${config.initialLookbackDays} days only. Turn on working backwards through older articles, or use Tools → Backfill, to match older content.`
     );
   }
 

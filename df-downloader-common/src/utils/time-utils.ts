@@ -29,3 +29,86 @@ export const secondsToHHMMSS = (durationSeconds: number) => {
   const ss = seconds.toString().padStart(2, "0");
   return `${hh}:${mm}:${ss}`;
 };
+
+/**
+ * Durations in configuration are stored in milliseconds, because that is what
+ * every timer in the service wants. Nobody thinks in them, though, so these
+ * translate at the edges: the value on disk stays a number of milliseconds,
+ * and the UI shows and accepts "12h".
+ */
+const DURATION_UNITS: [suffix: string, ms: number][] = [
+  ["w", 7 * 24 * 60 * 60 * 1000],
+  ["d", 24 * 60 * 60 * 1000],
+  ["h", 60 * 60 * 1000],
+  ["m", 60 * 1000],
+  ["s", 1000],
+  ["ms", 1],
+];
+
+/**
+ * Milliseconds as the shortest thing a person would actually say.
+ *
+ * At most two parts, largest first: "12h", "1d", "1h 30m". Three would be
+ * technically truer and harder to read, and these are intervals rather than
+ * stopwatch readings - nobody sets a poll to 1h 30m 20s on purpose.
+ */
+export const formatDurationMs = (ms: number): string => {
+  if (!Number.isFinite(ms)) {
+    return String(ms);
+  }
+  if (ms === 0) {
+    return "0s";
+  }
+  const negative = ms < 0;
+  let remaining = Math.abs(ms);
+  const parts: string[] = [];
+  for (const [suffix, size] of DURATION_UNITS) {
+    if (remaining < size || parts.length === 2) {
+      continue;
+    }
+    const count = Math.floor(remaining / size);
+    remaining -= count * size;
+    parts.push(`${count}${suffix}`);
+  }
+  // Sub-millisecond fractions have nowhere to go; better to say 0s than "".
+  return `${negative ? "-" : ""}${parts.join(" ") || "0s"}`;
+};
+
+/**
+ * "12h", "1d 6h", "90s", "1.5h" or a bare number of milliseconds.
+ *
+ * Bare numbers are read as milliseconds so that anything already stored, or
+ * pasted from the old fields, still means what it did. Returns undefined
+ * rather than throwing or guessing at nonsense, so a caller can leave a
+ * half-typed value alone instead of rewriting it under the cursor.
+ */
+export const parseDurationMs = (input: string): number | undefined => {
+  const trimmed = input.trim().toLowerCase();
+  if (!trimmed) {
+    return undefined;
+  }
+  if (/^\d+(\.\d+)?$/.test(trimmed)) {
+    return Math.round(Number(trimmed));
+  }
+  // "ms" before the single-letter units, or "5ms" parses as 5 minutes.
+  const token = /(\d+(?:\.\d+)?)\s*(ms|w|d|h|m|s)/g;
+  // Rejected outright if anything survives removing the unit tokens: using
+  // only the half that parsed would silently turn a typo into a real value.
+  if (trimmed.replace(token, "").trim().length > 0) {
+    return undefined;
+  }
+  let total = 0;
+  let matched = 0;
+  let match: RegExpExecArray | null;
+  token.lastIndex = 0;
+  while ((match = token.exec(trimmed)) !== null) {
+    const suffix = match[2];
+    const size = DURATION_UNITS.find(([candidate]) => candidate === suffix)?.[1];
+    if (size === undefined) {
+      return undefined;
+    }
+    total += Number(match[1]) * size;
+    matched++;
+  }
+  return matched ? Math.round(total) : undefined;
+};

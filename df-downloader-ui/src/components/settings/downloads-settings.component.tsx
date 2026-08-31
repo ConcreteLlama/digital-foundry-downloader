@@ -1,5 +1,6 @@
 import { Divider } from "@mui/material";
 import { ZodNumberField } from "../zod-fields/zod-number-field.component";
+import { ZodDurationField } from "../zod-fields/zod-duration-field.component";
 import { DfSettingsSectionForm } from "./df-settings-section-form.component";
 import { DownloadsConfig } from "df-downloader-common/config/download-config";
 
@@ -17,22 +18,20 @@ export const DownloadsSettingsForm = () => {
         label="Max Connections Per Download"
         zodNumber={DownloadsConfig.shape.maxConnectionsPerDownload}
       />
-      <ZodNumberField
+      <ZodDurationField
         name="failureRetryIntervalBase"
         label="Failure Retry Interval Base"
         zodNumber={DownloadsConfig.shape.failureRetryIntervalBase}
-        step={1000}
       />
       <ZodNumberField
         name="maxRetries"
         label="Max Retries"
         zodNumber={DownloadsConfig.shape.maxRetries}
       />
-      <ZodNumberField
+      <ZodDurationField
         name="maxRetryDelay"
         label="Max Retry Delay"
         zodNumber={DownloadsConfig.shape.maxRetryDelay}
-        step={1000}
       />
       <Divider>Connection options</Divider>
       <ZodNumberField
@@ -40,22 +39,20 @@ export const DownloadsSettingsForm = () => {
         label="Connection Max Retries"
         zodNumber={DownloadsConfig.shape.connectionMaxRetries}
       />
-      <ZodNumberField
+      <ZodDurationField
         name="connectionRetryDelayBase"
         label="Connection Retry Delay Base"
         zodNumber={DownloadsConfig.shape.connectionRetryDelayBase}
-        step={1000}
       />
       <ZodNumberField
         name="connectionRetryDelayMultiplier"
         label="Connection Retry Delay Multiplier"
         zodNumber={DownloadsConfig.shape.connectionRetryDelayMultiplier}
       />
-      <ZodNumberField
+      <ZodDurationField
         name="connectionMaxRetryDelay"
         label="Connection Max Retry Delay"
         zodNumber={DownloadsConfig.shape.connectionMaxRetryDelay}
-        step={1000}
       />
     </DfSettingsSectionForm>
   );

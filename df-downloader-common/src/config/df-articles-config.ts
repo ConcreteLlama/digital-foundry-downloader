@@ -69,7 +69,7 @@ export const DfArticlesConfig = z.object({
     .min(0)
     .default(7)
     .describe(
-      "On a brand-new install, how far back the first check looks. Kept short so setting the app up does not trigger a long crawl - older articles are picked up gradually instead, see below."
+      "On a brand-new install, how far back the first check looks. Only matters while working backwards through older articles is turned off - with it on, everything older is picked up anyway."
     ),
   /**
    * Whether to work backwards through the archive as well as forwards.

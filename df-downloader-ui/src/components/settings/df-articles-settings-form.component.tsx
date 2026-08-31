@@ -3,6 +3,7 @@ import { DfArticlesConfig } from "df-downloader-common/config/df-articles-config
 import { useFormContext, useWatch } from "react-hook-form";
 import { ZodCheckboxField } from "../zod-fields/zod-checkbox-field.component";
 import { ZodNumberField } from "../zod-fields/zod-number-field.component";
+import { ZodDurationField } from "../zod-fields/zod-duration-field.component";
 import { DfSettingsSectionForm } from "./df-settings-section-form.component";
 
 export const DfArticlesSettingsForm = () => (
@@ -44,7 +45,7 @@ const DfArticlesSettings = () => {
             are handled separately below, and Tools → Backfill is still there for matching a specific set of videos on
             demand.
           </Alert>
-          <ZodNumberField
+          <ZodDurationField
             name="scanInterval"
             label="Check every (ms)"
             zodNumber={DfArticlesConfig.shape.scanInterval}
@@ -54,17 +55,23 @@ const DfArticlesSettings = () => {
             label="Most articles to read per check"
             zodNumber={DfArticlesConfig.shape.maxArticlesPerScan}
           />
-          <ZodNumberField
-            name="initialLookbackDays"
-            label="Days of history on a new install"
-            zodNumber={DfArticlesConfig.shape.initialLookbackDays}
-          />
-
           <ZodCheckboxField
             name="archiveWalkEnabled"
             label="Also work backwards through older articles"
             zodBoolean={DfArticlesConfig.shape.archiveWalkEnabled}
           />
+          {/* Only worth setting when nothing is working backwards. With the
+              walk on, it reaches the same recent articles anyway and then
+              keeps going, so a first-run window is a second answer to a
+              question already answered - and two settings that look like they
+              both decide how much history you get is the confusing part. */}
+          {!archiveWalkEnabled && (
+            <ZodNumberField
+              name="initialLookbackDays"
+              label="Days of history on a new install"
+              zodNumber={DfArticlesConfig.shape.initialLookbackDays}
+            />
+          )}
           {archiveWalkEnabled && (
             /* The honest shape of it. "Reads the whole archive" invites the
                assumption of a long crawl on first boot, which is the thing
@@ -82,7 +89,7 @@ const DfArticlesSettings = () => {
                 label="Older articles to read per pass"
                 zodNumber={DfArticlesConfig.shape.archiveWalkPerRun}
               />
-              <ZodNumberField
+              <ZodDurationField
                 name="archiveWalkInterval"
                 label="Pass through older articles every (ms)"
                 zodNumber={DfArticlesConfig.shape.archiveWalkInterval}
