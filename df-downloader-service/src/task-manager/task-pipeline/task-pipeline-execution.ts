@@ -193,6 +193,39 @@ export class TaskPipelineExecution<
     ) as PipelineStepInfoTuple<TASK_PIPELINE_STEPS>;
   }
 
+  /**
+   * Stop this pipeline, whether or not it has started.
+   *
+   * The existing cancel path only ever worked on a running step: cancel() is
+   * implemented per task type and does nothing to a task with nothing running,
+   * so cancelling a queued pipeline returned success and left it in the queue
+   * to start later as though nothing had happened.
+   *
+   * Running work is cancelled as before, and the step result marks the
+   * pipeline cancelled the way it always has. Queued work is taken out of its
+   * manager's queue - the only thing that actually stops it - and then this
+   * completes the pipeline by hand, because no step result will ever arrive to
+   * do it.
+   */
+  cancel(): boolean {
+    if (this.isCompleted) {
+      return false;
+    }
+    const managedTask = this.getCurrentStep()?.managedTask as
+      | { task?: { id: string; getTaskState(): string; cancel(): unknown }; taskManager?: { dequeueTask(taskId: string): boolean } }
+      | undefined;
+    const task = managedTask?.task;
+    if (task && task.getTaskState() === "running") {
+      task.cancel();
+      return true;
+    }
+    if (task) {
+      managedTask?.taskManager?.dequeueTask(task.id);
+    }
+    this.emit("completed", { status: "cancelled", results: this.results } as any);
+    return true;
+  }
+
   getCurrentStep(): PipelineStepInfo<TASK_PIPELINE_STEPS[number]> {
     return this.getStep(this.currentStepIndex);
   }

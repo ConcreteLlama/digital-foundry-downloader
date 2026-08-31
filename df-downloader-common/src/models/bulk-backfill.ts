@@ -147,6 +147,15 @@ export const BulkBackfillStopRequest = z.object({
 export type BulkBackfillStopRequest = z.infer<typeof BulkBackfillStopRequest>;
 
 export const BulkBackfillStopResponse = z.object({
+  /** Queued items taken out of the queue - these are definitely stopped. */
   cancelled: z.number().default(0),
+  /**
+   * Items already running when the stop arrived.
+   *
+   * Asked to stop, but not all work can: transcription in particular declines
+   * and runs to the end. Counted separately rather than reported as cancelled,
+   * which would be a claim this cannot make.
+   */
+  stillRunning: z.number().default(0),
 });
 export type BulkBackfillStopResponse = z.infer<typeof BulkBackfillStopResponse>;

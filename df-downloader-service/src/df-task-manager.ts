@@ -809,8 +809,9 @@ export class DfTaskManager {
    * by a different run: stopping one run must not take the rest of the queue
    * with it.
    */
-  cancelBackfillJob(backfillJobId: string): { cancelled: number } {
+  cancelBackfillJob(backfillJobId: string): { cancelled: number; stillRunning: number } {
     let cancelled = 0;
+    let stillRunning = 0;
     for (const pipeline of this.pipelineExecutions.values()) {
       if (pipeline.isCompleted) {
         continue;
@@ -819,13 +820,24 @@ export class DfTaskManager {
       if (context?.backfillJobId !== backfillJobId) {
         continue;
       }
-      const managedTask = pipeline.getCurrentStep()?.managedTask as GenericManagedTask | undefined;
-      if (!managedTask?.task || managedTask.isCompleted()) {
-        continue;
-      }
+      // Counted before the attempt, because the two outcomes are genuinely
+      // different and only one of them is reliable. A queued pipeline is taken
+      // out of the queue and is definitely stopped. A running one is asked to
+      // stop and may simply decline - transcription does, and finishes - so
+      // reporting it as cancelled would be a claim this cannot make.
+      const runningNow =
+        (pipeline.getCurrentStep()?.managedTask as GenericManagedTask | undefined)?.task?.getTaskState() === "running";
       try {
-        managedTask.task.cancel();
-        cancelled++;
+        // Cancels the pipeline rather than its current task: cancelling the
+        // task does nothing when there is nothing running yet, which is the
+        // state most of a stopped run is in.
+        if (pipeline.cancel()) {
+          if (runningNow) {
+            stillRunning++;
+          } else {
+            cancelled++;
+          }
+        }
       } catch {
         // Already stopping, or past the point of stopping. Not counted, since
         // the number is meant to say what this call did.
@@ -834,7 +846,7 @@ export class DfTaskManager {
     if (cancelled) {
       this.notifyChanged();
     }
-    return { cancelled };
+    return { cancelled, stillRunning };
   }
 
   async controlAll(action: "pause" | "resume"): Promise<{ affected: number; skipped: number; queueHeld: boolean }> {

@@ -185,14 +185,19 @@ export const BulkBackfillPage = () => {
   const stopSpawned = async () => {
     setStopping(true);
     try {
-      const { cancelled } = await stopBackfillJobs(spawnedJobIds);
+      const { cancelled, stillRunning } = await stopBackfillJobs(spawnedJobIds);
       setStarted(null);
       setError(null);
       // Says what it stopped rather than assuming: an item that finished
       // between the click and the request is simply no longer there to stop.
+      const running = stillRunning
+        ? `${stillRunning} already running ${stillRunning === 1 ? "item cannot be interrupted and will finish" : "items cannot be interrupted and will finish"}`
+        : "";
       triggerSnackbar(
-        cancelled ? `Stopped ${cancelled} queued ${cancelled === 1 ? "item" : "items"}` : "Nothing left to stop",
-        { variant: cancelled ? "success" : "info" }
+        cancelled
+          ? `Stopped ${cancelled} queued ${cancelled === 1 ? "item" : "items"}${running ? ` - ${running}` : ""}`
+          : running || "Nothing left to stop",
+        { variant: stillRunning ? "warning" : cancelled ? "success" : "info" }
       );
       void load();
     } catch (e) {

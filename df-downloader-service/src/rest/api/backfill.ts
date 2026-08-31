@@ -220,11 +220,17 @@ export const makeBackfillRouter = (contentManager: DigitalFoundryContentManager)
   router.post("/stop", async (req, res) => {
     await zodParseHttp(BulkBackfillStopRequest, req, res, async ({ backfillJobIds }) => {
       try {
-        const cancelled = backfillJobIds.reduce(
-          (total, jobId) => total + contentManager.taskManager.cancelBackfillJob(jobId).cancelled,
-          0
+        const totals = backfillJobIds.reduce(
+          (running, jobId) => {
+            const result = contentManager.taskManager.cancelBackfillJob(jobId);
+            return {
+              cancelled: running.cancelled + result.cancelled,
+              stillRunning: running.stillRunning + result.stillRunning,
+            };
+          },
+          { cancelled: 0, stillRunning: 0 }
         );
-        return sendResponse(res, { cancelled });
+        return sendResponse(res, totals);
       } catch (e) {
         return sendErrorAsResponse(res, e);
       }

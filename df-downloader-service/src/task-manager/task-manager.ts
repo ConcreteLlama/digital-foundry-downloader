@@ -344,6 +344,27 @@ export class TaskManager {
    * Non-completed tasks will be ignored.
    * @param taskIds
    */
+  /**
+   * Drop a task that has not started yet.
+   *
+   * cancel() is implemented per task type and does nothing to a task with
+   * nothing running, so cancelling queued work reported success and left it
+   * exactly where it was, to start later as if nothing had happened. Removing
+   * it from the queue is the only thing that actually stops it.
+   *
+   * Refuses anything already running - that has a process behind it and has to
+   * be cancelled properly, not forgotten about while it carries on.
+   */
+  dequeueTask(taskId: string): boolean {
+    const wrapper = this.taskMap.get(taskId);
+    if (!wrapper || wrapper.task.getTaskState() === "running") {
+      return false;
+    }
+    this.priorityItemManager.removeItem(wrapper);
+    this.taskMap.delete(taskId);
+    return true;
+  }
+
   clearTasks(...taskIds: string[]) {
     this.taskMap.forEach(({ task }) => {
       if (taskIds.includes(task.id) && task.isCompleted()) {
