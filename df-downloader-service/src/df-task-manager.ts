@@ -43,7 +43,7 @@ import { makeDfDownloadParams } from "./df-fetcher.js";
 import { DownloadContextStatus } from "./download/downloader/fsm/download-context.js";
 import { SubtitleGenerator } from "./media-utils/subtitles/subtitles.js";
 import { serviceLocator } from "./services/service-locator.js";
-import { CompletedPipeline, PersistedPipeline, PersistedStepResult } from "./db/pipeline-db-model.js";
+import { CompletedPipeline, PersistedPipeline, PersistedStepResult, summariseForArchive } from "./db/pipeline-db-model.js";
 import { PriorityPositionInfo } from "./task-manager/priority-item-manager.js";
 import { TypedEventEmitter } from "./utils/event-emitter.js";
 import { TaskManager } from "./task-manager/task-manager.js";
@@ -329,7 +329,14 @@ export class DfTaskManager {
       if (activeDb && completedDb) {
         const persisted = makePersistedPipeline(pipelineExecution);
         completedDb
-          .add({ ...persisted, completedAt: new Date(), result: result?.status || "failed" })
+          .add({
+            ...persisted,
+            // Summarised only here. The active record keeps everything, since
+            // that is the copy a resume replays.
+            stepResults: summariseForArchive(persisted.stepResults),
+            completedAt: new Date(),
+            result: result?.status || "failed",
+          })
           // Removed from the active set only once it's safely archived, so a
           // crash between the two leaves it looking in-flight (and resumable)
           // rather than vanishing entirely.

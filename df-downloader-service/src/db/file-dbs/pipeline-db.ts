@@ -5,11 +5,10 @@ import {
   ActivePipelineDbSchema,
   CompletedPipeline,
   CompletedPipelineDbSchema,
-  PersistedPipeline,
-} from "../pipeline-db-model.js";
+  PersistedPipeline, summariseForArchive } from "../pipeline-db-model.js";
 import { FileDb } from "../file-db.js";
 
-const CURRENT_DB_VERSION = "2.7.1";
+const CURRENT_DB_VERSION = "2.8.0";
 
 /**
  * How many finished pipelines to keep. Enough to answer "why did that fail
@@ -67,24 +66,55 @@ const stripConnectionsFromPipelines = (pipelines: any): any => {
   if (Array.isArray(pipelines)) {
     return pipelines.map(stripConnectionsFromPipeline);
   }
-  const toReturn: Record<string, any> = {};
-  for (const [id, pipeline] of Object.entries<any>(pipelines || {})) {
-    toReturn[id] = stripConnectionsFromPipeline(pipeline);
-  }
-  return toReturn;
+  return mapPipelines(pipelines, stripConnectionsFromPipeline);
 };
 
-const makePatchRoutine = (schema: typeof ActivePipelineDbSchema | typeof CompletedPipelineDbSchema) => async (data: any) => {
-  if (data?.version === CURRENT_DB_VERSION) {
-    return { data: zodParse(schema as any, data), patched: false };
-  }
-  logger.log("info", `Pipeline DB at version ${data?.version || "NO_VERSION"} - patching to ${CURRENT_DB_VERSION}`);
-  const patchedPipelines = stripConnectionsFromPipelines(data?.pipelines);
-  return {
-    data: zodParse(schema as any, { ...data, pipelines: patchedPipelines, version: CURRENT_DB_VERSION }),
-    patched: true,
+/**
+ * Applies a transform to every pipeline, keeping the collection's shape.
+ *
+ * The two DBs disagree about that shape - the active one is a record keyed by
+ * id, the completed one is an array - and the patch routine is shared. It
+ * previously rebuilt a record either way, which was wrong for the completed DB
+ * and had simply never run: the version had not moved since that DB existed,
+ * so the routine always returned early. The first bump after that would have
+ * failed validation on startup for everyone, which is exactly what happened
+ * here the moment this version changed.
+ */
+const mapPipelines = (pipelines: any, transform: (pipeline: any) => any) =>
+  Array.isArray(pipelines)
+    ? pipelines.map(transform)
+    : Object.fromEntries(Object.entries<any>(pipelines || {}).map(([id, pipeline]) => [id, transform(pipeline)]));
+
+/**
+ * @param summariseResults trim step results down on the way in - for the
+ *   completed archive only. The active DB keeps them in full, because a
+ *   download resumes by replaying the results of the steps that already
+ *   finished, and summarising those would break the resume it exists for.
+ */
+const makePatchRoutine =
+  (
+    schema: typeof ActivePipelineDbSchema | typeof CompletedPipelineDbSchema,
+    { summariseResults = false }: { summariseResults?: boolean } = {}
+  ) =>
+  async (data: any) => {
+    if (data?.version === CURRENT_DB_VERSION) {
+      return { data: zodParse(schema as any, data), patched: false };
+    }
+    logger.log("info", `Pipeline DB at version ${data?.version || "NO_VERSION"} - patching to ${CURRENT_DB_VERSION}`);
+    let patchedPipelines = stripConnectionsFromPipelines(data?.pipelines);
+    if (summariseResults) {
+      // Reclaims what earlier versions archived in full - transcripts, mostly,
+      // which is why this file reached five megabytes on 48 records.
+      patchedPipelines = mapPipelines(patchedPipelines, (pipeline) => ({
+        ...pipeline,
+        stepResults: summariseForArchive(pipeline?.stepResults),
+      }));
+    }
+    return {
+      data: zodParse(schema as any, { ...data, pipelines: patchedPipelines, version: CURRENT_DB_VERSION }),
+      patched: true,
+    };
   };
-};
 
 const makeBackupDestination = (dbDir: string, name: string) => async (data: any) => {
   const version = data?.version || "NO_VERSION";
@@ -171,7 +201,7 @@ export class CompletedPipelineDb {
       filename: path.join(dbDir, "completed-pipelines.json"),
       initialData: { version: CURRENT_DB_VERSION, lastUpdated: new Date(), pipelines: [] },
       backupDestination: makeBackupDestination(dbDir, "completed-pipelines"),
-      patchRoutine: makePatchRoutine(CompletedPipelineDbSchema),
+      patchRoutine: makePatchRoutine(CompletedPipelineDbSchema, { summariseResults: true }),
     });
     return new CompletedPipelineDb(fileDb);
   }

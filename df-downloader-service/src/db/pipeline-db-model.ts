@@ -115,3 +115,35 @@ export const CompletedPipelineDbSchema = z.object({
   pipelines: CompletedPipeline.array().default([]),
 });
 export type CompletedPipelineDbSchema = z.infer<typeof CompletedPipelineDbSchema>;
+
+/**
+ * Trims a finished pipeline's step results down to what history is for.
+ *
+ * Results are kept in full while a pipeline is live, because a download
+ * resumes by replaying the steps that already finished. Once it has completed
+ * nothing reads them again - and a subtitle step's result is the whole
+ * transcript, which was landing in the archive at over 100KB a run and staying
+ * for good. Forty-eight runs had taken that file past five megabytes, nearly
+ * all of it transcripts already written to disk as sidecars.
+ *
+ * The archive is mostly there so failures are recorded somewhere, so the shape
+ * of a result and its error are what matter, not the payload. What is dropped
+ * says so rather than silently vanishing.
+ */
+const ARCHIVE_MAX_ARRAY = 20;
+const ARCHIVE_MAX_STRING = 500;
+
+export const summariseForArchive = (value: unknown): any => {
+  if (typeof value === "string") {
+    return value.length > ARCHIVE_MAX_STRING ? `${value.slice(0, ARCHIVE_MAX_STRING)}… (${value.length} chars)` : value;
+  }
+  if (Array.isArray(value)) {
+    return value.length > ARCHIVE_MAX_ARRAY
+      ? { omitted: `${value.length} items` }
+      : value.map((entry) => summariseForArchive(entry));
+  }
+  if (value === null || typeof value !== "object" || value instanceof Date) {
+    return value;
+  }
+  return Object.fromEntries(Object.entries(value).map(([key, entry]) => [key, summariseForArchive(entry)]));
+};
