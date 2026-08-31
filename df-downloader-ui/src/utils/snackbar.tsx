@@ -295,3 +295,80 @@ export const triggerSnackbar = (message: string, snackbarProps: TriggerSnackbarO
     variant,
   });
 };
+
+/**
+ * One toast per burst, rather than one per event.
+ *
+ * Queueing a backfill fires an event per item, and with a few hundred items
+ * that is a few hundred toasts arriving faster than they expire - the stack
+ * fills, evicts itself, and keeps going long after the run has started. The
+ * information in the two hundredth "queued subtitle generation for X" is the
+ * count, not the title.
+ *
+ * The first still lands immediately, so pressing a button still feels like it
+ * did something. Anything arriving within the window after it is counted and
+ * reported once, and the window extends while they keep coming, so a long
+ * dispatch produces one summary at the end rather than one per second.
+ *
+ * Errors and warnings are never grouped by the callers below - a failure is
+ * worth its own toast, and burying the one failure among ninety-nine
+ * successes is exactly the wrong trade.
+ */
+type SnackbarGroup = {
+  extras: number;
+  summary: (count: number) => string;
+  variant: VariantType;
+  timer: ReturnType<typeof setTimeout>;
+};
+
+const snackbarGroups = new Map<string, SnackbarGroup>();
+
+const flushSnackbarGroup = (groupKey: string) => {
+  const group = snackbarGroups.get(groupKey);
+  snackbarGroups.delete(groupKey);
+  if (group && group.extras > 0) {
+    triggerSnackbar(group.summary(group.extras), { variant: group.variant });
+  }
+};
+
+export type GroupedSnackbarOpts = {
+  /** Events sharing this are counted together. */
+  groupKey: string;
+  /** Shown as-is for the first of a burst. */
+  message: string;
+  /** Shown once for everything after the first. */
+  summary: (count: number) => string;
+  variant?: VariantType;
+  windowMs?: number;
+  /**
+   * Extra options for the first toast only.
+   *
+   * A per-task action belongs on the toast about that task and nowhere else -
+   * a summary of ninety-nine has no single task to act on, so it gets none.
+   */
+  firstOpts?: Omit<TriggerSnackbarOpts, "variant">;
+};
+
+export const triggerGroupedSnackbar = ({
+  groupKey,
+  message,
+  summary,
+  variant = "info",
+  windowMs = 1500,
+  firstOpts,
+}: GroupedSnackbarOpts) => {
+  const existing = snackbarGroups.get(groupKey);
+  if (existing) {
+    existing.extras++;
+    clearTimeout(existing.timer);
+    existing.timer = setTimeout(() => flushSnackbarGroup(groupKey), windowMs);
+    return;
+  }
+  triggerSnackbar(message, { ...firstOpts, variant });
+  snackbarGroups.set(groupKey, {
+    extras: 0,
+    summary,
+    variant,
+    timer: setTimeout(() => flushSnackbarGroup(groupKey), windowMs),
+  });
+};
