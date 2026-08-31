@@ -238,7 +238,24 @@ export type ProbedVideoStream = {
   height?: number;
 };
 
+/** One embedded subtitle stream, as ffprobe sees it. */
+export type ProbedSubtitleStream = {
+  /** ffmpeg's own stream index, which is what extraction addresses. */
+  index: number;
+  codecName?: string;
+  language?: string;
+  title?: string;
+};
+
 type MediaFileMetaNoSubs = Omit<MediaFileMeta, 'subtitles'> & {
+  /**
+   * Every subtitle stream in the file, not just the first.
+   *
+   * subsLang below records only that one and only its language, which is
+   * enough to say "this file has subtitles" but not enough to extract them -
+   * that needs the index, and choosing between them needs the rest.
+   */
+  subtitleStreams?: ProbedSubtitleStream[];
   subsLang?: string;
   /** See ProbedVideoStream. Stripped by extractMediaMeta - not part of MediaFileMeta. */
   videoStream?: ProbedVideoStream;
@@ -260,9 +277,7 @@ export const extractBaseMetadata = async (mediaFilePath: string, includeChapters
   }
   ffprobeArgs.push("-show_streams");
   logger.log("info", `Extracting metadata for ${mediaFilePath}`);
-  logger.log("info", `Metadata args: ${ffprobeArgs}`);
   const metadataStr = await runCommand(ffprobePath, ffprobeArgs);
-  console.log('Got meta: ', metadataStr);
   const parsed = JSON.parse(metadataStr);
   const meta: MediaFileMetaNoSubs = {};
   if (parsed.format) {
@@ -280,9 +295,18 @@ export const extractBaseMetadata = async (mediaFilePath: string, includeChapters
       end: chapter.end,
     }));
   }
-  const subtitleStream = parsed.streams?.find((stream: any) => stream.codec_type === "subtitle");
-  if (subtitleStream) {
-    meta.subsLang = subtitleStream.tags.language;
+  const subtitleStreams = (parsed.streams ?? []).filter((stream: any) => stream.codec_type === "subtitle");
+  if (subtitleStreams.length) {
+    // Tags are absent altogether on plenty of streams, so nothing here may
+    // assume them - reading .language off a missing tags object was a crash
+    // waiting for the first untagged file.
+    meta.subsLang = subtitleStreams[0].tags?.language;
+    meta.subtitleStreams = subtitleStreams.map((stream: any): ProbedSubtitleStream => ({
+      index: stream.index,
+      codecName: stream.codec_name,
+      language: stream.tags?.language,
+      title: stream.tags?.title,
+    }));
   }
   const videoStream = parsed.streams?.find((stream: any) => stream.codec_type === "video");
   if (videoStream) {

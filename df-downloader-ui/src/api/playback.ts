@@ -26,6 +26,19 @@ export const playbackSubtitlesUrl = (contentKey: string, downloadLocation: strin
   playbackUrl(contentKey, downloadLocation, `subtitles/${trackIndex}`);
 
 /**
+ * A subtitle stream inside the video file, extracted to WebVTT on request.
+ *
+ * Separate from the sidecar route because the index means a different thing:
+ * there it is a position in the download's subtitle list, here it is an
+ * ffmpeg stream index - see PlaybackSubtitleTrack.source.
+ */
+export const playbackEmbeddedSubtitlesUrl = (
+  contentKey: string,
+  downloadLocation: string,
+  streamIndex: number
+) => playbackUrl(contentKey, downloadLocation, `embedded-subtitles/${streamIndex}`);
+
+/**
  * Whether the API is on a different origin to the page.
  *
  * This decides whether the player sets `crossOrigin`, and it has to be

@@ -4,7 +4,13 @@ import { DfContentDownloadInfo } from "df-downloader-common/models/df-content-do
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AnalysisJump } from "../ai-analysis/analysis-jumps.ts";
 import { rememberPlaybackPosition, rememberedPlaybackPosition } from "./playback-positions.ts";
-import { apiIsCrossOrigin, getPlaybackInfo, playbackStreamUrl, playbackSubtitlesUrl } from "../../../api/playback.ts";
+import {
+  apiIsCrossOrigin,
+  getPlaybackInfo,
+  playbackEmbeddedSubtitlesUrl,
+  playbackStreamUrl,
+  playbackSubtitlesUrl,
+} from "../../../api/playback.ts";
 import { useQuery } from "../../../hooks/use-query.ts";
 import { monoFontFamily } from "../../../themes/build-theme";
 
@@ -608,11 +614,17 @@ export const DownloadPlayer = ({
     >
       {info.subtitleTracks.map((track, index) => (
         <track
-          key={`subs-${track.index}`}
+          // Source included: a sidecar and an embedded stream can both be
+          // index 0, and keying on the number alone collapses them into one.
+          key={`subs-${track.source}-${track.index}`}
           kind="subtitles"
-          // Served as WebVTT - browsers do not parse SRT, so the sidecar is
-          // converted on the way out.
-          src={playbackSubtitlesUrl(contentEntry.key, download.downloadLocation, track.index)}
+          // Served as WebVTT either way - browsers parse neither SRT nor a
+          // stream inside the container, so both are converted on the way out.
+          src={
+            track.source === "embedded"
+              ? playbackEmbeddedSubtitlesUrl(contentEntry.key, download.downloadLocation, track.index)
+              : playbackSubtitlesUrl(contentEntry.key, download.downloadLocation, track.index)
+          }
           srcLang={track.language}
           label={track.label}
           default={index === 0}
@@ -630,10 +642,15 @@ export const DownloadPlayer = ({
     </Alert>
   );
 
+  // Embedded text subtitles play now, so this is no longer "embedded means
+  // no captions" - it is the remainder that genuinely cannot be shown:
+  // picture-based streams, which would need OCR, and sidecars whose file has
+  // gone missing.
   const embeddedNote = info.embeddedSubtitlesOnly && (
     <Typography variant="body2" color="text.disabled">
-      This file's subtitles are embedded in it, which browsers cannot read. Generate them again with the separate .srt
-      output to get captions here.
+      This file's subtitles can't be displayed - they're either stored as images, which need to be read by eye rather
+      than played as text, or the subtitle file has gone missing. Generating subtitles again produces an .srt that will
+      play here.
     </Typography>
   );
 

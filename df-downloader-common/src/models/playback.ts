@@ -14,9 +14,21 @@ import { Chapter } from "./chapter.js";
  */
 export const PlaybackSubtitleTrack = z.object({
   /**
-   * Position in the download's own `subtitles` array. The playback subtitle
-   * endpoint takes this rather than a path, so no filename ever crosses the
-   * wire from the client.
+   * What `index` addresses, and which endpoint serves this track.
+   *
+   * A sidecar is a file beside the video; an embedded track is a stream
+   * inside it. Browsers can read neither directly - the first is SRT, the
+   * second is not reachable at all - so both are converted to WebVTT on the
+   * way out, just from different sources.
+   *
+   * Defaulted so tracks stored or sent before this existed still parse, and
+   * as sidecars because that is all there was.
+   */
+  source: z.enum(["sidecar", "embedded"]).default("sidecar"),
+  /**
+   * For a sidecar, its position in the download's own `subtitles` array. For
+   * an embedded track, ffmpeg's stream index within the file. Either way an
+   * opaque number, so no filename ever crosses the wire from the client.
    */
   index: z.number().int(),
   language: z.string(),

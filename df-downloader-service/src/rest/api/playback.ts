@@ -4,6 +4,10 @@ import fs from "fs";
 import path from "path";
 import { DigitalFoundryContentManager } from "../../df-content-manager.js";
 import { srtToVtt } from "../../media-utils/subtitles/vtt-utils.js";
+import {
+  extractEmbeddedSubtitlesAsVtt,
+  isConvertibleSubtitleCodec,
+} from "../../media-utils/subtitles/embedded.js";
 import { sanitizeContentName } from "../../utils/df-utils.js";
 import { extractBaseMetadata } from "../../utils/media-metadata.js";
 import { ServiceContentUtils } from "../../utils/service-content-utils.js";
@@ -155,19 +159,53 @@ export const makePlaybackRouter = (contentManager: DigitalFoundryContentManager)
     });
     const mimeType = mimeTypeForFile(filePath);
     const videoCodec = videoCodecFromProbe(meta?.videoStream?.codecName);
-    // Only sidecars can be served; an embedded track is not reachable by a
-    // browser at all (see PlaybackSubtitleTrack).
+    // A browser can read neither of these directly - a sidecar is SRT and an
+    // embedded track is not reachable at all - so both are converted to
+    // WebVTT on the way out, from different sources.
     const allSubtitles = download.subtitles ?? [];
     const subtitleTracks: PlaybackSubtitleTrack[] = allSubtitles.flatMap((subtitle, index) =>
       subtitle.path
         ? [
             {
+              source: "sidecar" as const,
               index,
               language: subtitle.language,
               label: subtitle.language.toLowerCase().startsWith("en") ? "English" : subtitle.language,
             },
           ]
         : []
+    );
+
+    // Text-based embedded streams can be extracted on demand; picture-based
+    // ones cannot without OCR, so they are counted but never offered - a
+    // track that loads empty is worse than one that was never listed.
+    const embeddedStreams = meta?.subtitleStreams ?? [];
+    // Generating subtitles writes a sidecar *and* embeds them, so most files
+    // that have one have both - and listing both puts two identical
+    // "English" entries in the browser's subtitle menu. The sidecar wins
+    // where they overlap: same text, and serving it is a file read rather
+    // than an ffmpeg run per request.
+    const sidecarLanguages = new Set(subtitleTracks.map((track) => track.language.toLowerCase()));
+    const convertibleStreams = embeddedStreams.filter(
+      (stream) =>
+        isConvertibleSubtitleCodec(stream.codecName) && !sidecarLanguages.has((stream.language ?? "und").toLowerCase())
+    );
+    subtitleTracks.push(
+      ...convertibleStreams.map((stream, position) => {
+        const language = stream.language ?? "und";
+        return {
+          source: "embedded" as const,
+          index: stream.index,
+          language,
+          label:
+            stream.title ??
+            (language.toLowerCase().startsWith("en")
+              ? "English"
+              : language !== "und"
+                ? language
+                : `Embedded ${position + 1}`),
+        };
+      })
     );
     const info: PlaybackInfo = {
       contentKey,
@@ -181,7 +219,12 @@ export const makePlaybackRouter = (contentManager: DigitalFoundryContentManager)
       height: meta?.videoStream?.height,
       chapters: (meta?.chapters ?? []) as Chapter[],
       subtitleTracks,
-      embeddedSubtitlesOnly: subtitleTracks.length === 0 && allSubtitles.length > 0,
+      // Now means "has subtitles nothing can serve" rather than "has embedded
+      // subtitles": the convertible ones are offered above, so the only
+      // remainder worth warning about is picture-based streams and sidecar
+      // entries whose file is gone.
+      embeddedSubtitlesOnly:
+        subtitleTracks.length === 0 && (allSubtitles.length > 0 || embeddedStreams.length > 0),
     };
     return sendResponse(res, info);
   });
@@ -193,6 +236,48 @@ export const makePlaybackRouter = (contentManager: DigitalFoundryContentManager)
    * by path, so the client never names a file. Small enough (tens of KB)
    * that converting per request is not worth caching.
    */
+  /**
+   * One embedded subtitle stream, extracted to WebVTT on demand.
+   *
+   * Extracted per request rather than written out beside the file: it costs a
+   * second of ffmpeg on a track nobody may turn on, and writing sidecars for
+   * every embedded stream would change what is on disk to solve a playback
+   * problem.
+   *
+   * Addressed by ffmpeg stream index, which the playback info endpoint
+   * supplies - so, as with sidecars, no path crosses the wire.
+   */
+  router.get("/:contentKey/embedded-subtitles/:streamIndex", async (req: Request, res: Response) => {
+    const resolved = await resolveDownload(req);
+    if (!resolved.ok) {
+      return sendError(res, resolved.error, resolved.code);
+    }
+    const { filePath } = resolved;
+    const streamIndex = Number.parseInt(req.params.streamIndex, 10);
+    if (!Number.isInteger(streamIndex) || streamIndex < 0) {
+      return sendError(res, "No such subtitle track", 404);
+    }
+    // Re-probed rather than trusted from the request: this decides whether we
+    // hand an arbitrary stream index to ffmpeg, and the file may have changed
+    // since the info call that offered it.
+    const meta = await extractBaseMetadata(filePath, false).catch(() => undefined);
+    const stream = meta?.subtitleStreams?.find((candidate) => candidate.index === streamIndex);
+    if (!stream || !isConvertibleSubtitleCodec(stream.codecName)) {
+      return sendError(res, "No such subtitle track", 404);
+    }
+    try {
+      const vtt = await extractEmbeddedSubtitlesAsVtt(filePath, streamIndex);
+      res.setHeader("Content-Type", "text/vtt; charset=utf-8");
+      // Same reasoning as the sidecar route: the file can be replaced in
+      // place, so this must not outlive it.
+      res.setHeader("Cache-Control", "no-store");
+      return res.send(vtt);
+    } catch (e) {
+      logger.log("warn", `Could not extract embedded subtitles from ${filePath}: ${e}`);
+      return sendError(res, "Could not read that subtitle track", 500);
+    }
+  });
+
   router.get("/:contentKey/subtitles/:trackIndex", async (req: Request, res: Response) => {
     const resolved = await resolveDownload(req);
     if (!resolved.ok) {
