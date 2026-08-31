@@ -5,6 +5,7 @@ import { Link, useLocation } from "react-router-dom";
 import { selectDevConfigEnabled } from "../../store/config/config.selector";
 import { useDirtySections } from "../../components/settings/dirty-sections";
 import { findDestination, flattenSectionRoutes, groupSectionRoutes } from "./nav-destinations";
+import { NestedRoute } from "./nested-routes";
 
 /**
  * A section's own pages, rendered as a column inside the page rather than as a
@@ -124,6 +125,17 @@ export const SectionNav = () => {
  * Below md the column would eat the page, so the section's pages become a
  * horizontal scroller above the content instead.
  */
+/**
+ * Below lg the column would eat the page, so a section's pages appear above
+ * the content instead - as two rows where the section is grouped.
+ *
+ * One row of fourteen was a list to be scrolled through rather than navigated,
+ * and labelling the groups inline did not fix that: the labels scrolled away
+ * with everything else and it still read as one run. Picking the group first
+ * means each row is three or four things, which is a choice rather than a
+ * search. Sections with no groups keep the single row - there is nothing to
+ * pick between.
+ */
 export const SectionNavCompact = () => {
   const { pathname } = useLocation();
   const devModeEnabled = useSelector(selectDevConfigEnabled);
@@ -151,73 +163,86 @@ export const SectionNavCompact = () => {
   if (routes.length <= 1) {
     return null;
   }
-  // Grouped here too. This was left flat on the grounds that headings do not
-  // belong in a horizontal strip, which was wrong twice over: the strip
-  // already scrolls, so a label costs nothing it does not have, and this is
-  // the nav most of the phone-sized use goes through - grouping only the
-  // column meant grouping it where it was least needed.
   const groups = groupSectionRoutes(destination.section)
     .map((group) => ({ ...group, routes: group.routes.filter((r) => !r.devOnly || devModeEnabled) }))
     .filter((group) => group.routes.length > 0);
+  const grouped = groups.length > 1 && groups.every((group) => group.label);
+  // Falls back to the first group rather than nothing, so the second row is
+  // never empty while the router settles on a path.
+  const activeGroup = groups.find((group) => group.routes.some((route) => route.path === pathname)) ?? groups[0];
+  const pageRoutes = grouped ? activeGroup.routes : routes;
+
+  const strip = (children: React.ReactNode, extraSx?: object) => (
+    <Box sx={{ display: "flex", gap: 1, overflowX: "auto", ...extraSx }}>{children}</Box>
+  );
+
+  const pageButton = (route: NestedRoute) => {
+    const selected = pathname === route.path;
+    return (
+      <ListItemButton
+        key={route.path}
+        ref={selected ? selectedRef : undefined}
+        component={Link}
+        to={route.path}
+        selected={selected}
+        sx={{ borderRadius: 1, flex: "0 0 auto", paddingY: 0.5 }}
+      >
+        <ListItemText
+          primary={route.name}
+          primaryTypographyProps={{
+            variant: "body2",
+            noWrap: true,
+            fontWeight: selected ? 600 : 400,
+            color: selected ? "text.primary" : "text.secondary",
+          }}
+        />
+      </ListItemButton>
+    );
+  };
+
   return (
     <Box
       sx={{
         // Normally the small-screen alternative to the column, but the
         // only nav for a section that opted out of the column entirely.
         display: destination.section.compactNavOnly ? "flex" : { xs: "flex", lg: "none" },
-        gap: 1,
-        overflowX: "auto",
+        flexDirection: "column",
+        gap: 0.5,
         paddingBottom: 1,
         marginBottom: 2,
         borderBottom: "1px solid",
         borderColor: "divider",
       }}
     >
-      {groups.map((group, groupIndex) => (
-        <Box key={group.label ?? "__ungrouped"} sx={{ display: "flex", alignItems: "center", gap: 1, flex: "0 0 auto" }}>
-          {group.label && (
-            <Typography
-              variant="overline"
-              sx={{
-                flex: "0 0 auto",
-                color: "text.disabled",
-                lineHeight: 1,
-                whiteSpace: "nowrap",
-                // A rule before every group but the first, so the boundary
-                // reads even once the label has scrolled past.
-                borderLeft: groupIndex > 0 ? "1px solid" : undefined,
-                borderColor: "divider",
-                paddingLeft: groupIndex > 0 ? 1.5 : 0,
-              }}
-            >
-              {group.label}
-            </Typography>
-          )}
-          {group.routes.map((route) => {
-        const selected = pathname === route.path;
-        return (
-          <ListItemButton
-            key={route.path}
-            ref={selected ? selectedRef : undefined}
-            component={Link}
-            to={route.path}
-            selected={selected}
-            sx={{ borderRadius: 1, flex: "0 0 auto", paddingY: 0.5 }}
-          >
-            <ListItemText
-              primary={route.name}
-              primaryTypographyProps={{
-                variant: "body2",
-                noWrap: true,
-                fontWeight: selected ? 600 : 400,
-                color: selected ? "text.primary" : "text.secondary",
-              }}
-            />
-          </ListItemButton>
-        );
-          })}
-        </Box>
-      ))}
+      {grouped &&
+        strip(
+          groups.map((group) => {
+            const selected = group === activeGroup;
+            return (
+              <ListItemButton
+                key={group.label}
+                component={Link}
+                // Selecting a group lands on its first page, so the choice
+                // always resolves to something real.
+                to={group.routes[0].path}
+                selected={selected}
+                sx={{ borderRadius: 1, flex: "0 0 auto", paddingY: 0.25 }}
+              >
+                <ListItemText
+                  primary={group.label}
+                  primaryTypographyProps={{
+                    variant: "overline",
+                    noWrap: true,
+                    lineHeight: 1.6,
+                    fontWeight: selected ? 700 : 400,
+                    color: selected ? "text.primary" : "text.disabled",
+                  }}
+                />
+              </ListItemButton>
+            );
+          })
+        )}
+      {strip(pageRoutes.map(pageButton))}
     </Box>
   );
 };
