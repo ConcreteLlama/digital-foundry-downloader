@@ -1,3 +1,4 @@
+import { AiAnalysisSourceSelection } from "df-downloader-common";
 import { SrtLine } from "df-downloader-common";
 import { AiAnalysisResult, DfContentEntry, logger } from "df-downloader-common";
 import { AiAnalysisConfig } from "df-downloader-common/config/ai-analysis-config.js";
@@ -28,11 +29,13 @@ type AiAnalysisTaskContext = {
    * the whole point of it being here - see the check in start().
    */
   force?: boolean;
+  /** Which sources this run may read - absent means the configured defaults. */
+  sources?: AiAnalysisSourceSelection;
 };
 
 const aiAnalysisTaskControls: TaskControls<AiAnalysisResult, AiAnalysisTaskContext> = {
   start: async (context: AiAnalysisTaskContext) => {
-    const { entry, config, chapters, articleText, articleUrl, articleTitle, transcriptText, transcriptLines } = context;
+    const { entry, config, chapters, articleText, articleUrl, articleTitle, transcriptText, transcriptLines, sources } = context;
     /*
      * Checked here, immediately before spending money, rather than when this
      * was queued.
@@ -60,7 +63,7 @@ const aiAnalysisTaskControls: TaskControls<AiAnalysisResult, AiAnalysisTaskConte
     }
     context.stage = "Analysing";
     logger.log("info", `Analysing ${entry.key} with ${config.model}`);
-    const result = await analyseContent(config, { entry, chapters, articleText, articleUrl, articleTitle, transcriptText, transcriptLines });
+    const result = await analyseContent(config, { entry, chapters, articleText, articleUrl, articleTitle, transcriptText, transcriptLines, sources });
     // analyseContent reports an ordinary failure inside the result rather
     // than throwing, so the task has to promote it - otherwise a run that
     // failed would be recorded as a successful task holding an error.

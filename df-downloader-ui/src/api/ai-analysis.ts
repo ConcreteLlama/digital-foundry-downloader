@@ -4,6 +4,7 @@ import {
   AiAnalysisResult,
   AiTagStatus,
   DfArticle,
+  AiAnalysisSourceSelection,
   GameIndexResponse,
   HardwareIndexResponse,
   PcSettingsIndexResponse,
@@ -67,8 +68,12 @@ export const estimateAiAnalysisCost = async (contentKey: string): Promise<AiAnal
   return unwrap(response, AiAnalysisCostEstimate);
 };
 
-export const startAiAnalysis = async (contentKey: string, force = false) =>
-  postJson(`${API_URL}/ai-analysis/analyse`, { contentKey, force });
+export const startAiAnalysis = async (
+  contentKey: string,
+  force = false,
+  /** Which sources this run may read. Omitted uses the configured defaults. */
+  sources?: AiAnalysisSourceSelection
+) => postJson(`${API_URL}/ai-analysis/analyse`, { contentKey, force, sources });
 
 export const decideAiTag = async (contentKey: string, tag: string, status: AiTagStatus): Promise<AiAnalysisResult> => {
   const response = await postJson(`${API_URL}/ai-analysis/tag-decision`, { contentKey, tag, status });

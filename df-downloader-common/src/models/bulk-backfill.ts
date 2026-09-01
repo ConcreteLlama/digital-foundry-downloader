@@ -1,3 +1,4 @@
+import { AiAnalysisSourceSelection } from "./ai-analysis.js";
 import { z } from "zod";
 import { AiEvidenceSource } from "./ai-analysis.js";
 
@@ -77,6 +78,8 @@ export type BulkBackfillCandidatesResponse = z.infer<typeof BulkBackfillCandidat
 export const BulkBackfillRequest = z.object({
   target: BulkBackfillTarget,
   contentKeys: z.array(z.string()).min(1),
+  /** Analysis only - which sources this run may read. See AiAnalysisSourceSelection. */
+  sources: AiAnalysisSourceSelection.optional(),
   /**
    * Redo work that has already been done - re-transcribe, re-analyse, or
    * re-search for an article that was already matched.

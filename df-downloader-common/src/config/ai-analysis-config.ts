@@ -187,6 +187,33 @@ export const AiPromptAdditionsConfig = z.object({
 });
 export type AiPromptAdditionsConfig = z.infer<typeof AiPromptAdditionsConfig>;
 
+/**
+ * Which grounding sources an analysis may read.
+ *
+ * Separate from the feature switches because these are about what the run is
+ * allowed to look at, not what it produces - and the difference is money and
+ * accuracy rather than taste. Turning the transcript off makes every run
+ * dramatically cheaper (a two-hour Direct is most of the input tokens) at the
+ * cost of the summary, the structured data and the jump-to timestamps.
+ *
+ * Both default on: the honest default is to use what you already have.
+ */
+export const AiAnalysisSourcesConfig = z.object({
+  transcript: z
+    .boolean()
+    .default(true)
+    .describe(
+      "Read the video's subtitles when it has them. This is what makes a summary, a verdict and the structured breakdown possible, and what anchors each finding to the moment it was said - but it is also nearly all of what a run costs."
+    ),
+  article: z
+    .boolean()
+    .default(true)
+    .describe(
+      "Read Digital Foundry's written article when one is matched. Written rather than transcribed, so product names and figures in it are correct where speech-to-text garbles them."
+    ),
+});
+export type AiAnalysisSourcesConfig = z.infer<typeof AiAnalysisSourcesConfig>;
+
 export const AiAnalysisConfig = z.object({
   enabled: z.boolean().default(false).describe("Turn AI content analysis on."),
   apiKey: z
@@ -207,6 +234,11 @@ export const AiAnalysisConfig = z.object({
     "How long the model may think before answering. Higher is more careful and more expensive. Not available on Haiku, which does not support this setting."
   ),
   automaticGeneration: AutomaticAiAnalysisMode.default("off"),
+  /**
+   * The default sources a run may read. Both the per-item analyse action and
+   * a bulk run start from these and can override them for that run only.
+   */
+  sources: AiAnalysisSourcesConfig.prefault({}),
   /**
    * A hard ceiling on transcript size, in characters.
    *

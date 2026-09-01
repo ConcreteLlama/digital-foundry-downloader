@@ -73,6 +73,7 @@ import { AiAnalysisTaskManager } from "./tasks/ai-analysis-task.js";
 import { BULK_BACKFILL_CONCURRENCY, BulkBackfillTask, isBulkBackfillTask } from "./tasks/bulk-backfill-task.js";
 import { ensureArticleForContent } from "./utils/df-articles/ensure-article.js";
 import { AiAnalysisConfig } from "df-downloader-common/config/ai-analysis-config.js";
+import { AiAnalysisSourceSelection } from "df-downloader-common";
 import { Chapter } from "./utils/chatpers.js";
 import { DfDownloaderOperationalDb } from "./db/df-operational-db.js";
 import { BatchMoveFilesTask, isBatchMoveFilesTask, makeMoveFilesTaskStatus } from "./tasks/batch-move-files-task.js";
@@ -477,7 +478,7 @@ export class DfTaskManager {
    * run with settings that differ from the saved ones - which is what the
    * "analyse with a different model" path in the UI needs.
    */
-  analyseContent(entry: DfContentEntry, config: AiAnalysisConfig, opts: { chapters?: Chapter[]; articleText?: string; articleUrl?: string; articleTitle?: string; backfillJobId?: string; force?: boolean } = {}) {
+  analyseContent(entry: DfContentEntry, config: AiAnalysisConfig, opts: { chapters?: Chapter[]; articleText?: string; articleUrl?: string; articleTitle?: string; backfillJobId?: string; force?: boolean; sources?: AiAnalysisSourceSelection } = {}) {
     const analysisExecution = this.aiAnalysisTaskPipeline.start({
       dfContentInfo: entry.contentInfo,
       entry,
@@ -488,6 +489,7 @@ export class DfTaskManager {
       articleTitle: opts.articleTitle,
       backfillJobId: opts.backfillJobId,
       force: opts.force,
+      sources: opts.sources,
     });
     logger.log(
       "info",
@@ -595,13 +597,25 @@ export class DfTaskManager {
    * result, so a bulk run that skipped it would produce systematically
    * worse analyses than analysing the same items one at a time.
    */
-  private async runAnalysisForContent(contentKey: string, config: AiAnalysisConfig, backfillJobId?: string, force?: boolean) {
+  private async runAnalysisForContent(
+    contentKey: string,
+    config: AiAnalysisConfig,
+    backfillJobId?: string,
+    force?: boolean,
+    sources?: AiAnalysisSourceSelection
+  ) {
     const db = serviceLocator.db;
     const entry = await db.getContentEntry(contentKey);
     if (!entry) {
       throw new Error(`Content ${contentKey} not found`);
     }
-    const article = await ensureArticleForContent(db, entry.contentInfo).catch(() => undefined);
+    // Skipped entirely when the article is deselected - the lookup can reach
+    // Digital Foundry, and over a bulk run that is a lot of requests to make
+    // for something the run has been told not to read.
+    const effectiveSources = sources ?? config.sources;
+    const article = effectiveSources.article
+      ? await ensureArticleForContent(db, entry.contentInfo).catch(() => undefined)
+      : undefined;
     // Queued and left to the queue, as the subtitle path is, so a run's items
     // are all visible at once rather than one at a time.
     //
@@ -614,6 +628,7 @@ export class DfTaskManager {
       articleTitle: article?.title,
       backfillJobId,
       force,
+      sources,
     });
     return "analysed";
   }
@@ -625,7 +640,13 @@ export class DfTaskManager {
    * work happens inside the task, against live state, as each comes up -
    * see stillNeedsWork in bulk-backfill-task.ts.
    */
-  bulkBackfill(contentKeys: string[], target: BulkBackfillTarget, force: boolean, language: string) {
+  bulkBackfill(
+    contentKeys: string[],
+    target: BulkBackfillTarget,
+    force: boolean,
+    language: string,
+    sources?: AiAnalysisSourceSelection
+  ) {
     // Assigned the moment the task exists, which is after these options are
     // built - the closures below only run later, once it is dispatching.
     let jobId: string | undefined;
@@ -644,7 +665,7 @@ export class DfTaskManager {
             if (!config) {
               return Promise.reject(new Error("AI analysis is not configured"));
             }
-            return this.runAnalysisForContent(contentKey, config, jobId, force);
+            return this.runAnalysisForContent(contentKey, config, jobId, force, sources);
           },
         },
         { maxConcurrent: BULK_BACKFILL_CONCURRENCY[target] }

@@ -73,8 +73,15 @@ export const AnalysisSourcesExplainer = () => (
     </AccordionSummary>
     <AccordionDetails>
       <Stack spacing={1.5}>
+        <Typography variant="caption" sx={{ color: "text.disabled" }}>
+          Chips are what the analysis reads. The text under each is what it can produce from that.
+        </Typography>
         {TIERS.map((tier) => (
           <Box key={tier.sources.join("+")}>
+            {/* Sources only on this line. An outcome chip sat here too and read
+                as a third source, which is exactly the confusion this table
+                exists to remove - what you get now lives below, where it
+                cannot be mistaken for something you supply. */}
             <Stack direction="row" spacing={0.5} flexWrap="wrap" useFlexGap sx={{ mb: 0.5 }}>
               {tier.sources.map((source) => (
                 <Chip
@@ -85,23 +92,19 @@ export const AnalysisSourcesExplainer = () => (
                   sx={{
                     height: 20,
                     fontSize: "0.65rem",
-                    // The two thin tiers are marked as such rather than just
-                    // being shorter rows - the step between them and the rest
-                    // is the whole point of the table.
+                    // The two thin tiers still read differently, by weight
+                    // rather than by an extra chip.
                     color: tier.limited ? "text.disabled" : "primary.main",
                     borderColor: tier.limited ? "divider" : "primary.main",
                   }}
                 />
               ))}
-              {tier.limited && (
-                <Chip
-                  size="small"
-                  label="tags only"
-                  sx={{ height: 20, fontSize: "0.65rem", color: "warning.main", bgcolor: "transparent" }}
-                  variant="outlined"
-                />
-              )}
             </Stack>
+            {tier.limited && (
+              <Typography variant="body2" sx={{ color: "warning.main", fontWeight: 500 }}>
+                Tags and classification only
+              </Typography>
+            )}
             <Typography variant="body2">{tier.gets}</Typography>
             {tier.note && (
               <Typography variant="caption" sx={{ color: "text.disabled", display: "block" }}>

@@ -541,11 +541,25 @@ export const resolveAnalysisGames = (result: {
   return names.filter((name) => Boolean(name?.trim()));
 };
 
+/**
+ * Which sources one particular run may read.
+ *
+ * Optional everywhere: absent means "use the configured defaults", which is
+ * what an automatic run after a download does. Only a person choosing in the
+ * UI sends this, and only for that run - it never writes back to config.
+ */
+export const AiAnalysisSourceSelection = z.object({
+  transcript: z.boolean(),
+  article: z.boolean(),
+});
+export type AiAnalysisSourceSelection = z.infer<typeof AiAnalysisSourceSelection>;
+
 /** Request body for triggering analysis by hand from the UI. */
 export const AnalyseContentRequest = z.object({
   contentKey: z.string(),
   /** Re-run even when a result already exists. */
   force: z.boolean().default(false),
+  sources: AiAnalysisSourceSelection.optional(),
 });
 export type AnalyseContentRequest = z.infer<typeof AnalyseContentRequest>;
 

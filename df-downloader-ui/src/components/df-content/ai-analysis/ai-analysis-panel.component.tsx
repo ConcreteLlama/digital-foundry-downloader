@@ -1,3 +1,4 @@
+import { AiAnalysisSourceSelection } from "df-downloader-common";
 import AutoAwesomeIcon from "@mui/icons-material/AutoAwesome";
 import CheckIcon from "@mui/icons-material/Check";
 import CloseIcon from "@mui/icons-material/Close";
@@ -8,6 +9,10 @@ import {
   Chip,
   CircularProgress,
   Collapse,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogTitle,
   Divider,
   Link,
   Paper,
@@ -28,6 +33,8 @@ import { useSelector } from "react-redux";
 import { selectQueryPipelineIds } from "../../../store/df-tasks/tasks.selector.ts";
 import { decideAiTag, estimateAiAnalysisCost, fetchAiAnalysis, startAiAnalysis } from "../../../api/ai-analysis.ts";
 import { monoFontFamily } from "../../../themes/build-theme.ts";
+import { selectConfigSection } from "../../../store/config/config.selector.ts";
+import { AnalysisSourcePicker, DEFAULT_SOURCE_SELECTION } from "./analysis-source-picker.component.tsx";
 import { AnalysisStructuredData, SectionLabel } from "./analysis-structured-data.component.tsx";
 
 /**
@@ -264,10 +271,72 @@ export const AiAnalysisPanel = ({ contentKey, enabled, onHasContent, onJumpTo }:
     wasRunning.current = analysisRunning;
   }, [analysisRunning, load]);
 
+  /*
+   * Both entry points ask which sources to use before spending anything.
+   * The settings say what you normally want; this is for the run where you
+   * want something else - usually skipping the transcript, which is nearly
+   * all of the cost. The choice applies to this run only.
+   */
+  const [sourcePrompt, setSourcePrompt] = useState<{ force: boolean } | null>(null);
+  const [sources, setSources] = useState<AiAnalysisSourceSelection>(DEFAULT_SOURCE_SELECTION);
+  const [sourcesTouched, setSourcesTouched] = useState(false);
+  const aiConfig = useSelector(selectConfigSection("aiAnalysis"));
+
+  useEffect(() => {
+    if (!sourcesTouched && aiConfig?.sources) {
+      setSources(aiConfig.sources);
+    }
+  }, [aiConfig, sourcesTouched]);
+
+  /*
+   * Rendered in each branch that can open it rather than once at the top,
+   * because this component returns early for loading/empty/error states. A
+   * MUI Dialog portals to the body, so where it sits in the tree costs
+   * nothing.
+   */
+  const sourceDialog = (
+    <Dialog open={Boolean(sourcePrompt)} onClose={() => setSourcePrompt(null)} maxWidth="xs" fullWidth>
+      <DialogTitle>{sourcePrompt?.force ? "Analyse again" : "Analyse this content"}</DialogTitle>
+      <DialogContent>
+        <Stack spacing={1.5} sx={{ pt: 0.5 }}>
+          <AnalysisSourcePicker
+            value={sources}
+            onChange={(next) => {
+              setSourcesTouched(true);
+              setSources(next);
+            }}
+          />
+          <Typography variant="caption" sx={{ color: "text.disabled" }}>
+            Defaults come from your AI analysis settings. Changing them here applies to this run only.
+          </Typography>
+          {sourcePrompt?.force && (
+            <Typography variant="caption" sx={{ color: "warning.main" }}>
+              This replaces the stored result and is charged for again.
+            </Typography>
+          )}
+        </Stack>
+      </DialogContent>
+      <DialogActions>
+        <Button size="small" onClick={() => setSourcePrompt(null)}>
+          Cancel
+        </Button>
+        <Button
+          size="small"
+          variant="contained"
+          disabled={starting}
+          onClick={() => runAnalysis(Boolean(sourcePrompt?.force))}
+        >
+          Analyse
+        </Button>
+      </DialogActions>
+    </Dialog>
+  );
+
   const runAnalysis = async (force: boolean) => {
+    setSourcePrompt(null);
     setStarting(true);
     try {
-      await startAiAnalysis(contentKey, force);
+      await startAiAnalysis(contentKey, force, sources);
     } finally {
       setStarting(false);
     }
@@ -322,6 +391,7 @@ export const AiAnalysisPanel = ({ contentKey, enabled, onHasContent, onJumpTo }:
 
     return (
       <Stack spacing={1.5}>
+        {sourceDialog}
         <Typography variant="body2" sx={{ color: "text.secondary" }}>
           This content has not been analysed yet.
         </Typography>
@@ -350,7 +420,7 @@ export const AiAnalysisPanel = ({ contentKey, enabled, onHasContent, onJumpTo }:
             variant="contained"
             startIcon={<AutoAwesomeIcon fontSize="small" />}
             disabled={starting}
-            onClick={() => runAnalysis(false)}
+            onClick={() => setSourcePrompt({ force: false })}
           >
             Analyse
           </Button>
@@ -362,11 +432,12 @@ export const AiAnalysisPanel = ({ contentKey, enabled, onHasContent, onJumpTo }:
   if (result.error) {
     return (
       <Stack spacing={1.5}>
+        {sourceDialog}
         <Alert severity="error" variant="outlined">
           Analysis failed: {result.error}
         </Alert>
         <Box>
-          <Button size="small" variant="outlined" disabled={starting || !enabled || analysisRunning} onClick={() => runAnalysis(true)}>
+          <Button size="small" variant="outlined" disabled={starting || !enabled || analysisRunning} onClick={() => setSourcePrompt({ force: true })}>
             Try again
           </Button>
         </Box>
@@ -379,6 +450,7 @@ export const AiAnalysisPanel = ({ contentKey, enabled, onHasContent, onJumpTo }:
 
   return (
     <Stack spacing={2}>
+      {sourceDialog}
       <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap" useFlexGap>
         <Chip size="small" variant="outlined" color="primary" label={AiContentTypeLabels[result.contentType]} />
         <Box sx={{ flex: "1 1 auto" }} />
@@ -390,7 +462,7 @@ export const AiAnalysisPanel = ({ contentKey, enabled, onHasContent, onJumpTo }:
           }
         >
           <span>
-            <Button size="small" disabled={starting || !enabled || analysisRunning} onClick={() => runAnalysis(true)}>
+            <Button size="small" disabled={starting || !enabled || analysisRunning} onClick={() => setSourcePrompt({ force: true })}>
               Re-analyse
             </Button>
           </span>

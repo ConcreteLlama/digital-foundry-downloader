@@ -1,3 +1,4 @@
+import { AiAnalysisSourceSelection } from "df-downloader-common";
 import { AiAnalysisResult, DfContentEntry, DfContentInfo, logger, makeErrorMessage } from "df-downloader-common";
 import { AiAnalysisConfig } from "df-downloader-common/config/ai-analysis-config.js";
 import { TaskManager } from "../task-manager/task-manager.js";
@@ -72,6 +73,7 @@ export const createAiAnalysisTaskPipeline = (opts: AiAnalysisTaskPipelineCreator
       articleText?: string;
       articleUrl?: string;
       articleTitle?: string;
+      sources?: AiAnalysisSourceSelection;
       /** Set when a bulk run queued this - see TaskPipelineDetails.backfillJobId. */
       backfillJobId?: string;
       /** Re-analyse even if there is already a result - checked when the task runs. */
@@ -89,6 +91,7 @@ export const createAiAnalysisTaskPipeline = (opts: AiAnalysisTaskPipelineCreator
           articleText: context.articleText,
           articleUrl: context.articleUrl,
           articleTitle: context.articleTitle,
+          sources: context.sources,
           force: context.force,
         }),
       taskManager: aiAnalysisTaskManager,

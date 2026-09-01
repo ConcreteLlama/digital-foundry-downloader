@@ -15,6 +15,7 @@ import {
 import {
   BulkBackfillCandidate,
   BulkBackfillEstimate,
+  AiAnalysisSourceSelection,
   BulkBackfillTarget,
   BulkBackfillTargetLabels,
 } from "df-downloader-common";
@@ -27,6 +28,10 @@ import { selectPipelinesInCompletionState } from "../../../store/df-tasks/tasks.
 import { store } from "../../../store/store.ts";
 import { estimateBackfill, fetchBackfillCandidates, runBackfill, stopBackfillJobs } from "../../../api/backfill.ts";
 import { triggerSnackbar } from "../../../utils/snackbar.tsx";
+import {
+  AnalysisSourcePicker,
+  DEFAULT_SOURCE_SELECTION,
+} from "../../df-content/ai-analysis/analysis-source-picker.component.tsx";
 import { AnalysisSourcesExplainer } from "./analysis-sources-explainer.component.tsx";
 import {
   analysisImprovable,
@@ -86,6 +91,11 @@ const FORCE_LABELS: Record<BulkBackfillTarget, string> = {
 export const BulkBackfillPage = () => {
   const [target, setTarget] = useState<BulkBackfillTarget>("subtitles");
   const [force, setForce] = useState(false);
+  /**
+   * Defaults to what the AI analysis settings say, and applies to this run
+   * only - choosing here never writes back to config.
+   */
+  const [sources, setSources] = useState<AiAnalysisSourceSelection>(DEFAULT_SOURCE_SELECTION);
   const [candidates, setCandidates] = useState<BulkBackfillCandidate[]>([]);
   const [libraryCount, setLibraryCount] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -101,6 +111,10 @@ export const BulkBackfillPage = () => {
     thousand items for a run that was never going to start.
   */
   const aiAnalysisConfig = useSelector(selectConfigSection("aiAnalysis"));
+  // Config arrives asynchronously, so the picker starts on the built-in
+  // defaults and adopts the configured ones as soon as they land - unless the
+  // user has already changed something, which must not be overwritten.
+  const [sourcesTouched, setSourcesTouched] = useState(false);
   const subtitlesConfig = useSelector(selectConfigSection("subtitles"));
   useEffect(() => {
     store.dispatch(queryConfigSection.start("aiAnalysis"));
@@ -115,6 +129,12 @@ export const BulkBackfillPage = () => {
     }
     return undefined;
   }, [target, aiAnalysisConfig, subtitlesConfig]);
+
+  useEffect(() => {
+    if (!sourcesTouched && aiAnalysisConfig?.sources) {
+      setSources(aiAnalysisConfig.sources);
+    }
+  }, [aiAnalysisConfig, sourcesTouched]);
 
   const [filterText, setFilterText] = useState("");
   // Narrowing to what still needs doing is the common case - the list is
@@ -430,7 +450,7 @@ export const BulkBackfillPage = () => {
   const confirm = async () => {
     setConfirmOpen(false);
     try {
-      const response = await runBackfill(target, runKeys, force);
+      const response = await runBackfill(target, runKeys, force, target === "ai_analysis" ? sources : undefined);
       setStarted(
         `Started on ${response.queued} ${response.queued === 1 ? "item" : "items"}` +
           (response.skipped ? `, skipped ${response.skipped} that could not take this action` : "")
@@ -473,7 +493,18 @@ export const BulkBackfillPage = () => {
       {/* Only for analysis: it is the one target whose result quality depends
           on what else the item happens to have, and the one you are about to
           be charged for. */}
-      {target === "ai_analysis" && <AnalysisSourcesExplainer />}
+      {target === "ai_analysis" && (
+        <>
+          <AnalysisSourcePicker
+            value={sources}
+            onChange={(next) => {
+              setSourcesTouched(true);
+              setSources(next);
+            }}
+          />
+          <AnalysisSourcesExplainer />
+        </>
+      )}
 
       <FormControlLabel
         control={<Switch size="small" checked={force} onChange={(event) => setForce(event.target.checked)} />}

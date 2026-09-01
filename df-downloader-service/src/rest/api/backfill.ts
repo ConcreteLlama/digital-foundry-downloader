@@ -239,7 +239,7 @@ export const makeBackfillRouter = (contentManager: DigitalFoundryContentManager)
   });
 
   router.post("/run", async (req, res) => {
-    await zodParseHttp(BulkBackfillRequest, req, res, async ({ target, contentKeys, force }) => {
+    await zodParseHttp(BulkBackfillRequest, req, res, async ({ target, contentKeys, force, sources}) => {
       try {
         if (target === "ai_analysis" && !AiAnalysisConfigUtils.isUsable(configService.config.aiAnalysis)) {
           return sendError(res, "AI analysis is not enabled, or no API key has been set", 400);
@@ -267,7 +267,7 @@ export const makeBackfillRouter = (contentManager: DigitalFoundryContentManager)
           return sendError(res, "None of the selected items can take this action", 400);
         }
 
-        const task = contentManager.taskManager.bulkBackfill(queued, target, force, language);
+        const task = contentManager.taskManager.bulkBackfill(queued, target, force, language, sources);
         return sendResponse(res, {
           message: "Bulk backfill started",
           taskId: task.task.id,

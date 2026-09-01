@@ -128,7 +128,14 @@ const ComparisonRow = ({
     sx={(theme) => ({
       cursor: "pointer",
       verticalAlign: "top",
-      "& > td": { borderBottom: `2px solid ${theme.palette.divider}` },
+      // A rule, not a hairline. `divider` (#1c242f) is barely a shade off the
+      // surface, which is fine between short rows and disappears entirely
+      // between rows this tall - so this steps up to a visible neutral and
+      // adds room beneath, letting the gap do half the separating.
+      "& > td": {
+        borderBottom: `3px solid ${alpha(theme.palette.text.primary, 0.22)}`,
+        paddingBottom: theme.spacing(2),
+      },
       "& > td:first-of-type": {
         borderLeft: `3px solid ${alpha(theme.palette.primary.main, 0.55)}`,
         backgroundColor: alpha(theme.palette.primary.main, 0.04),

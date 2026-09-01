@@ -172,7 +172,7 @@ export const makeAiAnalysisRouter = (contentManager: DigitalFoundryContentManage
   });
 
   router.post("/analyse", async (req, res) => {
-    await zodParseHttp(AnalyseContentRequest, req, res, async ({ contentKey, force }) => {
+    await zodParseHttp(AnalyseContentRequest, req, res, async ({ contentKey, force, sources }) => {
       const context = await resolveContext(contentManager, contentKey);
       if (!context.ok) {
         return sendError(res, context.error, context.status);
@@ -193,13 +193,20 @@ export const makeAiAnalysisRouter = (contentManager: DigitalFoundryContentManage
         // figures are correct by construction where a transcript's may
         // not be - which is exactly what the extraction needs most.
         // Interactive priority because a person is waiting on this.
-        const article = await ensureArticleForContent(contentManager.db, entry.contentInfo, {
-          priority: DfFetchPriority.INTERACTIVE,
-        });
+        // Not looked up at all when the article is deselected. The lookup can
+        // reach Digital Foundry, so "don't use the article" has to mean the
+        // request is never made rather than made and then discarded.
+        const effectiveSources = sources ?? config.sources;
+        const article = effectiveSources.article
+          ? await ensureArticleForContent(contentManager.db, entry.contentInfo, {
+              priority: DfFetchPriority.INTERACTIVE,
+            })
+          : undefined;
         contentManager.taskManager.analyseContent(entry, config, {
           articleText: article?.text,
           articleUrl: article?.url,
           articleTitle: article?.title,
+          sources,
           // Carried through, not just used for the guard above. Without it the
           // task's own already-analysed check saw force as undefined and
           // returned the stored result, so Re-analyse reported success and

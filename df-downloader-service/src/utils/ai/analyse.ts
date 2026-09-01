@@ -2,6 +2,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import {
   AiAnalysisCostEstimate,
   AiAnalysisResult,
+  AiAnalysisSourceSelection,
   AiAnalysisUsage,
   AiContentTypeGameSubject,
   AiEvidenceSource,
@@ -64,6 +65,12 @@ const EXTRACTABLE_TYPES: WireContentType[] = [
 
 export type AnalysisInputs = {
   entry: DfContentEntry;
+  /**
+   * Which sources this run may read, overriding the configured defaults for
+   * this run only. Absent means use the config, which is what an automatic
+   * run after a download does.
+   */
+  sources?: AiAnalysisSourceSelection;
   chapters?: Chapter[];
   articleText?: string;
   articleUrl?: string;
@@ -114,11 +121,20 @@ const addUsage = (a: AiAnalysisUsage | undefined, b: AiAnalysisUsage): AiAnalysi
  * would drift silently the first time either side changed.
  */
 export const prepareAnalysis = async (config: AiAnalysisConfig, inputs: AnalysisInputs): Promise<PreparedCall> => {
-  const { entry, chapters, articleText } = inputs;
+  const { entry, chapters } = inputs;
   const { contentInfo } = entry;
 
+  /*
+   * A deselected source is not read at all, rather than read and ignored.
+   * For the transcript that is the whole point - it is most of what a run
+   * costs, so "don't use it" has to mean the tokens are never sent.
+   */
+  const sources = inputs.sources ?? config.sources;
+  const articleText = sources.article ? inputs.articleText : undefined;
+
   const wantsTranscript =
-    config.features.summary || config.features.structuredData || config.features.tagging.useTranscriptWhenAvailable;
+    sources.transcript &&
+    (config.features.summary || config.features.structuredData || config.features.tagging.useTranscriptWhenAvailable);
   const fromLines =
     wantsTranscript && inputs.transcriptLines?.length
       ? { ...srtLinesToTextWithOffsets(inputs.transcriptLines), source: "sidecar" as const }
@@ -126,7 +142,7 @@ export const prepareAnalysis = async (config: AiAnalysisConfig, inputs: Analysis
   const resolved =
     fromLines ?? (wantsTranscript && !inputs.transcriptText ? await resolveTranscript(entry) : undefined);
 
-  let transcript = inputs.transcriptText || resolved?.text;
+  let transcript = sources.transcript ? inputs.transcriptText || resolved?.text : undefined;
   if (transcript && transcript.length > config.maxTranscriptChars) {
     // Refuse rather than truncate. A transcript cut off part-way produces
     // an analysis that looks complete but silently omits whatever was in
