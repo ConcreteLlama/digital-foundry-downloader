@@ -27,6 +27,7 @@ import { selectPipelinesInCompletionState } from "../../../store/df-tasks/tasks.
 import { store } from "../../../store/store.ts";
 import { estimateBackfill, fetchBackfillCandidates, runBackfill, stopBackfillJobs } from "../../../api/backfill.ts";
 import { triggerSnackbar } from "../../../utils/snackbar.tsx";
+import { AnalysisSourcesExplainer } from "./analysis-sources-explainer.component.tsx";
 import {
   analysisImprovable,
   BackfillConfirmDialog,
@@ -468,6 +469,11 @@ export const BulkBackfillPage = () => {
       <Typography variant="body2" sx={{ color: "text.secondary" }}>
         {TARGET_DESCRIPTIONS[target]}
       </Typography>
+
+      {/* Only for analysis: it is the one target whose result quality depends
+          on what else the item happens to have, and the one you are about to
+          be charged for. */}
+      {target === "ai_analysis" && <AnalysisSourcesExplainer />}
 
       <FormControlLabel
         control={<Switch size="small" checked={force} onChange={(event) => setForce(event.target.checked)} />}

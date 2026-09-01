@@ -211,6 +211,7 @@ This release also fixes a long-standing gap where newly published videos could g
 - Fixed "Re-analyse" doing nothing on anything already analysed
   - Pressing it reported success and left the existing result untouched, so nothing analysed before could ever be analysed again from the content panel - which is every item the button is offered on. The request correctly said to replace the result and the instruction was then dropped before the job ran, so the job found an existing analysis and kept it
   - This mattered more than usual right now: re-analysing is how content picks up the new categories and the game it is about, and the one button for doing it per item was the one that did not work
+- The Backfill tool now explains what each source adds to an analysis, on the AI analysis tab where you are about to spend money on one. The step that matters is not gradual: with neither subtitles nor an article there is nothing to read, so those runs produce tags and a classification but no summary, verdict or breakdown however good the title is
 - Subtitle generation reports progress far more often
   - Whisper only announces its own progress in 5% steps, so on a long video the bar could sit still for minutes and look like it had hung. Progress is now worked out from how far into the audio it has actually transcribed, which updates every few seconds of content - measured on a real run it went from 5% jumps to around 2%
   - It falls back to the old behaviour if the video's length cannot be read, so this can only ever be as good or better, never worse
