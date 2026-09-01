@@ -194,6 +194,13 @@ export const BulkBackfillEstimate = z.object({
   itemCount: z.number().default(0),
   /** Absent for targets that cost nothing but time. */
   estimatedCostUsd: z.number().optional(),
+  /**
+   * Roughly how long the whole run will take, for work whose cost is time.
+   *
+   * The more useful number for a local analysis run: "about four hours" is a
+   * better basis for deciding than a price of nothing.
+   */
+  estimatedDurationMs: z.number().optional(),
   /** How many items were actually priced to produce the figure. */
   sampledCount: z.number().default(0),
   /**

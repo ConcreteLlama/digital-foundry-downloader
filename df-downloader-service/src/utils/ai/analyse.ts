@@ -15,6 +15,7 @@ import {
 import { AiAnalysisConfig, AiAnalysisConfigUtils } from "df-downloader-common/config/ai-analysis-config.js";
 import { Chapter } from "../chatpers.js";
 import { AiProviderId } from "df-downloader-common/config/ai-analysis-config.js";
+import { estimateLocalDurationMs } from "./local-throughput.js";
 import { makeProvider } from "./providers/resolve.js";
 import { AiProvider } from "./providers/types.js";
 import {
@@ -387,6 +388,8 @@ export const estimateAnalysisCost = async (
       inputTokens,
       estimatedOutputTokens,
       estimatedCostUsd: provider.estimateCostUsd(inputTokens, estimatedOutputTokens),
+      estimatedDurationMs:
+        provider.id === "local" ? estimateLocalDurationMs(inputTokens, estimatedOutputTokens) : undefined,
       tagsOnly: true,
     };
   }
@@ -404,6 +407,14 @@ export const estimateAnalysisCost = async (
     inputTokens,
     estimatedOutputTokens,
     estimatedCostUsd: provider.estimateCostUsd(inputTokens + cachedRereadTokens, estimatedOutputTokens),
+    /*
+     * The whole input, not the cached re-read: caching saves money on the
+     * hosted path, but a local run genuinely processes it twice.
+     */
+    estimatedDurationMs:
+      provider.id === "local"
+        ? estimateLocalDurationMs(inputTokens * (secondCallLikely ? 2 : 1), estimatedOutputTokens)
+        : undefined,
     tagsOnly: false,
   };
 };

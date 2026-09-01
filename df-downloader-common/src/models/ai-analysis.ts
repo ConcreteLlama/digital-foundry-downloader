@@ -612,6 +612,16 @@ export const AiAnalysisCostEstimate = z.object({
    * the spend figures as though it were.
    */
   estimatedCostUsd: z.number().optional(),
+  /**
+   * Roughly how long a local run will take, when there is any history to
+   * judge from.
+   *
+   * Absent until this machine has actually run one - throughput varies by
+   * more than an order of magnitude between a GPU box and a passively-cooled
+   * microserver, so a built-in figure would be wrong for almost everybody.
+   * Measured here rather than guessed.
+   */
+  estimatedDurationMs: z.number().optional(),
   /** True when no transcript was found, so this is the cheaper tags-only path. */
   tagsOnly: z.boolean().default(false),
 });

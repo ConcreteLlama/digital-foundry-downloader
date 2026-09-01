@@ -227,47 +227,73 @@ export const makeBackfillRouter = (contentManager: DigitalFoundryContentManager)
 
         const config = configService.config.aiAnalysis;
         if (!AiAnalysisConfigUtils.isUsable(config)) {
-          return sendError(res, "AI analysis is not enabled, or no API key has been set", 400);
+          return sendError(res, "AI analysis is not enabled, or no engine is set up to run it", 400);
         }
         // Priced from a sample and scaled. Every item would mean one
         // token-counting call each, which for a thousand-item run is slow
         // enough to defeat the purpose of a pre-run estimate.
         const sampleKeys = contentKeys.slice(0, COST_SAMPLE_SIZE);
         const costs: number[] = [];
+        const durations: number[] = [];
+        let sampled = 0;
         for (const contentKey of sampleKeys) {
           const entry = await contentManager.db.getContentEntry(contentKey);
           if (!entry) {
             continue;
           }
           try {
-            const estimate = await estimateAnalysisCost(config!, { entry, sources });
+            const estimate = await estimateAnalysisCost(config!, { entry, sources, provider });
+            sampled++;
             // Absent means the run costs no money rather than nothing at all -
             // a local engine spends time. Skipped rather than counted as zero,
             // which would drag the average down and misprice the whole run.
             if (estimate.estimatedCostUsd !== undefined) {
               costs.push(estimate.estimatedCostUsd);
             }
+            if (estimate.estimatedDurationMs !== undefined) {
+              durations.push(estimate.estimatedDurationMs);
+            }
           } catch (e) {
             logger.log("warn", `Could not price ${contentKey} for a bulk estimate: ${e}`);
           }
         }
-        if (!costs.length) {
+
+        const mean = (values: number[]) => values.reduce((total, value) => total + value, 0) / values.length;
+
+        if (costs.length) {
           return sendResponse(res, {
             target,
             itemCount,
-            sampledCount: 0,
-            note: "Could not work out a cost for these items.",
+            estimatedCostUsd: mean(costs) * itemCount,
+            sampledCount: costs.length,
+            note: force
+              ? "Re-analysing charges again for items that already have an analysis."
+              : undefined,
           } satisfies BulkBackfillEstimate);
         }
-        const mean = costs.reduce((total, cost) => total + cost, 0) / costs.length;
+
+        if (durations.length) {
+          /*
+           * A local run: time is the number worth knowing, and it is scaled
+           * from what this machine has actually managed rather than a built-in
+           * figure - see local-throughput.ts.
+           */
+          return sendResponse(res, {
+            target,
+            itemCount,
+            estimatedDurationMs: mean(durations) * itemCount,
+            sampledCount: durations.length,
+            note: "No API cost - this runs on your machine. It works through one item at a time and can be stopped at any point; anything already analysed is kept.",
+          } satisfies BulkBackfillEstimate);
+        }
+
         return sendResponse(res, {
           target,
           itemCount,
-          estimatedCostUsd: mean * itemCount,
-          sampledCount: costs.length,
-          note: force
-            ? "Re-analysing charges again for items that already have an analysis."
-            : undefined,
+          sampledCount: sampled,
+          note: sampled
+            ? "This runs on your machine at no API cost. How long it takes is not yet known - that becomes clear once a few have run."
+            : "Could not work out a cost for these items.",
         } satisfies BulkBackfillEstimate);
       } catch (e) {
         return sendErrorAsResponse(res, e);
