@@ -490,6 +490,10 @@ export class DfTaskManager {
       backfillJobId: opts.backfillJobId,
       force: opts.force,
       sources: opts.sources,
+      // A bulk run always carries a job id, so this is exactly "one item a
+      // person asked for". Only those may spend a YouTube request looking for
+      // chapters the file did not have - see resolveChapters.
+      allowRemoteChapters: !opts.backfillJobId,
     });
     logger.log(
       "info",

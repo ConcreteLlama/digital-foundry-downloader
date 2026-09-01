@@ -74,6 +74,7 @@ export const createAiAnalysisTaskPipeline = (opts: AiAnalysisTaskPipelineCreator
       articleUrl?: string;
       articleTitle?: string;
       sources?: AiAnalysisSourceSelection;
+      allowRemoteChapters?: boolean;
       /** Set when a bulk run queued this - see TaskPipelineDetails.backfillJobId. */
       backfillJobId?: string;
       /** Re-analyse even if there is already a result - checked when the task runs. */
@@ -92,6 +93,7 @@ export const createAiAnalysisTaskPipeline = (opts: AiAnalysisTaskPipelineCreator
           articleUrl: context.articleUrl,
           articleTitle: context.articleTitle,
           sources: context.sources,
+          allowRemoteChapters: context.allowRemoteChapters,
           force: context.force,
         }),
       taskManager: aiAnalysisTaskManager,

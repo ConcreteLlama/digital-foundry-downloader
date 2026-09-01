@@ -31,11 +31,13 @@ type AiAnalysisTaskContext = {
   force?: boolean;
   /** Which sources this run may read - absent means the configured defaults. */
   sources?: AiAnalysisSourceSelection;
+  /** See resolveChapters - true only when a person is waiting on this one item. */
+  allowRemoteChapters?: boolean;
 };
 
 const aiAnalysisTaskControls: TaskControls<AiAnalysisResult, AiAnalysisTaskContext> = {
   start: async (context: AiAnalysisTaskContext) => {
-    const { entry, config, chapters, articleText, articleUrl, articleTitle, transcriptText, transcriptLines, sources } = context;
+    const { entry, config, chapters, articleText, articleUrl, articleTitle, transcriptText, transcriptLines, sources, allowRemoteChapters } = context;
     /*
      * Checked here, immediately before spending money, rather than when this
      * was queued.
@@ -63,7 +65,7 @@ const aiAnalysisTaskControls: TaskControls<AiAnalysisResult, AiAnalysisTaskConte
     }
     context.stage = "Analysing";
     logger.log("info", `Analysing ${entry.key} with ${config.model}`);
-    const result = await analyseContent(config, { entry, chapters, articleText, articleUrl, articleTitle, transcriptText, transcriptLines, sources });
+    const result = await analyseContent(config, { entry, chapters, articleText, articleUrl, articleTitle, transcriptText, transcriptLines, sources, allowRemoteChapters });
     // analyseContent reports an ordinary failure inside the result rather
     // than throwing, so the task has to promote it - otherwise a run that
     // failed would be recorded as a successful task holding an error.

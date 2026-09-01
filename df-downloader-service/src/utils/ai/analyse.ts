@@ -1,3 +1,4 @@
+import { resolveChapters } from "./chapters.js";
 import Anthropic from "@anthropic-ai/sdk";
 import {
   AiAnalysisCostEstimate,
@@ -71,6 +72,8 @@ export type AnalysisInputs = {
    * run after a download does.
    */
   sources?: AiAnalysisSourceSelection;
+  /** See resolveChapters - only the interactive single-item path sets this. */
+  allowRemoteChapters?: boolean;
   chapters?: Chapter[];
   articleText?: string;
   articleUrl?: string;
@@ -121,8 +124,17 @@ const addUsage = (a: AiAnalysisUsage | undefined, b: AiAnalysisUsage): AiAnalysi
  * would drift silently the first time either side changed.
  */
 export const prepareAnalysis = async (config: AiAnalysisConfig, inputs: AnalysisInputs): Promise<PreparedCall> => {
-  const { entry, chapters } = inputs;
+  const { entry } = inputs;
   const { contentInfo } = entry;
+
+  /*
+   * Read from the downloaded file when the caller did not supply them, which
+   * in practice is every caller - the plumbing existed but nothing ever filled
+   * it. A local ffprobe, not a YouTube request: chapters are muxed into the
+   * download, so for anything on disk the file already has them.
+   */
+  const chapters =
+    inputs.chapters ?? (await resolveChapters(entry, inputs.allowRemoteChapters).catch(() => undefined));
 
   /*
    * A deselected source is not read at all, rather than read and ignored.
@@ -176,7 +188,13 @@ export const prepareAnalysis = async (config: AiAnalysisConfig, inputs: Analysis
 
   return {
     system: buildSystemPrompt(flags),
-    content: tagsOnly ? buildTagOnlyContentBlock(contentInfo) : buildContentBlock({ contentInfo, transcript, chapters, articleText }),
+    content: tagsOnly
+      // Chapters go to the cheap path too. With no transcript they are the
+      // only description of what is actually in the video, and being written
+      // rather than transcribed they are the most reliable source of names
+      // there is - which is exactly what tagging and the game field need.
+      ? buildTagOnlyContentBlock(contentInfo, chapters)
+      : buildContentBlock({ contentInfo, transcript, chapters, articleText }),
     tagsOnly,
     evidence,
     // Only when the text actually sent is the one we hold offsets for. A

@@ -281,11 +281,23 @@ export const buildContentBlock = (context: PromptContext): string => {
   return parts.join("\n\n");
 };
 
-export const buildTagOnlyContentBlock = (contentInfo: DfContentInfo): string => {
+export const buildTagOnlyContentBlock = (contentInfo: DfContentInfo, chapters?: Chapter[]): string => {
   const parts = [`TITLE: ${contentInfo.title}`];
   const description = contentInfo.description ? stripSponsorship(contentInfo.description) : "";
   if (description) {
     parts.push(`DESCRIPTION:\n${description}`);
+  }
+  // With no transcript these are the only account of what is actually in
+  // the video, and being written rather than transcribed the names in them
+  // are spelt correctly - which is most of what this path is asked for.
+  if (chapters?.length) {
+    const formatted = formatChapters(chapters);
+    if (formatted) {
+      // Pushed as-is, like the full block: formatChapters already leads with
+      // the caveat that these titles are unverified and must not be treated
+      // as evidence, and a second heading above it only weakens that.
+      parts.push(formatted);
+    }
   }
   return parts.join("\n\n");
 };
