@@ -1,5 +1,6 @@
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 import { Accordion, AccordionDetails, AccordionSummary, Box, Chip, Stack, Typography, alpha } from "@mui/material";
+import { monoFontFamily } from "../../../themes/build-theme.ts";
 
 /**
  * What each combination of sources actually buys you.
@@ -18,6 +19,16 @@ type Tier = {
   sources: string[];
   /** True for the tiers that cannot produce a summary - see tagsOnly in analyse.ts. */
   limited?: boolean;
+  /**
+   * Roughly what an item costs at this tier.
+   *
+   * Measured on this project's own runs with Haiku rather than derived from
+   * the price list, because the useful comparison is between the tiers and
+   * that is not obvious from the tokens: the cheap tiers are cheap by an
+   * order of magnitude, and the expensive ones vary far less by video length
+   * than people expect, since output length dominates.
+   */
+  cost: string;
   gets: string;
   note?: string;
 };
@@ -26,27 +37,32 @@ const TIERS: Tier[] = [
   {
     sources: ["Title"],
     limited: true,
+    cost: "about $0.002",
     gets: "Content type, the game it is about, and suggested tags.",
     note: "No summary, verdict or structured data - there is nothing to read yet. Descriptions are fetched from YouTube only when something needs one, so an item you have never opened or downloaded often sits here.",
   },
   {
     sources: ["Title", "Description"],
     limited: true,
+    cost: "about $0.002",
     gets: "The same, but better founded - the description usually names the platforms and the angle.",
     note: "Still no summary or verdict. This is the cheapest run there is, and the one that works across your whole library rather than only what you have downloaded.",
   },
   {
     sources: ["Title", "Description", "Article"],
+    cost: "about $0.015",
     gets: "Full analysis: summary, verdict, and the structured breakdown for its type.",
     note: "Written rather than transcribed, so product names, studios and figures are right. No jump-to timestamps though - a quote from an article cannot be located in the video.",
   },
   {
     sources: ["Title", "Description", "Subtitles"],
+    cost: "about $0.015 - $0.05",
     gets: "Full analysis, plus every finding anchored to the moment it was said.",
     note: "Machine transcription garbles jargon, product names and the odd digit, so figures are less reliable than an article's.",
   },
   {
     sources: ["Title", "Description", "Subtitles", "Article"],
+    cost: "about $0.015 - $0.05",
     gets: "Everything, and the most accurate of the five.",
     note: "The article settles any disagreement over a name or a number, the transcript supplies what the article does not cover and the timestamps to jump to.",
   },
@@ -74,7 +90,8 @@ export const AnalysisSourcesExplainer = () => (
     <AccordionDetails>
       <Stack spacing={1.5}>
         <Typography variant="caption" sx={{ color: "text.disabled" }}>
-          Chips are what the analysis reads. The text under each is what it can produce from that.
+          Chips are what the analysis reads. The text under each is what it can produce from that, and
+          roughly what it costs per item.
         </Typography>
         {TIERS.map((tier) => (
           <Box key={tier.sources.join("+")}>
@@ -100,11 +117,16 @@ export const AnalysisSourcesExplainer = () => (
                 />
               ))}
             </Stack>
-            {tier.limited && (
-              <Typography variant="body2" sx={{ color: "warning.main", fontWeight: 500 }}>
-                Tags and classification only
+            <Stack direction="row" spacing={1} alignItems="baseline" flexWrap="wrap" useFlexGap>
+              {tier.limited && (
+                <Typography variant="body2" sx={{ color: "warning.main", fontWeight: 500 }}>
+                  Tags and classification only
+                </Typography>
+              )}
+              <Typography variant="caption" sx={{ color: "success.main", fontFamily: monoFontFamily }}>
+                {tier.cost}
               </Typography>
-            )}
+            </Stack>
             <Typography variant="body2">{tier.gets}</Typography>
             {tier.note && (
               <Typography variant="caption" sx={{ color: "text.disabled", display: "block" }}>
@@ -113,6 +135,12 @@ export const AnalysisSourcesExplainer = () => (
             )}
           </Box>
         ))}
+        <Typography variant="caption" sx={{ color: "text.disabled" }}>
+          Costs are rough, measured with Haiku on real videos. The step that matters is the first one: the
+          two cheap tiers are roughly a tenth of the others, which is why they are worth having at all.
+          Reading the subtitles is nearly all of what a full run costs, and the larger models multiply
+          every figure here several times over.
+        </Typography>
         <Typography variant="caption" sx={{ color: "text.disabled" }}>
           A transcript longer than the configured limit is dropped rather than cut short, since half a
           transcript reads as a complete analysis while missing whatever was in the back half - usually the
