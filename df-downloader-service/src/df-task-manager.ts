@@ -72,7 +72,7 @@ import {
 import { AiAnalysisTaskManager } from "./tasks/ai-analysis-task.js";
 import { BULK_BACKFILL_CONCURRENCY, BulkBackfillTask, isBulkBackfillTask } from "./tasks/bulk-backfill-task.js";
 import { ensureArticleForContent } from "./utils/df-articles/ensure-article.js";
-import { AiAnalysisConfig, AiProviderId } from "df-downloader-common/config/ai-analysis-config.js";
+import { AiAnalysisConfig, AiAnalysisConfigUtils, AiProviderId } from "df-downloader-common/config/ai-analysis-config.js";
 import { AiAnalysisSourceSelection, MetadataBackfillOptions, metadataFingerprintOf } from "df-downloader-common";
 import { buildMetadataForBackfill } from "./utils/metadata-backfill.js";
 import { InjectMetadataTask } from "./tasks/inject-metadata-task.js";
@@ -510,7 +510,12 @@ export class DfTaskManager {
     });
     logger.log(
       "info",
-      `Queued AI analysis: "${entry.contentInfo.title}" using ${config.model}${
+      // The engine that will actually answer, not the configured hosted one -
+      // logging the latter for a local run names something that never ran.
+      `Queued AI analysis: "${entry.contentInfo.title}" using ${AiAnalysisConfigUtils.resolveModelName(
+        config,
+        opts.provider
+      )}${
         opts.articleText ? " (with DF article as grounding)" : " (no article found)"
       }`
     );

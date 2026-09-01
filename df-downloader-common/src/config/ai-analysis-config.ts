@@ -450,6 +450,16 @@ export const AiAnalysisConfigUtils = {
     return usable[0];
   },
   /**
+   * The name of the model that will actually answer.
+   *
+   * Not the same as `config.model`, which is only the hosted one - reporting
+   * that for a local run names an engine that had nothing to do with it.
+   * Pure, so a log line or a label can ask without constructing a provider.
+   */
+  resolveModelName: (config: AiAnalysisConfig, requested?: AiProviderId): string =>
+    AiAnalysisConfigUtils.resolveProvider(config, requested) === "local" ? config.local.model : config.model,
+
+  /**
    * The effort value that may actually be sent for this config, or
    * undefined when the parameter must be omitted entirely.
    */
