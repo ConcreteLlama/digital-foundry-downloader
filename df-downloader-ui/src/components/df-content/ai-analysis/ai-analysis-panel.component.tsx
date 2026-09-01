@@ -1,4 +1,5 @@
 import { AiAnalysisSourceSelection, formatDurationMs } from "df-downloader-common";
+import { AiProviderId } from "df-downloader-common/config/ai-analysis-config";
 import AutoAwesomeIcon from "@mui/icons-material/AutoAwesome";
 import CheckIcon from "@mui/icons-material/Check";
 import CloseIcon from "@mui/icons-material/Close";
@@ -34,6 +35,7 @@ import { selectQueryPipelineIds } from "../../../store/df-tasks/tasks.selector.t
 import { decideAiTag, estimateAiAnalysisCost, fetchAiAnalysis, startAiAnalysis } from "../../../api/ai-analysis.ts";
 import { monoFontFamily } from "../../../themes/build-theme.ts";
 import { selectConfigSection } from "../../../store/config/config.selector.ts";
+import { AnalysisProviderPicker } from "./analysis-provider-picker.component.tsx";
 import { AnalysisSourcePicker, DEFAULT_SOURCE_SELECTION } from "./analysis-source-picker.component.tsx";
 import { AnalysisStructuredData, SectionLabel } from "./analysis-structured-data.component.tsx";
 
@@ -280,6 +282,9 @@ export const AiAnalysisPanel = ({ contentKey, enabled, onHasContent, onJumpTo }:
   const [sourcePrompt, setSourcePrompt] = useState<{ force: boolean } | null>(null);
   const [sources, setSources] = useState<AiAnalysisSourceSelection>(DEFAULT_SOURCE_SELECTION);
   const [sourcesTouched, setSourcesTouched] = useState(false);
+  // Undefined means "whatever is configured" - the picker shows that as
+  // selected, so an untouched dialog and an explicit pick agree.
+  const [provider, setProvider] = useState<AiProviderId | undefined>(undefined);
   const aiConfig = useSelector(selectConfigSection("aiAnalysis"));
 
   useEffect(() => {
@@ -299,6 +304,7 @@ export const AiAnalysisPanel = ({ contentKey, enabled, onHasContent, onJumpTo }:
       <DialogTitle>{sourcePrompt?.force ? "Analyse again" : "Analyse this content"}</DialogTitle>
       <DialogContent>
         <Stack spacing={1.5} sx={{ pt: 0.5 }}>
+          <AnalysisProviderPicker value={provider} onChange={setProvider} config={aiConfig ?? undefined} />
           <AnalysisSourcePicker
             value={sources}
             onChange={(next) => {
@@ -336,7 +342,7 @@ export const AiAnalysisPanel = ({ contentKey, enabled, onHasContent, onJumpTo }:
     setSourcePrompt(null);
     setStarting(true);
     try {
-      await startAiAnalysis(contentKey, force, sources);
+      await startAiAnalysis(contentKey, force, sources, provider);
     } finally {
       setStarting(false);
     }

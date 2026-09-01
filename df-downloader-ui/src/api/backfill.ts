@@ -1,3 +1,4 @@
+import { AiProviderId } from "df-downloader-common/config/ai-analysis-config";
 import {
   AiAnalysisSourceSelection,
   MetadataBackfillOptions,
@@ -41,9 +42,11 @@ export const estimateBackfill = async (
   contentKeys: string[],
   force: boolean,
   sources?: AiAnalysisSourceSelection,
-  metadataOptions?: MetadataBackfillOptions
+  metadataOptions?: MetadataBackfillOptions,
+  /** Analysis only - priced for the engine that will actually run it. */
+  provider?: AiProviderId
 ): Promise<BulkBackfillEstimate> => {
-  const response = await postJson(`${API_URL}/backfill/estimate`, { target, contentKeys, force, sources, metadataOptions});
+  const response = await postJson(`${API_URL}/backfill/estimate`, { target, contentKeys, force, sources, metadataOptions, provider });
   return unwrap(response, BulkBackfillEstimate);
 };
 
@@ -54,12 +57,15 @@ export const runBackfill = async (
   /** Analysis only - which sources this run may read. Omitted uses the configured defaults. */
   sources?: AiAnalysisSourceSelection,
   /** Metadata only - what to gather before rewriting. */
-  metadataOptions?: MetadataBackfillOptions
+  metadataOptions?: MetadataBackfillOptions,
+  /** Analysis only - which engine runs the batch. */
+  provider?: AiProviderId
 ): Promise<BulkBackfillStartedResponse> => {
   const response = await postJson(`${API_URL}/backfill/run`, {
     target,
     contentKeys,
     force,
+    provider,
     sources,
     metadataOptions,
   });

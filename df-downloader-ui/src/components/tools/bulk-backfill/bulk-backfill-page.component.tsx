@@ -1,3 +1,4 @@
+import { AiProviderId } from "df-downloader-common/config/ai-analysis-config";
 import {
   Alert,
   Box,
@@ -122,6 +123,9 @@ export const BulkBackfillPage = () => {
   // defaults and adopts the configured ones as soon as they land - unless the
   // user has already changed something, which must not be overwritten.
   const [sourcesTouched, setSourcesTouched] = useState(false);
+  // Undefined means "whatever is configured", which is what the picker shows
+  // as selected - so an untouched dialog and an explicit pick agree.
+  const [provider, setProvider] = useState<AiProviderId | undefined>(undefined);
   const subtitlesConfig = useSelector(selectConfigSection("subtitles"));
   useEffect(() => {
     store.dispatch(queryConfigSection.start("aiAnalysis"));
@@ -446,7 +450,7 @@ export const BulkBackfillPage = () => {
     setInlineEstimating(true);
     setInlineEstimate(null);
     try {
-      setInlineEstimate(await estimateBackfill(target, runKeys, force, sources, metadataOptions));
+      setInlineEstimate(await estimateBackfill(target, runKeys, force, sources, metadataOptions, provider));
     } catch (e) {
       setError(e instanceof Error ? e.message : "Could not estimate the cost");
     } finally {
@@ -458,7 +462,7 @@ export const BulkBackfillPage = () => {
     setEstimate(null);
     setEstimating(true);
     try {
-      setEstimate(await estimateBackfill(target, runKeys, force, sources, metadataOptions));
+      setEstimate(await estimateBackfill(target, runKeys, force, sources, metadataOptions, provider));
     } catch {
       setEstimate(null);
     } finally {
@@ -482,7 +486,7 @@ export const BulkBackfillPage = () => {
       void priceRun();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sources]);
+  }, [sources, provider]);
 
   const confirm = async () => {
     setConfirmOpen(false);
@@ -492,7 +496,8 @@ export const BulkBackfillPage = () => {
         runKeys,
         force,
         target === "ai_analysis" ? sources : undefined,
-        target === "metadata" ? metadataOptions : undefined
+        target === "metadata" ? metadataOptions : undefined,
+        target === "ai_analysis" ? provider : undefined
       );
       setStarted(
         `Started on ${response.queued} ${response.queued === 1 ? "item" : "items"}` +
@@ -768,6 +773,9 @@ export const BulkBackfillPage = () => {
           setSourcesTouched(true);
           setSources(next);
         }}
+        provider={provider}
+        onProviderChange={setProvider}
+        aiConfig={aiAnalysisConfig ?? undefined}
         metadataOptions={metadataOptions}
         onMetadataOptionsChange={setMetadataOptions}
         onCancel={() => setConfirmOpen(false)}

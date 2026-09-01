@@ -5,6 +5,9 @@ import {
   AiAnalysisFeaturesConfig,
   AiAnalysisModel,
   AiAnalysisModelCapabilities,
+  AiLocalModel,
+  AiLocalModels,
+  AiLocalProviderConfig,
   AiTagApplyMode,
   AiTaggingConfig,
   AutomaticAiAnalysisMode,
@@ -44,6 +47,16 @@ const SettingsGroup = ({
   </Stack>
 );
 
+const ProviderOptions = [
+  { id: "anthropic", label: "Claude (Anthropic API)" },
+  { id: "local", label: "On this machine" },
+];
+
+const LocalModelOptions = AiLocalModel.options.map((model) => ({
+  id: model,
+  label: AiLocalModels[model].label,
+}));
+
 const ModelOptions = AiAnalysisModel.options.map((model) => ({
   id: model,
   label: AiAnalysisModelCapabilities[model].label,
@@ -61,6 +74,11 @@ const AiAnalysisSettings = () => {
   // ignores on models that lack it - it is rejected outright.
   const model = useWatch({ control, name: "model" }) ?? "claude-haiku-4-5";
   const taggingEnabled = useWatch({ control, name: "features.tagging.enabled" });
+  const localEnabled = useWatch({ control, name: "local.enabled" });
+  const localModel = (useWatch({ control, name: "local.model" }) ?? "qwen3.5-9b") as AiLocalModel;
+  // Blank means this app runs the server itself, which is the case the extra
+  // controls below apply to - they are meaningless against someone else's.
+  const usingOwnServer = !useWatch({ control, name: "local.serverUrl" })?.trim();
   const capabilities = AiAnalysisModelCapabilities[model as AiAnalysisModel] ?? AiAnalysisModelCapabilities["claude-haiku-4-5"];
 
   return (
@@ -107,6 +125,71 @@ const AiAnalysisSettings = () => {
           label="Longest transcript to analyse (characters)"
           zodNumber={AiAnalysisConfig.shape.maxTranscriptChars}
         />
+      </SettingsGroup>
+
+      <SettingsGroup
+        title="Where to analyse"
+        description="Analysis can run through the Anthropic API or on this machine. Set up both and you can pick per run."
+      >
+        <SelectField
+          name="defaultProvider"
+          label="Analyse with by default"
+          opts={ProviderOptions}
+          helperText={getZodDescription(AiAnalysisConfig.shape.defaultProvider)}
+        />
+        <ZodCheckboxField
+          name="local.enabled"
+          label="Analyse on this machine"
+          zodBoolean={AiLocalProviderConfig.shape.enabled}
+        />
+        {localEnabled && (
+          <Fragment>
+            {/* Said before anything is downloaded, because the trade is the
+                whole decision here and the download is several gigabytes. */}
+            <Alert severity="info" variant="outlined">
+              Running locally costs nothing and sends nothing off the machine, but it is far slower than the API -
+              minutes per video rather than seconds, and longer again on a low-power box. The model is downloaded the
+              first time it runs and kept afterwards. Analysis never runs at the same time as subtitle transcription,
+              since both need the whole machine.
+            </Alert>
+            <SelectField
+              name="local.model"
+              label="Local model"
+              opts={LocalModelOptions}
+              helperText={AiLocalModels[localModel]?.notes}
+            />
+            <ZodTextField
+              name="local.serverUrl"
+              label="Use an existing server"
+              zodString={AiLocalProviderConfig.shape.serverUrl}
+            />
+            {usingOwnServer && (
+              <Fragment>
+                <ZodNumberField
+                  name="local.contextSize"
+                  label="Context size (tokens)"
+                  zodNumber={AiLocalProviderConfig.shape.contextSize}
+                />
+                <ZodNumberField
+                  name="local.threads"
+                  label="CPU threads"
+                  zodNumber={AiLocalProviderConfig.shape.threads}
+                />
+                <ZodNumberField
+                  name="local.gpuLayers"
+                  label="Layers to offload to a GPU"
+                  zodNumber={AiLocalProviderConfig.shape.gpuLayers}
+                />
+                <ZodNumberField
+                  name="local.idleShutdownSeconds"
+                  label="Unload the model after (seconds idle)"
+                  zodNumber={AiLocalProviderConfig.shape.idleShutdownSeconds}
+                />
+                <ZodNumberField name="local.port" label="Port" zodNumber={AiLocalProviderConfig.shape.port} />
+              </Fragment>
+            )}
+          </Fragment>
+        )}
       </SettingsGroup>
 
       <SettingsGroup title="What to produce" description="Each of these is a separate output and can be turned off on its own.">

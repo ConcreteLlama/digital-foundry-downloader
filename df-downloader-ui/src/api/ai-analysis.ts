@@ -1,3 +1,4 @@
+import { AiProviderId } from "df-downloader-common/config/ai-analysis-config";
 import {
   AiAnalysisCostEstimate,
   AiAnalysisIndexEntry,
@@ -72,8 +73,10 @@ export const startAiAnalysis = async (
   contentKey: string,
   force = false,
   /** Which sources this run may read. Omitted uses the configured defaults. */
-  sources?: AiAnalysisSourceSelection
-) => postJson(`${API_URL}/ai-analysis/analyse`, { contentKey, force, sources });
+  sources?: AiAnalysisSourceSelection,
+  /** Which engine runs it. Omitted uses the configured default. */
+  provider?: AiProviderId
+) => postJson(`${API_URL}/ai-analysis/analyse`, { contentKey, force, sources, provider });
 
 export const decideAiTag = async (contentKey: string, tag: string, status: AiTagStatus): Promise<AiAnalysisResult> => {
   const response = await postJson(`${API_URL}/ai-analysis/tag-decision`, { contentKey, tag, status });

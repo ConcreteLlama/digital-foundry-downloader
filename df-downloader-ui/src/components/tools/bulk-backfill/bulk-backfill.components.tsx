@@ -1,3 +1,5 @@
+import { AiAnalysisConfig, AiProviderId } from "df-downloader-common/config/ai-analysis-config";
+import { AnalysisProviderPicker } from "../../df-content/ai-analysis/analysis-provider-picker.component.tsx";
 import { AnalysisSourcePicker } from "../../df-content/ai-analysis/analysis-source-picker.component.tsx";
 import {
   Alert,
@@ -468,6 +470,10 @@ export type BackfillConfirmDialogProps = {
    */
   sources?: AiAnalysisSourceSelection;
   onSourcesChange?: (sources: AiAnalysisSourceSelection) => void;
+  /** Which engine runs the batch. Undefined means the configured default. */
+  provider?: AiProviderId;
+  onProviderChange?: (provider: AiProviderId) => void;
+  aiConfig?: AiAnalysisConfig;
   /** Metadata only - what to gather before rewriting. */
   metadataOptions?: MetadataBackfillOptions;
   onMetadataOptionsChange?: (options: MetadataBackfillOptions) => void;
@@ -497,6 +503,9 @@ export const BackfillConfirmDialog = ({
   willSkip,
   sources,
   onSourcesChange,
+  provider,
+  onProviderChange,
+  aiConfig,
   metadataOptions,
   onMetadataOptionsChange,
   onCancel,
@@ -511,6 +520,10 @@ export const BackfillConfirmDialog = ({
         <Stack spacing={1.5}>
           {target === "metadata" && metadataOptions && onMetadataOptionsChange && (
             <MetadataOptionsPicker value={metadataOptions} onChange={onMetadataOptionsChange} />
+          )}
+
+          {target === "ai_analysis" && onProviderChange && (
+            <AnalysisProviderPicker value={provider} onChange={onProviderChange} config={aiConfig} />
           )}
 
           {target === "ai_analysis" && sources && onSourcesChange && (
