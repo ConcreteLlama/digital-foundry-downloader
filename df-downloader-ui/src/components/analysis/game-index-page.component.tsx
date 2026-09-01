@@ -15,6 +15,7 @@ import {
   TextField,
   Tooltip,
   Typography,
+  alpha,
 } from "@mui/material";
 import { AiContentTypeLabels, GameGroup, GameIndexResponse, normaliseName } from "df-downloader-common";
 import { useEffect, useMemo, useState } from "react";
@@ -54,21 +55,25 @@ const GroupRow = ({ group, onOpen }: { group: GameGroup; onOpen: (contentKey: st
       disableGutters
       variant="outlined"
       defaultExpanded={group.items.length > 1}
-      sx={{
+      sx={(theme) => ({
         borderRadius: 1.5,
         overflow: "hidden",
+        // Matches AnalysisCard - see the reasoning there. The band was
+        // background.default, which is darker than the surface it sits on and
+        // so read as a recess rather than as the start of a new item.
+        borderLeft: `3px solid ${alpha(theme.palette.primary.main, 0.85)}`,
         "&:before": { display: "none" },
-      }}
+      })}
     >
       <AccordionSummary
         expandIcon={<ExpandMoreIcon />}
-        sx={{
-          backgroundColor: "background.default",
-          "&.Mui-expanded": { borderBottom: 1, borderColor: "divider" },
-        }}
+        sx={(theme) => ({
+          backgroundColor: alpha(theme.palette.primary.main, 0.09),
+          borderBottom: `1px solid ${alpha(theme.palette.primary.main, 0.22)}`,
+        })}
       >
         <Stack direction="row" spacing={0.75} alignItems="center" flexWrap="wrap" useFlexGap sx={{ width: "100%" }}>
-          <Typography variant="body2" sx={{ fontWeight: 600 }}>
+          <Typography variant="body2" sx={{ fontWeight: 600, color: "primary.main" }}>
             {group.name}
           </Typography>
           <Chip

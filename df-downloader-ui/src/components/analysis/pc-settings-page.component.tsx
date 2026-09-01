@@ -48,9 +48,14 @@ const ReviewCard = ({ row }: { row: PcSettingsRow }) => (
   <AnalysisCard
     header={
       <Stack direction="row" spacing={1} alignItems="baseline" flexWrap="wrap" useFlexGap>
-        <Typography sx={{ fontWeight: 600 }}>{row.game || row.title}</Typography>
+        <Typography sx={{ fontWeight: 600, color: "primary.main" }}>{row.game || row.title}</Typography>
         {row.engine && (
-          <Chip size="small" variant="outlined" label={row.engine} sx={{ height: 20, fontSize: "0.65rem" }} />
+          <Chip
+            size="small"
+            variant="outlined"
+            label={row.engine}
+            sx={{ height: 20, fontSize: "0.65rem", color: "secondary.main", borderColor: "secondary.main" }}
+          />
         )}
         <Box sx={{ flex: "1 1 auto" }} />
         <Typography variant="caption" sx={{ color: "text.disabled" }}>
@@ -193,7 +198,9 @@ export const PcSettingsPage = () => {
   return (
     <Stack spacing={2} sx={{ py: 1 }}>
       <Box>
-        <Typography variant="h6">PC settings</Typography>
+        <Typography variant="h6" sx={{ color: "primary.main" }}>
+          PC settings
+        </Typography>
         <Typography variant="body2" sx={{ color: "text.secondary" }}>
           Recommended settings from every analysed PC review · {data.reviewCount}{" "}
           {data.reviewCount === 1 ? "review" : "reviews"} from {data.analysedCount} analysed items

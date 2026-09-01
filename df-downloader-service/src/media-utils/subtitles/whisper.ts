@@ -8,6 +8,7 @@ import { configDir, configService } from "../../config/config.js";
 import { fileToAudioFile } from "../audio.js";
 import { runCommand } from "../../utils/command.js";
 import { fileExists } from "../../utils/file-utils.js";
+import { probeMediaDurationSeconds } from "../../utils/media-metadata.js";
 import { parseSrt } from "./srt-utils.js";
 import { GeneratedSubtitleInfo, SubtitleGenerator, SubtitleProgressReporter } from "./subtitles.js";
 
@@ -38,7 +39,29 @@ const NON_SPEECH_MARKERS = /^\[(?:BLANK_AUDIO|SILENCE|NO SPEECH|INAUDIBLE)\]$/i;
  * asked, and it's the only way to tell how far into a transcription it is - a
  * two-hour episode otherwise sits silent for tens of minutes.
  */
+/**
+ * A transcribed segment as whisper.cpp prints it while it works, e.g.
+ * "[00:04:12.340 --> 00:04:15.880]   and that is the difference".
+ *
+ * The end timestamp is how far into the audio it has got, which is the only
+ * continuous progress signal available. --print-progress fires once per whole
+ * percent of work but whisper.cpp emits it in 5% steps, so on a two-hour
+ * episode the bar sits still for minutes at a time and looks hung. These
+ * arrive every few seconds of audio instead.
+ */
+const SEGMENT_LINE = /\[(\d{2}):(\d{2}):(\d{2})\.\d{3}\s*-->\s*(\d{2}):(\d{2}):(\d{2})\.(\d{3})\]/g;
+
 const PROGRESS_LINE = /progress\s*=\s*(\d+)\s*%/g;
+
+/** Seconds into the audio, from a segment line's end timestamp. */
+const segmentEndSeconds = (chunk: string): number | undefined => {
+  let seconds: number | undefined;
+  for (const match of chunk.matchAll(SEGMENT_LINE)) {
+    const [, , , , hours, minutes, secs, millis] = match;
+    seconds = Number(hours) * 3600 + Number(minutes) * 60 + Number(secs) + Number(millis) / 1000;
+  }
+  return seconds;
+};
 
 const escapeRegExp = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
@@ -137,9 +160,14 @@ export class WhisperSubtitleGenerator implements SubtitleGenerator {
    * a real possibility (they're hundreds of MB, fetched on first use), and
    * the file's size makes that obvious at a glance.
    */
-  private async transcribe(args: string[], modelPath: string, onStderr: (chunk: string) => void) {
+  private async transcribe(
+    args: string[],
+    modelPath: string,
+    onStderr: (chunk: string) => void,
+    onStdout?: (chunk: string) => void
+  ) {
     try {
-      return await runCommand(this.binaryPath, args, undefined, { onStderr });
+      return await runCommand(this.binaryPath, args, undefined, { onStderr, onStdout });
     } catch (e) {
       const size = await fs.promises
         .stat(modelPath)
@@ -192,23 +220,52 @@ export class WhisperSubtitleGenerator implements SubtitleGenerator {
         `Transcribing ${filename} with Whisper (${this.config.model}, ${this.threads} threads) - this can take a while for long content`
       );
       const startedAt = Date.now();
+      /*
+       * Duration turns segment timestamps into a percentage. Probed from the
+       * source rather than assumed, and failure is not fatal: without it this
+       * falls back to whisper's own 5% steps, which is what it always did.
+       */
+      const durationSeconds = await probeMediaDurationSeconds(filename).catch(() => null);
       let lastPercent = -1;
-      await this.transcribe(args, modelPath, (chunk) => {
-        if (!onProgress) {
+      // Never let the bar go backwards. The two sources disagree by a few
+      // percent - whisper counts work done, segments count audio covered -
+      // and a bar that steps back reads as a fault.
+      const report = (percent: number) => {
+        const bounded = Math.max(0, Math.min(100, Math.round(percent)));
+        if (!onProgress || bounded <= lastPercent) {
           return;
         }
-        // A single chunk can carry several progress lines; only the most
-        // recent one is meaningful.
-        let percent: number | undefined;
-        for (const match of chunk.matchAll(PROGRESS_LINE)) {
-          percent = Number(match[1]);
+        lastPercent = bounded;
+        onProgress({ percent: bounded, detail: `${this.config.model}, ${this.threads} threads` });
+      };
+      await this.transcribe(
+        args,
+        modelPath,
+        (chunk) => {
+          // A single chunk can carry several progress lines; only the most
+          // recent one is meaningful.
+          let percent: number | undefined;
+          for (const match of chunk.matchAll(PROGRESS_LINE)) {
+            percent = Number(match[1]);
+          }
+          if (percent !== undefined) {
+            report(percent);
+          }
+        },
+        (chunk) => {
+          if (!durationSeconds) {
+            return;
+          }
+          const seconds = segmentEndSeconds(chunk);
+          if (seconds === undefined) {
+            return;
+          }
+          // Capped below 100: the run is finished when the process exits and
+          // the file exists, not when the last segment happens to land on the
+          // end of the audio.
+          report(Math.min(99, (seconds / durationSeconds) * 100));
         }
-        if (percent === undefined || percent === lastPercent) {
-          return;
-        }
-        lastPercent = percent;
-        onProgress({ percent, detail: `${this.config.model}, ${this.threads} threads` });
-      });
+      );
       logger.log("info", `Transcribed ${filename} in ${Math.round((Date.now() - startedAt) / 1000)}s`);
       if (!(await fileExists(srtPath))) {
         throw new Error(`Whisper produced no subtitle output for ${filename}`);

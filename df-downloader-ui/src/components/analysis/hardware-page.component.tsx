@@ -20,9 +20,10 @@ import { conciseFormatDate } from "../../utils/date.ts";
 
 const ReviewCard = ({ row }: { row: HardwareRow }) => (
   <AnalysisCard
+    accent="secondary.main"
     header={
       <Stack direction="row" spacing={1} alignItems="baseline" flexWrap="wrap" useFlexGap>
-        <Typography sx={{ fontWeight: 600 }}>{row.title}</Typography>
+        <Typography sx={{ fontWeight: 600, color: "secondary.main" }}>{row.title}</Typography>
         <Box sx={{ flex: "1 1 auto" }} />
         <Typography variant="caption" sx={{ color: "text.disabled" }}>
           {conciseFormatDate(row.publishedDate)}
@@ -40,9 +41,12 @@ const ReviewCard = ({ row }: { row: HardwareRow }) => (
                 {product.name}
               </Typography>
               {product.productClass && (
-                <Typography variant="caption" sx={{ color: "text.disabled" }}>
-                  {product.productClass}
-                </Typography>
+                <Chip
+                  size="small"
+                  variant="outlined"
+                  label={product.productClass}
+                  sx={{ height: 18, fontSize: "0.62rem", color: "secondary.main", borderColor: "secondary.main" }}
+                />
               )}
             </Stack>
             {product.verdict && (
@@ -136,7 +140,9 @@ export const HardwarePage = () => {
   return (
     <Stack spacing={2} sx={{ py: 1 }}>
       <Box>
-        <Typography variant="h6">Hardware</Typography>
+        <Typography variant="h6" sx={{ color: "secondary.main" }}>
+          Hardware
+        </Typography>
         <Typography variant="body2" sx={{ color: "text.secondary" }}>
           Graphics cards, CPUs, handhelds and displays · {data.reviewCount}{" "}
           {data.reviewCount === 1 ? "review" : "reviews"} from {data.analysedCount} analysed items

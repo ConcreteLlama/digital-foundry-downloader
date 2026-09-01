@@ -16,6 +16,7 @@ import {
   TextField,
   Tooltip,
   Typography,
+  alpha,
 } from "@mui/material";
 import { PlatformComparisonResponse, PlatformComparisonRow, PlatformMode, normaliseName } from "df-downloader-common";
 import { useEffect, useMemo, useState } from "react";
@@ -113,13 +114,29 @@ const ComparisonRow = ({
   platforms: string[];
   onOpen: (contentKey: string) => void;
 }) => (
+  /*
+   * Rows here are tall - several modes per platform across several columns -
+   * so a single hairline between them is not enough to tell where one game's
+   * row ends and the next begins, especially when scanning across columns.
+   * A heavier rule plus a tinted first cell gives the eye a left edge to
+   * track along, which is the same job the accent stripe does on the card
+   * lists.
+   */
   <TableRow
     hover
     onClick={() => onOpen(row.contentKey)}
-    sx={{ cursor: "pointer", verticalAlign: "top" }}
+    sx={(theme) => ({
+      cursor: "pointer",
+      verticalAlign: "top",
+      "& > td": { borderBottom: `2px solid ${theme.palette.divider}` },
+      "& > td:first-of-type": {
+        borderLeft: `3px solid ${alpha(theme.palette.primary.main, 0.55)}`,
+        backgroundColor: alpha(theme.palette.primary.main, 0.04),
+      },
+    })}
   >
     <TableCell sx={{ minWidth: 220 }}>
-      <Typography variant="body2" sx={{ fontWeight: 600 }}>
+      <Typography variant="body2" sx={{ fontWeight: 600, color: "primary.main" }}>
         {row.game || row.title}
       </Typography>
       <Typography variant="caption" sx={{ color: "text.disabled", display: "block" }}>

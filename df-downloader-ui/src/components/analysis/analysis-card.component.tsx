@@ -1,4 +1,4 @@
-import { Box, Paper } from "@mui/material";
+import { Box, Paper, alpha } from "@mui/material";
 import { ReactNode } from "react";
 
 /**
@@ -6,36 +6,54 @@ import { ReactNode } from "react";
  *
  * These pages are lists of separate things - a game, a review, a piece of
  * hardware - and read as one continuous document without a strong enough
- * break between them. An outlined box alone is not enough: stacked outlines
- * of the same weight, a card's worth of text apart, look like sections of one
- * item rather than a list of many.
+ * break between them.
  *
- * The cue that does the work is the header band. A filled strip at the top of
- * each card gives every item an unmistakable starting edge while scrolling,
- * which a hairline border between two dark surfaces does not. The gap between
- * cards is deliberately larger than the padding inside them, so proximity
- * groups each card's own content rather than pulling neighbours together.
+ * The first attempt at this used a header band filled with `background.default`,
+ * which is *darker* than the card surface it sits on (#07090c against #0d1116).
+ * That reads as a recess rather than a header, and at that contrast it barely
+ * reads at all - so the list still looked like one long item. Three cues do
+ * the work instead, and they are cheap:
+ *
+ * - a left accent stripe, which is the strongest "new item starts here" signal
+ *   available and the only one that survives being scrolled past quickly;
+ * - a header band tinted with the accent rather than with a flat grey, so it
+ *   is lighter than the surface and reads as a header;
+ * - a gap between cards wider than any padding inside them, so proximity
+ *   groups each card's own content instead of pulling neighbours together.
+ *
+ * The accent defaults to the palette's primary. Both accents it can be given
+ * are the deliberately non-semantic ones - the state colours (ok/warn/err)
+ * stay reserved for actually encoding state, so nothing here can be mistaken
+ * for a warning.
  */
-export const AnalysisCard = ({ header, children }: { header: ReactNode; children?: ReactNode }) => (
+export const AnalysisCard = ({
+  header,
+  children,
+  accent = "primary.main",
+}: {
+  header: ReactNode;
+  children?: ReactNode;
+  /** A non-semantic palette accent - "primary.main" or "secondary.main". */
+  accent?: "primary.main" | "secondary.main";
+}) => (
   <Paper
     variant="outlined"
-    sx={{
-      overflow: "hidden",
-      borderRadius: 1.5,
-      // Lifts the card off the page background so the edge reads even where
-      // the border falls between two similar darks.
-      backgroundColor: "background.paper",
+    sx={(theme) => {
+      const accentColor =
+        accent === "secondary.main" ? theme.palette.secondary.main : theme.palette.primary.main;
+      return {
+        overflow: "hidden",
+        borderRadius: 1.5,
+        backgroundColor: "background.paper",
+        borderLeft: `3px solid ${alpha(accentColor, 0.85)}`,
+        "& > .analysis-card-header": {
+          backgroundColor: alpha(accentColor, 0.09),
+          borderBottom: `1px solid ${alpha(accentColor, 0.22)}`,
+        },
+      };
     }}
   >
-    <Box
-      sx={{
-        px: 1.5,
-        py: 1,
-        backgroundColor: "background.default",
-        borderBottom: 1,
-        borderColor: "divider",
-      }}
-    >
+    <Box className="analysis-card-header" sx={{ px: 1.5, py: 1 }}>
       {header}
     </Box>
     {children != null && <Box sx={{ px: 1.5, py: 1.25 }}>{children}</Box>}
