@@ -94,8 +94,26 @@ export const buildSystemPrompt = (flags: PromptFlags): string => {
   return sections.join("\n\n");
 };
 
+/*
+ * The form guidance below exists because of a measured difference, not a
+ * stylistic preference.
+ *
+ * This instruction was written against Claude, which returns library tags
+ * unprompted - "PC performance", "CPU bottleneck". Local models given the same
+ * words return keywords lifted from the title instead - "pc", "cpu", "halo" -
+ * and happily emit both "halo" and "halo campaign evolved" as separate tags.
+ * Bare keywords are much worse for the job tags actually do here, where they
+ * drive filtering and auto-download exclusion rules: "pc" matches nearly
+ * everything and distinguishes nothing.
+ *
+ * So what was implicit is now stated. Naming the failure directly costs Claude
+ * nothing - it already does this - and is what a smaller model needs to be
+ * told.
+ */
 const buildTaggingInstruction = (config: AiAnalysisConfig): string => {
-  const base = `Suggest tags describing what the video covers - games, platforms, hardware, technologies and format. Prefer a small number of tags that would genuinely be useful for filtering a library later over an exhaustive list. Give each a confidence between 0 and 1, and be honest with it: judging a video from its title alone warrants lower confidence than reading its transcript.`;
+  const base = `Suggest tags describing what the video covers - games, platforms, hardware, technologies and format. Prefer a small number of tags that would genuinely be useful for filtering a library later over an exhaustive list. Give each a confidence between 0 and 1, and be honest with it: judging a video from its title alone warrants lower confidence than reading its transcript.
+
+Each tag should name the subject as a library would file it, not repeat a word from the title. Write "PC performance" rather than "pc", "CPU bottleneck" rather than "cpu", "ray tracing" rather than "rt". Give a game its full released name. Never return two tags where one contains the other - "Halo" alongside "Halo: Campaign Evolved" is one tag, not two - and never return a tag that is only a platform abbreviation on its own.`;
   const addition = config.promptAdditions?.tagging?.trim();
   return addition ? `${base}\n\nThe user's own tagging conventions, which your suggestions should match:\n${addition}` : base;
 };

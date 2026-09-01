@@ -1,4 +1,5 @@
-import { Alert, Divider, FormHelperText, Stack, Typography } from "@mui/material";
+import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
+import { Alert, Box, Collapse, Divider, FormHelperText, IconButton, Stack, Typography } from "@mui/material";
 import {
   AiAnalysisConfig,
   AiAnalysisEffort,
@@ -12,7 +13,7 @@ import {
   AiTaggingConfig,
   AutomaticAiAnalysisMode,
 } from "df-downloader-common/config/ai-analysis-config";
-import { Fragment } from "react";
+import { Fragment, useState } from "react";
 import { useFormContext, useWatch } from "react-hook-form";
 import { SelectField } from "../general/select-field";
 import { ZodCheckboxField } from "../zod-fields/zod-checkbox-field.component";
@@ -47,6 +48,60 @@ const SettingsGroup = ({
   </Stack>
 );
 
+/**
+ * One engine's own settings, boxed and collapsible.
+ *
+ * Follows the subtitles form's service cards: with two engines' settings run
+ * together there was nothing to show where one ended and the other began, and
+ * an API key sitting under a heading called "General" implied it applied to
+ * both. Boxing them says what belongs to what.
+ *
+ * Collapsible because most people set one up and never look at the other
+ * again, and the one they are not using should not be several fields of noise
+ * between them and the settings they came for. Starts open when the engine is
+ * actually in use, which is the one you are most likely to have come to change.
+ */
+const EngineCard = ({
+  title,
+  status,
+  description,
+  defaultExpanded,
+  children,
+}: {
+  title: string;
+  /** Short state, shown next to the title so it reads without expanding. */
+  status: string;
+  description: string;
+  defaultExpanded?: boolean;
+  children: React.ReactNode;
+}) => {
+  const [expanded, setExpanded] = useState(Boolean(defaultExpanded));
+  return (
+    <Stack sx={{ border: 1, borderColor: "divider", borderRadius: 1, p: 2 }}>
+      <Box
+        onClick={() => setExpanded((open) => !open)}
+        sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", cursor: "pointer" }}
+      >
+        <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
+          {title} <Typography component="span" variant="body2" sx={{ color: "text.disabled" }}>({status})</Typography>
+        </Typography>
+        <IconButton size="small" aria-label={expanded ? `Collapse ${title}` : `Expand ${title}`}>
+          <ExpandMoreIcon
+            fontSize="small"
+            sx={{ transform: expanded ? "rotate(180deg)" : "none", transition: "transform 150ms ease" }}
+          />
+        </IconButton>
+      </Box>
+      <FormHelperText sx={{ mx: 0 }}>{description}</FormHelperText>
+      <Collapse in={expanded} unmountOnExit>
+        <Stack spacing={2} sx={{ pt: 2 }}>
+          {children}
+        </Stack>
+      </Collapse>
+    </Stack>
+  );
+};
+
 const ProviderOptions = [
   { id: "anthropic", label: "Claude (Anthropic API)" },
   { id: "local", label: "On this machine" },
@@ -79,37 +134,16 @@ const AiAnalysisSettings = () => {
   // Blank means this app runs the server itself, which is the case the extra
   // controls below apply to - they are meaningless against someone else's.
   const usingOwnServer = !useWatch({ control, name: "local.serverUrl" })?.trim();
+  const hasApiKey = Boolean(useWatch({ control, name: "apiKey" })?.trim());
   const capabilities = AiAnalysisModelCapabilities[model as AiAnalysisModel] ?? AiAnalysisModelCapabilities["claude-haiku-4-5"];
 
   return (
     <Fragment>
       <SettingsGroup
         title="General"
-        description="Analysis reads a video's transcript and writes a summary, a verdict and structured data for the content types that support it. Every run costs a small amount against your Anthropic account."
+        description="Analysis reads a video's transcript and writes a summary, a verdict and structured data for the content types that support it. Where that work happens is set up under Engines below."
       >
         <ZodCheckboxField name="enabled" label="Enable AI analysis" zodBoolean={AiAnalysisConfig.shape.enabled} />
-        <ZodTextField
-          name="apiKey"
-          label="Anthropic API Key"
-          isPassword={true}
-          zodString={AiAnalysisConfig.shape.apiKey}
-        />
-        <SelectField name="model" label="Model" opts={ModelOptions} helperText={getZodDescription(AiAnalysisConfig.shape.model)} />
-        {capabilities.supportsEffort ? (
-          <SelectField
-            name="effort"
-            label="Thinking effort"
-            opts={EffortOptions}
-            helperText="How long the model may think before answering. Higher is more careful and more expensive - thinking time is billed like any other output."
-          />
-        ) : (
-          // Stated rather than silently hidden: a control that vanishes with
-          // no explanation reads as a bug, and someone who set an effort
-          // level on another model deserves to know why it no longer applies.
-          <FormHelperText sx={{ mx: 0 }}>
-            Thinking effort is not available on this model, so it is not sent. Choose Sonnet, Opus or Fable to control it.
-          </FormHelperText>
-        )}
         <SelectField
           name="automaticGeneration"
           label="Analyse automatically"
@@ -128,8 +162,8 @@ const AiAnalysisSettings = () => {
       </SettingsGroup>
 
       <SettingsGroup
-        title="Where to analyse"
-        description="Analysis can run through the Anthropic API or on this machine. Set up both and you can pick per run."
+        title="Engines"
+        description="Where analysis actually happens. Each is set up independently, and the settings inside one belong to that engine alone. Set up both and you can pick per run."
       >
         <SelectField
           name="defaultProvider"
@@ -137,59 +171,95 @@ const AiAnalysisSettings = () => {
           opts={ProviderOptions}
           helperText={getZodDescription(AiAnalysisConfig.shape.defaultProvider)}
         />
-        <ZodCheckboxField
-          name="local.enabled"
-          label="Analyse on this machine"
-          zodBoolean={AiLocalProviderConfig.shape.enabled}
-        />
-        {localEnabled && (
-          <Fragment>
-            {/* Said before anything is downloaded, because the trade is the
-                whole decision here and the download is several gigabytes. */}
-            <Alert severity="info" variant="outlined">
-              Running locally costs nothing and sends nothing off the machine, but it is far slower than the API -
-              minutes per video rather than seconds, and longer again on a low-power box. The model is downloaded the
-              first time it runs and kept afterwards. Analysis never runs at the same time as subtitle transcription,
-              since both need the whole machine.
-            </Alert>
+
+        <EngineCard
+          title="Claude (Anthropic API)"
+          status={hasApiKey ? "Ready" : "Needs an API key"}
+          defaultExpanded={hasApiKey}
+          description="Analysis through the Anthropic API. The most thorough results and by far the fastest, at a few pence a video."
+        >
+          <ZodTextField
+            name="apiKey"
+            label="Anthropic API Key"
+            isPassword={true}
+            zodString={AiAnalysisConfig.shape.apiKey}
+          />
+          <SelectField
+            name="model"
+            label="Model"
+            opts={ModelOptions}
+            helperText={getZodDescription(AiAnalysisConfig.shape.model)}
+          />
+          {capabilities.supportsEffort ? (
             <SelectField
-              name="local.model"
-              label="Local model"
-              opts={LocalModelOptions}
-              helperText={AiLocalModels[localModel]?.notes}
+              name="effort"
+              label="Thinking effort"
+              opts={EffortOptions}
+              helperText="How long the model may think before answering. Higher is more careful and more expensive - thinking time is billed like any other output."
             />
-            <ZodTextField
-              name="local.serverUrl"
-              label="Use an existing server"
-              zodString={AiLocalProviderConfig.shape.serverUrl}
-            />
-            {usingOwnServer && (
-              <Fragment>
-                <ZodNumberField
-                  name="local.contextSize"
-                  label="Context size (tokens)"
-                  zodNumber={AiLocalProviderConfig.shape.contextSize}
-                />
-                <ZodNumberField
-                  name="local.threads"
-                  label="CPU threads"
-                  zodNumber={AiLocalProviderConfig.shape.threads}
-                />
-                <ZodNumberField
-                  name="local.gpuLayers"
-                  label="Layers to offload to a GPU"
-                  zodNumber={AiLocalProviderConfig.shape.gpuLayers}
-                />
-                <ZodNumberField
-                  name="local.idleShutdownSeconds"
-                  label="Unload the model after (seconds idle)"
-                  zodNumber={AiLocalProviderConfig.shape.idleShutdownSeconds}
-                />
-                <ZodNumberField name="local.port" label="Port" zodNumber={AiLocalProviderConfig.shape.port} />
-              </Fragment>
-            )}
-          </Fragment>
-        )}
+          ) : (
+            // Stated rather than silently hidden: a control that vanishes with
+            // no explanation reads as a bug, and someone who set an effort
+            // level on another model deserves to know why it no longer applies.
+            <FormHelperText sx={{ mx: 0 }}>
+              Thinking effort is not available on this model, so it is not sent. Choose Sonnet, Opus or Fable to control
+              it.
+            </FormHelperText>
+          )}
+        </EngineCard>
+
+        <EngineCard
+          title="On this machine"
+          status={localEnabled ? "Enabled" : "Disabled"}
+          defaultExpanded={localEnabled}
+          description="Analysis run locally. Costs nothing and sends nothing off the machine, but it is far slower than the API - minutes per video, longer on a low-power box. The model is downloaded the first time it runs and kept afterwards, and analysis never runs at the same time as subtitle transcription since both need the whole machine."
+        >
+          <ZodCheckboxField
+            name="local.enabled"
+            label="Analyse on this machine"
+            zodBoolean={AiLocalProviderConfig.shape.enabled}
+          />
+          {localEnabled && (
+            <Fragment>
+              <SelectField
+                name="local.model"
+                label="Local model"
+                opts={LocalModelOptions}
+                helperText={AiLocalModels[localModel]?.notes}
+              />
+              <ZodTextField
+                name="local.serverUrl"
+                label="Use an existing server"
+                zodString={AiLocalProviderConfig.shape.serverUrl}
+              />
+              {usingOwnServer && (
+                <Fragment>
+                  <ZodNumberField
+                    name="local.contextSize"
+                    label="Context size (tokens)"
+                    zodNumber={AiLocalProviderConfig.shape.contextSize}
+                  />
+                  <ZodNumberField
+                    name="local.threads"
+                    label="CPU threads"
+                    zodNumber={AiLocalProviderConfig.shape.threads}
+                  />
+                  <ZodNumberField
+                    name="local.gpuLayers"
+                    label="Layers to offload to a GPU"
+                    zodNumber={AiLocalProviderConfig.shape.gpuLayers}
+                  />
+                  <ZodNumberField
+                    name="local.idleShutdownSeconds"
+                    label="Unload the model after (seconds idle)"
+                    zodNumber={AiLocalProviderConfig.shape.idleShutdownSeconds}
+                  />
+                  <ZodNumberField name="local.port" label="Port" zodNumber={AiLocalProviderConfig.shape.port} />
+                </Fragment>
+              )}
+            </Fragment>
+          )}
+        </EngineCard>
       </SettingsGroup>
 
       <SettingsGroup title="What to produce" description="Each of these is a separate output and can be turned off on its own.">

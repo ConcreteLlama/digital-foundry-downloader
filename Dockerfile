@@ -54,6 +54,46 @@ RUN git clone --depth 1 --branch ${WHISPER_CPP_REF} https://github.com/ggml-org/
     && cp -a /tmp/whisper.cpp/build/bin/whisper-cli /tmp/whisper.cpp/build/bin/*.so* /opt/whisper/ \
     && rm -rf /tmp/whisper.cpp
 
+# llama.cpp powers local AI content analysis - summaries, tags and the
+# structured breakdown produced on this machine rather than through a paid API.
+# Same upstream project and the same ggml build system as whisper.cpp above, so
+# this stage is deliberately near-identical; see that one for why each flag is
+# set, since the reasoning is the same.
+#
+# Pinned for the same reason, and bumped intentionally.
+FROM --platform=linux/amd64 node:24 AS llama-builder
+ARG LLAMA_CPP_REF=b10733
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends cmake libcurl4-openssl-dev \
+    && rm -rf /var/lib/apt/lists/*
+# The one meaningful difference from the whisper stage: RPATH instead of an
+# ldconfig entry.
+#
+# Both projects build their own libggml with the same soname. Putting both
+# directories on the global linker path would let whichever ldconfig happened
+# to cache first satisfy *both* binaries, and the two are not built from the
+# same ggml revision - so one of them would be resolving against a library it
+# was never linked against. Baking the search path into llama-server instead
+# means it always finds its own, and whisper-cli is left exactly as it was.
+RUN git clone --depth 1 --branch ${LLAMA_CPP_REF} https://github.com/ggml-org/llama.cpp.git /tmp/llama.cpp \
+    && cmake -S /tmp/llama.cpp -B /tmp/llama.cpp/build \
+        -DCMAKE_BUILD_TYPE=Release \
+        -DBUILD_SHARED_LIBS=ON \
+        -DLLAMA_BUILD_TESTS=OFF \
+        -DLLAMA_BUILD_EXAMPLES=OFF \
+        -DLLAMA_BUILD_SERVER=ON \
+        -DLLAMA_CURL=OFF \
+        -DGGML_NATIVE=OFF \
+        -DGGML_BACKEND_DL=ON \
+        -DGGML_CPU_ALL_VARIANTS=ON \
+        -DGGML_BACKEND_DIR=/usr/local/lib/llama \
+        -DCMAKE_INSTALL_RPATH=/usr/local/lib/llama \
+        -DCMAKE_BUILD_WITH_INSTALL_RPATH=ON \
+    && cmake --build /tmp/llama.cpp/build --config Release -j "$(nproc)" --target llama-server \
+    && mkdir -p /opt/llama \
+    && cp -a /tmp/llama.cpp/build/bin/llama-server /tmp/llama.cpp/build/bin/*.so* /opt/llama/ \
+    && rm -rf /tmp/llama.cpp
+
 FROM --platform=linux/amd64 node:24
 
 # Create app directory
@@ -68,6 +108,16 @@ COPY --from=whisper-builder /opt/whisper/*.so* /usr/local/lib/whisper/
 RUN echo /usr/local/lib/whisper > /etc/ld.so.conf.d/whisper.conf && ldconfig
 # Picked up by WhisperSubtitleGenerator when no explicit binaryPath is set.
 ENV WHISPER_BINARY=/usr/local/bin/whisper-cli
+
+COPY --from=llama-builder /opt/llama/llama-server /usr/local/bin/llama-server
+# Deliberately not added to /etc/ld.so.conf.d - llama-server carries an RPATH
+# pointing here, so it resolves its own ggml without putting a second copy on
+# the global path for whisper-cli to trip over. See the builder stage.
+COPY --from=llama-builder /opt/llama/*.so* /usr/local/lib/llama/
+# Picked up by the local analysis provider when no explicit binaryPath is set.
+# The model itself is not shipped - it is several gigabytes and is downloaded
+# on first use, the same as Whisper models.
+ENV LLAMA_SERVER_BINARY=/usr/local/bin/llama-server
 
 ENV CONFIG_DIR=/config
 ENV DB_DIR=/db
