@@ -266,3 +266,44 @@ export const WireQaSegments = z.object({
   segments: z.array(WireQaSegment),
 });
 export type WireQaSegments = z.infer<typeof WireQaSegments>;
+
+/**
+ * The two halves of the overview, for engines that do better with fewer jobs
+ * per call.
+ *
+ * Measured back-to-back on the same six items, same server, same prompts.
+ * Asked to classify, summarise and tag in one call, a local model left the
+ * conclusion empty on four of six and wrote 509 characters of summary for a
+ * Q+A - the most multi-topic content there is. Split across two calls: 1,484
+ * characters and a 681-character conclusion, with the summary longer on five
+ * of the six. Classification was what crowded the others out.
+ *
+ * Replicated across three runs: the split call produced a conclusion in 17
+ * of 18 item-observations, the combined call in 5 of 12. Local output varies
+ * noticeably run to run at temperature 0, so treat any single figure here as
+ * indicative rather than exact - the direction replicates, the magnitudes
+ * move.
+ *
+ * Games stay with the summary rather than the classification, deliberately.
+ * Moving them to a transcript-free call produced a confidently wrong answer -
+ * "Halo: Combat Evolved" for a video about Halo: Campaign Evolved, a title
+ * that appears nowhere in any source. Identifying a work needs corroboration;
+ * classifying one does not.
+ */
+
+/** Phase one: what kind of video this is. Needs no transcript. */
+export const WireClassification = WireOverview.pick({
+  contentType: true,
+  contentTypeConfidence: true,
+});
+export type WireClassification = z.infer<typeof WireClassification>;
+
+/** Phase two: everything that genuinely needs the transcript. */
+export const WireSummary = WireOverview.pick({
+  primaryGame: true,
+  games: true,
+  summary: true,
+  conclusion: true,
+  tags: true,
+});
+export type WireSummary = z.infer<typeof WireSummary>;

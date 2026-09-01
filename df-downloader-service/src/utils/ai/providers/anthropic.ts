@@ -23,6 +23,8 @@ export const makeAnthropicProvider = (config: AiAnalysisConfig): AiProvider => {
   return {
     id: "anthropic",
     model: config.model,
+    // Handles all three jobs in one call; splitting would only add a round trip.
+    separatesClassification: false,
     callStructured: <T extends z.ZodType>(schema: T, system: string, content: string, instruction: string) =>
       callStructured(client, config, schema, system, content, instruction),
     countInputTokens: (system: string, content: string, instruction: string) =>

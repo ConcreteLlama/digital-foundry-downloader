@@ -24,6 +24,13 @@ Downloads also play in the app itself now. Press the still at the top of a downl
   - You choose the model - Haiku, Sonnet, Opus or Fable. Haiku is the default and the recommendation: in testing it extracted settings tables and per-platform numbers correctly at around a tenth of the cost of the larger models
   - See what a run will cost before starting it. The figure comes from a real token count rather than an estimate, and came within about 10% of actual in testing
   - Run it by hand per video, or automatically after each download. Automatic waits for subtitles to finish first, so it has a transcript to work from rather than quietly producing a thinner result
+- Or run it on your own machine instead, with no API key and nothing to pay
+  - Point it at a llama.cpp server you already run, or let the app run the model itself - the image ships with everything it needs, so choosing local does not mean setting a server up first
+  - Pick which engine analyses your content in Settings, and override it for a single video when you want to. Where only one is set up it just uses that one instead of asking every time
+  - Before a local run it tells you how long it is likely to take, measured from what your machine has actually done rather than a generic figure - the local answer to the cost estimate, since the thing being spent is time rather than money
+  - It will not fight subtitle generation for the machine. If Whisper is transcribing, an analysis waits its turn rather than both crawling and neither finishing
+  - The model is loaded when needed and released when it has been idle a while, so it is not sitting on memory between runs
+  - Worth knowing what you give up: locally the summaries are shorter and the write-up thinner than Haiku manages. It works out the content type and the game just as reliably, but it is less careful about quoting the video word for word, and the timestamps on findings are built from those quotes - so on hands-on previews and hardware reviews in particular, expect fewer findings you can click to jump to
 - Suggested tags, including for content you have not downloaded
   - Tagging is the one part that does not need a transcript - a title and description alone are enough to infer something useful, so it works across your whole library rather than only what you have downloaded and transcribed
   - Tags inferred from a transcript or an article are more specific and better founded than ones inferred from a title alone, and every tag records which it came from, shown next to it. A tag drawn from a title is marked, because it is a weaker claim and you may be filtering on it

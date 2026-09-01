@@ -32,6 +32,29 @@ export type AiProvider = {
    */
   readonly model: string;
 
+  /**
+   * Whether this engine wants classification as a call of its own.
+   *
+   * A per-engine answer because it was measured as one. Asked to classify,
+   * summarise and tag together, a local model wrote a 509-character summary
+   * and no conclusion on a Q+A; with classification moved out, 1,484 and a
+   * 681-character conclusion. Across six items the combined call left the
+   * conclusion empty four times; the split call filled it on all but one
+   * observation across three runs. A hosted model does both jobs at once
+   * perfectly well and would only pay for the extra round trip.
+   *
+   * Note this costs latency rather than saving it: the split produces more
+   * output, and output tokens dominate local generation time. The overview
+   * stage roughly doubled (3.3s to 5.9s on that Q+A). The classify call
+   * itself is nearly free - ~0.7s to emit about twenty tokens.
+   *
+   * The classify call goes without the transcript - across eight items and six
+   * content types both engines classified identically with and without one, at
+   * 75% fewer prompt tokens - so this costs a small call and buys a large
+   * improvement.
+   */
+  readonly separatesClassification: boolean;
+
   /** One structured-output call: prompt in, schema-validated object out. */
   callStructured<T extends z.ZodType>(
     schema: T,

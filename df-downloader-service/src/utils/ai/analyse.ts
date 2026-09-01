@@ -23,6 +23,8 @@ import {
   PromptFlags,
   buildExtractionInstruction,
   buildOverviewInstruction,
+  buildClassificationInstruction,
+  buildSummaryInstruction,
   buildSystemPrompt,
   buildTagOnlyContentBlock,
   buildTagOnlyInstruction,
@@ -35,6 +37,8 @@ import {
   WirePreview,
   WireContentType,
   WireOverview,
+  WireClassification,
+  WireSummary,
   WirePcReviewSettings,
   WireQaSegments,
   WireTagOnly,
@@ -666,11 +670,53 @@ export const analyseContent = async (config: AiAnalysisConfig, inputs: AnalysisI
       return tagOnlyResult;
     }
 
-    const { parsed: overview, usage: overviewUsage } = await provider.callStructured(
-          WireOverview, prepared.system, prepared.content, buildOverviewInstruction(config)
-    );
+    /*
+     * Two call plans, chosen by the engine - see AiProvider.separatesClassification.
+     *
+     * A hosted model classifies, summarises and tags in one call perfectly
+     * well. A local one, given all three at once, quietly drops most of the
+     * summary: on a Q+A it wrote 509 characters and no conclusion, against
+     * 1,484 and a 681-character conclusion when classification was taken
+     * away - and over six items the combined call left the conclusion empty
+     * four times where the split call left it empty once. So it gets a cheap
+     * transcript-free classify call first.
+     *
+     * This buys quality, not speed - it roughly doubles overview latency,
+     * because the extra prose costs more than the tiny classify call saves.
+     */
+    let overview: WireOverview;
+    let usage: AiAnalysisUsage;
 
-    let usage = overviewUsage;
+    if (provider.separatesClassification) {
+      const forClassify = await prepareAnalysis(config, {
+        ...inputs,
+        sources: { ...(inputs.sources ?? config.sources), transcript: false },
+      });
+      const classified = await provider.callStructured(
+        WireClassification,
+        forClassify.system,
+        forClassify.content,
+        buildClassificationInstruction()
+      );
+      const summarised = await provider.callStructured(
+        WireSummary,
+        prepared.system,
+        prepared.content,
+        buildSummaryInstruction(config)
+      );
+      overview = { ...classified.parsed, ...summarised.parsed };
+      usage = addUsage(classified.usage, summarised.usage);
+    } else {
+      const summarised = await provider.callStructured(
+        WireOverview,
+        prepared.system,
+        prepared.content,
+        buildOverviewInstruction(config)
+      );
+      overview = summarised.parsed;
+      usage = summarised.usage;
+    }
+
     let structuredData: AiStructuredData | undefined;
 
     if (config.features.structuredData && EXTRACTABLE_TYPES.includes(overview.contentType)) {

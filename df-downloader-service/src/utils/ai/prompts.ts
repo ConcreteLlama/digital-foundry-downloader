@@ -143,6 +143,46 @@ Each tag should name the subject as a library would file it, not repeat a word f
 };
 
 /** Task instruction for call one: classify, summarise, tag. */
+/**
+ * Phase one for an engine that separates classification: what kind of video
+ * this is, and nothing else.
+ *
+ * Sent without the transcript, which is not a shortcut - across eight items
+ * and six content types both engines classified identically with and without
+ * one, at 75% fewer prompt tokens. The title and description say what a video
+ * IS; the transcript says what it happened to dwell on, which for this
+ * question is closer to a distraction than evidence.
+ */
+export const buildClassificationInstruction = (): string =>
+  [
+    `Classify this video. Do not summarise it, name its games or suggest tags - those come in a later call, and you do not have the transcript here.`,
+    `Classify this video as exactly one of:\n${CONTENT_TYPES}`,
+  ].join("\n\n");
+
+/**
+ * Phase two: everything that genuinely needs the transcript.
+ *
+ * Games belong here rather than with the classification. Asked to name the
+ * game without a transcript, a model answered "Halo: Combat Evolved" for a
+ * video about Halo: Campaign Evolved - a title appearing nowhere in the
+ * title, article or transcript. Identifying a work needs corroboration;
+ * classifying one does not.
+ */
+export const buildSummaryInstruction = (config: AiAnalysisConfig): string => {
+  const sections = [GAME_IDENTIFICATION];
+  if (config.features.summary) {
+    sections.push(
+      `Write a detailed summary: name the specific numbers, settings, platforms and verdicts the video gives, rather than describing it in general terms.`,
+      `Write the conclusion - the overall verdict or takeaway - as a separate field from the summary, not folded into it. Set it to null if the video genuinely does not reach one.`
+    );
+  }
+  sections.push(
+    config.features.tagging.enabled ? buildTaggingInstruction(config) : `Return an empty tags array - tagging is switched off.`
+  );
+  sections.push(`Do not classify this video - that has already been decided.`);
+  return sections.join("\n\n");
+};
+
 export const buildOverviewInstruction = (config: AiAnalysisConfig): string => {
   const sections = [`Classify this video as exactly one of:\n${CONTENT_TYPES}`, GAME_IDENTIFICATION];
 
@@ -191,6 +231,7 @@ export const buildOverviewInstruction = (config: AiAnalysisConfig): string => {
  * The two things doing the work are "character for character" and the
  * explicit permission to answer null. Softening either invites a tidied-up
  * near-quote, which cannot be located and is therefore worse than nothing.
+
  */
 const QUOTE_INSTRUCTION = [
   `For each item also set "quote": a span of 8 to 20 words copied EXACTLY from the transcript, character for character, at the point where that item is stated. Do not paraphrase, correct, summarise or re-punctuate it - it has to appear in the transcript verbatim, because it gets located by searching for it.`,
