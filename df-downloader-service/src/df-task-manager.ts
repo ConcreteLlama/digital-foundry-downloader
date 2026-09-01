@@ -102,8 +102,14 @@ export class DfTaskManager {
   readonly updateDownloadMetadataTaskPipeline: UpdateDownloadMetadataTaskPipeline;
 
   readonly maintenanceOperationsTaskManager: TaskManager;
-  /** Held so a metadata backfill can queue a rewrite onto the same serialised queue. */
+  /** Held so a metadata backfill can queue a whole-file rewrite onto the same serialised queue. */
   private readonly mediaProcessingTaskManager: TaskManager;
+  /**
+   * Held so a metadata backfill can queue a *tag-only* rewrite here instead.
+   * A tag edit is ~1 MiB of I/O whatever the file's size, so it does not
+   * belong in the one-at-a-time queue that exists for whole-file work.
+   */
+  private readonly fileTaskManager: TaskManager;
   /**
    * Where bulk backfill runs live, deliberately NOT the maintenance
    * manager.
@@ -175,6 +181,7 @@ export class DfTaskManager {
       concurrentTasks: 5,
     });
     this.allTaskManagers.push(fileTaskManager);
+    this.fileTaskManager = fileTaskManager;
     // Whole-file work: an ffmpeg remux to embed metadata, and moving a
     // finished download into place. Both read and write multi-gigabyte files
     // end to end, so they're bound by the disk rather than the CPU and
@@ -645,11 +652,23 @@ export class DfTaskManager {
   /**
    * Rewrites one downloaded file's metadata from the selected sources.
    *
-   * Queued onto the media processing manager, which runs one at a time - the
-   * same queue that muxing and sidecar writes use, so a rewrite can never
-   * land on a file another job is already touching. That serialisation is the
-   * whole answer to interfering with other work: nothing here spawns its own
-   * ffmpeg outside the queue.
+   * Queued by how much work it actually is, which is not the same for every
+   * run:
+   *
+   * - A change that touches chapters or subtitles is a full remux - reading
+   *   and writing the whole file - so it goes on the media processing manager,
+   *   which runs one at a time. That is the same queue muxing and sidecar
+   *   writes use, so a rewrite can never land on a file another job is already
+   *   touching, and several multi-gigabyte rewrites never contend on a NAS
+   *   array.
+   * - A tag-only change rewrites about a megabyte of `moov` and never touches
+   *   the media data (see mp4-tags.ts). Serialising those behind whole-file
+   *   work would make a library-wide AI tag backfill take hours for no reason,
+   *   so they go on the file manager and its limit of 5 instead.
+   *
+   * Decided from the metadata actually built rather than from the options
+   * asked for: `fromYouTube` only yields chapters if the remote fetch found
+   * any, and without them the run really is tag-only.
    */
   private async runMetadataForContent(contentKey: string, options: MetadataBackfillOptions) {
     const db = serviceLocator.db;
@@ -661,9 +680,9 @@ export class DfTaskManager {
     if (!built) {
       throw new Error(`No downloaded file for ${entry.contentInfo.title}`);
     }
-    const task = this.mediaProcessingTaskManager.addTask(
-      InjectMetadataTask(built.downloadLocation, built.meta)
-    );
+    const tagOnly = !built.meta.subtitles && !built.meta.chapters?.length;
+    const taskManager = tagOnly ? this.fileTaskManager : this.mediaProcessingTaskManager;
+    const task = taskManager.addTask(InjectMetadataTask(built.downloadLocation, built.meta));
     this.trackTask(task);
     await task.task.awaitResult();
     return "metadata written";

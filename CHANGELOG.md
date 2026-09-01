@@ -93,6 +93,10 @@ Downloads also play in the app itself now. Press the still at the top of a downl
   - Instead of a black rectangle you are told this machine has no decoder for the video, along with where the file is, so you can open it in a real player or through your media server
   - The check asks your browser what it can actually decode rather than assuming from the format, so an HEVC download is not refused on a machine that plays it perfectly well
 ### Enhancements
+- Updating a video's tags no longer rewrites the whole file
+  - Writing AI tags onto a video used to read and rewrite every byte of it - minutes per file on a NAS, for a change of a few dozen characters. It now edits just the metadata at the end of the file: on a 1.6GB download that is 1MB written instead of 1.7GB, and the video data is not touched at all
+  - This is what makes tagging a whole library practical rather than an overnight job. Because these edits are tiny, they also no longer queue behind whole-file work and several can run at once
+  - Only used where it is provably safe. Anything involving chapters or subtitles, or any file whose layout is not exactly what is expected, still takes the old path - so the worst case is the speed you had before, never a damaged file
 - Timestamps in an analysis opened from the Analysis section now take you to the video
   - Reading a console comparison and wanting to see the moment being described used to be a dead end there - the timestamps only worked in a video's own panel, where there is a player beside them. Opening one now plays the video from that point
 - The content list shows what has been analysed, and what has an article

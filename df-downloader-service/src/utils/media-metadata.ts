@@ -10,6 +10,7 @@ import { runCommand } from "./command.js";
 import { fileExists, moveFile, pathIsEqual, setDateOnFile, TEMP_FILE_PREFIX } from "./file-utils.js";
 import path from "path";
 import { mediaSanitise, mediaSanitiseMultiline } from "./string-utils.js";
+import { setMp4TagsInPlace } from "./mp4-tags.js";
 
 if (!ffmpegPathImport) {
   throw new Error("FFmpeg path not found");
@@ -58,6 +59,20 @@ export type InjectMediaMetadataOpts = {
   onProgress?: (progress: TaskProgress) => void;
 };
 
+/**
+ * Whether this change is only to text tags, and so can skip the remux.
+ *
+ * Chapters and subtitles are tracks whose sample data lives inside `mdat`;
+ * changing either means moving the bytes every other track's chunk offsets are
+ * measured against, which is a full rewrite by definition. Everything else we
+ * inject - title, year, description, genre - lives entirely in `moov`.
+ *
+ * `outputPath` is excluded because it means "write elsewhere and delete the
+ * source", which is a move the in-place edit does not perform.
+ */
+const isTagOnlyChange = (meta: MediaFileMeta, opts: InjectMediaMetadataOpts) =>
+  !opts.outputPath && !meta.subtitles && !(meta.chapters && meta.chapters.length > 0);
+
 export const injectMediaMetadata = async (
   mediaFilePath: string,
   meta: MediaFileMeta,
@@ -67,6 +82,46 @@ export const injectMediaMetadata = async (
   const finalPath = opts.outputPath || mediaFilePath;
   logger.log("info", `Setting metadata for ${mediaFilePath}${opts.outputPath ? ` (writing to ${opts.outputPath})` : ""}`);
   logger.log("silly", `Metadata: ${JSON.stringify(meta)}`);
+
+  /*
+   * Tag-only changes rewrite ~1 MiB of `moov` instead of the whole file - see
+   * mp4-tags.ts. Measured on a 1.62 GiB download: 1.05 MiB written rather than
+   * 1.69 GiB, with every byte before `moov` verified unchanged.
+   *
+   * It fails closed. Anything it does not fully recognise - an MP3, a
+   * faststart layout, a fragmented MP4 - returns not-ok and falls through to
+   * the remux below, which handles everything.
+   *
+   * CAVEAT: adding `-movflags +faststart` to the remux would move `moov` to
+   * the front of the file, making every `stco` chunk offset depend on its
+   * size, and this fast path would stop applying. Nothing would break - the
+   * guard would simply reject every file and fall back here - so the symptom
+   * would be a silent return to whole-file rewrites. See the matching note in
+   * mp4-tags.ts.
+   */
+  if (isTagOnlyChange(meta, opts)) {
+    const genre = meta.tags?.length ? meta.tags.map((tag) => tag.replace(/:/g, "")).join(",") : undefined;
+    const inPlace = await setMp4TagsInPlace(mediaFilePath, {
+      // Sanitised exactly as the remux arguments below are, so which path ran
+      // is never visible in the resulting file.
+      title: meta.title ? mediaSanitise(meta.title) : undefined,
+      year: meta.publishedDate ? String(meta.publishedDate.getFullYear()) : undefined,
+      description: meta.description ? mediaSanitiseMultiline(meta.description) : undefined,
+      genre,
+    });
+    if (inPlace.ok) {
+      logger.log(
+        "info",
+        `Updated tags in place for ${mediaFilePath} (${inPlace.bytesWritten} bytes written, no remux)`
+      );
+      // Still set explicitly: a tail write updates mtime, and media servers
+      // order "recently added" by it.
+      meta.publishedDate && (await setDateOnFile(mediaFilePath, meta.publishedDate));
+      opts.onProgress?.({ percent: 100, detail: "Embedding metadata" });
+      return;
+    }
+    logger.log("debug", `In-place tag update declined for ${mediaFilePath} (${inPlace.reason}); remuxing`);
+  }
 
   let workingFilename: string = '';
   let chapterFilePath: string | null = null;
