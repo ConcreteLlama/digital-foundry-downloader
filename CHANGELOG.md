@@ -247,6 +247,11 @@ This release also fixes a long-standing gap where newly published videos could g
   - Hardware reviews are handled honestly here: the games used to benchmark a graphics card are listed as what they are, tests, and the review is never filed as coverage of them
   - Previews deliberately get no performance table. That format is provisional by design, and a frame rate from an early build would imply a precision nobody claimed - so it records what was shown and what the presenters said not to conclude yet
   - Analysis of hardware reviews, retrospectives, interviews, tech explainers and news shows is now classified as such rather than landing in "Other", so the label above an analysis tells you what it actually is
+- Activity gained a Completed filter, a search box, and an explanation of every filter
+  - Hovering any of the filters now says what that state means. "Held" in particular is this app's own word and had no way of explaining itself: it means queued work you paused by hand, which is kept out of the queue so everything behind it carries on, until you resume it
+  - Completed is a filter now rather than only a section at the bottom, so you can look at just the history - and the live sections step aside when you do
+  - Search by title across everything on the page, which is what makes a queue of several hundred navigable at all
+- Activity uses the width of the screen. It was capped at two thirds, so titles were truncated while a third of a wide display sat empty. Live task rows are a little tighter too
 - The Activity page is now grouped by the kind of work, not by stage
   - Downloads, subtitles and analysis each get their own section, so a job that is actually running is visible instead of buried. Previously everything after the download shared one list ordered by queue position, so starting an analysis while a few hundred transcriptions were waiting put it at the very bottom of the page - running, but below all of them
   - This also matches how the app really works: those kinds of work do not compete for one slot, they have separate limits and genuinely run alongside each other, which one merged list actively misrepresented

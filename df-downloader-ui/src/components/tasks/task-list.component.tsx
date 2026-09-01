@@ -3,6 +3,7 @@ import {
   Box,
   Button,
   Stack,
+  TextField,
   ToggleButton,
   ToggleButtonGroup,
   Tooltip,
@@ -20,6 +21,7 @@ import {
   selectActiveTaskIds,
   selectCompletedPipelineIds,
   selectCompletedTaskIds,
+  selectCompletedTitles,
   selectLiveLaneItems,
 } from "../../store/df-tasks/tasks.selector.ts";
 import { monoFontFamily } from "../../themes/build-theme.ts";
@@ -50,7 +52,7 @@ const LANES: { type: DfPipelineType; label: string; emptyMessage?: string }[] = 
   { type: "update_download_meta", label: "Metadata" },
 ];
 
-type StateFilter = "all" | "running" | "queued" | "held";
+type StateFilter = "all" | "running" | "queued" | "held" | "completed";
 
 const matchesFilter = (item: LaneItem, filter: StateFilter) => {
   switch (filter) {
@@ -60,10 +62,16 @@ const matchesFilter = (item: LaneItem, filter: StateFilter) => {
       return !item.running && !item.held;
     case "held":
       return item.held;
+    case "completed":
+      // Finished work is not in a lane at all - see the Completed section.
+      return false;
     default:
       return true;
   }
 };
+
+const matchesSearch = (title: string, search: string) =>
+  !search.trim() || title.toLowerCase().includes(search.trim().toLowerCase());
 
 /** How much of a lane is shown before the rest is folded away. */
 const LANE_PREVIEW_COUNT = 6;
@@ -77,6 +85,8 @@ export const TaskList = () => {
   const activeTaskIds = useSelector(selectActiveTaskIds);
   const completedTaskIds = useSelector(selectCompletedTaskIds);
   const [filter, setFilter] = useState<StateFilter>("all");
+  const [search, setSearch] = useState("");
+  const completedTitles = useSelector(selectCompletedTitles);
   const onClearCompleted = () => clearCompletedPipelines().catch((e) => console.error(e));
   const theme = useTheme();
   const belowSm = useMediaQuery(theme.breakpoints.down("sm"));
@@ -86,8 +96,20 @@ export const TaskList = () => {
       running: laneItems.filter((item) => item.running).length,
       queued: laneItems.filter((item) => !item.running && !item.held).length,
       held: laneItems.filter((item) => item.held).length,
+      completed: completedTasks.length + completedTaskIds.length,
     }),
-    [laneItems]
+    [laneItems, completedTasks, completedTaskIds]
+  );
+
+  // Searched here rather than inside each lane so a lane's own count reflects
+  // what the search left, instead of claiming a total it is no longer showing.
+  const searched = useMemo(
+    () => laneItems.filter((item) => matchesSearch(item.title, search)),
+    [laneItems, search]
+  );
+  const searchedCompleted = useMemo(
+    () => completedTasks.filter((id) => matchesSearch(completedTitles[id] ?? "", search)),
+    [completedTasks, completedTitles, search]
   );
 
   return (
@@ -103,12 +125,23 @@ export const TaskList = () => {
     >
       <ScheduledDownloadsList />
 
-      {laneItems.length > 0 && (
-        <QueueSummary counts={counts} filter={filter} onFilterChange={setFilter} belowSm={belowSm} />
+      {(laneItems.length > 0 || counts.completed > 0) && (
+        <QueueSummary
+          counts={counts}
+          filter={filter}
+          onFilterChange={setFilter}
+          search={search}
+          onSearchChange={setSearch}
+          belowSm={belowSm}
+        />
       )}
 
-      {LANES.map(({ type, label, emptyMessage }) => {
-        const all = laneItems.filter((item) => item.pipelineType === type);
+      {/* Live lanes step aside entirely for the Completed filter - it is
+          history, and mixing it with running work is the thing the lanes
+          exist to avoid. */}
+      {filter !== "completed" &&
+        LANES.map(({ type, label, emptyMessage }) => {
+        const all = searched.filter((item) => item.pipelineType === type);
         // A lane with nothing in it is noise, with one exception: downloads
         // are what this page is primarily for, so its absence is worth
         // stating rather than leaving a gap where the section used to be.
@@ -124,11 +157,16 @@ export const TaskList = () => {
           what this page is for, and a backfill running in the background
           should not push them down. Before Completed, since these are live
           work rather than history. */}
-      {activeTaskIds.length > 0 && <TaskInfoSet pipelineIds={[]} taskIds={activeTaskIds} name="Jobs" />}
+      {filter !== "completed" && activeTaskIds.length > 0 && (
+        <TaskInfoSet pipelineIds={[]} taskIds={activeTaskIds} name="Jobs" />
+      )}
 
+      {/* Hidden while filtering to a live state: "Running" means running, and
+          a history section under it answers a question nobody asked. */}
+      {(filter === "all" || filter === "completed") && (
       <TaskInfoSet
-        pipelineIds={completedTasks}
-        taskIds={completedTaskIds}
+        pipelineIds={searchedCompleted}
+        taskIds={search.trim() ? [] : completedTaskIds}
         name="Completed"
         header={
           <Button
@@ -140,6 +178,7 @@ export const TaskList = () => {
           </Button>
         }
       />
+      )}
     </Stack>
   );
 };
@@ -154,19 +193,44 @@ const QueueSummary = ({
   counts,
   filter,
   onFilterChange,
+  search,
+  onSearchChange,
   belowSm,
 }: {
-  counts: { running: number; queued: number; held: number };
+  counts: { running: number; queued: number; held: number; completed: number };
   filter: StateFilter;
   onFilterChange: (filter: StateFilter) => void;
+  search: string;
+  onSearchChange: (search: string) => void;
   belowSm: boolean;
 }) => {
   const total = counts.running + counts.queued + counts.held;
-  const options: { value: StateFilter; label: string; count: number }[] = [
-    { value: "all", label: "All", count: total },
-    { value: "running", label: "Running", count: counts.running },
-    { value: "queued", label: "Queued", count: counts.queued },
-    { value: "held", label: "Held", count: counts.held },
+  /*
+   * Every state carries an explanation. "Held" in particular is this app's own
+   * word for something with no obvious meaning from the outside - it was asked
+   * about directly, which is answer enough that a label alone will not do.
+   */
+  const options: { value: StateFilter; label: string; count: number; hint: string }[] = [
+    { value: "all", label: "All", count: total, hint: "Everything not yet finished." },
+    { value: "running", label: "Running", count: counts.running, hint: "Work happening right now." },
+    {
+      value: "queued",
+      label: "Queued",
+      count: counts.queued,
+      hint: "Waiting its turn. It will start on its own as things ahead of it finish.",
+    },
+    {
+      value: "held",
+      label: "Held",
+      count: counts.held,
+      hint: "Queued work you paused by hand. It is kept out of the queue, so everything behind it carries on past it, until you resume it.",
+    },
+    {
+      value: "completed",
+      label: "Completed",
+      count: counts.completed,
+      hint: "Finished work, kept as history until cleared.",
+    },
   ];
   return (
     <Box sx={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 1, paddingX: 1 }}>
@@ -178,21 +242,35 @@ const QueueSummary = ({
         sx={{ flexWrap: "wrap" }}
       >
         {options.map((option) => (
-          <ToggleButton
-            key={option.value}
-            value={option.value}
-            // Held only exists once something has been held, and an always-on
-            // zero is a control that never does anything.
-            disabled={option.value === "held" && option.count === 0}
-            sx={{ textTransform: "none", paddingY: 0.25 }}
-          >
-            {option.label}
-            <Box component="span" sx={{ fontFamily: monoFontFamily, marginLeft: 0.75, opacity: 0.7 }}>
-              {option.count}
-            </Box>
-          </ToggleButton>
+          <Tooltip key={option.value} title={option.hint}>
+            {/* Wrapped: a disabled control does not emit the events a tooltip
+                listens for, so the explanation would vanish exactly when it
+                is most needed. */}
+            <span>
+              <ToggleButton
+                value={option.value}
+                // Held only exists once something has been held, and an
+                // always-on zero is a control that never does anything.
+                disabled={option.count === 0 && (option.value === "held" || option.value === "completed")}
+                sx={{ textTransform: "none", paddingY: 0.25 }}
+              >
+                {option.label}
+                <Box component="span" sx={{ fontFamily: monoFontFamily, marginLeft: 0.75, opacity: 0.7 }}>
+                  {option.count}
+                </Box>
+              </ToggleButton>
+            </span>
+          </Tooltip>
         ))}
       </ToggleButtonGroup>
+
+      <TextField
+        size="small"
+        placeholder="Search by title"
+        value={search}
+        onChange={(event) => onSearchChange(event.target.value)}
+        sx={{ flex: belowSm ? "1 1 100%" : "0 1 260px" }}
+      />
       {!belowSm && counts.running > 0 && (
         <Typography variant="caption" sx={{ color: "text.disabled" }}>
           {counts.running} running now

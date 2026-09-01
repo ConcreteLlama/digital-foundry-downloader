@@ -1,12 +1,19 @@
 import { Box, Card, styled } from "@mui/material";
 
+/**
+ * A live task.
+ *
+ * Tightened from 8px/0.5rem: a running job is a title, a track and a status
+ * line, and at the old spacing five of them filled a screen. The card still
+ * has to read as a card, so this is a trim rather than a squeeze.
+ */
 export const TaskInfoCard = styled(Card)({
   display: "flex",
   flexDirection: "column",
   justifyContent: "center",
   alignItems: "center",
-  padding: "8px",
-  gap: "0.5rem",
+  padding: "5px 8px",
+  gap: "0.3rem",
   width: "100%",
 });
 

@@ -28,7 +28,14 @@ export const DownloadsPage = () => {
       id="download-page-container"
       sx={{
         bgcolor: "background.default",
-        maxWidth: belowMd ? "100vw" : "65vw",
+        /*
+         * 65vw left a third of a wide screen empty while titles truncated in
+         * the space that was there. These rows are a title and a few short
+         * columns, so they use the width rather than needing protection from
+         * it - capped only so an ultrawide does not stretch one row across a
+         * metre of desk.
+         */
+        maxWidth: belowMd ? "100vw" : "min(100%, 1700px)",
       }}
     >
       <DownloadsPageHeader />

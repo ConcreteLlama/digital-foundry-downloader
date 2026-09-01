@@ -205,6 +205,21 @@ export const selectPostProcessingPipelineIds = createDeepEqualSelector(
   }
 );
 
+/** Completed pipeline id to the title of the content it was for, for searching. */
+export const selectCompletedTitles = createDeepEqualSelector(
+  [selectPipelineIds, selectPipelines],
+  (ids, pipelines): Record<string, string> => {
+    const titles: Record<string, string> = {};
+    for (const id of ids) {
+      const pipeline = pipelines[id];
+      if (pipeline?.pipelineStatus?.isComplete) {
+        titles[id] = pipeline.pipelineDetails?.dfContent?.title ?? "";
+      }
+    }
+    return titles;
+  }
+);
+
 export const selectCompletedPipelineIds = createDeepEqualSelector(
   [selectPipelineIds, selectPipelines],
   (ids, pipelines) => {
@@ -307,6 +322,8 @@ export const selectTask = (taskId: string) =>
 export type LaneItem = {
   pipelineId: string;
   pipelineType: DfPipelineType;
+  /** What the work is on, for searching - the content's title. */
+  title: string;
   state?: TaskState;
   /** Held out of the queue by hand - see TaskStatus.held. */
   held: boolean;
@@ -350,6 +367,7 @@ export const selectLiveLaneItems = createDeepEqualSelector(
       return {
         pipelineId: pipeline.id,
         pipelineType: pipeline.pipelineType,
+        title: pipeline.pipelineDetails?.dfContent?.title ?? "",
         state,
         held: Boolean(task?.status?.held),
         running: state === "running",
