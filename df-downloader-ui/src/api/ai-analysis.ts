@@ -5,6 +5,8 @@ import {
   AiTagStatus,
   DfArticle,
   GameIndexResponse,
+  HardwareIndexResponse,
+  PcSettingsIndexResponse,
   PlatformComparisonResponse,
   parseResponseBody,
   AiCostLedgerResponse,
@@ -121,6 +123,18 @@ export const fetchGameIndex = async (): Promise<GameIndexResponse> => {
 export const fetchPlatformComparison = async (): Promise<PlatformComparisonResponse> => {
   const response = await fetchJson(`${API_URL}/ai-analysis/platform-comparison`);
   return unwrap(response, PlatformComparisonResponse);
+};
+
+/** Every PC review's optimised settings, side by side. Aggregated server-side. */
+export const fetchPcSettingsIndex = async (): Promise<PcSettingsIndexResponse> => {
+  const response = await fetchJson(`${API_URL}/ai-analysis/pc-settings`);
+  return unwrap(response, PcSettingsIndexResponse);
+};
+
+/** Every analysed hardware review, newest first. Aggregated server-side. */
+export const fetchHardwareIndex = async (): Promise<HardwareIndexResponse> => {
+  const response = await fetchJson(`${API_URL}/ai-analysis/hardware`);
+  return unwrap(response, HardwareIndexResponse);
 };
 
 /** What analysis has cost, run by run. Aggregated server-side. */

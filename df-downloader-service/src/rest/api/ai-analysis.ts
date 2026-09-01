@@ -12,6 +12,8 @@ import { configService } from "../../config/config.js";
 import { DigitalFoundryContentManager } from "../../df-content-manager.js";
 import { estimateAnalysisCost } from "../../utils/ai/analyse.js";
 import { buildGameIndex } from "../../utils/ai/game-index.js";
+import { buildHardwareIndex } from "../../utils/ai/hardware-index.js";
+import { buildPcSettingsIndex } from "../../utils/ai/pc-settings-index.js";
 import { buildCostLedger } from "../../utils/ai/cost-ledger.js";
 import { buildPlatformComparison } from "../../utils/ai/platform-comparison.js";
 import { ensureArticleForContent } from "../../utils/df-articles/ensure-article.js";
@@ -119,6 +121,30 @@ export const makeAiAnalysisRouter = (contentManager: DigitalFoundryContentManage
   router.get("/platform-comparison", async (_req, res) => {
     try {
       return sendResponse(res, await buildPlatformComparison(contentManager.db));
+    } catch (e) {
+      return sendErrorAsResponse(res, e);
+    }
+  });
+
+  /**
+   * Every PC review's optimised settings, side by side.
+   *
+   * The data was already extracted per video and readable only one item at a
+   * time, so "which of my games have recommended settings" had no answer
+   * despite the answer being on disk.
+   */
+  router.get("/pc-settings", async (_req, res) => {
+    try {
+      return sendResponse(res, await buildPcSettingsIndex(contentManager.db));
+    } catch (e) {
+      return sendErrorAsResponse(res, e);
+    }
+  });
+
+  /** Every analysed hardware review, newest first. */
+  router.get("/hardware", async (_req, res) => {
+    try {
+      return sendResponse(res, await buildHardwareIndex(contentManager.db));
     } catch (e) {
       return sendErrorAsResponse(res, e);
     }

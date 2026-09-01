@@ -1,9 +1,13 @@
 import InsightsIcon from "@mui/icons-material/Insights";
+import MemoryIcon from "@mui/icons-material/Memory";
 import PaidIcon from "@mui/icons-material/Paid";
+import TuneIcon from "@mui/icons-material/Tune";
 import SportsEsportsIcon from "@mui/icons-material/SportsEsports";
 import TableChartIcon from "@mui/icons-material/TableChart";
 import { GameIndexPage } from "../../components/analysis/game-index-page.component.tsx";
 import { CostsPage } from "../../components/analysis/costs-page.component.tsx";
+import { HardwarePage } from "../../components/analysis/hardware-page.component.tsx";
+import { PcSettingsPage } from "../../components/analysis/pc-settings-page.component.tsx";
 import { PlatformComparisonPage } from "../../components/analysis/platform-comparison-page.component.tsx";
 import { NestedSubRoute } from "../nav/nested-routes.tsx";
 
@@ -12,9 +16,9 @@ import { NestedSubRoute } from "../nav/nested-routes.tsx";
  *
  * A section of its own rather than a tab inside Content because the
  * subject is different: Content is a row per video, this is a view of the
- * analysis corpus. Shaped to take more pages (a settings knowledge base, a
- * coverage summary, a tag review queue) without further nav churn - see
- * docs/AI_CONTENT_ANALYSIS_PLAN.md for the ranked list.
+ * analysis corpus. The settings knowledge base and hardware index this was
+ * shaped for now exist; a coverage summary and a tag review queue are the
+ * remaining candidates - see docs/AI_CONTENT_ANALYSIS_PLAN.md.
  */
 export const analysisRouteDefinitions: NestedSubRoute = {
   name: "Analysis",
@@ -35,6 +39,18 @@ export const analysisRouteDefinitions: NestedSubRoute = {
       element: <GameIndexPage />,
       name: "Games",
       icon: SportsEsportsIcon,
+    },
+    {
+      path: "/analysis/pc-settings",
+      element: <PcSettingsPage />,
+      name: "PC Settings",
+      icon: TuneIcon,
+    },
+    {
+      path: "/analysis/hardware",
+      element: <HardwarePage />,
+      name: "Hardware",
+      icon: MemoryIcon,
     },
     {
       path: "/analysis/costs",

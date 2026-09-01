@@ -30,6 +30,8 @@ export * from './ai-analysis.js';
 export * from './ai-cost-ledger.js';
 export * from './df-article.js';
 export * from './game-index.js';
+export * from './hardware-index.js';
+export * from './pc-settings-index.js';
 export * from './platform-comparison.js';
 export * from './bulk-backfill.js';
 export * from "./logs.js";
