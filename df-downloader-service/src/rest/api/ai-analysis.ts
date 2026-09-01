@@ -2,6 +2,7 @@ import {
   AiAnalysisResult,
   AnalyseContentRequest,
   AiTagDecisionRequest,
+  TestAiProviderRequest,
   DfArticleUtils,
   DfContentEntry,
   logger,
@@ -11,6 +12,7 @@ import express from "express";
 import { configService } from "../../config/config.js";
 import { DigitalFoundryContentManager } from "../../df-content-manager.js";
 import { estimateAnalysisCost } from "../../utils/ai/analyse.js";
+import { makeProvider } from "../../utils/ai/providers/resolve.js";
 import { buildGameIndex } from "../../utils/ai/game-index.js";
 import { buildHardwareIndex } from "../../utils/ai/hardware-index.js";
 import { buildPcSettingsIndex } from "../../utils/ai/pc-settings-index.js";
@@ -167,6 +169,47 @@ export const makeAiAnalysisRouter = (contentManager: DigitalFoundryContentManage
         return sendResponse(res, estimate);
       } catch (e) {
         return sendErrorAsResponse(res, e);
+      }
+    });
+  });
+
+  /**
+   * Checks a provider's credentials without running an analysis.
+   *
+   * Counts tokens rather than generating any. That validates the credential
+   * and that the endpoint is reachable, costs nothing on Anthropic's side
+   * because token counting is not billed, and cannot leave a half-finished
+   * analysis attached to a video. For the local provider it proves the server
+   * URL actually answers, which is the equivalent failure.
+   *
+   * Reports a bad key as {ok:false} with HTTP 200 - the caller is a settings
+   * form asking a question, and "your key is wrong" is an answer.
+   */
+  router.post("/test-provider", async (req, res) => {
+    await zodParseHttp(TestAiProviderRequest, req, res, async ({ provider, config }) => {
+      try {
+        const resolved = makeProvider(config, provider);
+        await resolved.countInputTokens(
+          "You are a configuration test.",
+          "This request exists only to check credentials.",
+          "No reply is needed."
+        );
+        return sendResponse(res, {
+          ok: true,
+          detail:
+            provider === "local"
+              ? `Reached the local model server, serving ${resolved.model}.`
+              : `Anthropic accepted the key, using ${resolved.model}.`,
+        });
+      } catch (e: any) {
+        const message = String(e?.message ?? e);
+        return sendResponse(res, {
+          ok: false,
+          error:
+            message.includes("401") || message.toLowerCase().includes("authentication")
+              ? `${message} - the API key looks wrong or expired.`
+              : message,
+        });
       }
     });
   });

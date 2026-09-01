@@ -449,6 +449,10 @@ export class DfTaskManager {
           finalLocation,
           makeDownloadProgressInfo(result.pipelineResult.finalDownloadStatus!, result.pipelineResult.attempts || 1)
         );
+        // The file exists at its final path now, so anything watching the
+        // library can be told. Batched with the metadata and subtitle writes
+        // that follow it - see MediaServerManager.
+        serviceLocator.mediaServers.fileChanged(finalLocation, "download");
       }
     });
     this.addTaskPipelineExecution(downloadExecution);

@@ -2,13 +2,20 @@ import { MediaFileMeta } from "df-downloader-common";
 import path from "path";
 import { InjectMediaMetadataOpts, injectMediaMetadata } from "../utils/media-metadata.js";
 import { taskifyWithProgress } from "../task-manager/utils.js";
+import { serviceLocator } from "../services/service-locator.js";
 
 // taskifyWithProgress rather than taskify so the remux can report how far
 // through it is - it rewrites the whole file, which on a feature-length
 // download is minutes of otherwise-silent work.
 export const InjectMetadataTask = taskifyWithProgress(
-  (onProgress, mediaFilePath: string, meta: MediaFileMeta, opts: InjectMediaMetadataOpts = {}) =>
-    injectMediaMetadata(mediaFilePath, meta, { ...opts, onProgress }),
+  async (onProgress, mediaFilePath: string, meta: MediaFileMeta, opts: InjectMediaMetadataOpts = {}) => {
+    const result = await injectMediaMetadata(mediaFilePath, meta, { ...opts, onProgress });
+    // Announced after the write, not before: injection either rewrites the
+    // file or patches its tags in place, and either way a server told too
+    // early reads a file that is still changing.
+    serviceLocator.mediaServers.fileChanged(mediaFilePath, "metadata");
+    return result;
+  },
   {
     taskType: "inject_metadata",
     idPrefix: "injectMediaMetadata",

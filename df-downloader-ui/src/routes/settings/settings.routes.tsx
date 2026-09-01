@@ -6,6 +6,7 @@ import DownloadIcon from "@mui/icons-material/Download";
 import DownloadingIcon from "@mui/icons-material/Downloading";
 import FolderIcon from "@mui/icons-material/Folder";
 import NotificationsIcon from "@mui/icons-material/Notifications";
+import VideoLibraryIcon from "@mui/icons-material/VideoLibrary";
 import RadarIcon from "@mui/icons-material/Radar";
 import SettingsIcon from "@mui/icons-material/Settings";
 import AutoAwesomeIcon from "@mui/icons-material/AutoAwesome";
@@ -20,6 +21,7 @@ import { DfSettingsForm } from "../../components/settings/df-settings.component"
 import { DownloadsSettingsForm } from "../../components/settings/downloads-settings.component";
 import { MetadataSettingsForm } from "../../components/settings/metadata-settings-form.component";
 import { NotificationSettingsForm } from "../../components/settings/notification-settings.component";
+import { MediaServersSettingsForm } from "../../components/settings/media-servers-settings-form.component";
 import ArticleIcon from "@mui/icons-material/Article";
 import { AiAnalysisSettingsForm } from "../../components/settings/ai-analysis-settings-form.component";
 import { DfArticlesSettingsForm } from "../../components/settings/df-articles-settings-form.component";
@@ -146,6 +148,15 @@ export const settingsRouteDefinitions: NestedSubRoute = {
           element: <NotificationSettingsForm />,
           name: "Notifications",
           icon: NotificationsIcon,
+        },
+        {
+          // Beside Notifications rather than under Post-processing: both are
+          // about telling something outside the app, where post-processing is
+          // work done to the file itself.
+          path: "/settings/media-servers",
+          element: <MediaServersSettingsForm />,
+          name: "Media Servers",
+          icon: VideoLibraryIcon,
         },
         {
           path: "/settings/appearance",

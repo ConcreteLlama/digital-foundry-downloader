@@ -1,5 +1,5 @@
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
-import { Alert, Box, Collapse, Divider, FormHelperText, IconButton, Stack, Typography } from "@mui/material";
+import { Alert, Box, Button, Collapse, Divider, FormHelperText, IconButton, Stack, Typography } from "@mui/material";
 import {
   AiAnalysisConfig,
   AiAnalysisEffort,
@@ -13,6 +13,9 @@ import {
   AiTaggingConfig,
   AutomaticAiAnalysisMode,
 } from "df-downloader-common/config/ai-analysis-config";
+import { TestAiProviderRequest, TestAiProviderResponse, parseResponseBody } from "df-downloader-common";
+import { API_URL } from "../../config";
+import { fetchJson } from "../../utils/fetch";
 import { Fragment, useState } from "react";
 import { useFormContext, useWatch } from "react-hook-form";
 import { SelectField } from "../general/select-field";
@@ -21,6 +24,58 @@ import { ZodNumberField } from "../zod-fields/zod-number-field.component";
 import { getZodDescription } from "../zod-fields/zod-schema-utils";
 import { ZodTextField } from "../zod-fields/zod-text-field.component";
 import { DfSettingsSectionForm } from "./df-settings-section-form.component";
+
+
+type ProviderTestState =
+  | { status: "idle" }
+  | { status: "testing" }
+  | { status: "success"; message: string }
+  | { status: "error"; message: string };
+
+/**
+ * Checks credentials before anything depends on them.
+ *
+ * Counts tokens rather than running an analysis, so it is free on Anthropic
+ * and instant on both. Without this the first sign of a wrong key is a failed
+ * analysis attached to a video, which is a poor place to learn it.
+ */
+const ProviderTestButton = ({ provider, label }: { provider: "anthropic" | "local"; label: string }) => {
+  const { getValues } = useFormContext();
+  const [test, setTest] = useState<ProviderTestState>({ status: "idle" });
+  const run = async () => {
+    setTest({ status: "testing" });
+    try {
+      const requestBody: TestAiProviderRequest = { provider, config: getValues() as AiAnalysisConfig };
+      const data = await fetchJson(`${API_URL}/ai-analysis/test-provider`, {
+        method: "POST",
+        body: JSON.stringify(requestBody),
+        headers: { "Content-Type": "application/json" },
+      });
+      const result = parseResponseBody(data, TestAiProviderResponse);
+      if (result.data?.ok) {
+        setTest({ status: "success", message: result.data.detail || "Connected." });
+      } else {
+        setTest({
+          status: "error",
+          message: result.data?.error || result.error?.message || "Could not reach the provider.",
+        });
+      }
+    } catch (e: any) {
+      setTest({ status: "error", message: e?.message || "Could not reach the provider." });
+    }
+  };
+  return (
+    <Stack spacing={1}>
+      <Box>
+        <Button variant="outlined" disabled={test.status === "testing"} onClick={run}>
+          {test.status === "testing" ? "Testing..." : label}
+        </Button>
+      </Box>
+      {test.status === "success" && <Alert severity="success">{test.message}</Alert>}
+      {test.status === "error" && <Alert severity="error">{test.message}</Alert>}
+    </Stack>
+  );
+};
 
 export const AiAnalysisSettingsForm = () => {
   return (
@@ -184,6 +239,7 @@ const AiAnalysisSettings = () => {
             isPassword={true}
             zodString={AiAnalysisConfig.shape.apiKey}
           />
+          <ProviderTestButton provider="anthropic" label="Test API key" />
           <SelectField
             name="model"
             label="Model"
@@ -242,6 +298,13 @@ const AiAnalysisSettings = () => {
                 label="Use an existing server"
                 zodString={AiLocalProviderConfig.shape.serverUrl}
               />
+              {/*
+                Only for a server you point at. When the app runs the model
+                itself there is nothing to reach until it is started, and
+                "testing" would mean loading several gigabytes of weights -
+                which is a download, not a check.
+              */}
+              {!usingOwnServer && <ProviderTestButton provider="local" label="Test server connection" />}
               {usingOwnServer && (
                 <Fragment>
                   <ZodNumberField

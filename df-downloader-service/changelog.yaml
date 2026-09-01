@@ -11,6 +11,7 @@ versions:
           - "You choose the model - Haiku, Sonnet, Opus or Fable. Haiku is the default and the recommendation: in testing it extracted settings tables and per-platform numbers correctly at around a tenth of the cost of the larger models"
           - "See what a run will cost before starting it. The figure comes from a real token count rather than an estimate, and came within about 10% of actual in testing"
           - "Run it by hand per video, or automatically after each download. Automatic waits for subtitles to finish first, so it has a transcript to work from rather than quietly producing a thinner result"
+          - "A button to check your API key works before anything depends on it. It only counts tokens rather than analysing anything, so it costs nothing and cannot leave a half-finished analysis attached to a video - and the same button checks a local model server is reachable"
         - "Or run it on your own machine instead, with no API key and nothing to pay":
           - "Point it at a llama.cpp server you already run, or let the app run the model itself - the image ships with everything it needs, so choosing local does not mean setting a server up first"
           - "Pick which engine analyses your content in Settings, and override it for a single video when you want to. Where only one is set up it just uses that one instead of asking every time"
@@ -22,6 +23,15 @@ versions:
           - "Tagging is the one part that does not need a transcript - a title and description alone are enough to infer something useful, so it works across your whole library rather than only what you have downloaded and transcribed"
           - "Tags inferred from a transcript or an article are more specific and better founded than ones inferred from a title alone, and every tag records which it came from, shown next to it. A tag drawn from a title is marked, because it is a weaker claim and you may be filtering on it"
           - "Tags are applied as they are found rather than held for approval, and removing one takes it straight back off the content"
+        - "Tell Plex or Jellyfin the moment something changes":
+          - "A finished download turns up in your library straight away, instead of whenever your media server next gets round to scanning on its own schedule"
+          - "Not only new downloads. Metadata written into a file, subtitles generated for it later, and files shifted about by the Reorganize tool all count as changes, so a video that gains subtitles an hour after you downloaded it is picked up too"
+          - "Plex is told exactly which folder changed and rescans only that, rather than combing through your entire library every time a video lands"
+          - "Moving a file tells the server about both the old folder and the new one, so the entry disappears from where it used to be instead of lingering as something that is no longer there"
+          - "Changes are batched. A download, the metadata written into it and the subtitles placed beside it are one refresh a few seconds after things go quiet, not three scans of a folder while it is still being written to - you can change how long it waits"
+          - "Path mapping for the usual case where the two do not agree on what a folder is called, which is almost always when either side runs in a container. Once you have tested the connection it offers the folders your server itself reported, so you pick from a list rather than typing a path that fails silently if you get it wrong, and it shows you what your download folder will actually be sent as"
+          - "A Test connection button for each, which says what it found - for Plex, the libraries it can see - or what went wrong in terms you can act on, distinguishing a wrong token from a server that is switched off from an address that cannot be resolved"
+          - "Worth knowing for Jellyfin: it has no built-in way to rescan a single folder, so it gets a whole-library refresh. If you install the Targeted Scans plugin this uses it and the scan becomes near-instant whatever the size of your library"
         - "Digital Foundry's written articles, found and used":
           - "Where DF published a written companion piece for a video, it is found, linked on the content, and read alongside the transcript when analysing"
           - "This measurably improves the result. An article is written rather than transcribed, so its terminology, product names and figures are correct where speech-to-text reliably garbles them, and for PC reviews it often contains the settings table outright"

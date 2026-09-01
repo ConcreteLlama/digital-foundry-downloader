@@ -19,6 +19,8 @@ export * from "./user-requests.js";
 export * from "./user.js";
 export * from "./auth.js";
 export * from "./preview.js";
+export * from "./ai-provider-test.js";
+export * from "./media-server-test.js";
 export * from "./test-session-id.js";
 export * from "./move-files.js";
 export * from "./subtitles.js";

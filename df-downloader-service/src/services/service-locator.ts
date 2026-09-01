@@ -5,11 +5,13 @@ import { logger, mapFilterEmpty } from "df-downloader-common";
 import { NotificationConsumerManager } from "../notifiers/notification-consumer-manager.js";
 import { DfDownloaderOperationalDb } from "../db/df-operational-db.js";
 import { ActivePipelineDb, CompletedPipelineDb } from "../db/file-dbs/pipeline-db.js";
+import { MediaServerManager } from "../media-servers/media-server-manager.js";
 
 class ServiceLocator {
   public static instance = new ServiceLocator();
   private _subtitleGenerators: SubtitleGenerator[] = [];
   private _notificationConsumerManager: NotificationConsumerManager = new NotificationConsumerManager();
+  private _mediaServerManager: MediaServerManager = new MediaServerManager();
   private _db!: DfDownloaderOperationalDb;
   private _activePipelineDb?: ActivePipelineDb;
   private _completedPipelineDb?: CompletedPipelineDb;
@@ -66,6 +68,16 @@ class ServiceLocator {
 
   get notifier() {
     return this._notificationConsumerManager;
+  }
+
+  /**
+   * Media servers to tell when a file on disk changes.
+   *
+   * Always present, and a no-op until something is configured, so callers can
+   * announce a change unconditionally rather than checking first.
+   */
+  get mediaServers() {
+    return this._mediaServerManager;
   }
 }
 

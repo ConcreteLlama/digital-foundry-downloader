@@ -3,6 +3,7 @@ import { ContainerContentManagementConfig, ContentManagementConfig, ContentManag
 import { DownloadsConfig, DownloadsConfigKey } from "./download-config.js";
 import { DefaultRestApiConfig, RestApiConfig, RestApiConfigKey } from "./rest-config.js";
 import { NotificationsConfig, NotificationsConfigKey } from "./notifications-config.js";
+import { MediaServersConfig, MediaServersConfigKey } from "./media-servers-config.js";
 import { DfConfig, DfConfigKey } from "./df-config.js";
 import { DefaultLoggingConfig, LoggingConfig, LoggingConfigKey } from "./logging-config.js";
 import { DefaultMetadataConfig, MetadataConfig, MetadataConfigKey } from "./metadata-config.js";
@@ -37,6 +38,7 @@ export const DfDownloaderConfig = z.object({
   [AiAnalysisConfigKey]: AiAnalysisConfig.optional(),
   [DfArticlesConfigKey]: DfArticlesConfig.prefault({}),
   [NotificationsConfigKey]: NotificationsConfig.optional(),
+  [MediaServersConfigKey]: MediaServersConfig.optional(),
   [LoggingConfigKey]: LoggingConfig.default(DefaultLoggingConfig),
   // prefault, not default - `theme` has its own default, so {} is valid input
   // but not an output-shaped value (see the note above).

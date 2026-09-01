@@ -1,6 +1,7 @@
 import { ContentMoveFileInfo, logger, makeErrorMessage, MoveFilesTaskProgressInfo, MoveFilesTaskStatus } from "df-downloader-common";
 import { BatchOperationTaskBuilder } from "../task-manager/task/batch-operation-task-builder.js";
 import { moveFile } from "../utils/file-utils.js";
+import { serviceLocator } from "../services/service-locator.js";
 import { DfDownloaderOperationalDb } from "../db/df-operational-db.js";
 
 type MoveFilesTaskOpts = {
@@ -16,6 +17,17 @@ export const BatchMoveFilesTask = BatchOperationTaskBuilder(async (moveFileInfo:
             clobber: taskOpts.overwrite,
             mkdirp: true,
         })
+        /*
+         * Both ends, because a move changes two directories: the file is gone
+         * from one and new in the other. Telling a server only about the
+         * destination leaves it showing an entry that no longer exists.
+         *
+         * Announced here rather than after the database update below - this is
+         * the point at which the disk actually changed, and that remains true
+         * even if the record update then fails.
+         */
+        serviceLocator.mediaServers.fileChanged(moveFileInfo.oldFilename, "moved");
+        serviceLocator.mediaServers.fileChanged(moveFileInfo.newFilename, "moved");
         const { missingFiles } = await taskOpts.db.moveDownload(moveFileInfo.contentName, moveFileInfo.oldFilename, moveFileInfo.newFilename);
         if (missingFiles.length) {
             // The file is already on disk at its new home, but nothing in the DB
