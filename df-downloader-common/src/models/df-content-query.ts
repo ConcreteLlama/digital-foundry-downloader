@@ -1,3 +1,4 @@
+import { DfContentBadgeMap } from "./df-content-badges.js";
 import { z } from "zod";
 import { DfContentAvailability } from "./df-content-status.js";
 import { DfContentEntry } from "./df-content-entry.js";
@@ -28,6 +29,7 @@ export const DfContentQueryResponse = z.object({
   totalResults: z.number(),
   totalDuration: z.string(),
   content: z.array(DfContentEntry),
+  badges: DfContentBadgeMap,
   scanInProgress: z.boolean().optional(),
 });
 export type DfContentQueryResponse = z.infer<typeof DfContentQueryResponse>;

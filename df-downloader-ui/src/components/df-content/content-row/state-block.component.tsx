@@ -36,6 +36,17 @@ export const StateBlock = ({ spec, detail, extraCount, align = "end", compact, s
         alignItems: "center",
         justifyContent: align === "end" ? "flex-end" : "flex-start",
         minWidth: 0,
+        /*
+         * Filling the fixed column is what makes this a column at all.
+         *
+         * Right-aligning a variable-width group does the opposite of what the
+         * shared width is for: a row with a longer detail line - two formats
+         * rather than one - makes the whole group wider, so its dot, icon and
+         * label all shift left and the labels stop lining up. Spanning the
+         * width instead pins them, and the ragged edge moves to the detail
+         * line, where it belongs.
+         */
+        ...(align === "end" ? { width: "100%" } : {}),
         ...sx,
       }}
     >
@@ -53,7 +64,7 @@ export const StateBlock = ({ spec, detail, extraCount, align = "end", compact, s
       />
       <StateIcon sx={{ fontSize: 14, color: spec.colour, flexShrink: 0 }} />
       <Tooltip title={detail ?? ""} disableHoverListener={!detail}>
-        <Box sx={{ minWidth: 0 }}>
+        <Box sx={{ minWidth: 0, ...(align === "end" ? { flex: 1 } : {}) }}>
           <Typography sx={{ fontSize: "0.6875rem", fontWeight: 600, color: spec.colour, lineHeight: 1.3 }}>
             {spec.label}
             {extraCount ? ` +${extraCount}` : ""}

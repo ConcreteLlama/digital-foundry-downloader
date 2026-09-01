@@ -141,6 +141,14 @@ export const StartDownloadingButton = ({ contentEntry, mediaFormat, label, disab
               font: "inherit",
               color: "inherit",
               textAlign: "inherit",
+              /*
+               * Fills its slot so a state block rendered through here lines up
+               * with one rendered directly. A button shrinks to its content by
+               * default, which silently undoes the state block's own full-width
+               * layout and puts "Available" rows in a different column from
+               * "Downloaded" ones.
+               */
+              width: "100%",
               cursor: buttonDisabled ? "default" : "pointer",
               opacity: buttonDisabled ? 0.6 : 1,
               "&:focus-visible": { outline: "2px solid", outlineColor: "primary.main", outlineOffset: 2 },

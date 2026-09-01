@@ -3,6 +3,8 @@ import {
   ContentMoveFileInfo,
   DeleteDownloadRequest,
   DfContentAvailability,
+  DfContentBadgeMap,
+  DfContentBadgesResponse,
   DfContentEntrySearchBody,
   DfContentEntrySearchUtils,
   DfContentEntryUtils,
@@ -32,6 +34,36 @@ import { extractMediaMeta } from "../../utils/media-metadata.js";
 import { queryParamToInteger, queryParamToString, queryParamToStringArray, queryParamToBoolean } from "../../utils/query-utils.js";
 import { ServiceContentUtils } from "../../utils/service-content-utils.js";
 import { sendError, sendErrorAsResponse, sendResponse, zodParseHttp } from "../utils/utils.js";
+
+/**
+ * Per-row badge state for one page of entries.
+ *
+ * Built for the page's entries only, from indexes already in memory - the
+ * analysis index exists precisely so a list can show an "analysed" badge
+ * without opening a result file per row, and the article index is already
+ * loaded whole. Shared by the query and search routes so the two lists cannot
+ * disagree about what a badge means.
+ */
+const buildBadgeMap = (contentManager: DigitalFoundryContentManager, keys: string[]): DfContentBadgeMap => {
+  const articleIndex = contentManager.db.getAllDfArticleIndexEntries();
+  const badges: DfContentBadgeMap = {};
+  for (const key of keys) {
+    const analysis = contentManager.db.getAiAnalysisIndexEntry(key);
+    const article = articleIndex[key];
+    // Only rows with something to say - an empty object per row would
+    // double the response for nothing.
+    if (analysis || article?.hasArticle) {
+      badges[key] = {
+        // A stored failure is not an analysis: the row should read as
+        // un-analysed so it can be tried again, not as done.
+        analysed: Boolean(analysis && !analysis.hasError),
+        analysisEvidence: analysis?.evidence ?? [],
+        hasArticle: Boolean(article?.hasArticle),
+      };
+    }
+  }
+  return badges;
+};
 
 export const makeContentApiRouter = (contentManager: DigitalFoundryContentManager) => {
   const router = express.Router();
@@ -205,6 +237,7 @@ export const makeContentApiRouter = (contentManager: DigitalFoundryContentManage
       tagMode,
       downloadedOnly,
     });
+    const badges = buildBadgeMap(contentManager, result.queryResult.map((entry) => entry.contentInfo.key));
     const response: DfContentQueryResponse = {
       params: result.params,
       resultsOnPage: result.queryResult.length,
@@ -212,6 +245,7 @@ export const makeContentApiRouter = (contentManager: DigitalFoundryContentManage
       totalResults: result.totalResults,
       totalDuration: secondsToHHMMSS(result.totalDurationSeconds),
       content: result.queryResult,
+      badges,
       scanInProgress: contentManager.scanInProgress,
     };
     sendResponse(res, response);
@@ -221,9 +255,23 @@ export const makeContentApiRouter = (contentManager: DigitalFoundryContentManage
     await zodParseHttp(DfContentEntrySearchBody, req, res, async (searchProps) => {
       const allContentEntries = await contentManager.db.getAllContentEntries();
       const result = DfContentEntrySearchUtils.search(searchProps, allContentEntries);
-      result.scanInProgress = contentManager.scanInProgress;
-      return sendResponse(res, result);
+      return sendResponse(res, {
+        ...result,
+        badges: buildBadgeMap(contentManager, result.content.map((entry) => entry.contentInfo.key)),
+        scanInProgress: contentManager.scanInProgress,
+      });
     });
+  });
+
+  /*
+   * Badges alone, for refreshing a row after something that changes only the
+   * badge - an analysis finishing, most commonly. Reading a whole page of
+   * entries again to learn one boolean would be the wrong request.
+   */
+  router.get("/badges", async (req: Request, res: Response) => {
+    const keys = queryParamToStringArray(req.query.keys) ?? [];
+    const response: DfContentBadgesResponse = { badges: buildBadgeMap(contentManager, keys) };
+    return sendResponse(res, response);
   });
 
   router.get("/tags", async (req: Request, res: Response) => {

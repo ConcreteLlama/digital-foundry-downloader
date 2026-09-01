@@ -1,3 +1,4 @@
+export * from "./df-content-badges.js";
 export * from "./df-content-entry.js";
 export * from "./df-content-info.js";
 export * from "./df-content-query.js";

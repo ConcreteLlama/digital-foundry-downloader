@@ -1,9 +1,10 @@
-import { DfContentEntry, DfContentEntrySearchResponse, DfContentInfoRefreshMetaResponse } from "df-downloader-common";
+import { DfContentBadgesResponse, DfContentEntry, DfContentEntrySearchResponse, DfContentInfoRefreshMetaResponse } from "df-downloader-common";
 import { API_URL } from "../../config";
 import { AppStartListening } from "../listener";
 import { store } from "../store";
 import { addFetchListener } from "../utils";
 import {
+  fetchContentBadges,
   fetchSingleDfContentEntry,
   fetchYtVideoMeta,
   queryDfContent,
@@ -59,6 +60,13 @@ export const startListeningDfContentInfo = (startListening: AppStartListening) =
   });
   addFetchListener(startListening, fetchSingleDfContentEntry, DfContentEntry, (contentName) => {
     return [`${API_URL}/content/entry/${contentName}`];
+  });
+  addFetchListener(startListening, fetchContentBadges, DfContentBadgesResponse, (contentKeys) => {
+    const params = new URLSearchParams();
+    for (const key of contentKeys) {
+      params.append("keys", key);
+    }
+    return [`${API_URL}/content/badges?${params.toString()}`];
   });
   addFetchListener(startListening, fetchYtVideoMeta, DfContentEntry, (contentName) => {
     return [`${API_URL}/content/entry/${contentName}/fetch-youtube-meta`, { method: "POST" }];

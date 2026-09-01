@@ -26,6 +26,7 @@ import { store } from "./store/store";
 import { subscribeToChannel } from "./store/realtime/realtime-stream.ts";
 import { queryTasks } from "./store/df-tasks/tasks.action.ts";
 import { AppThemeProvider } from "./themes/theme-provider.tsx";
+import registerBadgeRefreshTriggers from "./components/tasks/badge-refresh-triggers.ts";
 import registerTaskSnackbarTriggers from "./components/tasks/task-snackbar-triggers.tsx";
 import { BranchCheckDialog } from "./components/general/branch-check.component.tsx";
 import { ChangelogDialog } from "./components/general/changelog.component.tsx";
@@ -50,7 +51,11 @@ function App() {
 const MainContainer = () => {
   useEffect(() => {
     const unregister = registerTaskSnackbarTriggers();
-    return () => unregister();
+    const unregisterBadges = registerBadgeRefreshTriggers();
+    return () => {
+      unregister();
+      unregisterBadges();
+    };
   }, []);
   useEffect(() => {
     store.dispatch(queryServiceInfo.start());

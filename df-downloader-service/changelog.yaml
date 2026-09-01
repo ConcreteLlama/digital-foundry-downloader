@@ -80,6 +80,10 @@ versions:
           - "Instead of a black rectangle you are told this machine has no decoder for the video, along with where the file is, so you can open it in a real player or through your media server"
           - "The check asks your browser what it can actually decode rather than assuming from the format, so an HEVC download is not refused on a machine that plays it perfectly well"
       enhancements:
+        - "The content list shows what has been analysed, and what has an article":
+          - "Two small marks on each row, so you can see at a glance which of your videos have been analysed and which have a written Digital Foundry piece attached, without opening each one"
+          - "The analysis mark distinguishes a thorough reading from a rough one: an analysis based on a transcript or an article is shown solid, while one drawn only from a title and description is dimmed, because that is a much weaker basis and worth knowing before you trust a tag"
+          - "Costs nothing to show - it reads what the app already has in memory, so the list is no slower to open"
         - "Backfill runs show up on the Activity page, and say what they did":
           - "A run appears while it is going, with progress and a stop button, instead of disappearing until it finished"
           - "Clicking it shows the breakdown: how many were done, how many already had the thing, how many could never take it, and anything that failed. A run of 300 producing 4 results is unremarkable if 296 already had it, and a real problem if they were skipped for want of a transcript - so those are counted separately"
@@ -115,6 +119,10 @@ versions:
           - "The file is capped and rotates, so it cannot quietly fill the disk on a long-running install"
         - "Picking items in the Backfill list stays responsive with a few thousand of them, and the list is paged rather than cut short - the selection and the select-all buttons still apply across every page"
       bugfixes:
+        - "The new marks appear as soon as they are true":
+          - "Analysing a video now updates its row straight away. Previously the result was there but the list had no idea, so it took reloading the page to see anything had happened"
+        - "The status column lines up again":
+          - "A video with two downloaded files has a longer line of detail than one with a single file, and that was pushing its whole status block sideways - so \"Downloaded\" and \"Available\" sat at different places down the page and the column read as ragged rather than as a column"
         - "Backfill says up front when it cannot run":
           - "Choosing AI analysis without an API key, or subtitles with no transcription service set up, now says so before you pick anything, and the Run button stays out of reach until it is sorted"
           - "It used to let you choose a target, select a thousand items and press Run before mentioning it, and the cost estimate quietly failed on the way so the confirmation showed no figure either"

@@ -1,5 +1,5 @@
 import { createAction } from "@reduxjs/toolkit";
-import { DfContentEntry, DfContentEntrySearchBodyInput, DfContentEntrySearchResponse, DfContentInfoRefreshMetaResponse } from "df-downloader-common";
+import { DfContentBadgesResponse, DfContentEntry, DfContentEntrySearchBodyInput, DfContentEntrySearchResponse, DfContentInfoRefreshMetaResponse } from "df-downloader-common";
 import { createQueryActions } from "../utils";
 
 //TODO: Create a separate query store
@@ -24,6 +24,14 @@ export const fetchSingleDfContentEntry = createQueryActions<string, DfContentEnt
 export const fetchYtVideoMeta = createQueryActions<string, DfContentEntry>(
   "dfContent",
   "dfContent/FETCH_YT_VIDEO_META"
+);
+
+// Badges only, for rows whose badge went stale without the entry changing -
+// an analysis finishing is the case this exists for. Cheap: the service reads
+// two in-memory indexes, so this never touches a result file or the disk.
+export const fetchContentBadges = createQueryActions<string[], DfContentBadgesResponse>(
+  "dfContent",
+  "dfContent/FETCH_CONTENT_BADGES"
 );
 
 export const resetState = createAction("dfContent/RESET_STATE");

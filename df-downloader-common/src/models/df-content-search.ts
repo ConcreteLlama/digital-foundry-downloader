@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { ContentEntryFilter } from "./filter.js";
+import { DfContentBadgeMap } from "./df-content-badges.js";
 import { DfContentEntry, DfContentEntryUtils } from "./df-content-entry.js";
 import { filterContentEntries } from "../utils/search.js";
 import { secondsToHHMMSS } from "../utils/time-utils.js";
@@ -41,7 +42,12 @@ export const DfContentEntrySearchUtils = {
   search: (
     searchParams: DfContentEntrySearchBody,
     dfContentEntries: DfContentEntry[]
-  ): DfContentEntrySearchResponse => {
+    /*
+     * Badges are the caller's job: this util is pure, and the analysis and
+     * article indexes it would need live in the service. Omitted rather than
+     * defaulted so a route cannot quietly forget to supply them.
+     */
+  ): Omit<DfContentEntrySearchResponse, "badges"> => {
     const { page, limit, filter, sort, downloadedOnly } = searchParams;
     const { sortBy, sortDirection } = sort;
     const { include, exclude } = filter || {};
@@ -82,6 +88,10 @@ export const DfContentEntrySearchResponse = z.object({
   totalResults: z.number(),
   totalDuration: z.string(),
   content: z.array(DfContentEntry),
+  /**
+   * Per-row state the entry itself does not carry - see DfContentBadgeState.
+   */
+  badges: DfContentBadgeMap,
   scanInProgress: z.boolean().optional(),
 });
 export type DfContentEntrySearchResponse = z.infer<typeof DfContentEntrySearchResponse>;

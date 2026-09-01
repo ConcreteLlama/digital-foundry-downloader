@@ -1,6 +1,7 @@
 import { createReducer } from "@reduxjs/toolkit";
 import { addQueryCases } from "../utils";
 import {
+  fetchContentBadges,
   fetchSingleDfContentEntry,
   fetchYtVideoMeta,
   queryDfContent,
@@ -18,6 +19,7 @@ const INITIAL_STATE: DfContentInfoState = {
   content: {},
   totalItems: 0,
   currentQuery: DefaultContentQuery,
+  badges: {},
   error: null,
 };
 export const dfContentReducer = createReducer(INITIAL_STATE, (builder) => {
@@ -28,12 +30,20 @@ export const dfContentReducer = createReducer(INITIAL_STATE, (builder) => {
       for (const content of payload.content) {
         state.content[content.key] = content;
       }
+      // Merged rather than replaced, matching `content` above: paging away and
+      // back should not blank the badges on rows already held.
+      Object.assign(state.badges, payload.badges ?? {});
       state.selectedContent = payload.content.map((c) => c.key);
     },
   });
   addQueryCases(builder, fetchSingleDfContentEntry, {
     success: (state, payload) => {
       state.content[payload.key] = payload;
+    },
+  });
+  addQueryCases(builder, fetchContentBadges, {
+    success: (state, payload) => {
+      Object.assign(state.badges, payload.badges);
     },
   });
   addQueryCases(builder, fetchYtVideoMeta, {

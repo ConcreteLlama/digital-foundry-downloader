@@ -22,3 +22,12 @@ export const selectPageInfo = createSelector(selectQuery, selectTotalItems, (que
   limit: query.limit!,
   numPages: Math.ceil(totalItems / query.limit!),
 }));
+
+/**
+ * Analysis and article state for one row.
+ *
+ * Absent means "nothing to say" - the query only sends entries that have
+ * something, so a missing entry is the common case rather than an error.
+ */
+export const selectContentBadges = (contentKey: string) => (state: RootState) =>
+  state.dfContent.badges[contentKey];

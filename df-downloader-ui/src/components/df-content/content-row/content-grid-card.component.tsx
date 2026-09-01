@@ -5,6 +5,7 @@ import { monoFontFamily } from "../../../themes/build-theme.ts";
 import { DfThumbnailImage } from "../../general/df-thumbnail-image.component.tsx";
 import { contentRowStateSpecs, spineStyles } from "./content-row-state.ts";
 import { StartDownloadingButton } from "../start-download-dialog.component.tsx";
+import { RowBadges } from "./row-badges.component.tsx";
 import { StateBlock } from "./state-block.component.tsx";
 import { useContentRowStatus } from "./use-content-row-status.ts";
 
@@ -102,9 +103,12 @@ export const ContentGridCard = ({ dfContentName, onClick }: ContentGridCardProps
         >
           {contentInfo.title}
         </Typography>
-        <Typography sx={{ fontFamily: monoFontFamily, fontSize: "0.625rem", color: "text.secondary" }}>
-          {contentInfo.publishedDate.toISOString().slice(0, 10)}
-        </Typography>
+        <Stack direction="row" spacing={0.75} sx={{ alignItems: "center" }}>
+          <Typography sx={{ fontFamily: monoFontFamily, fontSize: "0.625rem", color: "text.secondary" }}>
+            {contentInfo.publishedDate.toISOString().slice(0, 10)}
+          </Typography>
+          <RowBadges contentKey={contentInfo.key} />
+        </Stack>
         <Box sx={{ marginTop: "auto" }} onClick={(event) => event.stopPropagation()}>
           {status.state === "available" ? (
             <StartDownloadingButton

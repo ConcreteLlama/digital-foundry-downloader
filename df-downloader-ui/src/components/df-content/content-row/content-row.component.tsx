@@ -6,6 +6,7 @@ import { RowDensity } from "../../../themes/ui-preferences.ts";
 import { DfThumbnailImage } from "../../general/df-thumbnail-image.component.tsx";
 import { contentRowStateSpecs, spineStyles } from "./content-row-state.ts";
 import { StartDownloadingButton } from "../start-download-dialog.component.tsx";
+import { RowBadges } from "./row-badges.component.tsx";
 import { StateBlock, STATE_BLOCK_WIDTH } from "./state-block.component.tsx";
 import { useContentRowStatus } from "./use-content-row-status.ts";
 
@@ -151,19 +152,28 @@ export const ContentRow = ({ dfContentName, density, onClick }: ContentRowProps)
         >
           {contentInfo.title}
         </Typography>
-        <Typography
-          sx={{
-            fontFamily: monoFontFamily,
-            fontSize: "0.6875rem",
-            color: "text.secondary",
-            marginTop: 0.25,
-            whiteSpace: "nowrap",
-            overflow: "hidden",
-            textOverflow: "ellipsis",
-          }}
-        >
-          {metaParts.join("  /  ")}
-        </Typography>
+        {/*
+          Badges sit after the meta line rather than before it: the meta line
+          is the thing being scanned down the page, so it keeps the left edge
+          and the badges take whatever is left. minWidth on the text is what
+          makes the ellipsis land there and not on the icons.
+        */}
+        <Stack direction="row" spacing={0.75} sx={{ alignItems: "center", marginTop: 0.25, minWidth: 0 }}>
+          <Typography
+            sx={{
+              fontFamily: monoFontFamily,
+              fontSize: "0.6875rem",
+              color: "text.secondary",
+              whiteSpace: "nowrap",
+              overflow: "hidden",
+              textOverflow: "ellipsis",
+              minWidth: 0,
+            }}
+          >
+            {metaParts.join("  /  ")}
+          </Typography>
+          <RowBadges contentKey={contentInfo.key} />
+        </Stack>
         {density !== "compact" && contentInfo.tags && contentInfo.tags.length > 0 && (
           <Stack direction="row" spacing={0.5} sx={{ marginTop: 0.5, flexWrap: "wrap", rowGap: 0.5 }}>
             {contentInfo.tags.slice(0, belowMd ? 2 : 4).map((tag) => (
