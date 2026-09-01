@@ -52,6 +52,14 @@ export type DfContentInfoItemDetailProps = {
    * panel by the modal - which left the whole band beside it empty.
    */
   onClose?: () => void;
+  /**
+   * Open the player here, in seconds.
+   *
+   * For arriving from somewhere that found a moment but has no player of its
+   * own to seek - the standalone analysis dialog, where a finding's timestamp
+   * is only useful if it can take you to the video.
+   */
+  startAtSeconds?: number;
 };
 
 type DetailTab = "content" | "files" | "analysis" | "article" | "activity";
@@ -148,7 +156,7 @@ const SectionHeading = ({ children }: { children: React.ReactNode }) => (
   </Typography>
 );
 
-export const DfContentInfoItemDetail = ({ dfContentName, onClose }: DfContentInfoItemDetailProps) => {
+export const DfContentInfoItemDetail = ({ dfContentName, onClose, startAtSeconds }: DfContentInfoItemDetailProps) => {
   const dfContentEntry = useDfContentEntry(dfContentName);
   const theme = useTheme();
   const belowMd = useMediaQuery(theme.breakpoints.down("md"));
@@ -234,6 +242,16 @@ export const DfContentInfoItemDetail = ({ dfContentName, onClose }: DfContentInf
   const onPlayFromReady = useCallback((playFrom: (seconds: number) => void) => {
     playFromRef.current = playFrom;
   }, []);
+  /*
+   * Honoured once the media registers its seek, which happens on mount rather
+   * than on first play - so arriving with a timestamp opens the player there
+   * instead of at the beginning.
+   */
+  useEffect(() => {
+    if (startAtSeconds != null) {
+      playFromRef.current?.(startAtSeconds);
+    }
+  }, [startAtSeconds, dfContentName]);
   const jumpTo = useCallback((seconds: number) => {
     playFromRef.current?.(seconds);
   }, []);

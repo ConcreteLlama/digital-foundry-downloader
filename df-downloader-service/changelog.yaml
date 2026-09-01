@@ -80,6 +80,8 @@ versions:
           - "Instead of a black rectangle you are told this machine has no decoder for the video, along with where the file is, so you can open it in a real player or through your media server"
           - "The check asks your browser what it can actually decode rather than assuming from the format, so an HEVC download is not refused on a machine that plays it perfectly well"
       enhancements:
+        - "Timestamps in an analysis opened from the Analysis section now take you to the video":
+          - "Reading a console comparison and wanting to see the moment being described used to be a dead end there - the timestamps only worked in a video's own panel, where there is a player beside them. Opening one now plays the video from that point"
         - "The content list shows what has been analysed, and what has an article":
           - "Two small marks on each row, so you can see at a glance which of your videos have been analysed and which have a written Digital Foundry piece attached, without opening each one"
           - "The analysis mark distinguishes a thorough reading from a rough one: an analysis based on a transcript or an article is shown solid, while one drawn only from a title and description is dimmed, because that is a much weaker basis and worth knowing before you trust a tag"
@@ -119,6 +121,8 @@ versions:
           - "The file is capped and rotates, so it cannot quietly fill the disk on a long-running install"
         - "Picking items in the Backfill list stays responsive with a few thousand of them, and the list is paged rather than cut short - the selection and the select-all buttons still apply across every page"
       bugfixes:
+        - "Every Analysis page can now open the analysis behind a row":
+          - "PC settings, Hardware and Costs listed what had been found but gave you no way to read the full analysis it came from - only the games and platform comparison pages did. Clicking a title now opens it on all of them"
         - "The new marks appear as soon as they are true":
           - "Analysing a video now updates its row straight away. Previously the result was there but the list had no idea, so it took reloading the page to see anything had happened"
         - "The status column lines up again":

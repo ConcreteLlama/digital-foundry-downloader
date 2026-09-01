@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { fetchAiCosts } from "../../api/ai-analysis.ts";
 import { conciseFormatDate } from "../../utils/date.ts";
 import { monoFontFamily } from "../../themes/build-theme.ts";
+import { useAnalysisDrilldown } from "./use-analysis-drilldown.tsx";
 
 /**
  * What the analyses you currently hold cost to produce.
@@ -30,6 +31,7 @@ const numberSx = { fontFamily: monoFontFamily, fontVariantNumeric: "tabular-nums
 
 export const CostsPage = () => {
   const [ledger, setLedger] = useState<AiCostLedgerResponse | null>(null);
+  const { openAnalysis, dialogs } = useAnalysisDrilldown("costs");
   const [loading, setLoading] = useState(true);
   const [failed, setFailed] = useState(false);
 
@@ -135,7 +137,31 @@ export const CostsPage = () => {
               key={`${entry.contentKey}-${entry.analysedAt.toISOString()}-${index}`}
               direction="row"
               spacing={2}
-              sx={{ alignItems: "baseline", paddingY: 1 }}
+              /*
+               * The whole row, unlike the card pages where only the title is
+               * the control: this row is a compact ledger line with nothing
+               * inside it to read closely or select, so the larger target is
+               * the better one.
+               */
+              role="button"
+              tabIndex={0}
+              onClick={() => openAnalysis(entry.contentKey, entry.title)}
+              onKeyDown={(event) => {
+                if (event.key === "Enter" || event.key === " ") {
+                  event.preventDefault();
+                  openAnalysis(entry.contentKey, entry.title);
+                }
+              }}
+              sx={{
+                alignItems: "baseline",
+                paddingY: 1,
+                paddingX: 1,
+                marginX: -1,
+                cursor: "pointer",
+                borderRadius: 1,
+                "&:hover": { backgroundColor: "action.hover" },
+                "&:focus-visible": { outline: "2px solid", outlineColor: "primary.main", outlineOffset: -2 },
+              }}
             >
               <Box sx={{ minWidth: 0, flex: "1 1 auto" }}>
                 <Typography variant="body2" sx={{ lineHeight: 1.3 }}>
@@ -162,6 +188,8 @@ export const CostsPage = () => {
           ))}
         </Stack>
       </Paper>
+
+      {dialogs}
     </Box>
   );
 };

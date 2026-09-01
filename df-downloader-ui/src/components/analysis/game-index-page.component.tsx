@@ -18,12 +18,10 @@ import {
   alpha,
 } from "@mui/material";
 import { AiContentTypeLabels, GameGroup, GameIndexResponse, normaliseName } from "df-downloader-common";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { fetchGameIndex } from "../../api/ai-analysis.ts";
 import { ANALYSIS_CARD_GAP } from "./analysis-card.component.tsx";
-import { MiddleModal } from "../general/middle-modal.component.tsx";
-import { DfContentInfoItemDetail } from "../df-content/df-content-item-detail/df-content-item-detail.component.tsx";
-import { AnalysisDialog } from "./analysis-dialog.component.tsx";
+import { useAnalysisDrilldown } from "./use-analysis-drilldown.tsx";
 import { conciseFormatDate } from "../../utils/date.ts";
 import { monoFontFamily } from "../../themes/build-theme.ts";
 
@@ -221,8 +219,17 @@ export const GameIndexPage = () => {
   const [data, setData] = useState<GameIndexResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
-  const [analysisKey, setAnalysisKey] = useState<string | null>(null);
-  const [contentKey, setContentKey] = useState<string | null>(null);
+  const { openAnalysis, dialogs } = useAnalysisDrilldown("game-index");
+  // The title comes from the row that was clicked, so the dialog can name the
+  // item while its analysis is still loading.
+  const openItemAnalysis = useCallback(
+    (contentKey: string) =>
+      openAnalysis(
+        contentKey,
+        data?.groups.flatMap((group) => group.items).find((item) => item.contentKey === contentKey)?.title
+      ),
+    [data, openAnalysis]
+  );
 
   useEffect(() => {
     let cancelled = false;
@@ -298,7 +305,7 @@ export const GameIndexPage = () => {
           <Box sx={{ overflowY: "auto", minHeight: 0, pr: 0.5 }}>
             <Stack spacing={ANALYSIS_CARD_GAP}>
               {filtered.map((group) => (
-                <GroupRow key={group.key} group={group} onOpen={setAnalysisKey} />
+                <GroupRow key={group.key} group={group} onOpen={openItemAnalysis} />
               ))}
               {filtered.length === 0 && (
                 <Typography variant="body2" sx={{ color: "text.disabled" }}>
@@ -310,26 +317,7 @@ export const GameIndexPage = () => {
         </>
       )}
 
-      <AnalysisDialog
-        contentKey={analysisKey}
-        title={data.groups.flatMap((group) => group.items).find((item) => item.contentKey === analysisKey)?.title}
-        onClose={() => setAnalysisKey(null)}
-        onOpenContent={(key) => {
-          setAnalysisKey(null);
-          setContentKey(key);
-        }}
-      />
-
-      <MiddleModal
-        open={Boolean(contentKey)}
-        onClose={() => setContentKey(null)}
-        id="game-index-content-modal"
-        hideCloseButton
-      >
-        <Box>
-          <DfContentInfoItemDetail dfContentName={contentKey || ""} onClose={() => setContentKey(null)} />
-        </Box>
-      </MiddleModal>
+      {dialogs}
     </Stack>
   );
 };

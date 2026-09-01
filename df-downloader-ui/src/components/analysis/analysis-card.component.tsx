@@ -1,4 +1,4 @@
-import { Box, Paper, alpha } from "@mui/material";
+import { Box, Paper, Typography, alpha } from "@mui/material";
 import { ReactNode } from "react";
 
 /**
@@ -62,3 +62,41 @@ export const AnalysisCard = ({
 
 /** The gap between cards - wider than any padding inside one, on purpose. */
 export const ANALYSIS_CARD_GAP = 2;
+
+/**
+ * A card's title, as the way into that item's full analysis.
+ *
+ * The title rather than the whole card: these cards hold tables meant to be
+ * read and selected from, and a click anywhere navigating away would fight
+ * that. Takes the card's own accent so it does not introduce a third colour
+ * into a header built around one.
+ */
+export const AnalysisCardTitle = ({
+  children,
+  onOpen,
+  accent = "primary.main",
+}: {
+  children: ReactNode;
+  onOpen: () => void;
+  accent?: "primary.main" | "secondary.main";
+}) => (
+  <Typography
+    component="button"
+    type="button"
+    onClick={onOpen}
+    sx={{
+      fontWeight: 600,
+      color: accent,
+      font: "inherit",
+      background: "none",
+      border: "none",
+      padding: 0,
+      cursor: "pointer",
+      textAlign: "left",
+      "&:hover": { textDecoration: "underline" },
+      "&:focus-visible": { outline: "2px solid", outlineColor: accent, outlineOffset: 2 },
+    }}
+  >
+    {children}
+  </Typography>
+);

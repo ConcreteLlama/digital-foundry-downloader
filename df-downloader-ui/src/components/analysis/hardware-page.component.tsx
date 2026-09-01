@@ -1,9 +1,10 @@
 import { Alert, Box, Chip, CircularProgress, Divider, Stack, Typography } from "@mui/material";
 import { HardwareIndexResponse, HardwareRow } from "df-downloader-common";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { fetchHardwareIndex } from "../../api/ai-analysis.ts";
-import { ANALYSIS_CARD_GAP, AnalysisCard } from "./analysis-card.component.tsx";
+import { ANALYSIS_CARD_GAP, AnalysisCard, AnalysisCardTitle } from "./analysis-card.component.tsx";
 import { conciseFormatDate } from "../../utils/date.ts";
+import { useAnalysisDrilldown } from "./use-analysis-drilldown.tsx";
 
 /**
  * Every analysed hardware review.
@@ -18,12 +19,14 @@ import { conciseFormatDate } from "../../utils/date.ts";
  * two verdicts at two moments, and collapsing them would silently pick one.
  */
 
-const ReviewCard = ({ row }: { row: HardwareRow }) => (
+const ReviewCard = ({ row, onOpen }: { row: HardwareRow; onOpen: (contentKey: string) => void }) => (
   <AnalysisCard
     accent="secondary.main"
     header={
       <Stack direction="row" spacing={1} alignItems="baseline" flexWrap="wrap" useFlexGap>
-        <Typography sx={{ fontWeight: 600, color: "secondary.main" }}>{row.title}</Typography>
+        <AnalysisCardTitle accent="secondary.main" onOpen={() => onOpen(row.contentKey)}>
+          {row.title}
+        </AnalysisCardTitle>
         <Box sx={{ flex: "1 1 auto" }} />
         <Typography variant="caption" sx={{ color: "text.disabled" }}>
           {conciseFormatDate(row.publishedDate)}
@@ -98,6 +101,13 @@ export const HardwarePage = () => {
   const [loading, setLoading] = useState(true);
   const [failed, setFailed] = useState(false);
   const [productClass, setProductClass] = useState<string | null>(null);
+  const { openAnalysis, dialogs } = useAnalysisDrilldown("hardware");
+  // The row's own title, so the dialog is named before its analysis arrives.
+  const openRowAnalysis = useCallback(
+    (contentKey: string) =>
+      openAnalysis(contentKey, data?.rows.find((row) => row.contentKey === contentKey)?.title),
+    [data, openAnalysis]
+  );
 
   useEffect(() => {
     let cancelled = false;
@@ -189,11 +199,13 @@ export const HardwarePage = () => {
 
           <Stack spacing={ANALYSIS_CARD_GAP}>
             {rows.map((row) => (
-              <ReviewCard key={row.contentKey} row={row} />
+              <ReviewCard key={row.contentKey} row={row} onOpen={openRowAnalysis} />
             ))}
           </Stack>
         </>
       )}
+
+      {dialogs}
     </Stack>
   );
 };

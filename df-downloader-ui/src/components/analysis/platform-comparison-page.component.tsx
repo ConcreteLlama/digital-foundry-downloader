@@ -19,13 +19,11 @@ import {
   alpha,
 } from "@mui/material";
 import { PlatformComparisonResponse, PlatformComparisonRow, PlatformMode, normaliseName } from "df-downloader-common";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { fetchPlatformComparison } from "../../api/ai-analysis.ts";
 import { monoFontFamily } from "../../themes/build-theme.ts";
 import { conciseFormatDate } from "../../utils/date.ts";
-import { MiddleModal } from "../general/middle-modal.component.tsx";
-import { DfContentInfoItemDetail } from "../df-content/df-content-item-detail/df-content-item-detail.component.tsx";
-import { AnalysisDialog } from "./analysis-dialog.component.tsx";
+import { useAnalysisDrilldown } from "./use-analysis-drilldown.tsx";
 
 /**
  * Every console comparison, side by side.
@@ -222,8 +220,13 @@ export const PlatformComparisonPage = () => {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [selectedPlatforms, setSelectedPlatforms] = useState<string[]>([]);
-  const [analysisKey, setAnalysisKey] = useState<string | null>(null);
-  const [contentKey, setContentKey] = useState<string | null>(null);
+  const { openAnalysis, dialogs } = useAnalysisDrilldown("platform-comparison");
+  // Named from the clicked row, so the dialog has a title before the analysis
+  // itself has loaded.
+  const openRowAnalysis = useCallback(
+    (contentKey: string) => openAnalysis(contentKey, data?.rows.find((row) => row.contentKey === contentKey)?.title),
+    [data, openAnalysis]
+  );
 
   useEffect(() => {
     let cancelled = false;
@@ -368,7 +371,7 @@ export const PlatformComparisonPage = () => {
                     key={row.contentKey}
                     row={row}
                     platforms={columns}
-                    onOpen={setAnalysisKey}
+                    onOpen={openRowAnalysis}
                   />
                 ))}
               </TableBody>
@@ -386,26 +389,7 @@ export const PlatformComparisonPage = () => {
         </>
       )}
 
-      <AnalysisDialog
-        contentKey={analysisKey}
-        title={data.rows.find((row) => row.contentKey === analysisKey)?.title}
-        onClose={() => setAnalysisKey(null)}
-        onOpenContent={(key) => {
-          setAnalysisKey(null);
-          setContentKey(key);
-        }}
-      />
-
-      <MiddleModal
-        open={Boolean(contentKey)}
-        onClose={() => setContentKey(null)}
-        id="platform-comparison-content-modal"
-        hideCloseButton
-      >
-        <Box>
-          <DfContentInfoItemDetail dfContentName={contentKey || ""} onClose={() => setContentKey(null)} />
-        </Box>
-      </MiddleModal>
+      {dialogs}
     </Stack>
   );
 };

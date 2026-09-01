@@ -9,11 +9,12 @@ import {
   Typography,
 } from "@mui/material";
 import { PcSettingsIndexResponse, PcSettingsRow } from "df-downloader-common";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { fetchPcSettingsIndex } from "../../api/ai-analysis.ts";
-import { ANALYSIS_CARD_GAP, AnalysisCard } from "./analysis-card.component.tsx";
+import { ANALYSIS_CARD_GAP, AnalysisCard, AnalysisCardTitle } from "./analysis-card.component.tsx";
 import { monoFontFamily } from "../../themes/build-theme.ts";
 import { conciseFormatDate } from "../../utils/date.ts";
+import { useAnalysisDrilldown } from "./use-analysis-drilldown.tsx";
 
 /**
  * Every PC review's optimised settings, in one place.
@@ -44,11 +45,11 @@ const CostCell = ({ pct }: { pct?: number | null }) =>
     </Typography>
   );
 
-const ReviewCard = ({ row }: { row: PcSettingsRow }) => (
+const ReviewCard = ({ row, onOpen }: { row: PcSettingsRow; onOpen: (contentKey: string) => void }) => (
   <AnalysisCard
     header={
       <Stack direction="row" spacing={1} alignItems="baseline" flexWrap="wrap" useFlexGap>
-        <Typography sx={{ fontWeight: 600, color: "primary.main" }}>{row.game || row.title}</Typography>
+        <AnalysisCardTitle onOpen={() => onOpen(row.contentKey)}>{row.game || row.title}</AnalysisCardTitle>
         {row.engine && (
           <Chip
             size="small"
@@ -146,6 +147,13 @@ export const PcSettingsPage = () => {
   const [loading, setLoading] = useState(true);
   const [failed, setFailed] = useState(false);
   const [search, setSearch] = useState("");
+  const { openAnalysis, dialogs } = useAnalysisDrilldown("pc-settings");
+  // The row's own title, so the dialog is named before its analysis arrives.
+  const openRowAnalysis = useCallback(
+    (contentKey: string) =>
+      openAnalysis(contentKey, data?.rows.find((row) => row.contentKey === contentKey)?.title),
+    [data, openAnalysis]
+  );
 
   useEffect(() => {
     let cancelled = false;
@@ -263,12 +271,14 @@ export const PcSettingsPage = () => {
           ) : (
             <Stack spacing={ANALYSIS_CARD_GAP}>
               {rows.map((row) => (
-                <ReviewCard key={row.contentKey} row={row} />
+                <ReviewCard key={row.contentKey} row={row} onOpen={openRowAnalysis} />
               ))}
             </Stack>
           )}
         </>
       )}
+
+      {dialogs}
     </Stack>
   );
 };

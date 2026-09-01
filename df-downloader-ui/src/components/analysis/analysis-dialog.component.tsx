@@ -45,8 +45,11 @@ export type AnalysisDialogProps = {
   contentKey: string | null;
   title?: string;
   onClose: () => void;
-  /** Opens the full content detail view for this item. */
-  onOpenContent: (contentKey: string) => void;
+  /**
+   * Opens the full content detail view for this item, optionally at a moment
+   * in the video - which is how a finding's timestamp becomes clickable here.
+   */
+  onOpenContent: (contentKey: string, startAtSeconds?: number) => void;
 };
 
 /**
@@ -95,7 +98,19 @@ export const AnalysisDialog = ({ contentKey, title, onClose, onOpenContent }: An
             of the dialog fixed means neither is lost part-way down a long
             analysis. */}
         <Box sx={{ flex: "1 1 auto", minHeight: 0, overflowY: "auto", overflowX: "hidden", py: 2 }}>
-          {contentKey && <AiAnalysisPanel contentKey={contentKey} enabled={enabled} />}
+          {contentKey && (
+            <AiAnalysisPanel
+              contentKey={contentKey}
+              enabled={enabled}
+              /*
+               * The content view seeks its own player in place; there is no
+               * player here, so the equivalent is to open the content at that
+               * moment. Without this the panel renders no timestamps at all,
+               * which read as findings that simply had none.
+               */
+              onJumpTo={(seconds) => onOpenContent(contentKey, seconds)}
+            />
+          )}
         </Box>
 
         <Divider sx={{ flex: "0 0 auto" }} />
