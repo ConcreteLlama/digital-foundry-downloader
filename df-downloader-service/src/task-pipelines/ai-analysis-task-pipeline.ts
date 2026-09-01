@@ -1,6 +1,6 @@
 import { AiAnalysisSourceSelection } from "df-downloader-common";
 import { AiAnalysisResult, DfContentEntry, DfContentInfo, logger, makeErrorMessage } from "df-downloader-common";
-import { AiAnalysisConfig } from "df-downloader-common/config/ai-analysis-config.js";
+import { AiAnalysisConfig, AiProviderId } from "df-downloader-common/config/ai-analysis-config.js";
 import { TaskManager } from "../task-manager/task-manager.js";
 import { taskify } from "../task-manager/utils.js";
 import { TaskPipelineExecution, makeTaskPipeline } from "../task-manager/task-pipeline.js";
@@ -74,6 +74,7 @@ export const createAiAnalysisTaskPipeline = (opts: AiAnalysisTaskPipelineCreator
       articleUrl?: string;
       articleTitle?: string;
       sources?: AiAnalysisSourceSelection;
+      provider?: AiProviderId;
       allowRemoteChapters?: boolean;
       /** Set when a bulk run queued this - see TaskPipelineDetails.backfillJobId. */
       backfillJobId?: string;
@@ -93,6 +94,7 @@ export const createAiAnalysisTaskPipeline = (opts: AiAnalysisTaskPipelineCreator
           articleUrl: context.articleUrl,
           articleTitle: context.articleTitle,
           sources: context.sources,
+          provider: context.provider,
           allowRemoteChapters: context.allowRemoteChapters,
           force: context.force,
         }),

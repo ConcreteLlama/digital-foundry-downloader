@@ -372,8 +372,54 @@ export const AiAnalysisConfigUtils = {
    * `enabled` alone isn't enough - without a key every run would fail at
    * the first request, so the UI and the service both gate on this.
    */
-  isUsable: (config?: AiAnalysisConfig): boolean =>
-    Boolean(config?.enabled && config.apiKey && config.apiKey.trim().length > 0),
+  isUsable: (config?: AiAnalysisConfig): boolean => AiAnalysisConfigUtils.usableProviders(config).length > 0,
+
+  /**
+   * Why one engine cannot be used, or undefined when it can.
+   *
+   * A reason rather than a boolean so the UI can say what to go and fix,
+   * instead of presenting an option that silently does nothing.
+   */
+  providerUnusableReason: (config: AiAnalysisConfig | undefined, provider: AiProviderId): string | undefined => {
+    if (!config?.enabled) {
+      return "AI analysis is turned off";
+    }
+    if (provider === "anthropic") {
+      return config.apiKey && config.apiKey.trim().length > 0 ? undefined : "No Anthropic API key has been set";
+    }
+    if (!config.local?.enabled) {
+      return "Local analysis is turned off";
+    }
+    // Until the app manages a server itself, one has to already be running.
+    return config.local.serverUrl && config.local.serverUrl.trim().length > 0
+      ? undefined
+      : "No local server address has been set";
+  },
+
+  /** Every engine that could answer right now. */
+  usableProviders: (config?: AiAnalysisConfig): AiProviderId[] =>
+    (["anthropic", "local"] as AiProviderId[]).filter(
+      (provider) => AiAnalysisConfigUtils.providerUnusableReason(config, provider) === undefined
+    ),
+
+  /**
+   * Which engine a run should use.
+   *
+   * A request wins if it can be honoured; otherwise the configured default,
+   * and failing that whatever is usable. Falling back rather than failing is
+   * deliberate for unattended work - an auto-analysis should not stop because
+   * the preferred engine is unavailable when another one is right there.
+   */
+  resolveProvider: (config: AiAnalysisConfig, requested?: AiProviderId): AiProviderId | undefined => {
+    const usable = AiAnalysisConfigUtils.usableProviders(config);
+    if (requested && usable.includes(requested)) {
+      return requested;
+    }
+    if (usable.includes(config.defaultProvider)) {
+      return config.defaultProvider;
+    }
+    return usable[0];
+  },
   /**
    * The effort value that may actually be sent for this config, or
    * undefined when the parameter must be omitted entirely.

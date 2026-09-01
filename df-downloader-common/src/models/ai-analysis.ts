@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { AiAnalysisModel } from "../config/ai-analysis-config.js";
+import { AiAnalysisModel, AiProviderId } from "../config/ai-analysis-config.js";
 
 /**
  * What kind of video this is, which decides what structured data (if any)
@@ -589,6 +589,8 @@ export const AnalyseContentRequest = z.object({
   /** Re-run even when a result already exists. */
   force: z.boolean().default(false),
   sources: AiAnalysisSourceSelection.optional(),
+  /** Which engine to use for this run only. Absent means the configured default. */
+  provider: AiProviderId.optional(),
 });
 export type AnalyseContentRequest = z.infer<typeof AnalyseContentRequest>;
 

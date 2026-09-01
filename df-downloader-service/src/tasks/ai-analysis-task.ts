@@ -1,7 +1,7 @@
 import { AiAnalysisSourceSelection } from "df-downloader-common";
 import { SrtLine } from "df-downloader-common";
 import { AiAnalysisResult, DfContentEntry, logger } from "df-downloader-common";
-import { AiAnalysisConfig } from "df-downloader-common/config/ai-analysis-config.js";
+import { AiAnalysisConfig, AiProviderId } from "df-downloader-common/config/ai-analysis-config.js";
 import { configService } from "../config/config.js";
 import { TaskControllerTaskBuilder, TaskControls } from "../task-manager/task/task-controller-task.js";
 import { TaskManager, TaskManagerOpts } from "../task-manager/task-manager.js";
@@ -31,13 +31,15 @@ type AiAnalysisTaskContext = {
   force?: boolean;
   /** Which sources this run may read - absent means the configured defaults. */
   sources?: AiAnalysisSourceSelection;
+  /** Which engine runs it - absent means the configured default. */
+  provider?: AiProviderId;
   /** See resolveChapters - true only when a person is waiting on this one item. */
   allowRemoteChapters?: boolean;
 };
 
 const aiAnalysisTaskControls: TaskControls<AiAnalysisResult, AiAnalysisTaskContext> = {
   start: async (context: AiAnalysisTaskContext) => {
-    const { entry, config, chapters, articleText, articleUrl, articleTitle, transcriptText, transcriptLines, sources, allowRemoteChapters } = context;
+    const { entry, config, chapters, articleText, articleUrl, articleTitle, transcriptText, transcriptLines, sources, provider, allowRemoteChapters } = context;
     /*
      * Checked here, immediately before spending money, rather than when this
      * was queued.
@@ -65,7 +67,7 @@ const aiAnalysisTaskControls: TaskControls<AiAnalysisResult, AiAnalysisTaskConte
     }
     context.stage = "Analysing";
     logger.log("info", `Analysing ${entry.key} with ${config.model}`);
-    const result = await analyseContent(config, { entry, chapters, articleText, articleUrl, articleTitle, transcriptText, transcriptLines, sources, allowRemoteChapters });
+    const result = await analyseContent(config, { entry, chapters, articleText, articleUrl, articleTitle, transcriptText, transcriptLines, sources, provider, allowRemoteChapters });
     // analyseContent reports an ordinary failure inside the result rather
     // than throwing, so the task has to promote it - otherwise a run that
     // failed would be recorded as a successful task holding an error.

@@ -1,4 +1,5 @@
 import { AiAnalysisSourceSelection } from "./ai-analysis.js";
+import { AiProviderId } from "../config/ai-analysis-config.js";
 import { z } from "zod";
 import { AiEvidenceSource } from "./ai-analysis.js";
 
@@ -125,6 +126,8 @@ export const BulkBackfillRequest = z.object({
   sources: AiAnalysisSourceSelection.optional(),
   /** Metadata only - what to gather before rewriting. See MetadataBackfillOptions. */
   metadataOptions: MetadataBackfillOptions.optional(),
+  /** Analysis only. Which engine runs the whole batch. */
+  provider: AiProviderId.optional(),
   /**
    * Redo work that has already been done - re-transcribe, re-analyse, or
    * re-search for an article that was already matched.
@@ -156,6 +159,11 @@ export const BulkBackfillEstimateRequest = z.object({
   contentKeys: z.array(z.string()).default([]),
   force: z.boolean().default(false),
   metadataOptions: MetadataBackfillOptions.optional(),
+  /**
+   * Analysis only. Priced for the engine that will actually run it - a local
+   * one costs time rather than money, which is a different answer entirely.
+   */
+  provider: AiProviderId.optional(),
   /**
    * Analysis only. Priced with the same sources the run will actually read,
    * or the figure is for a different run than the one about to start -

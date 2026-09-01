@@ -72,7 +72,7 @@ import {
 import { AiAnalysisTaskManager } from "./tasks/ai-analysis-task.js";
 import { BULK_BACKFILL_CONCURRENCY, BulkBackfillTask, isBulkBackfillTask } from "./tasks/bulk-backfill-task.js";
 import { ensureArticleForContent } from "./utils/df-articles/ensure-article.js";
-import { AiAnalysisConfig } from "df-downloader-common/config/ai-analysis-config.js";
+import { AiAnalysisConfig, AiProviderId } from "df-downloader-common/config/ai-analysis-config.js";
 import { AiAnalysisSourceSelection, MetadataBackfillOptions, metadataFingerprintOf } from "df-downloader-common";
 import { buildMetadataForBackfill } from "./utils/metadata-backfill.js";
 import { InjectMetadataTask } from "./tasks/inject-metadata-task.js";
@@ -490,7 +490,7 @@ export class DfTaskManager {
    * run with settings that differ from the saved ones - which is what the
    * "analyse with a different model" path in the UI needs.
    */
-  analyseContent(entry: DfContentEntry, config: AiAnalysisConfig, opts: { chapters?: Chapter[]; articleText?: string; articleUrl?: string; articleTitle?: string; backfillJobId?: string; force?: boolean; sources?: AiAnalysisSourceSelection } = {}) {
+  analyseContent(entry: DfContentEntry, config: AiAnalysisConfig, opts: { chapters?: Chapter[]; articleText?: string; articleUrl?: string; articleTitle?: string; backfillJobId?: string; force?: boolean; sources?: AiAnalysisSourceSelection; provider?: AiProviderId } = {}) {
     const analysisExecution = this.aiAnalysisTaskPipeline.start({
       dfContentInfo: entry.contentInfo,
       entry,
@@ -502,6 +502,7 @@ export class DfTaskManager {
       backfillJobId: opts.backfillJobId,
       force: opts.force,
       sources: opts.sources,
+      provider: opts.provider,
       // A bulk run always carries a job id, so this is exactly "one item a
       // person asked for". Only those may spend a YouTube request looking for
       // chapters the file did not have - see resolveChapters.
@@ -618,7 +619,8 @@ export class DfTaskManager {
     config: AiAnalysisConfig,
     backfillJobId?: string,
     force?: boolean,
-    sources?: AiAnalysisSourceSelection
+    sources?: AiAnalysisSourceSelection,
+    provider?: AiProviderId
   ) {
     const db = serviceLocator.db;
     const entry = await db.getContentEntry(contentKey);
@@ -645,6 +647,7 @@ export class DfTaskManager {
       backfillJobId,
       force,
       sources,
+      provider,
     });
     return "analysed";
   }
@@ -717,7 +720,8 @@ export class DfTaskManager {
     force: boolean,
     language: string,
     sources?: AiAnalysisSourceSelection,
-    metadataOptions?: MetadataBackfillOptions
+    metadataOptions?: MetadataBackfillOptions,
+    provider?: AiProviderId
   ) {
     // Assigned the moment the task exists, which is after these options are
     // built - the closures below only run later, once it is dispatching.
@@ -737,7 +741,7 @@ export class DfTaskManager {
             if (!config) {
               return Promise.reject(new Error("AI analysis is not configured"));
             }
-            return this.runAnalysisForContent(contentKey, config, jobId, force, sources);
+            return this.runAnalysisForContent(contentKey, config, jobId, force, sources, provider);
           },
           runMetadata: (contentKey: string) =>
             this.runMetadataForContent(contentKey, metadataOptions ?? { fromYouTube: false, fromAnalysis: false }),

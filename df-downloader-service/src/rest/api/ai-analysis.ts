@@ -172,7 +172,7 @@ export const makeAiAnalysisRouter = (contentManager: DigitalFoundryContentManage
   });
 
   router.post("/analyse", async (req, res) => {
-    await zodParseHttp(AnalyseContentRequest, req, res, async ({ contentKey, force, sources }) => {
+    await zodParseHttp(AnalyseContentRequest, req, res, async ({ contentKey, force, sources, provider }) => {
       const context = await resolveContext(contentManager, contentKey);
       if (!context.ok) {
         return sendError(res, context.error, context.status);
@@ -207,6 +207,7 @@ export const makeAiAnalysisRouter = (contentManager: DigitalFoundryContentManage
           articleUrl: article?.url,
           articleTitle: article?.title,
           sources,
+          provider,
           // Carried through, not just used for the guard above. Without it the
           // task's own already-analysed check saw force as undefined and
           // returned the stored result, so Re-analyse reported success and

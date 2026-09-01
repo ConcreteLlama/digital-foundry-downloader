@@ -14,7 +14,8 @@ import {
 } from "df-downloader-common";
 import { AiAnalysisConfig, AiAnalysisConfigUtils } from "df-downloader-common/config/ai-analysis-config.js";
 import { Chapter } from "../chatpers.js";
-import { makeAnthropicProvider } from "./providers/anthropic.js";
+import { AiProviderId } from "df-downloader-common/config/ai-analysis-config.js";
+import { makeProvider } from "./providers/resolve.js";
 import { AiProvider } from "./providers/types.js";
 import {
   buildContentBlock,
@@ -66,6 +67,11 @@ const EXTRACTABLE_TYPES: WireContentType[] = [
 
 export type AnalysisInputs = {
   entry: DfContentEntry;
+  /**
+   * Which engine to use, overriding the configured default for this run only.
+   * Absent means use the default, which is what an unattended run does.
+   */
+  provider?: AiProviderId;
   /**
    * Which sources this run may read, overriding the configured defaults for
    * this run only. Absent means use the config, which is what an automatic
@@ -366,7 +372,7 @@ export const estimateAnalysisCost = async (
   config: AiAnalysisConfig,
   inputs: AnalysisInputs
 ): Promise<AiAnalysisCostEstimate> => {
-  const provider = makeAnthropicProvider(config);
+  const provider = makeProvider(config, inputs.provider);
   const prepared = await prepareAnalysis(config, inputs);
   const instruction = prepared.tagsOnly ? buildTagOnlyInstruction(config) : buildOverviewInstruction(config);
   const inputTokens = await provider.countInputTokens(prepared.system, prepared.content, instruction);
@@ -377,7 +383,7 @@ export const estimateAnalysisCost = async (
   if (prepared.tagsOnly) {
     const estimatedOutputTokens = ESTIMATED_OUTPUT_TOKENS_TAGS_ONLY * scale;
     return {
-      model: config.model,
+      model: provider.model,
       inputTokens,
       estimatedOutputTokens,
       estimatedCostUsd: provider.estimateCostUsd(inputTokens, estimatedOutputTokens),
@@ -394,7 +400,7 @@ export const estimateAnalysisCost = async (
   const cachedRereadTokens = secondCallLikely ? inputTokens * 0.1 : 0;
 
   return {
-    model: config.model,
+    model: provider.model,
     inputTokens,
     estimatedOutputTokens,
     estimatedCostUsd: provider.estimateCostUsd(inputTokens + cachedRereadTokens, estimatedOutputTokens),
@@ -596,7 +602,13 @@ export const analyseContent = async (config: AiAnalysisConfig, inputs: AnalysisI
   const started = new Date();
   const base = {
     analysedAt: started,
-    model: config.model,
+    /*
+     * The configured model until a provider is resolved, then whatever
+     * actually answered - see below. Only the failure path that never got a
+     * provider keeps this value, where naming the engine that was asked for
+     * is the most honest thing available.
+     */
+    model: config.model as string,
     tags: [] as AiTagSuggestion[],
     evidence: [] as AiEvidenceSource[],
     // Present even on the failure paths: a stored result with no games is a
@@ -607,10 +619,13 @@ export const analyseContent = async (config: AiAnalysisConfig, inputs: AnalysisI
 
   let provider: AiProvider;
   try {
-    provider = makeAnthropicProvider(config);
+    provider = makeProvider(config, inputs.provider);
   } catch (e) {
     return { ...base, contentType: "other", error: e instanceof Error ? e.message : String(e) };
   }
+  // What answered, not what is configured: a local run recording a Claude
+  // model name would misattribute it in the per-model spend table.
+  base.model = provider.model;
 
   const prepared = await prepareAnalysis(config, inputs);
   const autoApply = config.features.tagging.applyMode === "auto_apply";
