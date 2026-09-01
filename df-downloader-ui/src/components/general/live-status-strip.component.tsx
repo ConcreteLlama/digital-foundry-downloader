@@ -4,6 +4,7 @@ import { bytesToHumanReadable, TaskPipelineUtils } from "df-downloader-common";
 import { useSelector } from "react-redux";
 import { useNavigate } from "react-router-dom";
 import {
+  selectActiveTaskIds,
   selectDownloadingPipelineIds,
   selectPipelinesFromIds,
   selectPostProcessingPipelineIds,
@@ -29,10 +30,17 @@ export const LiveStatusStrip = () => {
   const downloadingIds = useSelector(selectDownloadingPipelineIds);
   const downloadingPipelines = useSelector(selectPipelinesFromIds(downloadingIds));
   const postProcessingIds = useSelector(selectPostProcessingPipelineIds);
+  /*
+   * Standalone tasks count too. This used to total only pipelines, so a bulk
+   * backfill - which is a task driving further tasks, none of them pipelines -
+   * ran to completion with the badge showing nothing at all, which reads as
+   * "nothing is happening" at the exact moment the most is.
+   */
+  const activeTaskIds = useSelector(selectActiveTaskIds);
   const { bytesPerSecond, totalBytes, totalBytesDownloaded } =
     TaskPipelineUtils.getCumulativeDownloadStats(downloadingPipelines);
 
-  const active = downloadingIds.length + postProcessingIds.length;
+  const active = downloadingIds.length + postProcessingIds.length + activeTaskIds.length;
 
   const parts: string[] = [];
   if (downloadingIds.length > 0) {
@@ -40,6 +48,9 @@ export const LiveStatusStrip = () => {
   }
   if (postProcessingIds.length > 0) {
     parts.push(`${postProcessingIds.length} processing`);
+  }
+  if (activeTaskIds.length > 0) {
+    parts.push(`${activeTaskIds.length} ${activeTaskIds.length === 1 ? "task" : "tasks"} outstanding`);
   }
   if (downloadingIds.length > 0) {
     parts.push(

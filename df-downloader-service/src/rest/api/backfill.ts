@@ -144,7 +144,7 @@ export const makeBackfillRouter = (contentManager: DigitalFoundryContentManager)
    * between a run taking minutes and taking days.
    */
   router.post("/estimate", async (req, res) => {
-    await zodParseHttp(BulkBackfillEstimateRequest, req, res, async ({ target, contentKeys, force, sources }) => {
+    await zodParseHttp(BulkBackfillEstimateRequest, req, res, async ({ target, contentKeys, force, sources, metadataOptions }) => {
       try {
         const itemCount = contentKeys.length;
         if (target === "subtitles") {
@@ -156,14 +156,26 @@ export const makeBackfillRouter = (contentManager: DigitalFoundryContentManager)
           } satisfies BulkBackfillEstimate);
         }
         if (target === "metadata") {
-          // Would otherwise fall through to the analysis pricing below and be
-          // quoted in dollars, which is the wrong currency entirely - this
-          // spends disk and time, not API credit.
+          /*
+           * Would otherwise fall through to the analysis pricing below and be
+           * quoted in dollars, which is the wrong currency entirely - this
+           * spends disk and time, not API credit.
+           *
+           * How much of either depends entirely on what was ticked, and the
+           * two cases are orders of magnitude apart. Chapters are a track, so
+           * embedding them rewrites the whole file; tags live in the metadata
+           * at the end of it and are a megabyte whatever the video's size (see
+           * mp4-tags.ts). Quoting the slow case for both would talk people out
+           * of a run that finishes in seconds.
+           */
+          const rewritesWholeFile = Boolean(metadataOptions?.fromYouTube);
           return sendResponse(res, {
             target,
             itemCount,
             sampledCount: 0,
-            note: "No API cost. Each file is rewritten to embed the new metadata, so this is disk-bound and roughly proportional to how much video you selected - expect it to take a while over a large library, and note it runs one file at a time.",
+            note: rewritesWholeFile
+              ? "No API cost. Chapters are stored as a track inside the video, so any file that gains them is rewritten in full - that is disk-bound, roughly proportional to how much video you selected, and runs one file at a time. It also fetches from YouTube, which is deliberately paced."
+              : "No API cost, and quick: only the tags at the end of each file are rewritten, about a megabyte apiece however large the video. Several run at once, so this finishes in seconds rather than being proportional to how much video you selected.",
           } satisfies BulkBackfillEstimate);
         }
         if (target === "df_article") {

@@ -220,10 +220,34 @@ export const selectCompletedTitles = createDeepEqualSelector(
   }
 );
 
+/**
+ * When something finished, for ordering the completed list.
+ *
+ * A pipeline records no end time of its own - only its steps do - so it is
+ * taken as the latest of theirs. Anything with no time at all sorts oldest,
+ * which keeps it out of the way rather than pinning it to the top.
+ */
+const endedAt = (task?: { stepTasks?: Record<string, TaskInfo>; endTime?: Date }): number => {
+  if (!task) {
+    return 0;
+  }
+  if (task.stepTasks) {
+    let latest = 0;
+    for (const step of Object.values(task.stepTasks)) {
+      latest = Math.max(latest, step.endTime ? new Date(step.endTime).getTime() : 0);
+    }
+    return latest;
+  }
+  return task.endTime ? new Date(task.endTime).getTime() : 0;
+};
+
+/** Newest first: what just finished is what you came to look at. */
 export const selectCompletedPipelineIds = createDeepEqualSelector(
   [selectPipelineIds, selectPipelines],
   (ids, pipelines) => {
-    return ids.filter((id) => pipelines[id]?.pipelineStatus?.isComplete);
+    return ids
+      .filter((id) => pipelines[id]?.pipelineStatus?.isComplete)
+      .sort((a, b) => endedAt(pipelines[b]) - endedAt(pipelines[a]));
   }
 );
 
@@ -383,8 +407,11 @@ export const selectLiveLaneItems = createDeepEqualSelector(
 export const selectActiveTaskIds = createDeepEqualSelector(selectTaskIds, selectTasks, (ids, tasks) =>
   ids.filter((id) => !tasks[id]?.status?.isComplete)
 );
+/** Newest first, matching the completed pipelines above. */
 export const selectCompletedTaskIds = createDeepEqualSelector(selectTaskIds, selectTasks, (ids, tasks) =>
-  ids.filter((id) => Boolean(tasks[id]?.status?.isComplete))
+  ids
+    .filter((id) => Boolean(tasks[id]?.status?.isComplete))
+    .sort((a, b) => endedAt(tasks[b]) - endedAt(tasks[a]))
 );
 
 const applyTaskFilter = (task: TaskInfo, filter?: TaskFilter) => {

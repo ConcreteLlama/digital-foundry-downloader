@@ -125,6 +125,14 @@ versions:
           - "The file is capped and rotates, so it cannot quietly fill the disk on a long-running install"
         - "Picking items in the Backfill list stays responsive with a few thousand of them, and the list is paged rather than cut short - the selection and the select-all buttons still apply across every page"
       bugfixes:
+        - "The Activity page makes more sense while a backfill runs":
+          - "Finished items are listed newest first. They were oldest first, so whatever ran when the app started sat permanently at the top and anything you had just run appeared at the bottom - it looked like nothing had happened"
+          - "Each finished job now says what it did and to which video, instead of every row reading identically as \"Inject metadata\" with no clue which file it was"
+          - "A finished job no longer describes itself as still working. It kept showing the last thing it was doing mid-way through, so a completed job read as though it were still going"
+          - "The activity count in the top bar now includes background jobs like backfills. It only counted downloads, so starting a backfill of three hundred items showed nothing at all at the moment the most was happening"
+        - "The metadata backfill dialog no longer shows an empty warning":
+          - "Choosing to re-run one produced a warning box containing nothing but an exclamation mark. It now says what re-running actually does"
+          - "It also no longer warns that the run will take a while when it will not - writing tags is now quick, so the dialog says so, and keeps the slow-and-steady warning for runs that include chapters, which genuinely do rewrite each file"
         - "Every Analysis page can now open the analysis behind a row":
           - "PC settings, Hardware and Costs listed what had been found but gave you no way to read the full analysis it came from - only the games and platform comparison pages did. Clicking a title now opens it on all of them"
         - "The new marks appear as soon as they are true":

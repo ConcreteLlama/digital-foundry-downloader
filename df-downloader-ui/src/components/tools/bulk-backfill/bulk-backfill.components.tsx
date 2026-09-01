@@ -125,6 +125,14 @@ export const analysisSourcesFor = (candidate: BulkBackfillCandidate) => {
   return { sources, count: sources.length };
 };
 
+/** What re-running does to items that have already had this done, per target. */
+const RERUN_WARNINGS: Record<BulkBackfillTarget, string | undefined> = {
+  subtitles: "Items that already have subtitles will be transcribed again, replacing them.",
+  ai_analysis: "Items that have already been analysed will be analysed again, and charged for again.",
+  df_article: "Items that already have a matched article will be searched for again.",
+  metadata: "Items whose files already have this metadata written will have it written again.",
+};
+
 /** Why an item already in the selection would be passed over. */
 export const SKIP_REASONS: Record<BulkBackfillTarget, string> = {
   subtitles: "they already have subtitles",
@@ -504,11 +512,16 @@ export const BackfillConfirmDialog = ({
             <AnalysisSourcePicker value={sources} onChange={onSourcesChange} />
           )}
 
-          {force && (
+          {/*
+            Computed rather than a run of inline conditions, which rendered an
+            Alert containing nothing but its warning icon for any target
+            without a line here - "metadata" had none, so re-running one showed
+            an empty yellow box. Deriving the text first means a target that is
+            not covered renders no alert at all.
+          */}
+          {force && RERUN_WARNINGS[target] && (
             <Alert severity="warning" variant="outlined">
-              {target === "subtitles" && "Items that already have subtitles will be transcribed again, replacing them."}
-              {target === "ai_analysis" && "Items that have already been analysed will be analysed again, and charged for again."}
-              {target === "df_article" && "Items that already have a matched article will be searched for again."}
+              {RERUN_WARNINGS[target]}
             </Alert>
           )}
 

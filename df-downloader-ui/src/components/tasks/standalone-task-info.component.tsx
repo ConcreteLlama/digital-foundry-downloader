@@ -172,9 +172,18 @@ export const StandaloneTaskInfo = ({ taskId }: StandaloneTaskInfoProps) => {
             {summaryLine(backfill)}
           </Typography>
         ) : (
+          /*
+           * While it runs, the progress detail is the line that changes and so
+           * the one worth watching. Once it has finished that same line is
+           * frozen mid-sentence - "Embedding metadata" on a task that finished
+           * embedding, "Fetched enough subs" on one that generated them - so a
+           * completed card described the work as still happening and never
+           * named what it was done to. The status message is written for the
+           * finished state, so it wins there.
+           */
           (status?.message || progress?.detail) && (
             <Typography variant="caption" sx={{ display: "block", color: "text.disabled", marginTop: 0.25 }}>
-              {progress?.detail ?? status?.message}
+              {isComplete ? (status?.message ?? progress?.detail) : (progress?.detail ?? status?.message)}
             </Typography>
           )
         )}
