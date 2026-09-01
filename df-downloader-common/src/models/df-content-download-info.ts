@@ -28,6 +28,20 @@ export const DfContentDownloadInfo = z.object({
   mediaInfo: MediaInfo,
   size: z.string().optional(),
   subtitles: DfContentSubtitleInfo.array().optional(),
+  /**
+   * What was last embedded in this file, and when.
+   *
+   * Recorded so "which files need their metadata rewriting" is answerable at
+   * all - see metadataFingerprintOf. Absent on downloads written before this
+   * existed, which is treated as "unknown", not "up to date": those really may
+   * be stale, and the whole point is to stop offering the entire library.
+   */
+  metadataWritten: z
+    .object({
+      at: z.coerce.date(),
+      fingerprint: z.string(),
+    })
+    .optional(),
 });
 export type DfContentDownloadInfo = z.infer<typeof DfContentDownloadInfo>;
 

@@ -96,6 +96,18 @@ export const BulkBackfillCandidate = z.object({
    * than the item being permanently excluded.
    */
   articleLookupDue: z.boolean().default(true),
+  /**
+   * Whether writing metadata now would change the file.
+   *
+   * True when a download holds no record of what was written into it - which
+   * is every file downloaded before that was recorded - as well as when the
+   * record disagrees with what the content says now. Unknown is treated as
+   * stale on purpose: those files genuinely may be out of date, and the
+   * alternative is claiming they are current on no evidence.
+   */
+  metadataStale: z.boolean().default(true),
+  /** When metadata was last written into a file, if it is known. */
+  metadataWrittenAt: z.coerce.date().optional(),
 });
 export type BulkBackfillCandidate = z.infer<typeof BulkBackfillCandidate>;
 

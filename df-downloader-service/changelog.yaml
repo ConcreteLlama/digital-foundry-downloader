@@ -80,6 +80,10 @@ versions:
           - "Instead of a black rectangle you are told this machine has no decoder for the video, along with where the file is, so you can open it in a real player or through your media server"
           - "The check asks your browser what it can actually decode rather than assuming from the format, so an HEVC download is not refused on a machine that plays it perfectly well"
       enhancements:
+        - "The metadata backfill can now tell which files actually need it":
+          - "Each file remembers what was written into it, so the list marks items \"Up to date\", \"Out of date\" or \"Never written\" instead of offering everything you have downloaded with no way to tell them apart"
+          - "\"Select all missing\" works for it now, and the status filters do too - so keeping a library current is picking the handful that drifted rather than rewriting all of it"
+          - "Files downloaded before this existed read as \"Never written\" rather than up to date. That is deliberate: nothing recorded what went into them, and claiming they are current would quietly skip the ones most likely to need it"
         - "Updating a video's tags no longer rewrites the whole file":
           - "Writing AI tags onto a video used to read and rewrite every byte of it - minutes per file on a NAS, for a change of a few dozen characters. It now edits just the metadata at the end of the file: on a 1.6GB download that is 1MB written instead of 1.7GB, and the video data is not touched at all"
           - "This is what makes tagging a whole library practical rather than an overnight job. Because these edits are tiny, they also no longer queue behind whole-file work and several can run at once"

@@ -73,7 +73,7 @@ import { AiAnalysisTaskManager } from "./tasks/ai-analysis-task.js";
 import { BULK_BACKFILL_CONCURRENCY, BulkBackfillTask, isBulkBackfillTask } from "./tasks/bulk-backfill-task.js";
 import { ensureArticleForContent } from "./utils/df-articles/ensure-article.js";
 import { AiAnalysisConfig } from "df-downloader-common/config/ai-analysis-config.js";
-import { AiAnalysisSourceSelection, MetadataBackfillOptions } from "df-downloader-common";
+import { AiAnalysisSourceSelection, MetadataBackfillOptions, metadataFingerprintOf } from "df-downloader-common";
 import { buildMetadataForBackfill } from "./utils/metadata-backfill.js";
 import { InjectMetadataTask } from "./tasks/inject-metadata-task.js";
 import { Chapter } from "./utils/chatpers.js";
@@ -685,6 +685,22 @@ export class DfTaskManager {
     const task = taskManager.addTask(InjectMetadataTask(built.downloadLocation, built.meta));
     this.trackTask(task);
     await task.task.awaitResult();
+    /*
+     * Fingerprinted from what was actually written, not from the entry - the
+     * built metadata has already merged in accepted AI tags and any YouTube
+     * description, so re-deriving it here would record something the file does
+     * not contain and leave the item permanently stale.
+     */
+    await db.metadataWritten(
+      contentKey,
+      built.downloadLocation,
+      metadataFingerprintOf({
+        title: built.meta.title,
+        publishedDate: built.meta.publishedDate,
+        description: built.meta.description,
+        tags: built.meta.tags,
+      })
+    );
     return "metadata written";
   }
 

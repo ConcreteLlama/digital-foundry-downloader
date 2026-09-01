@@ -292,13 +292,21 @@ export const BulkBackfillPage = () => {
    */
   const statusOptions = useMemo(() => {
     const needsLabel =
-      target === "subtitles" ? "No subtitles" : target === "df_article" ? "No article" : "Not analysed";
-    const doneLabel = target === "subtitles" ? "Has subtitles" : target === "df_article" ? "Matched" : "Complete";
-    // Metadata has no per-item status to filter on, so it gets no chips
-    // rather than subtitle-shaped ones that mean nothing here.
-    if (target === "metadata") {
-      return [{ value: "all" as const, label: "All" }];
-    }
+      target === "subtitles"
+        ? "No subtitles"
+        : target === "df_article"
+          ? "No article"
+          : target === "metadata"
+            ? "Needs writing"
+            : "Not analysed";
+    const doneLabel =
+      target === "subtitles"
+        ? "Has subtitles"
+        : target === "df_article"
+          ? "Matched"
+          : target === "metadata"
+            ? "Up to date"
+            : "Complete";
     return [
       { value: "all" as const, label: "All" },
       { value: "needs" as const, label: needsLabel },
@@ -374,10 +382,7 @@ export const BulkBackfillPage = () => {
    */
   const isSelectable = useCallback(
     (candidate: BulkBackfillCandidate) =>
-      // Metadata has no "missing" state - nothing records what was last
-      // written into a file - so everything with a file is selectable and the
-      // buttons below say "all" rather than offering a count of zero.
-      !workingKeys.has(candidate.contentKey) && (force || target === "metadata" || isMissing(candidate, target)),
+      !workingKeys.has(candidate.contentKey) && (force || isMissing(candidate, target)),
     [workingKeys, force, target]
   );
   const selectable = useMemo(() => filtered.filter(isSelectable), [filtered, isSelectable]);
@@ -646,7 +651,7 @@ export const BulkBackfillPage = () => {
               disabled={selectable.length === 0}
               onClick={() => setSelected(new Set(selectable.map((candidate) => candidate.contentKey)))}
             >
-              {force || target === "metadata" ? "Select all" : "Select all missing"} ({selectable.length})
+              {force ? "Select all" : "Select all missing"} ({selectable.length})
             </Button>
             <Button
               size="small"
@@ -664,7 +669,7 @@ export const BulkBackfillPage = () => {
                 })
               }
             >
-              {force || target === "metadata" ? "Select all on page" : "Select missing on page"} ({visibleSelectable.length})
+              {force ? "Select all on page" : "Select missing on page"} ({visibleSelectable.length})
             </Button>
             {/* Only where there is money at stake. The other targets cost
                 time and requests, which the confirmation already states. */}

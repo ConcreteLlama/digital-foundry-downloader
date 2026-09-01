@@ -1459,11 +1459,15 @@ export class DigitalFoundryContentManager {
   ) {
     return pipelineExec.on("completed", (pipelineResult) => {
       if (pipelineResult.status === "success") {
-        const { size, downloadLocation, mediaInfo, subtitles, dfContentInfo } = pipelineResult.pipelineResult;
+        const { size, downloadLocation, mediaInfo, subtitles, dfContentInfo, metadataFingerprint } =
+          pipelineResult.pipelineResult;
         this.db.contentDownloaded(contentKey, {
           mediaInfo,
           downloadDate: new Date(),
           downloadLocation: downloadLocation,
+          // Only when the pipeline actually embedded metadata; absent means
+          // unknown rather than up to date.
+          metadataWritten: metadataFingerprint ? { at: new Date(), fingerprint: metadataFingerprint } : undefined,
           size: size ? bytesToHumanReadable(size) : undefined,
           subtitles: subtitles
             ? [{ service: subtitles.service, language: subtitles.language, path: subtitles.path }]
@@ -1889,11 +1893,12 @@ export class DigitalFoundryContentManager {
       .on("completed", (pipelineResult) => {
         if (pipelineResult.status === "success") {
           const finalPipelineResult = pipelineResult.pipelineResult;
-          const { size, downloadLocation, mediaInfo, subtitles } = finalPipelineResult;
+          const { size, downloadLocation, mediaInfo, subtitles, metadataFingerprint } = finalPipelineResult;
           this.db.contentDownloaded(dfContentInfo.key, {
             mediaInfo,
             downloadDate: new Date(),
             downloadLocation: downloadLocation,
+            metadataWritten: metadataFingerprint ? { at: new Date(), fingerprint: metadataFingerprint } : undefined,
             size: size ? `${size / 1024 / 1024} MB` : undefined,
             subtitles: subtitles ? [subtitles] : undefined,
           });

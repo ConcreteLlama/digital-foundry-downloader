@@ -71,13 +71,12 @@ export const isMissing = (
       return !candidate.hasArticle && candidate.articleLookupDue;
     case "metadata":
       /*
-       * Never "missing", because nothing records what was last written into a
-       * file - so a file holding current metadata is indistinguishable from
-       * one written before a rule existed. Saying "none are missing" is the
-       * honest answer to a question that cannot be asked yet; picking items
-       * deliberately is the way to run this until something tracks it.
+       * Now answerable: each download records a fingerprint of what was
+       * written into it, so this is "would writing now change the file".
+       * A file with no record counts as stale rather than current - see
+       * metadataStale.
        */
-      return false;
+      return candidate.metadataStale;
   }
 };
 
@@ -159,9 +158,15 @@ const statusFor = (candidate: BulkBackfillCandidate, target: BulkBackfillTarget,
         ? { label: "Analysed", tone: "done" as const }
         : { label: "Not analysed", tone: "todo" as const };
     case "metadata":
-      // Only whether there is a file to write into - see isMissing for why
-      // there is no up-to-date state to report.
-      return { label: "Downloaded", tone: "todo" as const };
+      return candidate.metadataStale
+        ? {
+            // Two different situations, worth telling apart: one has been
+            // written and has since drifted, the other has never been
+            // recorded at all and may well already be correct.
+            label: candidate.metadataWrittenAt ? "Out of date" : "Never written",
+            tone: "todo" as const,
+          }
+        : { label: "Up to date", tone: "done" as const };
     case "df_article":
       if (candidate.hasArticle) {
         return { label: "Article matched", tone: "done" as const };

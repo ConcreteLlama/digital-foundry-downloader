@@ -57,7 +57,14 @@ const AiAnalysisIndexFile = z.object({
 });
 type AiAnalysisIndexFile = z.infer<typeof AiAnalysisIndexFile>;
 
-const CURRENT_VERSION = "1.0.0";
+/**
+ * Bumped whenever a field is added that existing index files cannot have.
+ *
+ * 1.1.0 added acceptedTags, which the metadata staleness check needs: without
+ * it every analysed item compares against the wrong tags and reads as
+ * permanently out of date.
+ */
+const CURRENT_VERSION = "1.1.0";
 
 /**
  * A filesystem-safe name for a content key.
@@ -106,7 +113,18 @@ export class AiAnalysisStore {
     const indexPath = path.join(dir, INDEX_FILENAME);
     try {
       const raw = await fs.promises.readFile(indexPath, { encoding: "utf-8" });
-      return zodParse(AiAnalysisIndexFile, JSON.parse(raw));
+      const parsed = zodParse(AiAnalysisIndexFile, JSON.parse(raw));
+      /*
+       * The version was recorded but never checked, so an index written by an
+       * older build was loaded as-is and any field added since was silently
+       * absent - present in the schema, defaulted, and wrong. Rebuilding is
+       * cheap relative to being quietly incorrect, and only happens once.
+       */
+      if (parsed.version !== CURRENT_VERSION) {
+        logger.log("info", `AI analysis index is version ${parsed.version}, rebuilding for ${CURRENT_VERSION}`);
+        return AiAnalysisStore.rebuildIndex(dir);
+      }
+      return parsed;
     } catch (e) {
       // Missing is the normal first-run case and not worth a warning.
       if ((e as NodeJS.ErrnoException)?.code !== "ENOENT") {

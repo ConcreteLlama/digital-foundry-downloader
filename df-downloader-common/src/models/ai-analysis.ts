@@ -492,6 +492,16 @@ export const AiAnalysisIndexEntry = z.object({
   hasError: z.boolean().default(false),
   /** Drives the "tags waiting for you" affordance without loading the tags. */
   pendingTagCount: z.number().int().default(0),
+  /**
+   * The tags that would be written into the file.
+   *
+   * Carried here so "is this file's metadata out of date" can be answered
+   * across the whole library without opening every stored analysis - the same
+   * reason `games` is here. Accepted tags reach a file even when they were
+   * never applied to the content itself, so leaving them out makes every such
+   * item look permanently stale.
+   */
+  acceptedTags: z.array(z.string()).default([]),
   evidence: z.array(AiEvidenceSource).default([]),
   /**
    * Carried into the index so grouping and filtering by game never has to
@@ -508,6 +518,7 @@ export const makeAiAnalysisIndexEntry = (result: AiAnalysisResult): AiAnalysisIn
   contentType: result.contentType,
   hasError: Boolean(result.error),
   pendingTagCount: result.tags.filter((tag) => tag.status === "suggested").length,
+  acceptedTags: AiAnalysisResultUtils.acceptedTags(result),
   evidence: result.evidence,
   primaryGame: result.primaryGame,
   games: resolveAnalysisGames(result),

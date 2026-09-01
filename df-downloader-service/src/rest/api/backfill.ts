@@ -8,9 +8,11 @@ import {
   DfArticleUtils,
   DfContentEntry,
   DfContentEntryUtils,
+  currentMetadataFingerprint,
   logger,
 } from "df-downloader-common";
 import { AiAnalysisConfigUtils } from "df-downloader-common/config/ai-analysis-config.js";
+import { metadataTargetDownload } from "../../utils/metadata-backfill.js";
 import express from "express";
 import { configService } from "../../config/config.js";
 import { DigitalFoundryContentManager } from "../../df-content-manager.js";
@@ -58,6 +60,34 @@ const AVERAGE_REQUEST_SPACING_SECONDS = 10;
  * downloaded file, and an article can only be verified against a YouTube
  * video ID.
  */
+/**
+ * Whether writing this content's metadata now would change anything.
+ *
+ * Compares what the file records as holding against what a run would write
+ * today - the same tag merge the writer uses, so a file written a second ago
+ * does not immediately read as out of date again.
+ *
+ * Judged against the one download a run actually targets, not every download
+ * record: an entry can hold several, only one is written, and counting the
+ * rest would leave the item stale forever.
+ *
+ * No record at all means stale. Everything downloaded before this was tracked
+ * is in that state, and claiming those are current would quietly exclude the
+ * files most likely to need it.
+ */
+const metadataState = (entry: DfContentEntry, acceptedTags: string[]) => {
+  const download = metadataTargetDownload(entry);
+  const written = download?.metadataWritten;
+  const current = currentMetadataFingerprint(entry.contentInfo, acceptedTags);
+  return {
+    stale: !written || written.fingerprint !== current,
+    // Reported whenever there is one, whether or not it still matches - the
+    // list uses it to tell "written before and since drifted" from "never
+    // written", which are different situations to be in.
+    writtenAt: written?.at,
+  };
+};
+
 const isRelevant = (entry: DfContentEntry, target: BulkBackfillTarget): boolean => {
   switch (target) {
     case "subtitles":
@@ -102,8 +132,11 @@ export const makeBackfillRouter = (contentManager: DigitalFoundryContentManager)
         // over the whole library.
         const analysisIndexEntry = contentManager.db.getAiAnalysisIndexEntry(entry.key);
         const articleIndexEntry = contentManager.db.getDfArticleIndexEntry(entry.key);
+        const metadata = metadataState(entry, analysisIndexEntry?.acceptedTags ?? []);
         candidates.push({
           contentKey: entry.key,
+          metadataStale: metadata.stale,
+          metadataWrittenAt: metadata.writtenAt,
           title: entry.contentInfo.title,
           publishedDate: entry.contentInfo.publishedDate,
           hasDownload: DfContentEntryUtils.hasDownload(entry),

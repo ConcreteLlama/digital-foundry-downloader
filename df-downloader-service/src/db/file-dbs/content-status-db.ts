@@ -220,6 +220,24 @@ export class DfContentAvailabilityDb {
         this.updateDb();
         return this.data.contentStatuses[contentName];
     }
+    /**
+     * Records what metadata a file now holds, so staleness is answerable.
+     *
+     * Tolerant of a missing download rather than throwing like subsGenerated:
+     * this is bookkeeping after work that already succeeded, and losing the
+     * record only costs the item being offered again next time - failing the
+     * task would be a worse outcome than that.
+     */
+    metadataWritten(contentName: string, downloadLocation: string, fingerprint: string) {
+        const curStatus = this.getContentStatus(contentName, true);
+        const download = curStatus.downloads.find((d) => d.downloadLocation === downloadLocation);
+        if (!download) {
+            logger.log("warn", `Download ${downloadLocation} not found for ${contentName} when recording metadata`);
+            return;
+        }
+        download.metadataWritten = { at: new Date(), fingerprint };
+        this.updateDb();
+    }
     findDownloadByLocation(downloadLocation: string) {
         const contentStatuses = this.data.contentStatuses;
         for (const contentName in contentStatuses) {

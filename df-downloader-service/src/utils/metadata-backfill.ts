@@ -1,4 +1,4 @@
-import { DfContentEntry, MediaFileMeta, MetadataBackfillOptions, logger } from "df-downloader-common";
+import { DfContentEntry, MediaFileMeta, MetadataBackfillOptions, logger, tagsForWriting } from "df-downloader-common";
 import { serviceLocator } from "../services/service-locator.js";
 import { makeMediaFileMeta } from "../df-mpeg-meta.js";
 import { probeMediaDurationSeconds } from "./media-metadata.js";
@@ -16,11 +16,22 @@ import { fetchYtVideoMeta } from "./youtube/chapters.js";
  * already in the file, so leaving this out preserves embedded subtitles;
  * passing them would re-encode a track that is already there.
  */
+/**
+ * The download a metadata run writes to.
+ *
+ * Exported so staleness is judged against the same file: an entry can hold
+ * several download records, and a run writes to exactly one of them. Judging
+ * them all leaves any other permanently out of date, which is how an item
+ * ends up offered forever however many times it is written.
+ */
+export const metadataTargetDownload = (entry: DfContentEntry) =>
+  entry.downloads?.find((candidate) => candidate.mediaInfo.type === "VIDEO") ?? entry.downloads?.[0];
+
 export const buildMetadataForBackfill = async (
   entry: DfContentEntry,
   options: MetadataBackfillOptions
 ): Promise<{ meta: MediaFileMeta; downloadLocation: string } | null> => {
-  const download = entry.downloads?.find((candidate) => candidate.mediaInfo.type === "VIDEO") ?? entry.downloads?.[0];
+  const download = metadataTargetDownload(entry);
   if (!download?.downloadLocation) {
     return null;
   }
@@ -66,9 +77,9 @@ export const buildMetadataForBackfill = async (
     // a suggestion awaiting review is not a fact about the file.
     const analysis = await serviceLocator.db.getAiAnalysis(entry.contentInfo.key).catch(() => undefined);
     const accepted = (analysis?.tags ?? []).filter((tag) => tag.status === "accepted").map((tag) => tag.tag);
-    const existing = tags ?? [];
-    const existingLower = new Set(existing.map((tag) => tag.toLowerCase()));
-    tags = [...existing, ...accepted.filter((tag) => !existingLower.has(tag.toLowerCase()))];
+    // Shared with the staleness check, so the two cannot drift and report a
+    // just-written file as still needing writing.
+    tags = tagsForWriting(tags, accepted);
   }
 
   return {

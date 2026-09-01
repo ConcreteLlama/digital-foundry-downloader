@@ -137,6 +137,9 @@ export class DfFileOperationalDb extends DfDownloaderOperationalDb {
     async moveDownloads(moves: MoveDownloadOpts[]): Promise<{ missingFiles: MoveDownloadOpts[]; }> {
         return this.contentStatusDb.moveDownloads(moves);
     }
+    async metadataWritten(dfContentName: string, downloadLocation: string, fingerprint: string) {
+        this.contentStatusDb.metadataWritten(dfContentName, downloadLocation, fingerprint);
+    }
     async subsGenerated(dfContentName: string, downloadLocation: string, subsInfo: DfContentSubtitleInfo) {
         this.contentStatusDb.subsGenerated(dfContentName, downloadLocation, subsInfo);
     }

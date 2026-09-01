@@ -1,4 +1,4 @@
-import { DfContentInfo, MediaInfo, logger, makeErrorMessage } from "df-downloader-common";
+import { DfContentInfo, MediaInfo, logger, makeErrorMessage, metadataFingerprintOf } from "df-downloader-common";
 import { configService } from "../config/config.js";
 import { makeMediaFileMeta } from "../df-mpeg-meta.js";
 import { DownloadUrlOpt } from "../download/download-url.js";
@@ -82,6 +82,18 @@ export const createDownloadTaskPipeline = (opts: DownloadTaskPipelineOpts) => {
        * move (see ContentManagementConfig.writeDirectToDestination).
        */
       fileAtFinalLocation?: boolean;
+      /**
+       * A fingerprint of the metadata actually embedded, set only when this
+       * pipeline embedded any. Recorded against the download so a later
+       * backfill can tell whether the file is out of date rather than
+       * offering every downloaded item - see metadataFingerprintOf.
+       *
+       * Taken from what was written rather than re-derived from the content
+       * afterwards: the values here have already had accepted AI tags merged
+       * in and a YouTube description substituted, so re-deriving would produce
+       * a different fingerprint and make every fresh download look stale.
+       */
+      metadataFingerprint?: string;
       /**
        * How many times this pipeline has already been resumed after a
        * restart. Carried on the context so it survives into the next
@@ -276,6 +288,14 @@ export const createDownloadTaskPipeline = (opts: DownloadTaskPipelineOpts) => {
           // step below still runs and moves the download into place as usual.
           return null;
         }
+        if (metaForInjection) {
+          context.metadataFingerprint = metadataFingerprintOf({
+            title: metaForInjection.title,
+            publishedDate: metaForInjection.publishedDate,
+            description: metaForInjection.description,
+            tags: metaForInjection.tags,
+          });
+        }
         const meta = makeMediaFileMeta(metaForInjection, subtitles, chapters);
         const destination = makeFilePathWithTemplate(
           dfContentInfo,
@@ -393,6 +413,7 @@ export const createDownloadTaskPipeline = (opts: DownloadTaskPipelineOpts) => {
           dfContentInfo: context.dfContentInfo,
           mediaInfo: context.mediaInfo,
           downloadLocation: context.finalLocation!,
+          metadataFingerprint: context.metadataFingerprint,
           size: downloadResult?.size,
           finalDownloadStatus: downloadResult?.finalStatus,
           attempts: steps[0].managedTask?.attempt,
