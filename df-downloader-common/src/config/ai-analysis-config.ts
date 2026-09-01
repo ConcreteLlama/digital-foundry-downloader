@@ -278,7 +278,37 @@ export const AiLocalProviderConfig = z.object({
   serverUrl: z
     .string()
     .optional()
-    .describe("Use a llama-server that is already running, e.g. http://localhost:8080. Leave blank to manage one."),
+    .describe("Use a llama-server that is already running, e.g. http://localhost:8080. Leave blank to run one here."),
+  /**
+   * Where the llama-server binary is, when it is not on the PATH.
+   *
+   * The Docker image builds it and sets LLAMA_SERVER_BINARY, so this only
+   * matters for a bare install - the same arrangement Whisper already has.
+   */
+  binaryPath: z
+    .string()
+    .optional()
+    .describe("Path to llama-server, if it is not on the PATH. Not needed in the Docker image."),
+  port: z
+    .number()
+    .int()
+    .min(1024)
+    .max(65535)
+    .default(8127)
+    .describe("Port for the analysis server this app runs. Only change it if something else uses this one."),
+  /**
+   * How long to keep the model loaded after the last analysis.
+   *
+   * Loading costs seconds and several gigabytes of RAM, so holding it across a
+   * backfill is worth it while dropping it afterwards keeps that memory
+   * available to everything else on the machine.
+   */
+  idleShutdownSeconds: z
+    .number()
+    .int()
+    .min(0)
+    .default(300)
+    .describe("Seconds to keep the model loaded after the last analysis. 0 unloads it immediately."),
   threads: z
     .number()
     .int()
@@ -387,13 +417,12 @@ export const AiAnalysisConfigUtils = {
     if (provider === "anthropic") {
       return config.apiKey && config.apiKey.trim().length > 0 ? undefined : "No Anthropic API key has been set";
     }
-    if (!config.local?.enabled) {
-      return "Local analysis is turned off";
-    }
-    // Until the app manages a server itself, one has to already be running.
-    return config.local.serverUrl && config.local.serverUrl.trim().length > 0
-      ? undefined
-      : "No local server address has been set";
+    /*
+     * Nothing else to check: the app can download the model and run a server
+     * itself, so "enabled" really is enough. Pointing at an existing server is
+     * an option rather than a requirement.
+     */
+    return config.local?.enabled ? undefined : "Local analysis is turned off";
   },
 
   /** Every engine that could answer right now. */

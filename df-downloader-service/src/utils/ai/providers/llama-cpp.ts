@@ -1,7 +1,8 @@
-import { logger } from "df-downloader-common";
-import { AiLocalModels, AiLocalProviderConfig } from "df-downloader-common/config/ai-analysis-config.js";
+import { AiLocalProviderConfig } from "df-downloader-common/config/ai-analysis-config.js";
 import { z } from "zod";
 import { stripJsonFence } from "../anthropic-client.js";
+import { LocalLlamaServer } from "../local-server.js";
+import { localComputeGate } from "../../local-compute-gate.js";
 import { AiProvider } from "./types.js";
 
 /**
@@ -39,8 +40,6 @@ const MAX_OUTPUT_TOKENS = 16000;
  */
 const NO_THINKING = { enable_thinking: false };
 
-export class LocalAnalysisUnavailableError extends Error {}
-
 type ChatResponse = {
   choices?: { message?: { content?: string | null }; finish_reason?: string }[];
   usage?: { prompt_tokens?: number; completion_tokens?: number };
@@ -58,19 +57,25 @@ const postJson = async (baseUrl: string, path: string, body: unknown): Promise<a
   return response.json();
 };
 
-export const makeLocalProvider = (config: AiLocalProviderConfig, baseUrl: string): AiProvider => {
-  const modelInfo = AiLocalModels[config.model];
-  return {
-    id: "local",
-    model: config.model,
+/**
+ * Acquires the server per call rather than at construction, so the model is
+ * loaded only while there is work and released the moment there is not - see
+ * LocalLlamaServer. Construction stays synchronous, which keeps provider
+ * resolution simple everywhere else.
+ */
+export const makeLocalProvider = (config: AiLocalProviderConfig, server: LocalLlamaServer): AiProvider => ({
+  id: "local",
+  model: config.model,
 
-    callStructured: async <T extends z.ZodType>(
-      schema: T,
-      system: string,
-      content: string,
-      instruction: string
-    ) => {
-      const startedAt = Date.now();
+  callStructured: async <T extends z.ZodType>(
+    schema: T,
+    system: string,
+    content: string,
+    instruction: string
+  ) => {
+    const startedAt = Date.now();
+    const baseUrl = await server.acquire();
+    try {
       /*
        * `io: "output"` matters: the wire schemas are required-and-nullable by
        * design, and the output view is what preserves that. Every one of them
@@ -78,7 +83,13 @@ export const makeLocalProvider = (config: AiLocalProviderConfig, baseUrl: string
        * compiler able to take them directly.
        */
       const jsonSchema = z.toJSONSchema(schema as any, { io: "output" });
-      const response: ChatResponse = await postJson(baseUrl, "/v1/chat/completions", {
+      /*
+       * Exclusive: this saturates the machine, and so does transcription. The
+       * gate is around the call rather than the whole provider because the
+       * work happens in the server process while this request is open.
+       */
+      const response: ChatResponse = await localComputeGate.withExclusive("Local analysis", () =>
+        postJson(baseUrl, "/v1/chat/completions", {
         messages: [
           { role: "system", content: system },
           // One user message rather than the hosted path's two blocks: those
@@ -88,9 +99,13 @@ export const makeLocalProvider = (config: AiLocalProviderConfig, baseUrl: string
         ],
         max_tokens: MAX_OUTPUT_TOKENS,
         temperature: 0,
-        response_format: { type: "json_schema", json_schema: { name: "analysis", schema: jsonSchema, strict: true } },
-        chat_template_kwargs: NO_THINKING,
-      });
+        response_format: {
+          type: "json_schema",
+          json_schema: { name: "analysis", schema: jsonSchema, strict: true },
+        },
+          chat_template_kwargs: NO_THINKING,
+        })
+      );
 
       const choice = response.choices?.[0];
       const text = choice?.message?.content;
@@ -116,24 +131,26 @@ export const makeLocalProvider = (config: AiLocalProviderConfig, baseUrl: string
           durationMs: Date.now() - startedAt,
         },
       };
-    },
+    } finally {
+      server.release();
+    }
+  },
 
-    countInputTokens: async (system: string, content: string, instruction: string) => {
-      // Exact rather than estimated, and free - so the pre-run figure is as
-      // trustworthy as the hosted one, it just buys a duration instead of a
-      // price.
+  countInputTokens: async (system: string, content: string, instruction: string) => {
+    // Exact rather than estimated, and free - so the pre-run figure is as
+    // trustworthy as the hosted one, it just buys a duration instead of a
+    // price.
+    const baseUrl = await server.acquire();
+    try {
       const result = await postJson(baseUrl, "/tokenize", {
         content: `${system}\n\n${content}\n\n${instruction}`,
       });
       return Array.isArray(result?.tokens) ? result.tokens.length : 0;
-    },
+    } finally {
+      server.release();
+    }
+  },
 
-    // Money is the wrong question here; the caller reports time instead.
-    estimateCostUsd: () => undefined,
-  };
-};
-
-export const describeLocalModel = (config: AiLocalProviderConfig) => AiLocalModels[config.model];
-
-export const logLocalProviderReady = (baseUrl: string, config: AiLocalProviderConfig) =>
-  logger.log("info", `Local analysis using ${AiLocalModels[config.model].label} via ${baseUrl}`);
+  // Money is the wrong question here; the caller reports time instead.
+  estimateCostUsd: () => undefined,
+});

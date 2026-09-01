@@ -7,6 +7,7 @@ import _ from "lodash";
 import { configDir, configService } from "../../config/config.js";
 import { fileToAudioFile } from "../audio.js";
 import { runCommand } from "../../utils/command.js";
+import { localComputeGate } from "../../utils/local-compute-gate.js";
 import { fileExists } from "../../utils/file-utils.js";
 import { probeMediaDurationSeconds } from "../../utils/media-metadata.js";
 import { parseSrt } from "./srt-utils.js";
@@ -184,7 +185,15 @@ export class WhisperSubtitleGenerator implements SubtitleGenerator {
     onStdout?: (chunk: string) => void
   ) {
     try {
-      return await runCommand(this.binaryPath, args, undefined, { onStderr, onStdout });
+      /*
+       * Shared, not exclusive: several transcriptions may run together if that
+       * is what subtitles.maxConcurrent asks for. What this prevents is a
+       * local analysis grinding against them for the same cores - see
+       * localComputeGate.
+       */
+      return await localComputeGate.withShared("Transcription", () =>
+        runCommand(this.binaryPath, args, undefined, { onStderr, onStdout })
+      );
     } catch (e) {
       const size = await fs.promises
         .stat(modelPath)

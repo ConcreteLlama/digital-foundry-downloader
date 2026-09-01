@@ -6,6 +6,7 @@ import { configService } from "./config/config.js";
 
 import { DigitalFoundryContentManager } from "./df-content-manager.js";
 import { logger } from "df-downloader-common";
+import { stopLocalAnalysisServer } from "./utils/ai/providers/resolve.js";
 import { serviceInfo } from "./utils/service.js";
 import { makeRoutes } from "./rest/routes.js";
 import { loadServices } from "./services/service-loader.js";
@@ -30,6 +31,10 @@ process
     closeAttempts++;
     if (closeAttempts === 1) {
       logger.log("info", "Caught interrupt signal");
+      // Explicit rather than relying on the child dying with the parent,
+      // which is not reliable across platforms - and this one holds several
+      // gigabytes of model.
+      await stopLocalAnalysisServer().catch(() => {});
       await closeAllQueues();
       process.exit();
     } else if (closeAttempts === 3) {
