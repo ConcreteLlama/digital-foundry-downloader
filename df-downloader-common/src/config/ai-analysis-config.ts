@@ -221,7 +221,7 @@ export type AiAnalysisSourcesConfig = z.infer<typeof AiAnalysisSourcesConfig>;
  * this schema without inventing numbers" are different claims, and only these
  * have been checked - see docs/LOCAL_AI_ANALYSIS_SPIKE.md.
  */
-export const AiLocalModel = z.enum(["qwen3.5-9b", "qwen3.5-4b"]);
+export const AiLocalModel = z.enum(["qwen3.5-9b"]);
 export type AiLocalModel = z.infer<typeof AiLocalModel>;
 
 export type AiLocalModelInfo = {
@@ -235,20 +235,12 @@ export type AiLocalModelInfo = {
 
 export const AiLocalModels: Record<AiLocalModel, AiLocalModelInfo> = {
   "qwen3.5-9b": {
-    label: "Qwen3.5 9B (recommended)",
+    label: "Qwen3.5 9B",
     url: "https://huggingface.co/unsloth/Qwen3.5-9B-GGUF/resolve/main/Qwen3.5-9B-UD-Q4_K_XL.gguf",
     fileName: "Qwen3.5-9B-UD-Q4_K_XL.gguf",
     approxBytes: 5_966_095_584,
     notes:
-      "Schema-valid on every measured call, correct on every classification, and invented no numbers. The default for good reason.",
-  },
-  "qwen3.5-4b": {
-    label: "Qwen3.5 4B (constrained hardware)",
-    url: "https://huggingface.co/unsloth/Qwen3.5-4B-GGUF/resolve/main/Qwen3.5-4B-UD-Q4_K_XL.gguf",
-    fileName: "Qwen3.5-4B-UD-Q4_K_XL.gguf",
-    approxBytes: 2_912_109_728,
-    notes:
-      "Half the size and still classifies correctly, but it fabricated a figure once and hit a repetition loop on one item - so it is an opt-in for small machines rather than a default.",
+      "Schema-valid on every measured call, correct on every classification, and invented no numbers across the runs measured. To use something else, run your own llama-server and point at it below.",
   },
 };
 
@@ -257,9 +249,18 @@ export const AiLocalProviderConfig = z.object({
     .boolean()
     .default(false)
     .describe("Analyse on this machine instead of paying an API. Slower, but it costs nothing to run."),
-  model: AiLocalModel.default("qwen3.5-9b").describe(
-    "Which local model to analyse with. The 9B is recommended - the 4B is faster but has been seen to invent a figure."
-  ),
+  /**
+   * Deliberately a list of one.
+   *
+   * A smaller model was measured and rejected rather than offered with a
+   * caveat: it fabricated a figure once and looped on another item, and in a
+   * system whose worst failure is an invented number that reads exactly like a
+   * real one, a warning next to a dropdown entry is not a safeguard - people
+   * pick the faster option and never read it. Anyone who genuinely wants a
+   * different model can run their own server and point `serverUrl` at it,
+   * which costs them nothing and hands nobody else a bad default.
+   */
+  model: AiLocalModel.default("qwen3.5-9b").describe("Which local model to analyse with."),
   /**
    * Left optional so it can follow the Whisper models directory by default -
    * the same "downloaded once, kept" story, in the same place.

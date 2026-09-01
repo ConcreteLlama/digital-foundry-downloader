@@ -221,12 +221,22 @@ const AiAnalysisSettings = () => {
           />
           {localEnabled && (
             <Fragment>
-              <SelectField
-                name="local.model"
-                label="Local model"
-                opts={LocalModelOptions}
-                helperText={AiLocalModels[localModel]?.notes}
-              />
+              {/* Only when there is something to choose between - the same
+                  rule the engine picker follows. With one vetted model this is
+                  a control that reads as a decision and is not one, so the
+                  model is stated as helper text instead. */}
+              {LocalModelOptions.length > 1 ? (
+                <SelectField
+                  name="local.model"
+                  label="Local model"
+                  opts={LocalModelOptions}
+                  helperText={AiLocalModels[localModel]?.notes}
+                />
+              ) : (
+                <FormHelperText sx={{ mx: 0 }}>
+                  <strong>{AiLocalModels[localModel]?.label}.</strong> {AiLocalModels[localModel]?.notes}
+                </FormHelperText>
+              )}
               <ZodTextField
                 name="local.serverUrl"
                 label="Use an existing server"
