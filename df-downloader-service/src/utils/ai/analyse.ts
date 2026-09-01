@@ -20,6 +20,7 @@ import { makeProvider } from "./providers/resolve.js";
 import { AiProvider } from "./providers/types.js";
 import {
   buildContentBlock,
+  PromptFlags,
   buildExtractionInstruction,
   buildOverviewInstruction,
   buildSystemPrompt,
@@ -108,6 +109,8 @@ export type AnalysisInputs = {
 };
 
 type PreparedCall = {
+  /** Which sources this run actually has, for guidance that depends on it. */
+  flags: PromptFlags;
   system: string;
   content: string;
   tagsOnly: boolean;
@@ -208,6 +211,9 @@ export const prepareAnalysis = async (config: AiAnalysisConfig, inputs: Analysis
   const flags = { hasTranscript: Boolean(transcript), hasArticle: Boolean(articleText) };
 
   return {
+    // Carried so the extraction instruction can vary with the sources - see
+    // BOTH_SOURCES_COUNT, which only applies when there are two of them.
+    flags,
     system: buildSystemPrompt(flags),
     content: tagsOnly
       // Chapters go to the cheap path too. With no transcript they are the
@@ -449,7 +455,7 @@ const extractStructuredData = async (
   prepared: PreparedCall,
   contentType: WireContentType
 ): Promise<{ data?: AiStructuredData; usage?: AiAnalysisUsage }> => {
-  const instruction = buildExtractionInstruction(contentType);
+  const instruction = buildExtractionInstruction(contentType, prepared.flags);
   if (!instruction) {
     return {};
   }

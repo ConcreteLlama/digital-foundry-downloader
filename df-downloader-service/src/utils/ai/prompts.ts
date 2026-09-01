@@ -36,6 +36,30 @@ const TRANSCRIPT_CAVEAT = `The transcript is machine-generated and has not been 
 
 const ARTICLE_PRECEDENCE = `You have both Digital Foundry's own written article and a machine transcript. Prefer the article for any name, spelling or figure the two disagree on - it was written, not transcribed, so it cannot contain a mishearing. Use the transcript for anything the article does not cover.`;
 
+/**
+ * Appended to an extraction when both sources are present.
+ *
+ * ARTICLE_PRECEDENCE above says which source wins a disagreement, which left
+ * the article reading as a corrective - right about spelling, subordinate
+ * about substance. A local model took that literally: on a PC review covering
+ * ten settings it extracted five, and the ones it dropped were largely named
+ * in the article rather than said aloud.
+ *
+ * Two things were measured on the way to this wording, both worth keeping:
+ *
+ * - Position matters as much as content. The same sentences in the system
+ *   prompt changed nothing at all; as part of the task instruction they took
+ *   it from five to nine. A system prompt is read as framing, an instruction
+ *   as the job.
+ * - The force is what works, not the procedure. "Go through each source in
+ *   turn and list what it names" scored five - no better than saying nothing.
+ *   Stating that an item counts even when only one source mentions it scored
+ *   nine, with every added item verifiable in the sources.
+ *
+ * Claude already behaves this way, so this costs it nothing.
+ */
+const BOTH_SOURCES_COUNT = `The article and the transcript are BOTH primary sources for what this video covers. The article frequently names things the presenter never says aloud - those count and must be included. Cover everything named in either source, not only what both mention.`;
+
 const CONTENT_TYPES = `- console_comparison: a technical comparison of one game across two or more consoles - per-platform resolutions, frame rates, and modes.
 - platform_analysis: one game examined on a single platform, or a small number, outside a full face-off - a port, a patch, an upgrade, a "have they fixed it yet" revisit, a single-platform review. Choose this over console_comparison when the point is that game on that hardware rather than a comparison between platforms.
 - pc_review_settings: a PC technical review OF A GAME, usually with per-setting performance analysis and recommended "optimised settings". The subject is the game; the PC is what it is being run on.
@@ -173,46 +197,49 @@ const QUOTE_INSTRUCTION = [
   `Set quote to null if there is no exact span to copy - for example when the item comes from the article rather than the video, or when you are summarising something said across several places. A null is expected and fine; an approximated quote is not, because it silently fails to locate.`,
 ].join(" ");
 
-export const buildExtractionInstruction = (contentType: WireContentType): string => {
+export const buildExtractionInstruction = (contentType: WireContentType, flags?: PromptFlags): string => {
+  const bothSources = flags?.hasTranscript && flags?.hasArticle ? `
+
+${BOTH_SOURCES_COUNT}` : "";
   switch (contentType) {
     case "console_comparison":
       return `Extract the per-platform technical comparison. For each platform covered, record each display/performance mode it offers, with the resolution as described (including upscaling where stated), the target frame rate, and the measured average frame rate if one is actually given. Record known bugs, crashes or performance problems the video calls out, and the overall platform recommendation. Remember that an unstated number is null, not an estimate.
 
-${QUOTE_INSTRUCTION}`;
+${QUOTE_INSTRUCTION}${bothSources}`;
     case "pc_review_settings":
       return `Extract the PC settings analysis. For each graphics setting discussed, record the levels tested, the performance cost as a percentage if one is actually stated, any console-equivalent comparison made, and the recommended level. Record the main performance bottleneck if the video identifies one, and the before/after result of the optimised settings if it gives one. A setting described only qualitatively ("barely costs anything") has a null percentage - do not convert words into a number.
 
-${QUOTE_INSTRUCTION}`;
+${QUOTE_INSTRUCTION}${bothSources}`;
     case "platform_analysis":
       return `Extract the technical analysis of this game. For each platform covered, record each display or performance mode, with the resolution as described (including upscaling where stated), the target frame rate, and the measured average frame rate only if one is actually given. Where the video is about a change - a patch, a port, a revisit, a new platform version - record what changed in changeSummary, since that delta is usually the point of the piece rather than the raw numbers. Record known bugs or performance problems it calls out, and the overall verdict. Remember that an unstated number is null, not an estimate.
 
-${QUOTE_INSTRUCTION}`;
+${QUOTE_INSTRUCTION}${bothSources}`;
     case "hands_on_preview":
       return `Record what was actually shown, not what it might mean. Name the game, the platforms it was seen running on, and what kind of build it was - preview build, beta, demo, near-final - if the video says. List concrete observations rather than general impressions where the video supports them. Put whatever the presenters explicitly said not to conclude yet into caveats.
 
 Do not produce performance figures here even if some are mentioned in passing. This format is provisional by design, and a number from an early build implies a precision nobody claimed.
 
-${QUOTE_INSTRUCTION}`;
+${QUOTE_INSTRUCTION}${bothSources}`;
     case "hardware_review":
       return `Extract the hardware under review. For each product, record its name, what class of thing it is (GPU, CPU, handheld, display, complete machine), and the verdict reached on it specifically. Record the overall verdict separately, and any known issues or caveats raised.
 
 Record the games used as benchmarks in gamesTested. These are test instruments rather than subjects - the video is not coverage of those games, and they must not be presented as though it were.
 
-${QUOTE_INSTRUCTION}`;
+${QUOTE_INSTRUCTION}${bothSources}`;
     case "news_discussion":
       return `Break this show into its distinct items, in order. For each, give the topic, and set "game" to the specific game it is about, or null where the item is not about one - a hardware rumour, an industry story. Give a summary of what was said and the conclusion reached, or null where the participants disagreed or left it open, which is common and should not be smoothed over into false agreement.
 
 Getting "game" right matters more here than anywhere else: this is frequently the only record of what Digital Foundry said about that title, and an item filed under no game is invisible.
 
-${QUOTE_INSTRUCTION}`;
+${QUOTE_INSTRUCTION}${bothSources}`;
     case "roundup_list":
       return `Break this round-up into its entries, in order. For each, give the topic - the game or the category - set "game" to the title it concerns, and record the reasoning given for its inclusion as the summary, with the verdict or placement as the conclusion.
 
-${QUOTE_INSTRUCTION}`;
+${QUOTE_INSTRUCTION}${bothSources}`;
     case "qa_roundtable":
       return `Break this discussion into its distinct topics, in order. For each, give the topic, a summary of what was said, and the conclusion reached - or null where the participants disagreed or left it open, which is common and should not be smoothed over into false agreement. Set "game" to the specific game a topic concerns, or null where it is not about one. Do not record who asked a question: usernames cannot be transcribed reliably and there is nothing to check them against.
 
-${QUOTE_INSTRUCTION}`;
+${QUOTE_INSTRUCTION}${bothSources}`;
     default:
       return "";
   }
