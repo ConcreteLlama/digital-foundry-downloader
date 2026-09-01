@@ -18,3 +18,8 @@ docs/WHISPER_JARGON_SEED_PLAN.md
 docs/SPEAKER_DIARIZATION_NOTES.md
 docs/DF_SITE_ARTICLES_NOTES.md
 docs/BULK_BACKFILL_TOOL_PLAN.md
+docs/LOCAL_AI_ANALYSIS_SPIKE.md
+
+# Local-model benchmark harnesses and recorded results. Kept on disk on purpose -
+# the local-model investigation refers to them - but they are scratch, not repo content.
+.ai-benchmark/
