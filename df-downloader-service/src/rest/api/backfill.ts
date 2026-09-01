@@ -65,6 +65,9 @@ const isRelevant = (entry: DfContentEntry, target: BulkBackfillTarget): boolean 
       return DfContentEntryUtils.hasDownload(entry);
     case "df_article":
       return Boolean(entry.contentInfo.youtubeVideoId);
+    case "metadata":
+      // There has to be a file to write into.
+      return DfContentEntryUtils.hasDownload(entry);
   }
 };
 
@@ -150,6 +153,17 @@ export const makeBackfillRouter = (contentManager: DigitalFoundryContentManager)
             itemCount,
             sampledCount: 0,
             note: "Transcribing runs on this machine and costs nothing but CPU time. Long videos can take tens of minutes each, and they run one at a time.",
+          } satisfies BulkBackfillEstimate);
+        }
+        if (target === "metadata") {
+          // Would otherwise fall through to the analysis pricing below and be
+          // quoted in dollars, which is the wrong currency entirely - this
+          // spends disk and time, not API credit.
+          return sendResponse(res, {
+            target,
+            itemCount,
+            sampledCount: 0,
+            note: "No API cost. Each file is rewritten to embed the new metadata, so this is disk-bound and roughly proportional to how much video you selected - expect it to take a while over a large library, and note it runs one file at a time.",
           } satisfies BulkBackfillEstimate);
         }
         if (target === "df_article") {
@@ -239,7 +253,7 @@ export const makeBackfillRouter = (contentManager: DigitalFoundryContentManager)
   });
 
   router.post("/run", async (req, res) => {
-    await zodParseHttp(BulkBackfillRequest, req, res, async ({ target, contentKeys, force, sources}) => {
+    await zodParseHttp(BulkBackfillRequest, req, res, async ({ target, contentKeys, force, sources, metadataOptions}) => {
       try {
         if (target === "ai_analysis" && !AiAnalysisConfigUtils.isUsable(configService.config.aiAnalysis)) {
           return sendError(res, "AI analysis is not enabled, or no API key has been set", 400);
@@ -267,7 +281,14 @@ export const makeBackfillRouter = (contentManager: DigitalFoundryContentManager)
           return sendError(res, "None of the selected items can take this action", 400);
         }
 
-        const task = contentManager.taskManager.bulkBackfill(queued, target, force, language, sources);
+        const task = contentManager.taskManager.bulkBackfill(
+          queued,
+          target,
+          force,
+          language,
+          sources,
+          metadataOptions
+        );
         return sendResponse(res, {
           message: "Bulk backfill started",
           taskId: task.task.id,

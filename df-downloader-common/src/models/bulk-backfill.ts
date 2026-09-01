@@ -19,14 +19,45 @@ import { AiEvidenceSource } from "./ai-analysis.js";
  * both simpler and no less efficient, and it gains a selection UI the
  * sweep could not have had.
  */
-export const BulkBackfillTarget = z.enum(["subtitles", "ai_analysis", "df_article"]);
+export const BulkBackfillTarget = z.enum(["subtitles", "ai_analysis", "df_article", "metadata"]);
 export type BulkBackfillTarget = z.infer<typeof BulkBackfillTarget>;
 
 export const BulkBackfillTargetLabels: Record<BulkBackfillTarget, string> = {
   subtitles: "Subtitles",
   ai_analysis: "AI analysis",
   df_article: "Digital Foundry articles",
+  metadata: "File metadata",
 };
+
+/**
+ * What a metadata run should gather before rewriting a file.
+ *
+ * Generic rather than one target per source, because the expensive part is
+ * the write, not the gathering: rewriting a file twice to add chapters and
+ * then tags costs twice for no reason. Whatever is selected is collected and
+ * written in a single pass.
+ *
+ * Both default off. Neither is free - one spends a YouTube request per item,
+ * the other is only useful once analysis has actually produced tags - so the
+ * run should say what it is for rather than assuming.
+ */
+export const MetadataBackfillOptions = z.object({
+  /**
+   * Re-fetch chapters and description from YouTube.
+   *
+   * One request per item. Worth it for anything downloaded before the sponsor
+   * chapter realignment existed, where the embedded chapters still carry a
+   * sponsor marker and, if the read was cut, the wrong timings.
+   */
+  fromYouTube: z.boolean().default(false),
+  /**
+   * Include tags the stored analysis produced and you accepted.
+   *
+   * Free - read from the analysis already on disk, no API call.
+   */
+  fromAnalysis: z.boolean().default(false),
+});
+export type MetadataBackfillOptions = z.infer<typeof MetadataBackfillOptions>;
 
 /**
  * One library item and what it already has.
@@ -80,6 +111,8 @@ export const BulkBackfillRequest = z.object({
   contentKeys: z.array(z.string()).min(1),
   /** Analysis only - which sources this run may read. See AiAnalysisSourceSelection. */
   sources: AiAnalysisSourceSelection.optional(),
+  /** Metadata only - what to gather before rewriting. See MetadataBackfillOptions. */
+  metadataOptions: MetadataBackfillOptions.optional(),
   /**
    * Redo work that has already been done - re-transcribe, re-analyse, or
    * re-search for an article that was already matched.
@@ -110,6 +143,7 @@ export const BulkBackfillEstimateRequest = z.object({
   target: BulkBackfillTarget,
   contentKeys: z.array(z.string()).default([]),
   force: z.boolean().default(false),
+  metadataOptions: MetadataBackfillOptions.optional(),
   /**
    * Analysis only. Priced with the same sources the run will actually read,
    * or the figure is for a different run than the one about to start -

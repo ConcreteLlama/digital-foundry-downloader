@@ -39,6 +39,7 @@ export type BulkBackfillTaskOpts = {
    */
   runSubtitles: (contentKey: string) => Promise<string>;
   runAnalysis: (contentKey: string) => Promise<string>;
+  runMetadata: (contentKey: string) => Promise<string>;
 };
 
 export type BulkBackfillItem = { contentKey: string };
@@ -85,6 +86,19 @@ const stillNeedsWork = async (
       }
       return { needed: true };
     }
+    case "metadata": {
+      if (!DfContentEntryUtils.hasDownload(entry)) {
+        return { needed: false, reason: "nothing downloaded" };
+      }
+      /*
+       * No "already done" state to check against yet: nothing records what
+       * was last written into a file, so there is no way to tell a file
+       * holding current metadata from one holding metadata from before a
+       * rule existed. Every selected item is rewritten, which is why this
+       * target is explicit selection rather than "everything that needs it".
+       */
+      return { needed: true };
+    }
     case "df_article": {
       if (!entry.contentInfo.youtubeVideoId) {
         // Without a video ID a candidate cannot be verified, and an
@@ -116,6 +130,9 @@ export const BulkBackfillTask = BatchOperationTaskBuilder(
         return "done";
       case "ai_analysis":
         await opts.runAnalysis(item.contentKey);
+        return "done";
+      case "metadata":
+        await opts.runMetadata(item.contentKey);
         return "done";
       case "df_article": {
         const entry = await opts.db.getContentEntry(item.contentKey);
@@ -164,4 +181,8 @@ export const BULK_BACKFILL_CONCURRENCY: Record<BulkBackfillTarget, number> = {
   // little more parallelism here shortens the run without increasing the
   // rate anything actually reaches Digital Foundry.
   df_article: 3,
+  // Rewriting a file is disk-bound and the media processing manager runs one
+  // at a time regardless, so handing it more would only build a queue
+  // somewhere less visible.
+  metadata: 1,
 };

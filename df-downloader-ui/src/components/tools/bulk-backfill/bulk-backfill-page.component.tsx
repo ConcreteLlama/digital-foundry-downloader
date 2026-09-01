@@ -13,6 +13,7 @@ import {
   Chip,
 } from "@mui/material";
 import {
+  MetadataBackfillOptions,
   BulkBackfillCandidate,
   BulkBackfillEstimate,
   AiAnalysisSourceSelection,
@@ -57,6 +58,8 @@ const TARGET_DESCRIPTIONS: Record<BulkBackfillTarget, string> = {
     "Write a summary, verdict, structured data and tags for downloaded videos. This calls the Claude API and costs a small amount per video.",
   df_article:
     "Find Digital Foundry's own written article for each video. Costs nothing but time, and gives later analyses a better source to work from than the transcript alone.",
+  metadata:
+    "Rewrite the metadata embedded in files you have already downloaded - chapters, description and tags. Useful for anything downloaded before a rule existed, since a file's metadata is written once and never revisited afterwards.",
 };
 
 /**
@@ -83,6 +86,7 @@ const FORCE_LABELS: Record<BulkBackfillTarget, string> = {
   subtitles: "Re-transcribe items that already have subtitles",
   ai_analysis: "Re-analyse items that have already been analysed",
   df_article: "Search again for items that already have a matched article",
+  metadata: "Rewrite every selected file, even if nothing looks out of date",
 };
 
 export const BulkBackfillPage = () => {
@@ -93,6 +97,12 @@ export const BulkBackfillPage = () => {
    * only - choosing here never writes back to config.
    */
   const [sources, setSources] = useState<AiAnalysisSourceSelection>(DEFAULT_SOURCE_SELECTION);
+  // Both off to start: one spends a YouTube request per item, the other only
+  // does anything once analysis has produced tags you accepted.
+  const [metadataOptions, setMetadataOptions] = useState<MetadataBackfillOptions>({
+    fromYouTube: false,
+    fromAnalysis: false,
+  });
   const [candidates, setCandidates] = useState<BulkBackfillCandidate[]>([]);
   const [libraryCount, setLibraryCount] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -284,6 +294,11 @@ export const BulkBackfillPage = () => {
     const needsLabel =
       target === "subtitles" ? "No subtitles" : target === "df_article" ? "No article" : "Not analysed";
     const doneLabel = target === "subtitles" ? "Has subtitles" : target === "df_article" ? "Matched" : "Complete";
+    // Metadata has no per-item status to filter on, so it gets no chips
+    // rather than subtitle-shaped ones that mean nothing here.
+    if (target === "metadata") {
+      return [{ value: "all" as const, label: "All" }];
+    }
     return [
       { value: "all" as const, label: "All" },
       { value: "needs" as const, label: needsLabel },
@@ -359,7 +374,10 @@ export const BulkBackfillPage = () => {
    */
   const isSelectable = useCallback(
     (candidate: BulkBackfillCandidate) =>
-      !workingKeys.has(candidate.contentKey) && (force || isMissing(candidate, target)),
+      // Metadata has no "missing" state - nothing records what was last
+      // written into a file - so everything with a file is selectable and the
+      // buttons below say "all" rather than offering a count of zero.
+      !workingKeys.has(candidate.contentKey) && (force || target === "metadata" || isMissing(candidate, target)),
     [workingKeys, force, target]
   );
   const selectable = useMemo(() => filtered.filter(isSelectable), [filtered, isSelectable]);
@@ -423,7 +441,7 @@ export const BulkBackfillPage = () => {
     setInlineEstimating(true);
     setInlineEstimate(null);
     try {
-      setInlineEstimate(await estimateBackfill(target, runKeys, force, sources));
+      setInlineEstimate(await estimateBackfill(target, runKeys, force, sources, metadataOptions));
     } catch (e) {
       setError(e instanceof Error ? e.message : "Could not estimate the cost");
     } finally {
@@ -435,7 +453,7 @@ export const BulkBackfillPage = () => {
     setEstimate(null);
     setEstimating(true);
     try {
-      setEstimate(await estimateBackfill(target, runKeys, force, sources));
+      setEstimate(await estimateBackfill(target, runKeys, force, sources, metadataOptions));
     } catch {
       setEstimate(null);
     } finally {
@@ -464,7 +482,13 @@ export const BulkBackfillPage = () => {
   const confirm = async () => {
     setConfirmOpen(false);
     try {
-      const response = await runBackfill(target, runKeys, force, target === "ai_analysis" ? sources : undefined);
+      const response = await runBackfill(
+        target,
+        runKeys,
+        force,
+        target === "ai_analysis" ? sources : undefined,
+        target === "metadata" ? metadataOptions : undefined
+      );
       setStarted(
         `Started on ${response.queued} ${response.queued === 1 ? "item" : "items"}` +
           (response.skipped ? `, skipped ${response.skipped} that could not take this action` : "")
@@ -622,7 +646,7 @@ export const BulkBackfillPage = () => {
               disabled={selectable.length === 0}
               onClick={() => setSelected(new Set(selectable.map((candidate) => candidate.contentKey)))}
             >
-              {force ? "Select all" : "Select all missing"} ({selectable.length})
+              {force || target === "metadata" ? "Select all" : "Select all missing"} ({selectable.length})
             </Button>
             <Button
               size="small"
@@ -640,7 +664,7 @@ export const BulkBackfillPage = () => {
                 })
               }
             >
-              {force ? "Select all on page" : "Select missing on page"} ({visibleSelectable.length})
+              {force || target === "metadata" ? "Select all on page" : "Select missing on page"} ({visibleSelectable.length})
             </Button>
             {/* Only where there is money at stake. The other targets cost
                 time and requests, which the confirmation already states. */}
@@ -739,6 +763,8 @@ export const BulkBackfillPage = () => {
           setSourcesTouched(true);
           setSources(next);
         }}
+        metadataOptions={metadataOptions}
+        onMetadataOptionsChange={setMetadataOptions}
         onCancel={() => setConfirmOpen(false)}
         onConfirm={confirm}
       />

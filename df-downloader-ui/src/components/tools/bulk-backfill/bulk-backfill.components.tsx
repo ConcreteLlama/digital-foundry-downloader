@@ -14,8 +14,10 @@ import {
   Stack,
   Typography,
   useMediaQuery,
+  Tooltip,
 } from "@mui/material";
 import {
+  MetadataBackfillOptions,
   AiAnalysisSourceSelection,
   BulkBackfillCandidate,
   BulkBackfillEstimate,
@@ -67,6 +69,15 @@ export const isMissing = (
       // asking again immediately would just spend a request to learn the
       // same thing.
       return !candidate.hasArticle && candidate.articleLookupDue;
+    case "metadata":
+      /*
+       * Never "missing", because nothing records what was last written into a
+       * file - so a file holding current metadata is indistinguishable from
+       * one written before a rule existed. Saying "none are missing" is the
+       * honest answer to a question that cannot be asked yet; picking items
+       * deliberately is the way to run this until something tracks it.
+       */
+      return false;
   }
 };
 
@@ -119,6 +130,7 @@ export const SKIP_REASONS: Record<BulkBackfillTarget, string> = {
   subtitles: "they already have subtitles",
   ai_analysis: "they have already been analysed",
   df_article: "they already have an article, or were searched too recently to be worth asking again",
+  metadata: "they have nothing downloaded to write into",
 };
 
 /** What this item already has, in the terms of the selected target. */
@@ -138,6 +150,10 @@ const statusFor = (candidate: BulkBackfillCandidate, target: BulkBackfillTarget,
       return candidate.hasAnalysis
         ? { label: "Analysed", tone: "done" as const }
         : { label: "Not analysed", tone: "todo" as const };
+    case "metadata":
+      // Only whether there is a file to write into - see isMissing for why
+      // there is no up-to-date state to report.
+      return { label: "Downloaded", tone: "todo" as const };
     case "df_article":
       if (candidate.hasArticle) {
         return { label: "Article matched", tone: "done" as const };
@@ -358,6 +374,71 @@ export const BackfillTable = ({ candidates, target, selected, workingKeys, onTog
   );
 };
 
+/**
+ * What a metadata rewrite should gather before writing.
+ *
+ * Generic rather than a target per source, because the write is the expensive
+ * part - rewriting a file twice to add chapters and then tags would cost
+ * twice for nothing. Neither is on by default: one spends a YouTube request
+ * per item, the other only does anything once analysis has produced tags you
+ * accepted.
+ */
+const METADATA_OPTIONS: { key: keyof MetadataBackfillOptions; label: string; tooltip: string }[] = [
+  {
+    key: "fromYouTube",
+    label: "Chapters & description",
+    tooltip:
+      "Re-fetch from YouTube, one request per item. Chapters are realigned onto your copy the same way a fresh download does it - which is the fix for anything downloaded before that realignment existed, where a sponsor marker is still embedded and the timings after it may be wrong.",
+  },
+  {
+    key: "fromAnalysis",
+    label: "Tags from analysis",
+    tooltip:
+      "Include the tags an analysis produced and you accepted. Read from what is already stored, so this costs nothing.",
+  },
+];
+
+const MetadataOptionsPicker = ({
+  value,
+  onChange,
+}: {
+  value: MetadataBackfillOptions;
+  onChange: (value: MetadataBackfillOptions) => void;
+}) => (
+  <Box>
+    <Typography variant="overline" sx={{ color: "text.disabled" }}>
+      Include
+    </Typography>
+    <Stack direction="row" spacing={0.75} flexWrap="wrap" useFlexGap sx={{ mt: 0.5 }}>
+      {METADATA_OPTIONS.map((option) => {
+        const on = value[option.key];
+        return (
+          <Tooltip key={option.key} title={option.tooltip}>
+            <Chip
+              size="small"
+              label={option.label}
+              variant={on ? "filled" : "outlined"}
+              onClick={() => onChange({ ...value, [option.key]: !on })}
+              sx={{
+                height: 24,
+                fontSize: "0.7rem",
+                ...(on ? { bgcolor: "primary.main", color: "primary.contrastText" } : { color: "text.secondary" }),
+              }}
+            />
+          </Tooltip>
+        );
+      })}
+    </Stack>
+    {/* Not an error - the stored title, description and tags are rewritten
+        either way, which is worth doing on its own after a rename. */}
+    <Typography variant="caption" sx={{ display: "block", mt: 0.5, color: "text.disabled" }}>
+      {value.fromYouTube || value.fromAnalysis
+        ? "Everything selected is gathered first and written in one pass."
+        : "Nothing extra selected - files are rewritten with the title, description and tags already stored."}
+    </Typography>
+  </Box>
+);
+
 export type BackfillConfirmDialogProps = {
   open: boolean;
   target: BulkBackfillTarget;
@@ -374,6 +455,9 @@ export type BackfillConfirmDialogProps = {
    */
   sources?: AiAnalysisSourceSelection;
   onSourcesChange?: (sources: AiAnalysisSourceSelection) => void;
+  /** Metadata only - what to gather before rewriting. */
+  metadataOptions?: MetadataBackfillOptions;
+  onMetadataOptionsChange?: (options: MetadataBackfillOptions) => void;
   onCancel: () => void;
   onConfirm: () => void;
 };
@@ -400,6 +484,8 @@ export const BackfillConfirmDialog = ({
   willSkip,
   sources,
   onSourcesChange,
+  metadataOptions,
+  onMetadataOptionsChange,
   onCancel,
   onConfirm,
 }: BackfillConfirmDialogProps) => (
@@ -410,6 +496,10 @@ export const BackfillConfirmDialog = ({
     <DialogContent>
       <DialogContentText component="div">
         <Stack spacing={1.5}>
+          {target === "metadata" && metadataOptions && onMetadataOptionsChange && (
+            <MetadataOptionsPicker value={metadataOptions} onChange={onMetadataOptionsChange} />
+          )}
+
           {target === "ai_analysis" && sources && onSourcesChange && (
             <AnalysisSourcePicker value={sources} onChange={onSourcesChange} />
           )}

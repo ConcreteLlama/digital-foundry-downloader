@@ -247,6 +247,11 @@ This release also fixes a long-standing gap where newly published videos could g
   - Hardware reviews are handled honestly here: the games used to benchmark a graphics card are listed as what they are, tests, and the review is never filed as coverage of them
   - Previews deliberately get no performance table. That format is provisional by design, and a frame rate from an early build would imply a precision nobody claimed - so it records what was shown and what the presenters said not to conclude yet
   - Analysis of hardware reviews, retrospectives, interviews, tech explainers and news shows is now classified as such rather than landing in "Other", so the label above an analysis tells you what it actually is
+- A new Backfill target for file metadata, to rewrite what is embedded in files you already have
+  - A file's metadata is written once at download and never revisited, so anything downloaded before a rule existed still carries the old version - chapters from before sponsor segments were realigned, or tags from before an analysis produced any
+  - Pick what to gather before it writes: chapters and description re-fetched from YouTube, tags from an analysis you have already run, or neither - in which case it rewrites what is already stored. Whatever is selected is collected first and written in one pass, since the write is the expensive part
+  - Chapters fetched this way are realigned onto your copy exactly as a fresh download would do it, so a sponsor marker embedded before that existed is removed and the timings after it corrected
+  - No API cost, but each file is rewritten, so it is disk-bound and runs one at a time
 - Notifications no longer have to interrupt you
   - A bell in the top bar collects everything the app says, with a count of what arrived while you were elsewhere. Turning pop-ups down now loses the interruption rather than the information - every message is still there to read
   - Choose whether everything pops up, only failures do, or nothing does. Failures always pop up regardless: a notification quietly swallowed because it was the one that mattered would be a worse feature than no setting at all

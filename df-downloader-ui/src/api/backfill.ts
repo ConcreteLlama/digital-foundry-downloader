@@ -1,5 +1,6 @@
 import {
   AiAnalysisSourceSelection,
+  MetadataBackfillOptions,
   BulkBackfillCandidatesResponse,
   BulkBackfillEstimate,
   BulkBackfillStartedResponse,
@@ -39,9 +40,10 @@ export const estimateBackfill = async (
   target: BulkBackfillTarget,
   contentKeys: string[],
   force: boolean,
-  sources?: AiAnalysisSourceSelection
+  sources?: AiAnalysisSourceSelection,
+  metadataOptions?: MetadataBackfillOptions
 ): Promise<BulkBackfillEstimate> => {
-  const response = await postJson(`${API_URL}/backfill/estimate`, { target, contentKeys, force, sources});
+  const response = await postJson(`${API_URL}/backfill/estimate`, { target, contentKeys, force, sources, metadataOptions});
   return unwrap(response, BulkBackfillEstimate);
 };
 
@@ -50,9 +52,17 @@ export const runBackfill = async (
   contentKeys: string[],
   force: boolean,
   /** Analysis only - which sources this run may read. Omitted uses the configured defaults. */
-  sources?: AiAnalysisSourceSelection
+  sources?: AiAnalysisSourceSelection,
+  /** Metadata only - what to gather before rewriting. */
+  metadataOptions?: MetadataBackfillOptions
 ): Promise<BulkBackfillStartedResponse> => {
-  const response = await postJson(`${API_URL}/backfill/run`, { target, contentKeys, force, sources });
+  const response = await postJson(`${API_URL}/backfill/run`, {
+    target,
+    contentKeys,
+    force,
+    sources,
+    metadataOptions,
+  });
   return unwrap(response, BulkBackfillStartedResponse);
 };
 

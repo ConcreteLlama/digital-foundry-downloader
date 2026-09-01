@@ -73,7 +73,9 @@ import { AiAnalysisTaskManager } from "./tasks/ai-analysis-task.js";
 import { BULK_BACKFILL_CONCURRENCY, BulkBackfillTask, isBulkBackfillTask } from "./tasks/bulk-backfill-task.js";
 import { ensureArticleForContent } from "./utils/df-articles/ensure-article.js";
 import { AiAnalysisConfig } from "df-downloader-common/config/ai-analysis-config.js";
-import { AiAnalysisSourceSelection } from "df-downloader-common";
+import { AiAnalysisSourceSelection, MetadataBackfillOptions } from "df-downloader-common";
+import { buildMetadataForBackfill } from "./utils/metadata-backfill.js";
+import { InjectMetadataTask } from "./tasks/inject-metadata-task.js";
 import { Chapter } from "./utils/chatpers.js";
 import { DfDownloaderOperationalDb } from "./db/df-operational-db.js";
 import { BatchMoveFilesTask, isBatchMoveFilesTask, makeMoveFilesTaskStatus } from "./tasks/batch-move-files-task.js";
@@ -100,6 +102,8 @@ export class DfTaskManager {
   readonly updateDownloadMetadataTaskPipeline: UpdateDownloadMetadataTaskPipeline;
 
   readonly maintenanceOperationsTaskManager: TaskManager;
+  /** Held so a metadata backfill can queue a rewrite onto the same serialised queue. */
+  private readonly mediaProcessingTaskManager: TaskManager;
   /**
    * Where bulk backfill runs live, deliberately NOT the maintenance
    * manager.
@@ -181,6 +185,7 @@ export class DfTaskManager {
       concurrentTasks: 1,
     });
     this.allTaskManagers.push(mediaProcessingTaskManager);
+    this.mediaProcessingTaskManager = mediaProcessingTaskManager;
     const dfFetchTaskManager = new TaskManager({
       concurrentTasks: 1,
     });
@@ -638,6 +643,33 @@ export class DfTaskManager {
   }
 
   /**
+   * Rewrites one downloaded file's metadata from the selected sources.
+   *
+   * Queued onto the media processing manager, which runs one at a time - the
+   * same queue that muxing and sidecar writes use, so a rewrite can never
+   * land on a file another job is already touching. That serialisation is the
+   * whole answer to interfering with other work: nothing here spawns its own
+   * ffmpeg outside the queue.
+   */
+  private async runMetadataForContent(contentKey: string, options: MetadataBackfillOptions) {
+    const db = serviceLocator.db;
+    const entry = await db.getContentEntry(contentKey);
+    if (!entry) {
+      throw new Error(`Content ${contentKey} not found`);
+    }
+    const built = await buildMetadataForBackfill(entry, options);
+    if (!built) {
+      throw new Error(`No downloaded file for ${entry.contentInfo.title}`);
+    }
+    const task = this.mediaProcessingTaskManager.addTask(
+      InjectMetadataTask(built.downloadLocation, built.meta)
+    );
+    this.trackTask(task);
+    await task.task.awaitResult();
+    return "metadata written";
+  }
+
+  /**
    * Queues one bulk backfill run over the given items.
    *
    * The items are taken as given; deciding whether each still needs the
@@ -649,7 +681,8 @@ export class DfTaskManager {
     target: BulkBackfillTarget,
     force: boolean,
     language: string,
-    sources?: AiAnalysisSourceSelection
+    sources?: AiAnalysisSourceSelection,
+    metadataOptions?: MetadataBackfillOptions
   ) {
     // Assigned the moment the task exists, which is after these options are
     // built - the closures below only run later, once it is dispatching.
@@ -671,6 +704,8 @@ export class DfTaskManager {
             }
             return this.runAnalysisForContent(contentKey, config, jobId, force, sources);
           },
+          runMetadata: (contentKey: string) =>
+            this.runMetadataForContent(contentKey, metadataOptions ?? { fromYouTube: false, fromAnalysis: false }),
         },
         { maxConcurrent: BULK_BACKFILL_CONCURRENCY[target] }
       )
