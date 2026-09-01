@@ -214,6 +214,96 @@ export const AiAnalysisSourcesConfig = z.object({
 });
 export type AiAnalysisSourcesConfig = z.infer<typeof AiAnalysisSourcesConfig>;
 
+/**
+ * Local engines that have actually been measured against the stored corpus.
+ *
+ * A short list on purpose. Any GGUF will load, but "it runs" and "it fills
+ * this schema without inventing numbers" are different claims, and only these
+ * have been checked - see docs/LOCAL_AI_ANALYSIS_SPIKE.md.
+ */
+export const AiLocalModel = z.enum(["qwen3.5-9b", "qwen3.5-4b"]);
+export type AiLocalModel = z.infer<typeof AiLocalModel>;
+
+export type AiLocalModelInfo = {
+  label: string;
+  /** GGUF download, fetched on first use the way Whisper models are. */
+  url: string;
+  fileName: string;
+  approxBytes: number;
+  notes: string;
+};
+
+export const AiLocalModels: Record<AiLocalModel, AiLocalModelInfo> = {
+  "qwen3.5-9b": {
+    label: "Qwen3.5 9B (recommended)",
+    url: "https://huggingface.co/unsloth/Qwen3.5-9B-GGUF/resolve/main/Qwen3.5-9B-UD-Q4_K_XL.gguf",
+    fileName: "Qwen3.5-9B-UD-Q4_K_XL.gguf",
+    approxBytes: 5_966_095_584,
+    notes:
+      "Schema-valid on every measured call, correct on every classification, and invented no numbers. The default for good reason.",
+  },
+  "qwen3.5-4b": {
+    label: "Qwen3.5 4B (constrained hardware)",
+    url: "https://huggingface.co/unsloth/Qwen3.5-4B-GGUF/resolve/main/Qwen3.5-4B-UD-Q4_K_XL.gguf",
+    fileName: "Qwen3.5-4B-UD-Q4_K_XL.gguf",
+    approxBytes: 2_912_109_728,
+    notes:
+      "Half the size and still classifies correctly, but it fabricated a figure once and hit a repetition loop on one item - so it is an opt-in for small machines rather than a default.",
+  },
+};
+
+export const AiLocalProviderConfig = z.object({
+  enabled: z
+    .boolean()
+    .default(false)
+    .describe("Analyse on this machine instead of paying an API. Slower, but it costs nothing to run."),
+  model: AiLocalModel.default("qwen3.5-9b").describe(
+    "Which local model to analyse with. The 9B is recommended - the 4B is faster but has been seen to invent a figure."
+  ),
+  /**
+   * Left optional so it can follow the Whisper models directory by default -
+   * the same "downloaded once, kept" story, in the same place.
+   */
+  modelDir: z
+    .string()
+    .optional()
+    .describe("Where to keep downloaded models. Defaults to alongside the Whisper models."),
+  /**
+   * Point at a llama-server that is already running instead of managing one.
+   *
+   * For anyone who would rather run inference on a different machine, or who
+   * already has a server up - and the only way to test this without a bundled
+   * binary.
+   */
+  serverUrl: z
+    .string()
+    .optional()
+    .describe("Use a llama-server that is already running, e.g. http://localhost:8080. Leave blank to manage one."),
+  threads: z
+    .number()
+    .int()
+    .min(1)
+    .optional()
+    .describe("CPU threads to use. Defaults to leaving a couple free for everything else on the machine."),
+  contextSize: z
+    .number()
+    .int()
+    .min(4096)
+    .default(32768)
+    .describe("How much text the model can consider at once. A long transcript needs a large window."),
+  gpuLayers: z
+    .number()
+    .int()
+    .min(0)
+    .optional()
+    .describe("Layers to offload to a GPU, if there is one. Leave blank to offload as many as fit."),
+});
+export type AiLocalProviderConfig = z.infer<typeof AiLocalProviderConfig>;
+
+/** Which engine answers. Both can be configured; this is the default pick. */
+export const AiProviderId = z.enum(["anthropic", "local"]);
+export type AiProviderId = z.infer<typeof AiProviderId>;
+
 export const AiAnalysisConfig = z.object({
   enabled: z.boolean().default(false).describe("Turn AI content analysis on."),
   apiKey: z
@@ -258,6 +348,19 @@ export const AiAnalysisConfig = z.object({
     ),
   features: AiAnalysisFeaturesConfig.prefault({}),
   promptAdditions: AiPromptAdditionsConfig.optional(),
+  /**
+   * The local engine. Additive rather than a restructure: the Anthropic
+   * settings stay exactly where existing installs already have them, so
+   * nothing needs migrating.
+   */
+  local: AiLocalProviderConfig.prefault({}),
+  /**
+   * Which engine to use when nothing says otherwise - unattended runs, and
+   * the pre-selected option wherever a choice is offered.
+   */
+  defaultProvider: AiProviderId.default("anthropic").describe(
+    "Which engine to analyse with by default. You can still pick per run when both are set up."
+  ),
 });
 export type AiAnalysisConfig = z.infer<typeof AiAnalysisConfig>;
 export const AiAnalysisConfigKey = "aiAnalysis";
