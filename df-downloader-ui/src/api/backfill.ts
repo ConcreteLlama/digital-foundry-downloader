@@ -38,9 +38,10 @@ export const fetchBackfillCandidates = async (
 export const estimateBackfill = async (
   target: BulkBackfillTarget,
   contentKeys: string[],
-  force: boolean
+  force: boolean,
+  sources?: AiAnalysisSourceSelection
 ): Promise<BulkBackfillEstimate> => {
-  const response = await postJson(`${API_URL}/backfill/estimate`, { target, contentKeys, force });
+  const response = await postJson(`${API_URL}/backfill/estimate`, { target, contentKeys, force, sources});
   return unwrap(response, BulkBackfillEstimate);
 };
 

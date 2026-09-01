@@ -1,3 +1,4 @@
+import { AnalysisSourcePicker } from "../../df-content/ai-analysis/analysis-source-picker.component.tsx";
 import {
   Alert,
   Box,
@@ -15,6 +16,7 @@ import {
   useMediaQuery,
 } from "@mui/material";
 import {
+  AiAnalysisSourceSelection,
   BulkBackfillCandidate,
   BulkBackfillEstimate,
   BulkBackfillTarget,
@@ -365,6 +367,13 @@ export type BackfillConfirmDialogProps = {
   estimating: boolean;
   /** How many of the selected items the run will skip as already done. */
   willSkip: number;
+  /**
+   * Analysis only. Asked here rather than on the page behind it, because a
+   * control sitting up the page is easy to walk past - and this one changes
+   * both what comes back and what it costs.
+   */
+  sources?: AiAnalysisSourceSelection;
+  onSourcesChange?: (sources: AiAnalysisSourceSelection) => void;
   onCancel: () => void;
   onConfirm: () => void;
 };
@@ -389,6 +398,8 @@ export const BackfillConfirmDialog = ({
   estimate,
   estimating,
   willSkip,
+  sources,
+  onSourcesChange,
   onCancel,
   onConfirm,
 }: BackfillConfirmDialogProps) => (
@@ -399,6 +410,10 @@ export const BackfillConfirmDialog = ({
     <DialogContent>
       <DialogContentText component="div">
         <Stack spacing={1.5}>
+          {target === "ai_analysis" && sources && onSourcesChange && (
+            <AnalysisSourcePicker value={sources} onChange={onSourcesChange} />
+          )}
+
           {force && (
             <Alert severity="warning" variant="outlined">
               {target === "subtitles" && "Items that already have subtitles will be transcribed again, replacing them."}

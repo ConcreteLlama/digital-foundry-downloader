@@ -9,9 +9,12 @@ import { AiAnalysisSourceSelection } from "df-downloader-common";
  * deliberate: the settings say what you normally want, and this is for the
  * times you want something else once, usually to spend less.
  *
- * Title and description are not offered. They are always read, cost almost
- * nothing, and there would be nothing left to analyse without them - a
- * control that can only be left on is noise.
+ * Title and description are shown but cannot be switched off. They are always
+ * read, cost almost nothing, and there would be nothing left to analyse
+ * without them - but leaving them out of the list entirely implied the run
+ * reads only the two things it does offer, which understated what is being
+ * sent. Shown as fixed rather than as unchecked toggles, so the distinction
+ * is between "always used" and "your choice" rather than on and off.
  */
 
 export const DEFAULT_SOURCE_SELECTION: AiAnalysisSourceSelection = { transcript: true, article: true };
@@ -22,6 +25,16 @@ type SourceOption = {
   /** What turning it on buys, and what turning it off costs. */
   tooltip: string;
 };
+
+/** Read on every run, whatever else is selected. Not choices. */
+const ALWAYS_USED: { label: string; tooltip: string }[] = [
+  { label: "Title", tooltip: "Always read. It is the most reliable statement of what the video is about." },
+  {
+    label: "Description",
+    tooltip:
+      "Always read when the item has one. Descriptions are fetched from YouTube only when something needs one, so an item never opened or downloaded may not have one yet.",
+  },
+];
 
 const OPTIONS: SourceOption[] = [
   {
@@ -57,6 +70,24 @@ export const AnalysisSourcePicker = ({
         Sources
       </Typography>
       <Stack direction="row" spacing={0.75} flexWrap="wrap" useFlexGap sx={{ mt: 0.5 }}>
+        {ALWAYS_USED.map((fixed) => (
+          <Tooltip key={fixed.label} title={fixed.tooltip}>
+            {/* Deliberately not a disabled toggle: disabled reads as "you
+                cannot have this", where the truth is "you always do". */}
+            <Chip
+              size="small"
+              label={fixed.label}
+              variant="filled"
+              sx={{
+                height: 24,
+                fontSize: "0.7rem",
+                bgcolor: "action.hover",
+                color: "text.secondary",
+                cursor: "default",
+              }}
+            />
+          </Tooltip>
+        ))}
         {OPTIONS.map((option) => {
           // An item with no subtitles cannot use them however the toggle is
           // set, so it is shown off and explained rather than left looking
@@ -88,9 +119,12 @@ export const AnalysisSourcePicker = ({
       {/* Not an error - it is a legitimate, and much cheaper, kind of run.
           But it changes what comes back enough to be worth saying outright
           rather than letting it be discovered afterwards. */}
+      <Typography variant="caption" sx={{ display: "block", mt: 0.5, color: "text.disabled" }}>
+        Title and description are always read. The rest is your choice.
+      </Typography>
       {nothingSelected && (
-        <Typography variant="caption" sx={{ display: "block", mt: 0.5, color: "warning.main" }}>
-          Title and description only - this returns tags and a content type, with no summary, verdict or
+        <Typography variant="caption" sx={{ display: "block", mt: 0.25, color: "warning.main" }}>
+          With neither of those, this returns tags and a content type only - no summary, verdict or
           breakdown.
         </Typography>
       )}

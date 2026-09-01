@@ -28,10 +28,7 @@ import { selectPipelinesInCompletionState } from "../../../store/df-tasks/tasks.
 import { store } from "../../../store/store.ts";
 import { estimateBackfill, fetchBackfillCandidates, runBackfill, stopBackfillJobs } from "../../../api/backfill.ts";
 import { triggerSnackbar } from "../../../utils/snackbar.tsx";
-import {
-  AnalysisSourcePicker,
-  DEFAULT_SOURCE_SELECTION,
-} from "../../df-content/ai-analysis/analysis-source-picker.component.tsx";
+import { DEFAULT_SOURCE_SELECTION } from "../../df-content/ai-analysis/analysis-source-picker.component.tsx";
 import { AnalysisSourcesExplainer } from "./analysis-sources-explainer.component.tsx";
 import {
   analysisImprovable,
@@ -426,7 +423,7 @@ export const BulkBackfillPage = () => {
     setInlineEstimating(true);
     setInlineEstimate(null);
     try {
-      setInlineEstimate(await estimateBackfill(target, runKeys, force));
+      setInlineEstimate(await estimateBackfill(target, runKeys, force, sources));
     } catch (e) {
       setError(e instanceof Error ? e.message : "Could not estimate the cost");
     } finally {
@@ -434,18 +431,35 @@ export const BulkBackfillPage = () => {
     }
   };
 
-  const openConfirm = async () => {
-    setConfirmOpen(true);
+  const priceRun = async () => {
     setEstimate(null);
     setEstimating(true);
     try {
-      setEstimate(await estimateBackfill(target, runKeys, force));
+      setEstimate(await estimateBackfill(target, runKeys, force, sources));
     } catch {
       setEstimate(null);
     } finally {
       setEstimating(false);
     }
   };
+
+  const openConfirm = async () => {
+    setConfirmOpen(true);
+    await priceRun();
+  };
+
+  /*
+   * Re-priced when the sources change with the dialog open, because they are
+   * chosen in the dialog now and declining the transcript changes the cost by
+   * roughly an order of magnitude - a price for the run you just stopped
+   * asking for is worse than none.
+   */
+  useEffect(() => {
+    if (confirmOpen && target === "ai_analysis") {
+      void priceRun();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sources]);
 
   const confirm = async () => {
     setConfirmOpen(false);
@@ -493,18 +507,10 @@ export const BulkBackfillPage = () => {
       {/* Only for analysis: it is the one target whose result quality depends
           on what else the item happens to have, and the one you are about to
           be charged for. */}
-      {target === "ai_analysis" && (
-        <>
-          <AnalysisSourcePicker
-            value={sources}
-            onChange={(next) => {
-              setSourcesTouched(true);
-              setSources(next);
-            }}
-          />
-          <AnalysisSourcesExplainer />
-        </>
-      )}
+      {/* The picker itself now lives in the run confirmation - a control up
+          here was easy to walk past. This stays: it is reference material for
+          deciding, not the decision. */}
+      {target === "ai_analysis" && <AnalysisSourcesExplainer />}
 
       <FormControlLabel
         control={<Switch size="small" checked={force} onChange={(event) => setForce(event.target.checked)} />}
@@ -728,6 +734,11 @@ export const BulkBackfillPage = () => {
         estimate={estimate}
         estimating={estimating}
         willSkip={willSkip}
+        sources={sources}
+        onSourcesChange={(next) => {
+          setSourcesTouched(true);
+          setSources(next);
+        }}
         onCancel={() => setConfirmOpen(false)}
         onConfirm={confirm}
       />

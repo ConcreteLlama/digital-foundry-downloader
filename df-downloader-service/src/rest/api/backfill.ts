@@ -141,7 +141,7 @@ export const makeBackfillRouter = (contentManager: DigitalFoundryContentManager)
    * between a run taking minutes and taking days.
    */
   router.post("/estimate", async (req, res) => {
-    await zodParseHttp(BulkBackfillEstimateRequest, req, res, async ({ target, contentKeys, force }) => {
+    await zodParseHttp(BulkBackfillEstimateRequest, req, res, async ({ target, contentKeys, force, sources }) => {
       try {
         const itemCount = contentKeys.length;
         if (target === "subtitles") {
@@ -181,7 +181,7 @@ export const makeBackfillRouter = (contentManager: DigitalFoundryContentManager)
             continue;
           }
           try {
-            const estimate = await estimateAnalysisCost(config!, { entry });
+            const estimate = await estimateAnalysisCost(config!, { entry, sources });
             costs.push(estimate.estimatedCostUsd);
           } catch (e) {
             logger.log("warn", `Could not price ${contentKey} for a bulk estimate: ${e}`);

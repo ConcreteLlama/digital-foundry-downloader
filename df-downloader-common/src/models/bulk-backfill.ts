@@ -110,6 +110,13 @@ export const BulkBackfillEstimateRequest = z.object({
   target: BulkBackfillTarget,
   contentKeys: z.array(z.string()).default([]),
   force: z.boolean().default(false),
+  /**
+   * Analysis only. Priced with the same sources the run will actually read,
+   * or the figure is for a different run than the one about to start -
+   * declining the transcript changes the cost by roughly an order of
+   * magnitude, so this is not a rounding difference.
+   */
+  sources: AiAnalysisSourceSelection.optional(),
 });
 export type BulkBackfillEstimateRequest = z.infer<typeof BulkBackfillEstimateRequest>;
 
