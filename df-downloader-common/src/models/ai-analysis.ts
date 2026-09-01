@@ -387,7 +387,19 @@ export type AiStructuredData = z.infer<typeof AiStructuredData>;
 export const AiAnalysisUsage = z.object({
   inputTokens: z.number().default(0),
   outputTokens: z.number().default(0),
-  costUsd: z.number().default(0),
+  /**
+   * What the run cost in money, absent when that question does not apply.
+   *
+   * Optional rather than zero: a locally-run analysis is not free, it costs
+   * time instead, and recording zero would quietly average into the spend
+   * figures as though it were a bargain. Records written before this was
+   * optional all carry a real figure, so they are unaffected.
+   */
+  costUsd: z.number().optional(),
+  /** Wall-clock for engines whose cost is time rather than money. */
+  durationMs: z.number().optional(),
+  /** Which engine answered. Absent on records predating a second one. */
+  provider: z.string().default("anthropic"),
 });
 export type AiAnalysisUsage = z.infer<typeof AiAnalysisUsage>;
 
@@ -401,7 +413,12 @@ export type AiAnalysisUsage = z.infer<typeof AiAnalysisUsage>;
  */
 export const AiAnalysisResult = z.object({
   analysedAt: z.coerce.date(),
-  model: AiAnalysisModel,
+  /**
+   * A record of what actually answered, so a plain string rather than the
+   * configured-model enum - a local engine's model name is not one of the
+   * hosted options, and every stored value is already a valid string.
+   */
+  model: z.string(),
   contentType: AiContentType,
   /** The classifier's confidence in `contentType`, 0-1, when it gave one. */
   contentTypeConfidence: z.number().min(0).max(1).optional(),
@@ -486,7 +503,8 @@ export const AiAnalysisResultUtils = {
  */
 export const AiAnalysisIndexEntry = z.object({
   analysedAt: z.coerce.date(),
-  model: AiAnalysisModel,
+  /** What answered - a plain string, like AiAnalysisResult.model. */
+  model: z.string(),
   contentType: AiContentType,
   /** Whether the stored result records a failure rather than an analysis. */
   hasError: z.boolean().default(false),
@@ -582,7 +600,8 @@ export type AnalyseContentRequest = z.infer<typeof AnalyseContentRequest>;
  * output is projected from measured runs against real content.
  */
 export const AiAnalysisCostEstimate = z.object({
-  model: AiAnalysisModel,
+  /** What would answer - a plain string, since it may be a local engine. */
+  model: z.string(),
   inputTokens: z.number(),
   estimatedOutputTokens: z.number(),
   /**

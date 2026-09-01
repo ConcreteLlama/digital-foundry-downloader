@@ -67,11 +67,27 @@ export class AiCostLog {
     return this.log.startedAt;
   }
 
-  total(): { costUsd: number; runCount: number } {
-    return {
-      costUsd: this.log.entries.reduce((sum, entry) => sum + entry.costUsd, 0),
-      runCount: this.log.entries.length,
-    };
+  /**
+   * Two populations, never summed together.
+   *
+   * A run that cost time is not a cheap run - averaging it into the money
+   * figures would make both numbers meaningless.
+   */
+  total(): { costUsd: number; runCount: number; localRunCount: number; localDurationMs: number } {
+    let costUsd = 0;
+    let runCount = 0;
+    let localRunCount = 0;
+    let localDurationMs = 0;
+    for (const entry of this.log.entries) {
+      if (entry.costUsd === undefined) {
+        localRunCount++;
+        localDurationMs += entry.durationMs ?? 0;
+      } else {
+        costUsd += entry.costUsd;
+        runCount++;
+      }
+    }
+    return { costUsd, runCount, localRunCount, localDurationMs };
   }
 
   /**
@@ -98,6 +114,7 @@ export class AiCostLog {
       model: result.model,
       analysedAt,
       costUsd: result.usage.costUsd,
+      durationMs: result.usage.durationMs,
       inputTokens: result.usage.inputTokens,
       outputTokens: result.usage.outputTokens,
     });

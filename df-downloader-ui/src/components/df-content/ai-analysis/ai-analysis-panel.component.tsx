@@ -1,4 +1,4 @@
-import { AiAnalysisSourceSelection } from "df-downloader-common";
+import { AiAnalysisSourceSelection, formatDurationMs } from "df-downloader-common";
 import AutoAwesomeIcon from "@mui/icons-material/AutoAwesome";
 import CheckIcon from "@mui/icons-material/Check";
 import CloseIcon from "@mui/icons-material/Close";
@@ -583,7 +583,13 @@ const RunDetails = ({ result }: { result: AiAnalysisResult }) => {
           <span>{result.model}</span>
           <span>{result.usage.inputTokens.toLocaleString()} in</span>
           <span>{result.usage.outputTokens.toLocaleString()} out</span>
-          <span>{formatCost(result.usage.costUsd)}</span>
+          <span>
+            {result.usage.costUsd !== undefined
+              ? formatCost(result.usage.costUsd)
+              : result.usage.durationMs !== undefined
+                ? formatDurationMs(result.usage.durationMs)
+                : "-"}
+          </span>
           <span>{new Date(result.analysedAt).toLocaleString()}</span>
         </Stack>
       </Collapse>

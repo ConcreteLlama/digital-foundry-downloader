@@ -29,6 +29,12 @@ export const buildCostLedger = async (db: DfDownloaderOperationalDb): Promise<Ai
   const byModel = new Map<string, AiCostByModel>();
   let totalCostUsd = 0;
   let runsWithoutCost = 0;
+  // Runs that cost time instead of money. Their own population throughout -
+  // folding them into the money figures would make the average per run read
+  // as though analysing had got cheaper rather than free.
+  let moneyRunCount = 0;
+  let localRunCount = 0;
+  let localDurationMs = 0;
 
   for (const { contentKey, result } of results) {
     if (!result.usage) {
@@ -38,7 +44,7 @@ export const buildCostLedger = async (db: DfDownloaderOperationalDb): Promise<Ai
       runsWithoutCost++;
       continue;
     }
-    const { costUsd, inputTokens, outputTokens } = result.usage;
+    const { costUsd, durationMs, inputTokens, outputTokens } = result.usage;
     ledger.push({
       contentKey,
       // Falls back to the key so a run whose content has since been removed
@@ -47,12 +53,23 @@ export const buildCostLedger = async (db: DfDownloaderOperationalDb): Promise<Ai
       model: result.model,
       analysedAt: result.analysedAt,
       costUsd,
+      durationMs,
       inputTokens,
       outputTokens,
       hasError: Boolean(result.error),
     });
-    totalCostUsd += costUsd;
 
+    if (costUsd === undefined) {
+      localRunCount++;
+      localDurationMs += durationMs ?? 0;
+      // Deliberately not in byModel: that table is spend per model, and a row
+      // reading zero against a local engine would invite exactly the wrong
+      // comparison.
+      continue;
+    }
+
+    moneyRunCount++;
+    totalCostUsd += costUsd;
     const existing = byModel.get(result.model) ?? { model: result.model, runCount: 0, costUsd: 0 };
     existing.runCount++;
     existing.costUsd += costUsd;
@@ -71,11 +88,15 @@ export const buildCostLedger = async (db: DfDownloaderOperationalDb): Promise<Ai
   return {
     lifetimeCostUsd: costLog.costUsd,
     lifetimeRunCount: costLog.runCount,
+    lifetimeLocalRunCount: costLog.localRunCount,
+    lifetimeLocalDurationMs: costLog.localDurationMs,
     lifetimeFrom: costLog.startedAt,
     entries: ledger,
     totalCostUsd,
-    runCount: ledger.length,
+    runCount: moneyRunCount,
     runsWithoutCost,
+    localRunCount,
+    localDurationMs,
     byModel: [...byModel.values()].sort((a, b) => b.costUsd - a.costUsd),
   };
 };

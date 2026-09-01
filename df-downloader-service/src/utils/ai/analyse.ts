@@ -109,11 +109,25 @@ type PreparedCall = {
   transcript?: ResolvedTranscript;
 };
 
-const addUsage = (a: AiAnalysisUsage | undefined, b: AiAnalysisUsage): AiAnalysisUsage => ({
-  inputTokens: (a?.inputTokens ?? 0) + b.inputTokens,
-  outputTokens: (a?.outputTokens ?? 0) + b.outputTokens,
-  costUsd: (a?.costUsd ?? 0) + b.costUsd,
-});
+/**
+ * Totals the two calls of a run.
+ *
+ * Money and time are summed only where they were reported at all: absent has
+ * to stay absent, because turning it into zero is exactly the claim this
+ * whole distinction exists to avoid - that a local run was free rather than
+ * that it cost something other than money.
+ */
+const addUsage = (a: AiAnalysisUsage | undefined, b: AiAnalysisUsage): AiAnalysisUsage => {
+  const sumOptional = (x: number | undefined, y: number | undefined) =>
+    x === undefined && y === undefined ? undefined : (x ?? 0) + (y ?? 0);
+  return {
+    inputTokens: (a?.inputTokens ?? 0) + b.inputTokens,
+    outputTokens: (a?.outputTokens ?? 0) + b.outputTokens,
+    costUsd: sumOptional(a?.costUsd, b.costUsd),
+    durationMs: sumOptional(a?.durationMs, b.durationMs),
+    provider: b.provider,
+  };
+};
 
 /**
  * Assembles everything a run will send, without sending it.

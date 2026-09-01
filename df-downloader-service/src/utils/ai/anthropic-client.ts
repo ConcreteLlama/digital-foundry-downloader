@@ -125,6 +125,7 @@ const summariseUsage = (config: AiAnalysisConfig, usage: any): AiAnalysisUsage =
   const outputCost = (outputTokens / 1_000_000) * pricing.outputPerMTok;
 
   return {
+    provider: "anthropic",
     inputTokens: freshInput + cacheRead + cacheWrite,
     outputTokens,
     costUsd: inputCost + outputCost,

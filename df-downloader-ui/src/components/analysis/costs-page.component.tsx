@@ -1,5 +1,5 @@
 import { Alert, Box, Chip, CircularProgress, Divider, Paper, Stack, Typography } from "@mui/material";
-import { AiCostLedgerResponse } from "df-downloader-common";
+import { AiCostLedgerResponse, formatDurationMs } from "df-downloader-common";
 import { useEffect, useState } from "react";
 import { fetchAiCosts } from "../../api/ai-analysis.ts";
 import { conciseFormatDate } from "../../utils/date.ts";
@@ -182,7 +182,13 @@ export const CostsPage = () => {
                   color: entry.hasError ? "text.disabled" : "text.primary",
                 }}
               >
-                {formatCost(entry.costUsd)}
+                {/* Time, for a run that cost that instead of money. Never
+                    rendered as a price of zero, which would read as free. */}
+                {entry.costUsd !== undefined
+                  ? formatCost(entry.costUsd)
+                  : entry.durationMs !== undefined
+                    ? formatDurationMs(entry.durationMs)
+                    : "-"}
               </Typography>
             </Stack>
           ))}

@@ -14,9 +14,12 @@ import { AiAnalysisModel } from "../config/ai-analysis-config.js";
 export const AiCostLedgerEntry = z.object({
   contentKey: z.string(),
   title: z.string(),
-  model: AiAnalysisModel,
+  model: z.string(),
   analysedAt: z.coerce.date(),
-  costUsd: z.number().default(0),
+  /** Absent for a run that cost time rather than money. */
+  costUsd: z.number().optional(),
+  /** Present for a run that cost time rather than money. */
+  durationMs: z.number().optional(),
   inputTokens: z.number().default(0),
   outputTokens: z.number().default(0),
   /** A run that failed still spent tokens getting there. */
@@ -26,7 +29,7 @@ export type AiCostLedgerEntry = z.infer<typeof AiCostLedgerEntry>;
 
 /** Spend grouped by model, so an expensive choice is visible as one. */
 export const AiCostByModel = z.object({
-  model: AiAnalysisModel,
+  model: z.string(),
   runCount: z.number().default(0),
   costUsd: z.number().default(0),
 });
@@ -56,9 +59,12 @@ export type AiCostByModel = z.infer<typeof AiCostByModel>;
 export const AiCostLogEntry = z.object({
   contentKey: z.string(),
   title: z.string().optional(),
-  model: AiAnalysisModel,
+  model: z.string(),
   analysedAt: z.coerce.date(),
-  costUsd: z.number().default(0),
+  /** Absent for a run that cost time rather than money. */
+  costUsd: z.number().optional(),
+  /** Present for a run that cost time rather than money. */
+  durationMs: z.number().optional(),
   inputTokens: z.number().default(0),
   outputTokens: z.number().default(0),
 });
@@ -70,6 +76,16 @@ export const AiCostLedgerResponse = z.object({
   runCount: z.number().default(0),
   /** Stored runs with no usage recorded, so not counted in the total. */
   runsWithoutCost: z.number().default(0),
+  /**
+   * Runs that cost time instead of money, kept as their own population.
+   *
+   * Never folded into the money figures. Summing them would make the average
+   * cost per run meaningless, and the existing runsWithoutCost counter already
+   * establishes that "not known" and "free" are different things - this is
+   * that distinction one step further.
+   */
+  localRunCount: z.number().default(0),
+  localDurationMs: z.number().default(0),
   byModel: z.array(AiCostByModel),
   /**
    * Everything ever spent, from the run log rather than from what is still
@@ -81,7 +97,10 @@ export const AiCostLedgerResponse = z.object({
    * can be trusted rather than implying it goes back forever.
    */
   lifetimeCostUsd: z.number().default(0),
+  /** Runs that were charged for. Local runs are counted separately below. */
   lifetimeRunCount: z.number().default(0),
+  lifetimeLocalRunCount: z.number().default(0),
+  lifetimeLocalDurationMs: z.number().default(0),
   lifetimeFrom: z.coerce.date().optional(),
 });
 export type AiCostLedgerResponse = z.infer<typeof AiCostLedgerResponse>;

@@ -104,7 +104,15 @@ export abstract class DfDownloaderOperationalDb {
    * Distinct from the stored analyses: those are replaced by a re-run, this is
    * not - see AiCostLog.
    */
-  abstract getAiCostLog(): { entries: AiCostLogEntry[]; startedAt: Date; costUsd: number; runCount: number };
+  abstract getAiCostLog(): {
+    entries: AiCostLogEntry[];
+    startedAt: Date;
+    /** Money runs only - local runs are the separate pair below. */
+    costUsd: number;
+    runCount: number;
+    localRunCount: number;
+    localDurationMs: number;
+  };
   /** Every stored analysis, for cross-content views. Cached in the store - see AiAnalysisStore. */
   abstract getAllAiAnalysisResults(): Promise<{ contentKey: string; result: AiAnalysisResult }[]>;
   abstract setDfArticleLookup(state: DfArticleLookupState): Promise<void>;
