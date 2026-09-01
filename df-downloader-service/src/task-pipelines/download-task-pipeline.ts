@@ -22,6 +22,31 @@ import { resolveSubtitlesOutput } from "../media-utils/subtitles/sidecar.js";
 import { GeneratedSubtitleInfo } from "../media-utils/subtitles/subtitles.js";
 import { Chapter } from "../utils/chatpers.js";
 
+/**
+ * Where each step's result lands in `allResults`.
+ *
+ * The results array is pre-sized to the number of steps and written at the
+ * step's own index, so a skipped step leaves a hole rather than shifting
+ * anything - which means these are positions in the chain below, and
+ * inserting a step shifts every index after it.
+ *
+ * Named because reading them positionally already went wrong once: adding
+ * "Analyse Content" in the middle pushed Inject Metadata from 4 to 5, and
+ * Move File carried on reading index 4 - so it judged whether injection had
+ * succeeded from the analysis result, and with analysis switched off it read
+ * a hole and concluded failure every time.
+ */
+const STEP = {
+  download: 0,
+  measureDuration: 1,
+  fetchChapters: 2,
+  generateSubtitles: 3,
+  analyseContent: 4,
+  injectMetadata: 5,
+  moveFile: 6,
+  writeSubtitles: 7,
+} as const;
+
 type DownloadTaskPipelineOpts = {
   downloadTaskManager: DownloadTaskManager;
   subtitlesTaskManager: SubtitlesTaskManager;
@@ -69,7 +94,8 @@ export const createDownloadTaskPipeline = (opts: DownloadTaskPipelineOpts) => {
     },
     "download"
   >("download")
-    .next({
+    
+.next({
       stepName: "Download",
       taskCreator: ({ context }) => {
         const { url, downloadLocation, headers } = context;
@@ -204,7 +230,9 @@ export const createDownloadTaskPipeline = (opts: DownloadTaskPipelineOpts) => {
       stepName: "Inject Metadata",
       taskCreator: ({ context, allResults }) => {
         const { dfContentInfo, downloadLocation } = context;
-        const [_downloadTaskResult, _measureTaskResult, ytMetaTaskResult, subtitlesTaskResult] = allResults;
+        const ytMetaTaskResult = allResults[STEP.fetchChapters];
+        const subtitlesTaskResult = allResults[STEP.generateSubtitles];
+        const analysisTaskResult = allResults[STEP.analyseContent];
         const config = configService.config;
         const metaConfig = config.metadata;
         const generatedSubtitles = subtitlesTaskResult?.status === "success" ? subtitlesTaskResult.result : null;
@@ -223,8 +251,25 @@ export const createDownloadTaskPipeline = (opts: DownloadTaskPipelineOpts) => {
         // previously-missing description from YouTube - fold that in so a
         // freshly-resolved description still gets embedded in this file,
         // not just saved to the DB for next time.
+        /*
+         * Tags the analysis just accepted are folded in for the same reason
+         * the description is: analysis runs two steps earlier and writes them
+         * to the database, but this context copy was captured before the
+         * pipeline started, so injecting from it embeds the tags the content
+         * had on arrival and silently drops the ones just produced.
+         *
+         * Only accepted tags, matching what actually gets written to the
+         * content - a suggestion awaiting review is not a fact about the file.
+         */
+        const analysis = analysisTaskResult?.status === "success" ? analysisTaskResult.result : undefined;
+        const acceptedTags = (analysis?.tags ?? [])
+          .filter((tag) => tag.status === "accepted")
+          .map((tag) => tag.tag);
+        const existingTags = dfContentInfo.tags ?? [];
+        const existingLower = new Set(existingTags.map((tag) => tag.toLowerCase()));
+        const tags = [...existingTags, ...acceptedTags.filter((tag) => !existingLower.has(tag.toLowerCase()))];
         const metaForInjection = metaConfig.injectMetadata
-          ? { ...dfContentInfo, description: dfContentInfo.description || ytMeta?.description }
+          ? { ...dfContentInfo, description: dfContentInfo.description || ytMeta?.description, tags }
           : undefined;
         if (!metaForInjection && !subtitles && !chapters) {
           // Nothing to embed, so there's no remux to redirect - the Move File
@@ -270,8 +315,7 @@ export const createDownloadTaskPipeline = (opts: DownloadTaskPipelineOpts) => {
         // it only means "injection intended to write there" - it has to be
         // confirmed against the actual result. Results are stored by index, so
         // a skipped step leaves a hole rather than shifting anything.
-        const [_downloadTaskResult, _measureTaskResult, _ytMetaTaskResult, _subtitlesTaskResult, injectTaskResult] =
-          allResults;
+        const injectTaskResult = allResults[STEP.injectMetadata];
         const injectSucceeded = injectTaskResult?.status === "success";
         if (context.fileAtFinalLocation && !injectSucceeded) {
           logger.log(
@@ -298,7 +342,7 @@ export const createDownloadTaskPipeline = (opts: DownloadTaskPipelineOpts) => {
     .next({
       stepName: "Write Subtitles",
       taskCreator: ({ context, allResults }) => {
-        const [_downloadTaskResult, _measureTaskResult, _ytMetaTaskResult, subtitlesTaskResult] = allResults;
+        const subtitlesTaskResult = allResults[STEP.generateSubtitles];
         const generatedSubtitles = subtitlesTaskResult?.status === "success" ? subtitlesTaskResult.result : null;
         if (!generatedSubtitles || !context.finalLocation) {
           return null;

@@ -21,6 +21,7 @@ import { useCallback, useEffect, useState } from "react";
 import { useSelector } from "react-redux";
 import { Link, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { LiveStatusStrip } from "../../components/general/live-status-strip.component";
+import { NotificationBell } from "../../components/general/notification-bell.component";
 import { ThemeSwitcher } from "../../components/general/theme-switcher.component";
 import { DfLogoIcon } from "../../icons/df-logo.component";
 import { selectDevConfigEnabled } from "../../store/config/config.selector.ts";
@@ -337,7 +338,12 @@ const AppTopBar = ({ railWidth, showMenuButton, onMenuClick }: AppTopBarProps) =
         <Typography variant="h6" noWrap sx={{ flex: "1 1 auto", minWidth: 0 }}>
           {getPageTitle(pathname)}
         </Typography>
+        {/* One row of icons rather than a mix of prose and controls: activity,
+            the DF request queue, notifications, theme. Theme stays despite
+            belonging in settings by rights - a one-tap switch is the point of
+            it, and it costs the same as the others now they are all icons. */}
         <LiveStatusStrip />
+        <NotificationBell />
         <ThemeSwitcher />
       </Toolbar>
     </AppBar>

@@ -1,3 +1,4 @@
+import { recordNotification, shouldToast } from "./notifications.ts";
 import CheckCircleOutlineIcon from "@mui/icons-material/CheckCircleOutline";
 import CloseIcon from "@mui/icons-material/Close";
 import ErrorOutlineIcon from "@mui/icons-material/ErrorOutline";
@@ -261,6 +262,18 @@ type TriggerSnackbarOpts = OptionsObject & {
 export const triggerSnackbar = (message: string, snackbarProps: TriggerSnackbarOpts) => {
   const { actionButton, ...options } = snackbarProps;
   const variant: VariantType = options.variant || "info";
+  /*
+   * Recorded whatever happens, toasted only if the settings allow it. Every
+   * notification stays reachable from the bell even when nothing pops, so
+   * turning toasts off loses the interruption rather than the information.
+   *
+   * This is the single choke point - grouped notifications come through here
+   * too - so there is one place that decides, rather than each caller.
+   */
+  recordNotification(message, variant);
+  if (!shouldToast(variant)) {
+    return;
+  }
   const spec = getVariantSpec(variant);
   // No default "Dismiss" button any more. It appeared on every toast, ate the
   // width the message needed, and said nothing that the auto-hide and the
