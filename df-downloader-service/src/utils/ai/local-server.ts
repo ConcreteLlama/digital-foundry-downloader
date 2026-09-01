@@ -94,6 +94,22 @@ const HEALTH_TIMEOUT_MS = 10 * 60_000;
 const HEALTH_POLL_MS = 1000;
 
 /**
+ * The shortest the model is ever held after going idle.
+ *
+ * One analysis makes two calls - classify and summarise, then extract - and
+ * each releases the server between them. With an idle shutdown of zero that
+ * gap is enough to unload the model and load it again mid-run, which on a
+ * six-gigabyte model off a slow mount costs minutes for nothing. Observed
+ * doing exactly that.
+ *
+ * So "unload immediately" means "as soon as the run is actually over", not
+ * "in the pause between two halves of one job". A minute of held memory is a
+ * far smaller cost than reloading, and anyone setting zero wants their RAM
+ * back after the work - not during it.
+ */
+const MIN_IDLE_SECONDS = 60;
+
+/**
  * One llama-server, started when needed and dropped when idle.
  *
  * Held rather than spawned per call because loading the model is seconds and
@@ -152,11 +168,7 @@ export class LocalLlamaServer {
     if (this.inFlight > 0 || this.config.serverUrl?.trim() || !this.process) {
       return;
     }
-    const seconds = this.config.idleShutdownSeconds;
-    if (seconds <= 0) {
-      void this.stop();
-      return;
-    }
+    const seconds = Math.max(this.config.idleShutdownSeconds, MIN_IDLE_SECONDS);
     this.idleTimer = setTimeout(() => {
       this.idleTimer = undefined;
       if (this.inFlight === 0) {

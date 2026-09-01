@@ -308,7 +308,9 @@ export const AiLocalProviderConfig = z.object({
     .int()
     .min(0)
     .default(300)
-    .describe("Seconds to keep the model loaded after the last analysis. 0 unloads it immediately."),
+    .describe(
+      "Seconds to keep the model loaded after the last analysis. A short grace period always applies, so it is never unloaded midway through a run."
+    ),
   threads: z
     .number()
     .int()
