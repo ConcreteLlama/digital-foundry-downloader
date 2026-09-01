@@ -1,5 +1,4 @@
 import { resolveChapters } from "./chapters.js";
-import Anthropic from "@anthropic-ai/sdk";
 import {
   AiAnalysisCostEstimate,
   AiAnalysisResult,
@@ -15,7 +14,8 @@ import {
 } from "df-downloader-common";
 import { AiAnalysisConfig, AiAnalysisConfigUtils } from "df-downloader-common/config/ai-analysis-config.js";
 import { Chapter } from "../chatpers.js";
-import { calculateCostUsd, callStructured, countInputTokens, makeAnthropicClient } from "./anthropic-client.js";
+import { makeAnthropicProvider } from "./providers/anthropic.js";
+import { AiProvider } from "./providers/types.js";
 import {
   buildContentBlock,
   buildExtractionInstruction,
@@ -352,10 +352,10 @@ export const estimateAnalysisCost = async (
   config: AiAnalysisConfig,
   inputs: AnalysisInputs
 ): Promise<AiAnalysisCostEstimate> => {
-  const client = makeAnthropicClient(config);
+  const provider = makeAnthropicProvider(config);
   const prepared = await prepareAnalysis(config, inputs);
   const instruction = prepared.tagsOnly ? buildTagOnlyInstruction(config) : buildOverviewInstruction(config);
-  const inputTokens = await countInputTokens(client, config, prepared.system, prepared.content, instruction);
+  const inputTokens = await provider.countInputTokens(prepared.system, prepared.content, instruction);
 
   const capabilities = AiAnalysisConfigUtils.capabilities(config.model);
   const scale = capabilities.supportsThinking ? THINKING_OUTPUT_MULTIPLIER : 1;
@@ -366,7 +366,7 @@ export const estimateAnalysisCost = async (
       model: config.model,
       inputTokens,
       estimatedOutputTokens,
-      estimatedCostUsd: calculateCostUsd(config.model, inputTokens, estimatedOutputTokens),
+      estimatedCostUsd: provider.estimateCostUsd(inputTokens, estimatedOutputTokens),
       tagsOnly: true,
     };
   }
@@ -383,7 +383,7 @@ export const estimateAnalysisCost = async (
     model: config.model,
     inputTokens,
     estimatedOutputTokens,
-    estimatedCostUsd: calculateCostUsd(config.model, inputTokens + cachedRereadTokens, estimatedOutputTokens),
+    estimatedCostUsd: provider.estimateCostUsd(inputTokens + cachedRereadTokens, estimatedOutputTokens),
     tagsOnly: false,
   };
 };
@@ -413,7 +413,7 @@ const mapTags = (
  * poor trade, and the failure is logged either way.
  */
 const extractStructuredData = async (
-  client: Anthropic,
+  provider: AiProvider,
   config: AiAnalysisConfig,
   prepared: PreparedCall,
   contentType: WireContentType
@@ -425,8 +425,8 @@ const extractStructuredData = async (
   try {
     switch (contentType) {
       case "console_comparison": {
-        const { parsed, usage } = await callStructured(
-          client, config, WireConsoleComparison, prepared.system, prepared.content, instruction
+        const { parsed, usage } = await provider.callStructured(
+          WireConsoleComparison, prepared.system, prepared.content, instruction
         );
         return {
           data: {
@@ -441,8 +441,8 @@ const extractStructuredData = async (
         };
       }
       case "pc_review_settings": {
-        const { parsed, usage } = await callStructured(
-          client, config, WirePcReviewSettings, prepared.system, prepared.content, instruction
+        const { parsed, usage } = await provider.callStructured(
+          WirePcReviewSettings, prepared.system, prepared.content, instruction
         );
         return {
           data: {
@@ -469,8 +469,8 @@ const extractStructuredData = async (
         };
       }
       case "platform_analysis": {
-        const { parsed, usage } = await callStructured(
-          client, config, WirePlatformAnalysis, prepared.system, prepared.content, instruction
+        const { parsed, usage } = await provider.callStructured(
+          WirePlatformAnalysis, prepared.system, prepared.content, instruction
         );
         return {
           data: {
@@ -486,8 +486,8 @@ const extractStructuredData = async (
         };
       }
       case "hands_on_preview": {
-        const { parsed, usage } = await callStructured(
-          client, config, WirePreview, prepared.system, prepared.content, instruction
+        const { parsed, usage } = await provider.callStructured(
+          WirePreview, prepared.system, prepared.content, instruction
         );
         return {
           data: {
@@ -502,8 +502,8 @@ const extractStructuredData = async (
         };
       }
       case "hardware_review": {
-        const { parsed, usage } = await callStructured(
-          client, config, WireHardwareReview, prepared.system, prepared.content, instruction
+        const { parsed, usage } = await provider.callStructured(
+          WireHardwareReview, prepared.system, prepared.content, instruction
         );
         return {
           data: {
@@ -519,8 +519,8 @@ const extractStructuredData = async (
       case "qa_roundtable":
       case "news_discussion":
       case "roundup_list": {
-        const { parsed, usage } = await callStructured(
-          client, config, WireQaSegments, prepared.system, prepared.content, instruction
+        const { parsed, usage } = await provider.callStructured(
+          WireQaSegments, prepared.system, prepared.content, instruction
         );
         return parsed.segments.length
           ? { data: { contentType, segments: parsed.segments }, usage }
@@ -591,9 +591,9 @@ export const analyseContent = async (config: AiAnalysisConfig, inputs: AnalysisI
     games: [] as string[],
   };
 
-  let client: Anthropic;
+  let provider: AiProvider;
   try {
-    client = makeAnthropicClient(config);
+    provider = makeAnthropicProvider(config);
   } catch (e) {
     return { ...base, contentType: "other", error: e instanceof Error ? e.message : String(e) };
   }
@@ -603,8 +603,8 @@ export const analyseContent = async (config: AiAnalysisConfig, inputs: AnalysisI
 
   try {
     if (prepared.tagsOnly) {
-      const { parsed, usage } = await callStructured(
-        client, config, WireTagOnly, prepared.system, prepared.content, buildTagOnlyInstruction(config)
+      const { parsed, usage } = await provider.callStructured(
+          WireTagOnly, prepared.system, prepared.content, buildTagOnlyInstruction(config)
       );
       const tagOnlyResult = {
         ...base,
@@ -620,15 +620,15 @@ export const analyseContent = async (config: AiAnalysisConfig, inputs: AnalysisI
       return tagOnlyResult;
     }
 
-    const { parsed: overview, usage: overviewUsage } = await callStructured(
-      client, config, WireOverview, prepared.system, prepared.content, buildOverviewInstruction(config)
+    const { parsed: overview, usage: overviewUsage } = await provider.callStructured(
+          WireOverview, prepared.system, prepared.content, buildOverviewInstruction(config)
     );
 
     let usage = overviewUsage;
     let structuredData: AiStructuredData | undefined;
 
     if (config.features.structuredData && EXTRACTABLE_TYPES.includes(overview.contentType)) {
-      const extraction = await extractStructuredData(client, config, prepared, overview.contentType);
+      const extraction = await extractStructuredData(provider, config, prepared, overview.contentType);
       structuredData = extraction.data ? anchorFindings(extraction.data, prepared.transcript) : undefined;
       if (extraction.usage) {
         usage = addUsage(usage, extraction.usage);

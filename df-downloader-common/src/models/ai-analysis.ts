@@ -585,7 +585,12 @@ export const AiAnalysisCostEstimate = z.object({
   model: AiAnalysisModel,
   inputTokens: z.number(),
   estimatedOutputTokens: z.number(),
-  estimatedCostUsd: z.number(),
+  /**
+   * Absent when the run costs no money - a local engine costs time instead.
+   * Optional rather than zero, which would read as "free" and average into
+   * the spend figures as though it were.
+   */
+  estimatedCostUsd: z.number().optional(),
   /** True when no transcript was found, so this is the cheaper tags-only path. */
   tagsOnly: z.boolean().default(false),
 });

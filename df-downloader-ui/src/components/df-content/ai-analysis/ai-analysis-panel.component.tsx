@@ -398,12 +398,18 @@ export const AiAnalysisPanel = ({ contentKey, enabled, onHasContent, onJumpTo }:
         {estimate && (
           <Paper variant="outlined" sx={{ p: 1.5, bgcolor: "background.default" }}>
             <Stack direction="row" spacing={1} alignItems="baseline" flexWrap="wrap" useFlexGap>
-              <Typography variant="body2" sx={{ color: "text.secondary" }}>
-                Estimated cost
-              </Typography>
-              <Typography sx={{ fontFamily: monoFontFamily, fontWeight: 600, color: "primary.main" }}>
-                {formatCost(estimate.estimatedCostUsd)}
-              </Typography>
+              {/* Absent when the run costs no money rather than nothing -
+                  the token count below still says what the work is. */}
+              {estimate.estimatedCostUsd != null && (
+                <>
+                  <Typography variant="body2" sx={{ color: "text.secondary" }}>
+                    Estimated cost
+                  </Typography>
+                  <Typography sx={{ fontFamily: monoFontFamily, fontWeight: 600, color: "primary.main" }}>
+                    {formatCost(estimate.estimatedCostUsd)}
+                  </Typography>
+                </>
+              )}
               <Typography variant="caption" sx={{ color: "text.disabled" }}>
                 {estimate.inputTokens.toLocaleString()} input tokens, counted not guessed
                 {estimate.tagsOnly ? " · no transcript found, so tags only" : ""}

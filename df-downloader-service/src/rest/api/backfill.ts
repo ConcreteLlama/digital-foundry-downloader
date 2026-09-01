@@ -241,7 +241,12 @@ export const makeBackfillRouter = (contentManager: DigitalFoundryContentManager)
           }
           try {
             const estimate = await estimateAnalysisCost(config!, { entry, sources });
-            costs.push(estimate.estimatedCostUsd);
+            // Absent means the run costs no money rather than nothing at all -
+            // a local engine spends time. Skipped rather than counted as zero,
+            // which would drag the average down and misprice the whole run.
+            if (estimate.estimatedCostUsd !== undefined) {
+              costs.push(estimate.estimatedCostUsd);
+            }
           } catch (e) {
             logger.log("warn", `Could not price ${contentKey} for a bulk estimate: ${e}`);
           }
