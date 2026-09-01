@@ -19,6 +19,7 @@ import {
 import { AiContentTypeLabels, GameGroup, GameIndexResponse, normaliseName } from "df-downloader-common";
 import { useEffect, useMemo, useState } from "react";
 import { fetchGameIndex } from "../../api/ai-analysis.ts";
+import { ANALYSIS_CARD_GAP } from "./analysis-card.component.tsx";
 import { MiddleModal } from "../general/middle-modal.component.tsx";
 import { DfContentInfoItemDetail } from "../df-content/df-content-item-detail/df-content-item-detail.component.tsx";
 import { AnalysisDialog } from "./analysis-dialog.component.tsx";
@@ -41,8 +42,31 @@ const GroupRow = ({ group, onOpen }: { group: GameGroup; onOpen: (contentKey: st
   const platforms = allPlatforms.slice(0, 3);
   const extraPlatforms = allPlatforms.length - platforms.length;
   return (
-    <Accordion disableGutters variant="outlined" defaultExpanded={group.items.length > 1}>
-      <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+    /*
+     * Each game is its own card rather than a row in a continuous rail.
+     * Stacked outlined accordions of equal weight read as sections of one
+     * long item while scrolling, which is exactly what this list is not - so
+     * the summary gets a filled band to give every game an unmistakable
+     * starting edge, and MUI's default ::before hairline between siblings is
+     * removed since the gap now does that job.
+     */
+    <Accordion
+      disableGutters
+      variant="outlined"
+      defaultExpanded={group.items.length > 1}
+      sx={{
+        borderRadius: 1.5,
+        overflow: "hidden",
+        "&:before": { display: "none" },
+      }}
+    >
+      <AccordionSummary
+        expandIcon={<ExpandMoreIcon />}
+        sx={{
+          backgroundColor: "background.default",
+          "&.Mui-expanded": { borderBottom: 1, borderColor: "divider" },
+        }}
+      >
         <Stack direction="row" spacing={0.75} alignItems="center" flexWrap="wrap" useFlexGap sx={{ width: "100%" }}>
           <Typography variant="body2" sx={{ fontWeight: 600 }}>
             {group.name}
@@ -267,7 +291,7 @@ export const GameIndexPage = () => {
             sx={{ maxWidth: 360 }}
           />
           <Box sx={{ overflowY: "auto", minHeight: 0, pr: 0.5 }}>
-            <Stack spacing={1}>
+            <Stack spacing={ANALYSIS_CARD_GAP}>
               {filtered.map((group) => (
                 <GroupRow key={group.key} group={group} onOpen={setAnalysisKey} />
               ))}

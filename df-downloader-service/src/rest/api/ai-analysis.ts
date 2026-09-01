@@ -200,6 +200,12 @@ export const makeAiAnalysisRouter = (contentManager: DigitalFoundryContentManage
           articleText: article?.text,
           articleUrl: article?.url,
           articleTitle: article?.title,
+          // Carried through, not just used for the guard above. Without it the
+          // task's own already-analysed check saw force as undefined and
+          // returned the stored result, so Re-analyse reported success and
+          // changed nothing for anything that had ever been analysed - which
+          // is every item the button is offered on.
+          force,
         });
         return sendResponse(res, { message: "Analysis started", contentKey: entry.key, articleMatched: Boolean(article) });
       } catch (e) {

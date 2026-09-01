@@ -208,6 +208,13 @@ This release also fixes a long-standing gap where newly published videos could g
 - A job now shows both how long it has been going and how long it has actually been working
   - The single duration kept counting while a download was paused, which is right for one question and wrong for the other
   - Paused jobs show both, so 'Elapsed 6m 29s, Active 2m 14s' tells you the pause is why it is taking a while
+- Fixed "Re-analyse" doing nothing on anything already analysed
+  - Pressing it reported success and left the existing result untouched, so nothing analysed before could ever be analysed again from the content panel - which is every item the button is offered on. The request correctly said to replace the result and the instruction was then dropped before the job ran, so the job found an existing analysis and kept it
+  - This mattered more than usual right now: re-analysing is how content picks up the new categories and the game it is about, and the one button for doing it per item was the one that did not work
+- Analysis sections are easier to scan
+  - Each game, review or piece of hardware now reads as its own card rather than as another section of one very long list, which is how a scrolling page of similar-looking blocks tends to read
+  - The Analysis sections are in a more sensible order, with Games first - it is the broadest view, so it answers "what do I have on this game" without having to know which of the narrower sections to look in
+- Hardware reviews are no longer filed under the games they benchmark. A graphics card review that tested ten games was listing all ten as games it covered, which would have put it in front of anyone looking for those games - they are listed as what they are, tests
 - Two new sections under Analysis: PC Settings and Hardware
   - PC Settings gathers the recommended settings from every PC review you have analysed into one place. This data was already being extracted for each video but could only be read one item at a time, so "which of my games have optimised settings, and what did they say about shadows" had no answer even though the answer was already stored
   - It also shows which settings Digital Foundry return to most often across your library, and searching matches setting names as well as games - so you can pull up every review that discussed ray tracing

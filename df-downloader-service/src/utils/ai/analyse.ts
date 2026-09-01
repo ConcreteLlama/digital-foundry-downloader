@@ -218,6 +218,22 @@ const mergeGames = (
    * prompt for restraint here did not hold; the schema already knows the
    * answer, so it is taken rather than requested.
    */
+  /*
+   * A hardware review's benchmarks are not coverage.
+   *
+   * The extraction already separates them into gamesTested, but the overview
+   * call still listed all ten of a GPU review's test titles as games covered
+   * despite the prompt excluding them - so a card review filed itself under
+   * Cyberpunk 2077. Subtracting one from the other is deterministic and uses
+   * a distinction the schema has already drawn, rather than asking the model
+   * again and hoping.
+   */
+  const benchmarks = new Set(
+    structuredData?.contentType === "hardware_review"
+      ? structuredData.gamesTested.map((game) => game.trim().toLowerCase())
+      : []
+  );
+
   const subject = AiContentTypeGameSubject[contentType];
   const covered =
     subject === "single"
@@ -230,7 +246,10 @@ const mergeGames = (
   const out: string[] = [];
   for (const name of [primaryGame, ...covered]) {
     const trimmed = name?.trim();
-    if (trimmed && !out.some((existing) => existing.toLowerCase() === trimmed.toLowerCase())) {
+    if (!trimmed || benchmarks.has(trimmed.toLowerCase())) {
+      continue;
+    }
+    if (!out.some((existing) => existing.toLowerCase() === trimmed.toLowerCase())) {
       out.push(trimmed);
     }
   }

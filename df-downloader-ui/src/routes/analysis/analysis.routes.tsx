@@ -27,18 +27,25 @@ export const analysisRouteDefinitions: NestedSubRoute = {
   // in particular - so a second vertical nav beside the rail takes width
   // the content needs, to choose between two pages.
   compactNavOnly: true,
+  /*
+   * Games first: it is the broadest view - everything analysed, grouped by
+   * what it was about - so it is the one that answers "what do I have on this
+   * game" without knowing which specialised view to look in. The three after
+   * it are narrower cuts of the same corpus, and Costs is last because it is
+   * about running the feature rather than about any content.
+   */
   routes: [
-    {
-      path: "/analysis/platform-comparisons",
-      element: <PlatformComparisonPage />,
-      name: "Platform Comparisons",
-      icon: TableChartIcon,
-    },
     {
       path: "/analysis/games",
       element: <GameIndexPage />,
       name: "Games",
       icon: SportsEsportsIcon,
+    },
+    {
+      path: "/analysis/platform-comparisons",
+      element: <PlatformComparisonPage />,
+      name: "Platform Comparisons",
+      icon: TableChartIcon,
     },
     {
       path: "/analysis/pc-settings",

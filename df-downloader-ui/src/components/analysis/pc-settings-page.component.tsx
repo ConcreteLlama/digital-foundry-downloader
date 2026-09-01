@@ -4,7 +4,6 @@ import {
   Chip,
   CircularProgress,
   Divider,
-  Paper,
   Stack,
   TextField,
   Typography,
@@ -12,6 +11,7 @@ import {
 import { PcSettingsIndexResponse, PcSettingsRow } from "df-downloader-common";
 import { useEffect, useMemo, useState } from "react";
 import { fetchPcSettingsIndex } from "../../api/ai-analysis.ts";
+import { ANALYSIS_CARD_GAP, AnalysisCard } from "./analysis-card.component.tsx";
 import { monoFontFamily } from "../../themes/build-theme.ts";
 import { conciseFormatDate } from "../../utils/date.ts";
 
@@ -45,20 +45,23 @@ const CostCell = ({ pct }: { pct?: number | null }) =>
   );
 
 const ReviewCard = ({ row }: { row: PcSettingsRow }) => (
-  <Paper variant="outlined" sx={{ p: 1.5 }}>
-    <Stack direction="row" spacing={1} alignItems="baseline" flexWrap="wrap" useFlexGap>
-      <Typography sx={{ fontWeight: 600 }}>{row.game || row.title}</Typography>
-      {row.engine && (
-        <Chip size="small" variant="outlined" label={row.engine} sx={{ height: 20, fontSize: "0.65rem" }} />
-      )}
-      <Box sx={{ flex: "1 1 auto" }} />
-      <Typography variant="caption" sx={{ color: "text.disabled" }}>
-        {conciseFormatDate(row.publishedDate)}
-      </Typography>
-    </Stack>
+  <AnalysisCard
+    header={
+      <Stack direction="row" spacing={1} alignItems="baseline" flexWrap="wrap" useFlexGap>
+        <Typography sx={{ fontWeight: 600 }}>{row.game || row.title}</Typography>
+        {row.engine && (
+          <Chip size="small" variant="outlined" label={row.engine} sx={{ height: 20, fontSize: "0.65rem" }} />
+        )}
+        <Box sx={{ flex: "1 1 auto" }} />
+        <Typography variant="caption" sx={{ color: "text.disabled" }}>
+          {conciseFormatDate(row.publishedDate)}
+        </Typography>
+      </Stack>
+    }
+  >
 
     {row.verdict && (
-      <Typography variant="body2" sx={{ color: "text.secondary", mt: 0.75 }}>
+      <Typography variant="body2" sx={{ color: "text.secondary" }}>
         {row.verdict}
       </Typography>
     )}
@@ -130,7 +133,7 @@ const ReviewCard = ({ row }: { row: PcSettingsRow }) => (
         </Box>
       </Box>
     )}
-  </Paper>
+  </AnalysisCard>
 );
 
 export const PcSettingsPage = () => {
@@ -251,7 +254,7 @@ export const PcSettingsPage = () => {
               Nothing matches “{search}”.
             </Typography>
           ) : (
-            <Stack spacing={1.5}>
+            <Stack spacing={ANALYSIS_CARD_GAP}>
               {rows.map((row) => (
                 <ReviewCard key={row.contentKey} row={row} />
               ))}

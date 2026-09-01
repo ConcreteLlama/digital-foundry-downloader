@@ -1,7 +1,8 @@
-import { Alert, Box, Chip, CircularProgress, Divider, Paper, Stack, Typography } from "@mui/material";
+import { Alert, Box, Chip, CircularProgress, Divider, Stack, Typography } from "@mui/material";
 import { HardwareIndexResponse, HardwareRow } from "df-downloader-common";
 import { useEffect, useMemo, useState } from "react";
 import { fetchHardwareIndex } from "../../api/ai-analysis.ts";
+import { ANALYSIS_CARD_GAP, AnalysisCard } from "./analysis-card.component.tsx";
 import { conciseFormatDate } from "../../utils/date.ts";
 
 /**
@@ -18,17 +19,20 @@ import { conciseFormatDate } from "../../utils/date.ts";
  */
 
 const ReviewCard = ({ row }: { row: HardwareRow }) => (
-  <Paper variant="outlined" sx={{ p: 1.5 }}>
-    <Stack direction="row" spacing={1} alignItems="baseline" flexWrap="wrap" useFlexGap>
-      <Typography sx={{ fontWeight: 600 }}>{row.title}</Typography>
-      <Box sx={{ flex: "1 1 auto" }} />
-      <Typography variant="caption" sx={{ color: "text.disabled" }}>
-        {conciseFormatDate(row.publishedDate)}
-      </Typography>
-    </Stack>
+  <AnalysisCard
+    header={
+      <Stack direction="row" spacing={1} alignItems="baseline" flexWrap="wrap" useFlexGap>
+        <Typography sx={{ fontWeight: 600 }}>{row.title}</Typography>
+        <Box sx={{ flex: "1 1 auto" }} />
+        <Typography variant="caption" sx={{ color: "text.disabled" }}>
+          {conciseFormatDate(row.publishedDate)}
+        </Typography>
+      </Stack>
+    }
+  >
 
     {row.products.length > 0 && (
-      <Stack spacing={0.75} sx={{ mt: 1 }}>
+      <Stack spacing={0.75}>
         {row.products.map((product, index) => (
           <Box key={`${product.name}-${index}`}>
             <Stack direction="row" spacing={0.75} alignItems="baseline" flexWrap="wrap" useFlexGap>
@@ -82,7 +86,7 @@ const ReviewCard = ({ row }: { row: HardwareRow }) => (
         </Stack>
       </Box>
     )}
-  </Paper>
+  </AnalysisCard>
 );
 
 export const HardwarePage = () => {
@@ -177,7 +181,7 @@ export const HardwarePage = () => {
 
           <Divider />
 
-          <Stack spacing={1.5}>
+          <Stack spacing={ANALYSIS_CARD_GAP}>
             {rows.map((row) => (
               <ReviewCard key={row.contentKey} row={row} />
             ))}

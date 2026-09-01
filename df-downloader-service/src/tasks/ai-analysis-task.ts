@@ -52,7 +52,7 @@ const aiAnalysisTaskControls: TaskControls<AiAnalysisResult, AiAnalysisTaskConte
       if (existing && !existing.error) {
         logger.log(
           "info",
-          `Skipping analysis of ${entry.key} - it was analysed while this was queued`
+          `Skipping analysis of ${entry.key} - it already has a result and this run did not ask to replace it`
         );
         context.stage = "Already analysed";
         return { status: "success", result: existing };

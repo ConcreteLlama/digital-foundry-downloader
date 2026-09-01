@@ -38,10 +38,11 @@ const ARTICLE_PRECEDENCE = `You have both Digital Foundry's own written article 
 
 const CONTENT_TYPES = `- console_comparison: a technical comparison of one game across two or more consoles - per-platform resolutions, frame rates, and modes.
 - platform_analysis: one game examined on a single platform, or a small number, outside a full face-off - a port, a patch, an upgrade, a "have they fixed it yet" revisit, a single-platform review. Choose this over console_comparison when the point is that game on that hardware rather than a comparison between platforms.
-- pc_review_settings: a PC technical review, usually with per-setting performance analysis and recommended "optimised settings".
+- pc_review_settings: a PC technical review OF A GAME, usually with per-setting performance analysis and recommended "optimised settings". The subject is the game; the PC is what it is being run on.
 - hands_on_preview: an early look at unreleased or just-revealed content, typically hedged and provisional.
 - game_retrospective: a look back at an older game, or an anniversary re-release.
-- hardware_review: a review or test of hardware - a GPU, CPU, handheld, display or complete machine. Games appearing in it are benchmarks, not the subject.
+- hardware_review: a review or test OF A PIECE OF HARDWARE - a graphics card, CPU, handheld, display or complete machine. Games appearing in it are benchmarks, not the subject.
+  Decide between this and pc_review_settings by asking what is being reviewed, not by what is discussed. A graphics card review talks about PC performance, frame rates and quality settings at length and still is not a PC game review: its subject is the card. If the title names a product rather than a game, it is hardware_review.
 - tech_explainer: a piece about a technology rather than a product - upscaling, ray tracing, frame generation, an engine feature.
 - interview: a conversation with developers, or a behind-the-scenes piece built around one.
 - qa_roundtable: a Q+A show answering viewer questions across unrelated topics.
