@@ -37,8 +37,8 @@ const ffprobePath = ffprobePathImport.path;
  * Note out_time_ms is microseconds despite the name - a long-standing ffmpeg
  * misnomer.
  */
-const FFMPEG_DURATION_LINE = /Duration:\s*(\d+):(\d{2}):(\d{2})(?:\.(\d+))?/;
-const FFMPEG_OUT_TIME_LINE = /out_time_ms=(\d+)/g;
+export const FFMPEG_DURATION_LINE = /Duration:\s*(\d+):(\d{2}):(\d{2})(?:\.(\d+))?/;
+export const FFMPEG_OUT_TIME_LINE = /out_time_ms=(\d+)/g;
 
 export type InjectMediaMetadataOpts = {
   /**

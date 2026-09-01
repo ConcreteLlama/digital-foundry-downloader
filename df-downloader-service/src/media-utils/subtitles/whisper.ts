@@ -123,6 +123,23 @@ const ensureModel = async (config: WhisperConfig): Promise<string> => {
 };
 
 /**
+ * How much of the bar audio extraction owns, with transcription taking the
+ * rest.
+ *
+ * Measured rather than guessed: extraction ran 1.8s against a 31s
+ * transcription for an 11-minute video, and 6.1s against 107s for a
+ * 46-minute one - a steady ~5.5% either way. Rounded up to 10% because both
+ * numbers came off an SSD with the model already in page cache, and the NAS
+ * installs this typically runs on read a multi-gigabyte source far more
+ * slowly than that.
+ */
+const EXTRACTION_PERCENT_SPAN = 10;
+
+/** Maps whisper's own 0-100 onto the slice of the bar left after extraction. */
+const toOverallPercent = (transcriptionPercent: number) =>
+  EXTRACTION_PERCENT_SPAN + (transcriptionPercent / 100) * (100 - EXTRACTION_PERCENT_SPAN);
+
+/**
  * Local speech-to-text via whisper.cpp.
  *
  * Transcribes the downloaded file itself, which has two consequences worth
@@ -193,11 +210,52 @@ export class WhisperSubtitleGenerator implements SubtitleGenerator {
     const outputPrefix = path.join(workDir, jobId);
     const srtPath = `${outputPrefix}.srt`;
     try {
+      /*
+       * Duration turns both ffmpeg's elapsed output time and whisper's
+       * segment timestamps into a percentage, so it is probed once here and
+       * used by both phases. Probed from the source rather than assumed, and
+       * failure is not fatal: without it extraction reports nothing and
+       * transcription falls back to whisper's own 5% steps, which is what it
+       * always did.
+       */
+      const durationSeconds = await probeMediaDurationSeconds(filename).catch(() => null);
+      let lastPercent = -1;
+      let lastDetail: string | undefined;
+      /*
+       * Never let the bar go backwards. The sources disagree by a few
+       * percent - whisper counts work done, segments count audio covered -
+       * and a bar that steps back reads as a fault. A changed detail is
+       * always published though, even at an unchanged percent: the phase
+       * labels below are the whole point, and the first two phases sit at
+       * one number while they run.
+       */
+      const report = (percent: number, detail: string) => {
+        const bounded = Math.max(0, Math.min(100, Math.round(percent)));
+        if (!onProgress || (bounded <= lastPercent && detail === lastDetail)) {
+          return;
+        }
+        lastPercent = Math.max(lastPercent, bounded);
+        lastDetail = detail;
+        onProgress({ percent: lastPercent, detail });
+      };
+
       logger.log("info", `Extracting audio from ${filename} for transcription`);
-      await fileToAudioFile(filename, audioPath, {
-        channels: WHISPER_CHANNELS,
-        sampleRate: WHISPER_SAMPLE_RATE,
-      });
+      // Published before ffmpeg is even spawned rather than waiting on its
+      // first progress block: opening a multi-gigabyte source is itself part
+      // of the wait, and a fast extraction only emits two blocks anyway.
+      report(0, "Extracting audio");
+      await fileToAudioFile(
+        filename,
+        audioPath,
+        {
+          channels: WHISPER_CHANNELS,
+          sampleRate: WHISPER_SAMPLE_RATE,
+        },
+        {
+          durationSeconds,
+          onProgress: (percent) => report((percent / 100) * EXTRACTION_PERCENT_SPAN, "Extracting audio"),
+        }
+      );
       const requestedLanguage = this.config.language || language;
       const args = [
         "-m", modelPath,
@@ -220,24 +278,18 @@ export class WhisperSubtitleGenerator implements SubtitleGenerator {
         `Transcribing ${filename} with Whisper (${this.config.model}, ${this.threads} threads) - this can take a while for long content`
       );
       const startedAt = Date.now();
+      const transcribeDetail = `${this.config.model}, ${this.threads} threads`;
       /*
-       * Duration turns segment timestamps into a percentage. Probed from the
-       * source rather than assumed, and failure is not fatal: without it this
-       * falls back to whisper's own 5% steps, which is what it always did.
+       * Every transcription spawns a fresh one-shot process (see destroy()),
+       * so the model loads from disk before whisper.cpp prints anything we
+       * can parse - measured at ~1.5s for `base` warm, and far longer for a
+       * multi-gigabyte model on a cold NAS disk. There is no way to tell when
+       * that load finishes short of the first real progress line arriving, so
+       * this deliberately moves the label rather than faking a number: the
+       * point is that the text is fresh and honest the moment the phase
+       * starts, instead of the previous phase's caption sitting there inert.
        */
-      const durationSeconds = await probeMediaDurationSeconds(filename).catch(() => null);
-      let lastPercent = -1;
-      // Never let the bar go backwards. The two sources disagree by a few
-      // percent - whisper counts work done, segments count audio covered -
-      // and a bar that steps back reads as a fault.
-      const report = (percent: number) => {
-        const bounded = Math.max(0, Math.min(100, Math.round(percent)));
-        if (!onProgress || bounded <= lastPercent) {
-          return;
-        }
-        lastPercent = bounded;
-        onProgress({ percent: bounded, detail: `${this.config.model}, ${this.threads} threads` });
-      };
+      report(EXTRACTION_PERCENT_SPAN, `Loading ${this.config.model} model`);
       await this.transcribe(
         args,
         modelPath,
@@ -249,7 +301,7 @@ export class WhisperSubtitleGenerator implements SubtitleGenerator {
             percent = Number(match[1]);
           }
           if (percent !== undefined) {
-            report(percent);
+            report(toOverallPercent(percent), transcribeDetail);
           }
         },
         (chunk) => {
@@ -263,7 +315,7 @@ export class WhisperSubtitleGenerator implements SubtitleGenerator {
           // Capped below 100: the run is finished when the process exits and
           // the file exists, not when the last segment happens to land on the
           // end of the audio.
-          report(Math.min(99, (seconds / durationSeconds) * 100));
+          report(toOverallPercent(Math.min(99, (seconds / durationSeconds) * 100)), transcribeDetail);
         }
       );
       logger.log("info", `Transcribed ${filename} in ${Math.round((Date.now() - startedAt) / 1000)}s`);
