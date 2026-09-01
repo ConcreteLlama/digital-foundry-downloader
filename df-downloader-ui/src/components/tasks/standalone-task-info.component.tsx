@@ -1,3 +1,4 @@
+import { useAnimateAfterReveal } from "../../hooks/use-animate-after-reveal.ts";
 import {
   Box,
   Button,
@@ -94,6 +95,7 @@ export type StandaloneTaskInfoProps = {
 };
 
 export const StandaloneTaskInfo = ({ taskId }: StandaloneTaskInfoProps) => {
+  const animate = useAnimateAfterReveal();
   const task = useSelector(selectTask(taskId));
   const dispatch = useDispatch();
   const [detailsOpen, setDetailsOpen] = useState(false);
@@ -182,7 +184,11 @@ export const StandaloneTaskInfo = ({ taskId }: StandaloneTaskInfoProps) => {
             <LinearProgress
               variant="determinate"
               value={Math.max(0, Math.min(100, progress.percent))}
-              sx={{ flex: "1 1 auto", borderRadius: 1 }}
+              sx={{
+                flex: "1 1 auto",
+                borderRadius: 1,
+                ...(animate ? {} : { "& .MuiLinearProgress-bar": { transition: "none" } }),
+              }}
             />
             <Typography
               variant="caption"

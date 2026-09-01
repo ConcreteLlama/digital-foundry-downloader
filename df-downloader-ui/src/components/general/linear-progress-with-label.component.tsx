@@ -1,3 +1,4 @@
+import { useAnimateAfterReveal } from "../../hooks/use-animate-after-reveal.ts";
 import { Box, LinearProgress, LinearProgressProps, Typography } from "@mui/material";
 
 type LinearProgressWithLabelProps = LinearProgressProps & {
@@ -6,6 +7,7 @@ type LinearProgressWithLabelProps = LinearProgressProps & {
   labelPosition?: "left" | "right" | "top" | "bottom";
 }
 export const LinearProgressWithLabel = (props: LinearProgressWithLabelProps) => {
+  const animate = useAnimateAfterReveal();
   const { labelPosition = "right", label, value, ...linearProgressProps } = props;
   const displayLabel = label ?? `${Math.round(value)}%`;
 
@@ -27,9 +29,18 @@ export const LinearProgressWithLabel = (props: LinearProgressWithLabelProps) => 
         </Typography>
       )}
       <Box sx={{ width: "100%", mr: labelPosition === "right" ? 1 : 0 }}>
-        <LinearProgress variant="determinate" value={value} {...linearProgressProps} sx={{
-          width: "100%"
-        }}/>
+        <LinearProgress
+          variant="determinate"
+          value={value}
+          {...linearProgressProps}
+          sx={{
+            width: "100%",
+            // MUI animates the determinate bar by default, which replays all
+            // the progress missed while the tab was hidden - see
+            // useAnimateAfterReveal.
+            ...(animate ? {} : { "& .MuiLinearProgress-bar": { transition: "none" } }),
+          }}
+        />
       </Box>
       {(labelPosition === "right" || labelPosition === "top" || labelPosition === "bottom") && (
         <Typography

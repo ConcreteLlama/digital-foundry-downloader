@@ -1,3 +1,4 @@
+import { useAnimateAfterReveal } from "../../../hooks/use-animate-after-reveal.ts";
 import BlockIcon from "@mui/icons-material/Block";
 import CheckIcon from "@mui/icons-material/Check";
 import CloseIcon from "@mui/icons-material/Close";
@@ -99,6 +100,7 @@ type TrackSegmentProps = {
 };
 
 const TrackSegment = ({ view, widthPercent, activePercent, dense }: TrackSegmentProps) => {
+  const animate = useAnimateAfterReveal();
   const { state, name, task } = view;
   const spec = STEP_SPECS[state];
   const StepIcon = spec.icon;
@@ -175,7 +177,10 @@ const TrackSegment = ({ view, widthPercent, activePercent, dense }: TrackSegment
                     height: "100%",
                     width: `${fillPercent}%`,
                     backgroundColor: spec.fill,
-                    transition: "width 400ms linear",
+                    // Suppressed for a frame when the tab is revealed, or every
+                    // bar animates from where it was last painted up to where
+                    // it actually is - see useAnimateAfterReveal.
+                    transition: animate ? "width 400ms linear" : "none",
                   }
             }
           />

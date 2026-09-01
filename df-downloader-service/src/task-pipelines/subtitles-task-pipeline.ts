@@ -81,7 +81,10 @@ export const createSubtitlesTaskPipeline = (opts: SubtitlesTaskPipelineCreatorOp
             const task = steps[0].managedTask?.task;
             if (task?.result?.status === "success") {
               const subTaskResult = task.result.result;
-              return `Fetched ${subTaskResult.language} subs from ${subTaskResult.service}`;
+              // "Generated", not "fetched": whisper transcribes locally and
+              // fetches nothing, and it is the default. The word was left over
+              // from when every subtitle service was a remote API.
+              return `Generated ${subTaskResult.language} subs with ${subTaskResult.service}`;
             }
           } else if (lastResult.status === "failed") {
             return `Failed to fetch or inject subtitles: ${makeErrorMessage(lastResult.error)}`;
