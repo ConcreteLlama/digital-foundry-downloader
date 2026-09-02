@@ -17,7 +17,37 @@ export type TaskManagerOpts = {
 
 export type AddTaskOpts = {
   priority?: number;
+  /**
+   * Start this immediately, ignoring a queue hold.
+   *
+   * Set by a pipeline that was forced, so every later step inherits it - the
+   * user asked for one item to be finished, not for its first step to run.
+   */
+  forceStart?: boolean;
 };
+
+/**
+ * What force start actually did.
+ *
+ * `queued_at_front` is not a refusal. A forced task that cannot exceed its
+ * manager's limit waits for a slot rather than being turned away, and takes
+ * one the moment it frees - it is first in the queue and exempt from the hold
+ * that is stopping everything else. There is deliberately no outcome that
+ * means "the button did nothing".
+ */
+export type ForceStartOutcome =
+  | "started"
+  | "queued_at_front"
+  | "already_running"
+  | "not_startable"
+  | "unknown_task";
+
+/**
+ * Priority given to forced work. Lower is sooner and the managers default to 1,
+ * so this puts it in front of everything, which is what makes waiting for a
+ * slot equivalent to being next.
+ */
+export const FORCED_PRIORITY = 0;
 
 /**
  * TaskManager is a class that manages tasks and their execution order. It allows for tasks to be added, removed, and reordered,
@@ -93,17 +123,8 @@ export class TaskManager {
           return;
         }
       }
-      const forceRunFlagChangedListener = (forceRunFlag: boolean) => {
-        if (!forceRunFlag) {
-          this.reassessRunningTasks();
-        } else {
-          this.startEligibleTasks();
-        }
-      };
-      task.on("forceRunFlagChanged", forceRunFlagChangedListener);
       task.off("taskStateChanged", statusChangedListener);
       task.off("completed", completedListener);
-      task.off("forceRunFlagChanged", forceRunFlagChangedListener);
       if (this.autoClearCompletedTasks) {
         this.taskMap.delete(task.id);
       }
@@ -117,7 +138,14 @@ export class TaskManager {
 
     this.taskMap.set(task.id, taskWrapper);
     this.priorityItemManager.addItem(taskWrapper, opts.priority || this.defaultPriority);
-    this.startEligibleTasks();
+    if (opts.forceStart) {
+      // A later step of a pipeline the user forced. It inherits the exemption
+      // rather than stalling at the first boundary, which is what made the
+      // whole thing need hand-cranking.
+      this.forceStartTask(task.id);
+    } else {
+      this.startEligibleTasks();
+    }
     return taskWrapper.managedTask;
   }
 
@@ -188,10 +216,64 @@ export class TaskManager {
   }
 
   getEligibleStartableTasks() {
-    if (this.queueHeld) {
-      return [];
+    const startable = this.selectStartableTasks();
+    if (!this.queueHeld) {
+      return startable;
     }
-    return this.selectStartableTasks();
+    /*
+     * A hold stops everything except work that was forced.
+     *
+     * Forced tasks are given FORCED_PRIORITY, so they sort to the front and are
+     * inside the window selectStartableTasks looks at - without that, a forced
+     * task sitting tenth in a held queue would never be considered.
+     */
+    return startable.filter((task) => task.task.forceRunFlag);
+  }
+
+  /** How many tasks this manager currently has running. */
+  runningTaskCount() {
+    return [...this.taskMap.values()].filter((task) => task.task.getTaskState() === "running").length;
+  }
+
+  /**
+   * Runs a task now if there is room, and puts it first in the queue if not.
+   *
+   * Goes through startTask rather than calling task.start() directly, which is
+   * the whole point of the change: the direct call skipped the mutex, the
+   * double-start guard and the manager's own record of the task starting, so
+   * the manager's view of what was running diverged from reality.
+   */
+  forceStartTask(taskId: string): ForceStartOutcome {
+    const wrapped = this.taskMap.get(taskId);
+    if (!wrapped) {
+      return "unknown_task";
+    }
+    if (wrapped.task.getTaskState() === "running") {
+      return "already_running";
+    }
+    if (!wrapped.isStartable()) {
+      return "not_startable";
+    }
+    /*
+     * Forced work jumps the queue and ignores both kinds of hold, but only a
+     * task type that has declared headroom may exceed the limit - see
+     * TaskOpts.canBreakConcurrency. Downloads may; transcription and analysis
+     * may not, because two at once saturates the machine.
+     */
+    this.heldTasks.delete(taskId);
+    this.changeTaskPriority(taskId, FORCED_PRIORITY);
+    wrapped.task.forceRunFlag = true;
+    const limit = this._concurrentTasks + wrapped.task.canBreakConcurrency;
+    if (this.runningTaskCount() >= limit) {
+      this.log("info", "Force start queued at the front - no capacity", {
+        taskId,
+        running: this.runningTaskCount(),
+        limit,
+      });
+      return "queued_at_front";
+    }
+    void this.startTask(wrapped, true);
+    return "started";
   }
 
   private selectStartableTasks() {
@@ -205,7 +287,8 @@ export class TaskManager {
     const startableAndRunningTasks = this.priorityItemManager.getFirstXItems(
       this._concurrentTasks,
       (task) =>
-        (!this.heldTasks.has(task.task.id) && task.isStartable()) || task.task.getTaskState() === "running"
+        ((task.task.forceRunFlag || !this.heldTasks.has(task.task.id)) && task.isStartable()) ||
+        task.task.getTaskState() === "running"
     );
 
     const startableTasks = startableAndRunningTasks.filter((task) => task.isStartable());
@@ -227,18 +310,21 @@ export class TaskManager {
     }
   }
 
-  private async startTask(task: TaskManagerInternalTask<Task<any, any, any>>) {
+  private async startTask(task: TaskManagerInternalTask<Task<any, any, any>>, force = false) {
     if (this.startingTasks.has(task) || !task.isStartable()) {
       return;
     }
-    this.mutex.runExclusive(async () => {
+    // Awaited, unlike before: without it startTask resolved before the task had
+    // actually started, so a caller could not tell the difference between
+    // started and about to be.
+    await this.mutex.runExclusive(async () => {
       // Check again once we have the lock
       if (this.startingTasks.has(task) || !task.isStartable()) {
         return;
       }
       try {
         this.startingTasks.add(task);
-        const result = await task.task.start();
+        const result = await task.task.start(force);
       } finally {
         this.startingTasks.delete(task);
       }

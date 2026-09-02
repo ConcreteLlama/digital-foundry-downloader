@@ -913,8 +913,9 @@ export class DfTaskManager {
           managedTask.task.cancel();
           break;
         case "force_start":
-          managedTask.forceStart();
-          break;
+          // Returned rather than discarded: "started" and "next in line when a
+          // slot frees" are different answers and the user should see which.
+          return managedTask.forceStart();
       }
     }
   }
@@ -940,16 +941,30 @@ export class DfTaskManager {
       pipeline.cancel();
       return;
     }
+    /*
+     * Force start goes through the pipeline for the same reason cancel does:
+     * the user is asking for this item to finish, not for one step to run.
+     * Forcing only the current task left the pipeline stalling at the next step
+     * boundary with the queue still held - which is what made people press the
+     * button again at every step, and every one of those hand-starts bypassed
+     * the manager's bookkeeping.
+     */
+    if (action === "force_start" && !stepId) {
+      const outcome = pipeline.forceRunNow();
+      this.notifyChanged();
+      return outcome;
+    }
     const step = stepId ? pipeline.getStepById(stepId) : pipeline.getCurrentStep();
     const managedTask = step?.managedTask as GenericManagedTask | undefined;
     if (!managedTask?.task) {
       throw new Error(`No curent task for taskInfo ${pipelineExecutionId}`);
     }
-    this.controlTaskManagerTask(managedTask, action);
+    const outcome = this.controlTaskManagerTask(managedTask, action);
     // Holding a task does not change the task's own state, so the
     // taskStateChanged event that normally pushes a fresh snapshot never
     // fires - without this the hold is invisible until something else moves.
     this.notifyChanged();
+    return outcome;
   }
 
   controlTask(controlTaskRequest: ControlTaskRequest) {
@@ -1488,6 +1503,13 @@ const makeTaskInfo = (
   managedTask: ManagedTask<any, any>,
   positionInfo: PriorityPositionInfo | null
 ): BasicTaskInfo | DownloadTaskInfo => {
+  return withForceStartCapability(makeTaskInfoInner(managedTask, positionInfo), managedTask);
+};
+
+const makeTaskInfoInner = (
+  managedTask: ManagedTask<any, any>,
+  positionInfo: PriorityPositionInfo | null
+): BasicTaskInfo | DownloadTaskInfo => {
   if (isDownloadTask(managedTask.task)) {
     return makeDownloadSubtaskInfo(managedTask, positionInfo);
   } else if (isBatchMoveFilesTask(managedTask.task)) {
@@ -1506,6 +1528,23 @@ const makeTaskInfo = (
     return makeBasicTaskInfo(managedTask, positionInfo);
   }
 };
+
+/**
+ * Adds `force_start` where the task type may exceed its manager's limit.
+ *
+ * Derived from the task rather than declared in each of the makers above, so
+ * there is one source of truth and it cannot drift from what the manager will
+ * actually allow. Everything can be forced past a paused queue; this says only
+ * whether it may also take an extra slot, which is what the confirm dialog
+ * needs to word itself honestly.
+ */
+const withForceStartCapability = (
+  info: BasicTaskInfo | DownloadTaskInfo,
+  managedTask: ManagedTask<any, any>
+): BasicTaskInfo | DownloadTaskInfo =>
+  managedTask.task.canBreakConcurrency > 0
+    ? { ...info, capabilities: [...info.capabilities, "force_start" as const] }
+    : info;
 
 const makeCommonTaskInfo = (
   managedTask: GenericManagedTask,

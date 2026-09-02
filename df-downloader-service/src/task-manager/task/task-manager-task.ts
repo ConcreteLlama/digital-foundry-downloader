@@ -1,6 +1,6 @@
 import { CachedEventEmitter } from "../../utils/event-emitter.js";
 import { RetryContext, RetryOpts } from "../../utils/retry-context.js";
-import { TaskManager } from "../task-manager.js";
+import { ForceStartOutcome, TaskManager } from "../task-manager.js";
 import { InferTaskTaskResult, Task } from "./task.js";
 
 export type TaskOpts = {
@@ -121,8 +121,16 @@ export class ManagedTask<
   resume() {
     this.taskManager.resumeTask(this.task.id);
   }
-  forceStart() {
-    this.task.start(true);
+  /**
+   * Runs this now if there is room, otherwise puts it first in the queue.
+   *
+   * Delegates rather than calling task.start(true) itself. The direct call went
+   * around the manager entirely - no mutex, no double-start guard, and no record
+   * of the task starting - so the manager's idea of what was running stopped
+   * matching reality, which is how a finished step could still show as running.
+   */
+  forceStart(): ForceStartOutcome {
+    return this.taskManager.forceStartTask(this.task.id);
   }
 }
 export type GenericManagedTask = ManagedTask<Task<any, any, any>, TaskManager>;

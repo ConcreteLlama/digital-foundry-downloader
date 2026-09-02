@@ -2,6 +2,7 @@ import { makeErrorMessage } from "df-downloader-common";
 import { CachedEventEmitter } from "../../utils/event-emitter.js";
 import { makeRunUniqueId } from "../../utils/run-id.js";
 import { LoggerType, makeLogger } from "../../utils/log.js";
+import { FORCED_PRIORITY, ForceStartOutcome } from "../task-manager.js";
 import { ManagedTask } from "../task/task-manager-task.js";
 import { InferTaskTaskResult, Task, isTaskCancelledResult, isTaskFailedResult } from "../task/task.js";
 import {
@@ -46,6 +47,15 @@ export class TaskPipelineExecution<
   private readonly tasks: PartialTuple<InferManagedTaskTuple<TASK_PIPELINE_STEPS>>;
   private _pipelineResult: PipelineExecutionResult<TASK_PIPELINE_STEPS, PIPELINE_SUCCESS_RESULT_TYPE> | undefined;
   private currentStepIndex = 0;
+  /**
+   * Sticky once set: every remaining step ignores the queue hold.
+   *
+   * Deliberately for the life of the pipeline rather than one step. The user
+   * asked for this item to be finished while everything is paused, and a flag
+   * that expired at the next boundary is exactly what forced them to press the
+   * button again at every step.
+   */
+  private forceRun = false;
   private started: boolean = false;
   readonly id: string;
   private _startTime?: Date;
@@ -107,10 +117,19 @@ export class TaskPipelineExecution<
       }
       return;
     }
-    // Every step of a pipeline inherits its priority: a backfill's
-    // transcription should stay behind a download's for the muxing and
-    // metadata steps too, not just the first one.
-    const managedTask = pipelineStep.taskManager.addTask(task, { priority: this.executionOpts.priority });
+    /*
+     * Every step inherits the pipeline's priority and its forced flag.
+     *
+     * Priority so a backfill's transcription stays behind a download's for the
+     * muxing and metadata steps too. Forced because the user asked for an item
+     * to be finished, not for its first step to run - without this, a forced
+     * pipeline stopped dead at the next step boundary while the queue was held,
+     * which is what made people force-start every step by hand.
+     */
+    const managedTask = pipelineStep.taskManager.addTask(task, {
+      priority: this.forceRun ? FORCED_PRIORITY : this.executionOpts.priority,
+      forceStart: this.forceRun,
+    });
     this.tasks[index] = managedTask;
     managedTask.task.once("started", () => {
       this.emit("stepTaskStarted", { index, task: managedTask as any });
@@ -163,6 +182,24 @@ export class TaskPipelineExecution<
 
   private makeStepId(index: number) {
     return `${this.id}-step-${index}`;
+  }
+
+  /**
+   * Push this pipeline through a held queue, now and for its remaining steps.
+   *
+   * Returns what happened to the step currently waiting, so the caller can say
+   * whether it started or is next in line - a forced task that cannot exceed
+   * its manager's limit waits rather than being refused.
+   */
+  forceRunNow(): ForceStartOutcome {
+    this.forceRun = true;
+    const current = this.tasks[this.currentStepIndex];
+    if (!current) {
+      // Nothing queued yet - the flag alone is enough, and the step will be
+      // forced as it is added.
+      return "queued_at_front";
+    }
+    return current.forceStart();
   }
 
   getStep(index: number, includePositionInfo?: boolean): PipelineStepInfo<TASK_PIPELINE_STEPS[number]> {

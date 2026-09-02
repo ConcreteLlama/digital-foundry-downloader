@@ -35,6 +35,23 @@ export type TaskOpts = {
   taskType: string;
   idPrefix?: string;
   logger?: LoggerType;
+  /**
+   * How many extra of this task may run beyond its manager's limit when forced.
+   *
+   * Zero for everything except downloads, deliberately. Force start began as a
+   * download gesture where one more transfer is harmless, but the same button
+   * now sits on transcription and analysis, which saturate the machine - two at
+   * once is a real problem rather than a slower queue.
+   *
+   * A number rather than a flag so it stays bounded: forcing several downloads
+   * must not open several extra connections to a site this app is deliberately
+   * gentle with.
+   *
+   * This is separate from being exempt from a queue hold. A forced pipeline
+   * ignores the hold on every manager it touches; only this decides whether it
+   * may also exceed a limit.
+   */
+  canBreakConcurrency?: number;
 };
 export type InferTaskTaskResult<TASK> = TaskResult<TASK extends Task<infer RESULT, any, any> ? RESULT : never>;
 export type InferTaskResult<TASK> = TASK extends Task<infer RESULT, any, any> ? RESULT : never;
@@ -63,6 +80,8 @@ export abstract class Task<
 > extends CachedEventEmitter<EVENTS> {
   protected _result: TaskResult<RESULT> | undefined;
   readonly taskType: string;
+  /** See TaskOpts.canBreakConcurrency. Zero unless a task type opts in. */
+  readonly canBreakConcurrency: number;
   public readonly id: string;
   private lastTaskState: TaskState = "idle";
   protected log: LoggerType;
@@ -82,10 +101,11 @@ export abstract class Task<
   private _lastResumedAt: Date | null = null;
   private startedEmitted: boolean = false;
 
-  constructor({ idPrefix, taskType, logger }: TaskOpts) {
+  constructor({ idPrefix, taskType, logger, canBreakConcurrency }: TaskOpts) {
     super();
     this.log = makeLogger(`task:${taskType}`, logger);
     this.taskType = taskType;
+    this.canBreakConcurrency = canBreakConcurrency ?? 0;
     this.id = makeRunUniqueId(idPrefix || `${taskType}-task-`);
     this.on("stateChanged", (state) => {
       const taskState = this.stateToTaskState(state);

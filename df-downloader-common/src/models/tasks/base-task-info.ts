@@ -14,7 +14,17 @@ export const TaskState = z.enum([
   "cancelled",
 ]);
 export type TaskState = z.infer<typeof TaskState>;
-export const TaskCapabilities = z.enum(["pause", "cancel"]);
+/**
+ * What a task genuinely supports, which is not the same as what the UI offers.
+ *
+ * `force_start` means this task may run beyond its manager's concurrency limit
+ * when forced - true for downloads, where one more transfer is harmless, and
+ * false for transcription and analysis, where two at once saturates the
+ * machine. A task without it can still be forced past a paused queue; it just
+ * waits for a slot rather than taking an extra one, so the wording the user
+ * sees should differ.
+ */
+export const TaskCapabilities = z.enum(["pause", "cancel", "force_start"]);
 export type TaskCapabilities = z.infer<typeof TaskCapabilities>;
 /**
  * Generic progress for any task that can report it.

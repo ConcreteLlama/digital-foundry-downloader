@@ -17,6 +17,15 @@ export class DownloadTask extends Task<SuccessDownloadResult, DownloadStatus, Do
   constructor(downloadOptions: DownloadOptions, taskOpts: Partial<TaskOpts> = {}) {
     super({
       taskType: "download",
+      /*
+       * The one task type allowed past its manager's limit when forced.
+       *
+       * Force start began as a download gesture on the reasoning that one more
+       * transfer is harmless. Bounded at one rather than unlimited: forcing
+       * several must not open several extra connections to a site this app is
+       * deliberately gentle with.
+       */
+      canBreakConcurrency: 1,
       ...taskOpts,
     });
     this.download = new Download(downloadOptions);
