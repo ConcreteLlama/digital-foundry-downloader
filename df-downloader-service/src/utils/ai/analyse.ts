@@ -37,9 +37,9 @@ import {
   srtLinesToTextWithOffsets,
 } from "./transcript.js";
 import {
-  WireConsoleComparison,
+  WirePlatformComparison,
   WireHardwareReview,
-  WirePlatformAnalysis,
+  WireSinglePlatformAnalysis,
   WirePreview,
   WireContentType,
   WireOverview,
@@ -67,8 +67,8 @@ const THINKING_OUTPUT_MULTIPLIER = 3;
 
 /** The types worth a second, structure-extracting call. */
 const EXTRACTABLE_TYPES: WireContentType[] = [
-  "console_comparison",
-  "platform_analysis",
+  "platform_comparison",
+  "single_platform_analysis",
   "pc_review_settings",
   "hands_on_preview",
   "hardware_review",
@@ -85,7 +85,41 @@ const EXTRACTABLE_TYPES: WireContentType[] = [
  * length. How many calls a run makes is knowable; how far through one is, is
  * not.
  */
-export type AnalysisStage = { step: number; of: number; label: string };
+export type AnalysisStage = {
+  step: number;
+  of: number;
+  label: string;
+  /**
+   * How much of the run is behind you, from the weights below.
+   *
+   * Only ever advances at step boundaries, which are the points genuinely
+   * known. It is not interpolated within a step, because that would need an
+   * expected output length and there is no such thing - see outputTokens.
+   */
+  fractionComplete: number;
+  /**
+   * Tokens generated so far in the current call, where the engine reports them.
+   *
+   * A running count and deliberately not a fraction: the model decides when it
+   * stops, so any percentage would be measured against an invented total.
+   */
+  outputTokens?: number;
+};
+
+/**
+ * How the three local calls divide the wait.
+ *
+ * Measured over three runs of six items on Qwen3.5-9B fully on GPU: classify
+ * 3.7%, summarise 30.2%, extract 66.1%. Extraction is two thirds of it, so
+ * treating the calls as equal thirds would show a progress figure that stalls
+ * for most of the run.
+ *
+ * Explicitly a 9B measurement. The larger model runs its experts on CPU, which
+ * is expected to shift the balance toward prompt processing, and that has not
+ * been measured - so this is a named default to be replaced with evidence,
+ * not a universal constant.
+ */
+const LOCAL_CALL_WEIGHTS = { classify: 0.037, summarise: 0.302, extract: 0.661 };
 
 export type AnalysisInputs = {
   entry: DfContentEntry;
@@ -425,13 +459,13 @@ const anchorFindings = (
   };
 
   switch (data.contentType) {
-    case "console_comparison":
+    case "platform_comparison":
       return {
         ...data,
         platforms: data.platforms.map((platform) => ({ ...platform, modes: platform.modes.map(at) })),
         knownIssues: data.knownIssues.map(at),
       };
-    case "platform_analysis":
+    case "single_platform_analysis":
       return {
         ...data,
         platforms: data.platforms.map((platform) => ({ ...platform, modes: platform.modes.map(at) })),
@@ -570,7 +604,11 @@ const chooseExtractionPrompt = async (
   }
   // The marked instruction explains the markers, so it is what must be sized -
   // measuring the plain one would under-count what actually gets sent.
-  const instruction = buildExtractionInstruction(contentType, { ...prepared.flags, hasMarkers: true });
+  const instruction = buildExtractionInstruction(contentType, {
+    ...prepared.flags,
+    hasMarkers: true,
+    needsQuoteCoverage: provider.usesQuoteCoverageClause,
+  });
   if (!instruction) {
     return plain;
   }
@@ -599,22 +637,26 @@ const extractStructuredData = async (
   provider: AiProvider,
   config: AiAnalysisConfig,
   prepared: PreparedCall,
-  contentType: WireContentType
+  contentType: WireContentType,
+  onProgress?: (progress: { outputTokens: number }) => void
 ): Promise<{ data?: AiStructuredData; usage?: AiAnalysisUsage }> => {
-  const plainInstruction = buildExtractionInstruction(contentType, prepared.flags);
+  const plainInstruction = buildExtractionInstruction(contentType, {
+    ...prepared.flags,
+    needsQuoteCoverage: provider.usesQuoteCoverageClause,
+  });
   if (!plainInstruction) {
     return {};
   }
   const { content, instruction } = await chooseExtractionPrompt(provider, prepared, contentType, plainInstruction);
   try {
     switch (contentType) {
-      case "console_comparison": {
+      case "platform_comparison": {
         const { parsed, usage } = await provider.callStructured(
-          WireConsoleComparison, prepared.system, content, instruction
+          WirePlatformComparison, prepared.system, content, instruction, onProgress
         );
         return {
           data: {
-            contentType: "console_comparison",
+            contentType: "platform_comparison",
             game: parsed.game,
             developer: parsed.developer,
             platforms: parsed.platforms,
@@ -626,7 +668,7 @@ const extractStructuredData = async (
       }
       case "pc_review_settings": {
         const { parsed, usage } = await provider.callStructured(
-          WirePcReviewSettings, prepared.system, content, instruction
+          WirePcReviewSettings, prepared.system, content, instruction, onProgress
         );
         return {
           data: {
@@ -652,13 +694,13 @@ const extractStructuredData = async (
           usage,
         };
       }
-      case "platform_analysis": {
+      case "single_platform_analysis": {
         const { parsed, usage } = await provider.callStructured(
-          WirePlatformAnalysis, prepared.system, content, instruction
+          WireSinglePlatformAnalysis, prepared.system, content, instruction, onProgress
         );
         return {
           data: {
-            contentType: "platform_analysis",
+            contentType: "single_platform_analysis",
             game: parsed.game,
             developer: parsed.developer,
             platforms: parsed.platforms,
@@ -671,7 +713,7 @@ const extractStructuredData = async (
       }
       case "hands_on_preview": {
         const { parsed, usage } = await provider.callStructured(
-          WirePreview, prepared.system, content, instruction
+          WirePreview, prepared.system, content, instruction, onProgress
         );
         return {
           data: {
@@ -687,7 +729,7 @@ const extractStructuredData = async (
       }
       case "hardware_review": {
         const { parsed, usage } = await provider.callStructured(
-          WireHardwareReview, prepared.system, content, instruction
+          WireHardwareReview, prepared.system, content, instruction, onProgress
         );
         return {
           data: {
@@ -704,7 +746,7 @@ const extractStructuredData = async (
       case "news_discussion":
       case "roundup_list": {
         const { parsed, usage } = await provider.callStructured(
-          WireQaSegments, prepared.system, content, instruction
+          WireQaSegments, prepared.system, content, instruction, onProgress
         );
         return parsed.segments.length
           ? { data: { contentType, segments: parsed.segments }, usage }
@@ -838,7 +880,25 @@ export const analyseContent = async (config: AiAnalysisConfig, inputs: AnalysisI
      * step early is a better surprise than one that grows a step.
      */
     const totalSteps = (provider.separatesClassification ? 2 : 1) + (config.features.structuredData ? 1 : 0);
-    const reportStage = (step: number, label: string) => inputs.onStage?.({ step, of: totalSteps, label });
+    /*
+     * Weighted rather than even. Without the classify call its share folds into
+     * the summary, which is what the hosted path does in one call anyway.
+     */
+    const weights = provider.separatesClassification
+      ? [LOCAL_CALL_WEIGHTS.classify, LOCAL_CALL_WEIGHTS.summarise, LOCAL_CALL_WEIGHTS.extract]
+      : [LOCAL_CALL_WEIGHTS.classify + LOCAL_CALL_WEIGHTS.summarise, LOCAL_CALL_WEIGHTS.extract];
+    let stage: AnalysisStage | undefined;
+    const reportStage = (step: number, label: string) => {
+      const fractionComplete = weights.slice(0, step - 1).reduce((total, w) => total + w, 0);
+      stage = { step, of: totalSteps, label, fractionComplete };
+      inputs.onStage?.(stage);
+    };
+    /** Re-reports the current stage with the tokens generated so far. */
+    const reportTokens = ({ outputTokens }: { outputTokens: number }) => {
+      if (stage) {
+        inputs.onStage?.({ ...stage, outputTokens });
+      }
+    };
 
     if (provider.separatesClassification) {
       reportStage(1, "Working out what kind of video this is");
@@ -850,14 +910,16 @@ export const analyseContent = async (config: AiAnalysisConfig, inputs: AnalysisI
         WireClassification,
         forClassify.system,
         forClassify.content,
-        buildClassificationInstruction()
+        buildClassificationInstruction(),
+        reportTokens
       );
       reportStage(2, "Writing the summary");
       const summarised = await provider.callStructured(
         WireSummary,
         prepared.system,
         prepared.content,
-        buildSummaryInstruction(config)
+        buildSummaryInstruction(config),
+        reportTokens
       );
       overview = { ...classified.parsed, ...summarised.parsed };
       usage = addUsage(classified.usage, summarised.usage);
@@ -867,7 +929,8 @@ export const analyseContent = async (config: AiAnalysisConfig, inputs: AnalysisI
         WireOverview,
         prepared.system,
         prepared.content,
-        buildOverviewInstruction(config)
+        buildOverviewInstruction(config),
+        reportTokens
       );
       overview = summarised.parsed;
       usage = summarised.usage;
@@ -877,7 +940,7 @@ export const analyseContent = async (config: AiAnalysisConfig, inputs: AnalysisI
 
     if (config.features.structuredData && EXTRACTABLE_TYPES.includes(overview.contentType)) {
       reportStage(totalSteps, "Pulling out the details");
-      const extraction = await extractStructuredData(provider, config, prepared, overview.contentType);
+      const extraction = await extractStructuredData(provider, config, prepared, overview.contentType, reportTokens);
       structuredData = extraction.data ? anchorFindings(extraction.data, prepared.transcript, prepared.articleText) : undefined;
       if (extraction.usage) {
         usage = addUsage(usage, extraction.usage);

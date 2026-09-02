@@ -10,7 +10,7 @@ import {
 import { DfDownloaderOperationalDb } from "../../db/df-operational-db.js";
 
 /**
- * Builds the console comparison ledger.
+ * Builds the platform comparison ledger.
  *
  * Nothing here aggregates: it collects each comparison's per-platform
  * figures and puts them side by side. See the model in
@@ -30,7 +30,7 @@ export const buildPlatformComparison = async (
 
   for (const { contentKey, result } of results) {
     const data = result.structuredData;
-    if (data?.contentType !== "console_comparison") {
+    if (data?.contentType !== "platform_comparison") {
       continue;
     }
     const entry = await db.getContentEntry(contentKey);

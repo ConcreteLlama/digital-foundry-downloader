@@ -1,6 +1,7 @@
 import {
   AiAnalysisIndexEntry,
   AiAnalysisResult,
+  AiContentTypeRenames,
   logger,
   makeAiAnalysisIndexEntry,
   zodParse,
@@ -64,7 +65,72 @@ type AiAnalysisIndexFile = z.infer<typeof AiAnalysisIndexFile>;
  * it every analysed item compares against the wrong tags and reads as
  * permanently out of date.
  */
-const CURRENT_VERSION = "1.1.0";
+const CURRENT_VERSION = "1.2.0";
+
+/**
+ * Schema version of an individual result file.
+ *
+ * Separate from the index's version because the two answer different
+ * questions. The index is a derived cache that can be rebuilt from the
+ * results at any time; the result files are the source of truth, and are
+ * the only thing a patch can usefully be applied to. Versioning only the
+ * index - which is what this store did originally - meant a change to the
+ * stored shape had to be detected by inspecting values, which is guesswork
+ * and gets less reliable with every subsequent change.
+ *
+ * Files written before this existed carry no version and are treated as
+ * 1.0.0.
+ */
+const RESULT_SCHEMA_VERSION = "1.1.0";
+const UNVERSIONED_RESULT_SCHEMA = "1.0.0";
+
+/**
+ * Brings one stored result file up to the current schema.
+ *
+ * A version chain in the same shape as the FileDb patch routines: each step
+ * moves one version forward, so adding a future change means appending a
+ * branch rather than revisiting this one. Operates on raw parsed JSON and
+ * never on a zod-validated object, because the whole point is that the file
+ * does not validate yet.
+ *
+ * An unrecognised version - a file written by a newer build - is left
+ * untouched rather than guessed at. Downgrading is not supported, but
+ * silently mangling the file would be worse than failing to read it.
+ */
+const patchResultFile = (stored: any): { stored: any; patched: boolean } => {
+  let version: string = stored?.schemaVersion || UNVERSIONED_RESULT_SCHEMA;
+  let patched = false;
+
+  while (version !== RESULT_SCHEMA_VERSION) {
+    if (version === UNVERSIONED_RESULT_SCHEMA) {
+      // 1.0.0 -> 1.1.0: console_comparison became platform_comparison and
+      // platform_analysis became single_platform_analysis. The type is
+      // recorded in two places and both have to move together, or the
+      // discriminated union stops matching the result's own content type.
+      const result = stored?.result;
+      if (result) {
+        const renamed = AiContentTypeRenames[result.contentType];
+        if (renamed) {
+          result.contentType = renamed;
+        }
+        const structuredRenamed = result.structuredData
+          ? AiContentTypeRenames[result.structuredData.contentType]
+          : undefined;
+        if (structuredRenamed) {
+          result.structuredData.contentType = structuredRenamed;
+        }
+      }
+      version = RESULT_SCHEMA_VERSION;
+      patched = true;
+    } else {
+      logger.log("warn", `Analysis result file is at unknown schema version ${version}, leaving it alone`);
+      return { stored, patched: false };
+    }
+  }
+
+  stored.schemaVersion = version;
+  return { stored, patched };
+};
 
 /**
  * A filesystem-safe name for a content key.
@@ -105,13 +171,102 @@ export class AiAnalysisStore {
   static async create(dbDir: string): Promise<AiAnalysisStore> {
     const dir = path.join(dbDir, ANALYSIS_DIR);
     ensureDirectory(dir);
-    const index = await AiAnalysisStore.loadIndex(dir);
-    return new AiAnalysisStore(dir, index);
+    /*
+     * Patching happens before the index is touched, and that ordering is
+     * load-bearing. Every read path zod-parses the result, so a file still
+     * holding a pre-rename content type does not merely look odd - it fails
+     * validation, and both loadIndex and rebuildIndex treat a failure as an
+     * unreadable file and skip it. The analysis would be silently absent
+     * while sitting intact on disk.
+     */
+    const onDiskVersion = await AiAnalysisStore.readIndexVersion(dir);
+    const stale = onDiskVersion !== CURRENT_VERSION;
+    if (stale) {
+      await AiAnalysisStore.migrateResultFiles(dir);
+    }
+    const index = await AiAnalysisStore.loadIndex(dir, onDiskVersion);
+    const store = new AiAnalysisStore(dir, index);
+    /*
+     * A rebuilt index has to be written back, or it is rebuilt again on the
+     * next startup and forever after: rebuildIndex only ever returned it in
+     * memory, and writeIndex is otherwise reached only by set() and
+     * remove(). Left alone, the version gate above would never advance and
+     * every start would re-scan the whole directory.
+     */
+    if (stale) {
+      await store.writeIndex();
+    }
+    return store;
   }
 
-  private static async loadIndex(dir: string): Promise<AiAnalysisIndexFile> {
+  /**
+   * The index's version, read without validating anything else.
+   *
+   * Deliberately not zodParse: this is the gate that decides whether a
+   * migration is needed, so it has to work in exactly the case where the
+   * rest of the file no longer validates. Missing or unreadable reports
+   * undefined, which runs the migration - a no-op on a fresh install.
+   */
+  private static async readIndexVersion(dir: string): Promise<string | undefined> {
+    try {
+      const raw = await fs.promises.readFile(path.join(dir, INDEX_FILENAME), { encoding: "utf-8" });
+      return (JSON.parse(raw) as { version?: string })?.version;
+    } catch {
+      return undefined;
+    }
+  }
+
+  /**
+   * Applies the result-file patch chain across the whole directory.
+   *
+   * Runs once per version bump rather than on every startup, and rewrites
+   * only the files a patch actually changed. A file that cannot be read or
+   * written is logged and skipped rather than aborting the run: one bad
+   * file should cost one analysis, not the entire store.
+   */
+  private static async migrateResultFiles(dir: string): Promise<void> {
+    let files: string[] = [];
+    try {
+      files = await fs.promises.readdir(dir);
+    } catch {
+      return;
+    }
+    let migrated = 0;
+    for (const file of files) {
+      if (file === INDEX_FILENAME || !file.endsWith(".json")) {
+        continue;
+      }
+      const filePath = path.join(dir, file);
+      try {
+        const stored = JSON.parse(await fs.promises.readFile(filePath, { encoding: "utf-8" }));
+        const { stored: patchedFile, patched } = patchResultFile(stored);
+        if (!patched) {
+          continue;
+        }
+        await writeFileAtomic(filePath, JSON.stringify(patchedFile, null, 2));
+        migrated++;
+      } catch (e) {
+        logger.log("warn", `Could not patch analysis file ${file}: ${e}`);
+      }
+    }
+    if (migrated > 0) {
+      logger.log("info", `Patched ${migrated} AI analysis result files to schema ${RESULT_SCHEMA_VERSION}`);
+    }
+  }
+
+  private static async loadIndex(dir: string, knownVersion?: string): Promise<AiAnalysisIndexFile> {
     const indexPath = path.join(dir, INDEX_FILENAME);
     try {
+      /*
+       * The version is checked before validating, not after. An index from an
+       * older build can legitimately fail the current schema - that is what a
+       * version bump means - and parsing first reported an ordinary upgrade as
+       * corruption, burying the real signal under a wall of validation errors.
+       */
+      if (knownVersion !== undefined && knownVersion !== CURRENT_VERSION) {
+        logger.log("info", `AI analysis index is version ${knownVersion}, rebuilding for ${CURRENT_VERSION}`);
+        return AiAnalysisStore.rebuildIndex(dir);
+      }
       const raw = await fs.promises.readFile(indexPath, { encoding: "utf-8" });
       const parsed = zodParse(AiAnalysisIndexFile, JSON.parse(raw));
       /*
@@ -182,7 +337,7 @@ export class AiAnalysisStore {
     // The key is stored inside the file as well as encoded in its name, so
     // a rebuild can recover the mapping without having to reverse the
     // hash - which it cannot do.
-    const payload = { contentKey, result };
+    const payload = { schemaVersion: RESULT_SCHEMA_VERSION, contentKey, result };
     await writeFileAtomic(filePath, JSON.stringify(payload, null, 2));
     this.index.entries[contentKey] = makeAiAnalysisIndexEntry(result);
     this.allResultsCache = undefined;

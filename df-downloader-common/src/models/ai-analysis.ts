@@ -15,8 +15,8 @@ import { AiAnalysisModel, AiProviderId } from "../config/ai-analysis-config.js";
  * describe it.
  */
 export const AiContentType = z.enum([
-  "console_comparison",
-  "platform_analysis",
+  "platform_comparison",
+  "single_platform_analysis",
   "pc_review_settings",
   "hands_on_preview",
   "game_retrospective",
@@ -30,9 +30,27 @@ export const AiContentType = z.enum([
 ]);
 export type AiContentType = z.infer<typeof AiContentType>;
 
+/**
+ * Content types that have been renamed, and what they became.
+ *
+ * Stored analyses carry their content type as a string, so a rename is a
+ * data migration rather than a code change - an un-patched file fails
+ * `AiContentType` and is dropped as unreadable, taking a real analysis with
+ * it. Lives here rather than in the store because it is a statement about
+ * the domain model, and the model is the contract both sides share.
+ *
+ * Deliberately not a general alias map: these are one-way historical
+ * renames applied once by the store's patch chain, not accepted input.
+ * Nothing should read a legacy name at runtime.
+ */
+export const AiContentTypeRenames: Record<string, AiContentType> = {
+  console_comparison: "platform_comparison",
+  platform_analysis: "single_platform_analysis",
+};
+
 export const AiContentTypeLabels: Record<AiContentType, string> = {
-  console_comparison: "Console comparison",
-  platform_analysis: "Platform analysis",
+  platform_comparison: "Platform comparison",
+  single_platform_analysis: "Single-platform analysis",
   pc_review_settings: "PC review & optimised settings",
   hands_on_preview: "Hands-on preview",
   game_retrospective: "Retrospective",
@@ -60,8 +78,8 @@ export const AiContentTypeLabels: Record<AiContentType, string> = {
  * those still belong in `games` so the piece surfaces under each of them.
  */
 export const AiContentTypeGameSubject: Record<AiContentType, "single" | "maybe" | "none"> = {
-  console_comparison: "single",
-  platform_analysis: "single",
+  platform_comparison: "single",
+  single_platform_analysis: "single",
   pc_review_settings: "single",
   hands_on_preview: "single",
   game_retrospective: "single",
@@ -121,7 +139,7 @@ export const AiTagSuggestion = z.object({
 });
 export type AiTagSuggestion = z.infer<typeof AiTagSuggestion>;
 
-/** One display/performance mode of one platform, in a console comparison. */
+/** One display/performance mode of one platform, in a platform comparison. */
 /**
  * Where a finding is stated in the video.
  *
@@ -173,11 +191,11 @@ export const AiPlatformMode = z.object({
 });
 export type AiPlatformMode = z.infer<typeof AiPlatformMode>;
 
-export const AiPlatformComparison = z.object({
+export const AiPlatformEntry = z.object({
   platform: z.string(),
   modes: z.array(AiPlatformMode).default([]),
 });
-export type AiPlatformComparison = z.infer<typeof AiPlatformComparison>;
+export type AiPlatformEntry = z.infer<typeof AiPlatformEntry>;
 
 /**
  * A problem the video calls out, and where it says so.
@@ -197,7 +215,7 @@ export const AiKnownIssue = z.preprocess(
 export type AiKnownIssue = z.infer<typeof AiKnownIssue>;
 
 /**
- * Console face-off data.
+ * Platform face-off data - one game across two or more platforms.
  *
  * Every numeric field is nullable on purpose, and the extraction prompt is
  * explicit that unstated numbers must be left null rather than guessed.
@@ -206,15 +224,15 @@ export type AiKnownIssue = z.infer<typeof AiKnownIssue>;
  * than an honest gap - the whole point of this data is that it can be
  * trusted enough to compare against.
  */
-export const AiConsoleComparisonData = z.object({
-  contentType: z.literal("console_comparison"),
+export const AiPlatformComparisonData = z.object({
+  contentType: z.literal("platform_comparison"),
   game: z.string().nullish(),
   developer: z.string().nullish(),
-  platforms: z.array(AiPlatformComparison).default([]),
+  platforms: z.array(AiPlatformEntry).default([]),
   knownIssues: z.array(AiKnownIssue).default([]),
   recommendation: z.string().nullish(),
 });
-export type AiConsoleComparisonData = z.infer<typeof AiConsoleComparisonData>;
+export type AiPlatformComparisonData = z.infer<typeof AiPlatformComparisonData>;
 
 export const AiSettingEntry = z.object({
   name: z.string(),
@@ -296,17 +314,17 @@ export type AiQaRoundtableData = z.infer<typeof AiQaRoundtableData>;
  * delta - what a patch altered, how a port differs from the original - and
  * that is the thing a reader wants and a bare mode table cannot express.
  */
-export const AiPlatformAnalysisData = z.object({
-  contentType: z.literal("platform_analysis"),
+export const AiSinglePlatformAnalysisData = z.object({
+  contentType: z.literal("single_platform_analysis"),
   game: z.string().nullish(),
   developer: z.string().nullish(),
-  platforms: z.array(AiPlatformComparison).default([]),
+  platforms: z.array(AiPlatformEntry).default([]),
   /** What changed relative to a previous version, patch or platform. */
   changeSummary: z.string().nullish(),
   knownIssues: z.array(AiKnownIssue).default([]),
   verdict: z.string().nullish(),
 });
-export type AiPlatformAnalysisData = z.infer<typeof AiPlatformAnalysisData>;
+export type AiSinglePlatformAnalysisData = z.infer<typeof AiSinglePlatformAnalysisData>;
 
 export const AiHardwareProduct = z.object({
   name: z.string(),
@@ -389,8 +407,8 @@ export type AiRoundupData = z.infer<typeof AiRoundupData>;
  * manufacture certainty the presenters explicitly disclaimed.
  */
 export const AiStructuredData = z.discriminatedUnion("contentType", [
-  AiConsoleComparisonData,
-  AiPlatformAnalysisData,
+  AiPlatformComparisonData,
+  AiSinglePlatformAnalysisData,
   AiPcReviewSettingsData,
   AiPreviewData,
   AiHardwareReviewData,

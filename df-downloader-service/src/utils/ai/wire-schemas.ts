@@ -36,8 +36,8 @@ const nullableString = () => z.string().nullable();
 const nullableNumber = () => z.number().nullable();
 
 export const WireContentType = z.enum([
-  "console_comparison",
-  "platform_analysis",
+  "platform_comparison",
+  "single_platform_analysis",
   "pc_review_settings",
   "hands_on_preview",
   "game_retrospective",
@@ -149,15 +149,15 @@ export const WireKnownIssue = z.object({
   quote: nullableString(),
 });
 
-/** Second call, console_comparison branch. 9 union params. */
-export const WireConsoleComparison = z.object({
+/** Second call, platform_comparison branch. 9 union params. */
+export const WirePlatformComparison = z.object({
   game: nullableString(),
   developer: nullableString(),
   platforms: z.array(WirePlatform),
   knownIssues: z.array(WireKnownIssue),
   recommendation: nullableString(),
 });
-export type WireConsoleComparison = z.infer<typeof WireConsoleComparison>;
+export type WirePlatformComparison = z.infer<typeof WirePlatformComparison>;
 
 export const WireSetting = z.object({
   name: z.string(),
@@ -215,8 +215,8 @@ export const WireQaSegment = z.object({
   quote: nullableString(),
 });
 
-/** Second call, platform_analysis branch. Same platform shape as a face-off. */
-export const WirePlatformAnalysis = z.object({
+/** Second call, single_platform_analysis branch. Same platform shape as a face-off. */
+export const WireSinglePlatformAnalysis = z.object({
   game: nullableString(),
   developer: nullableString(),
   platforms: z.array(WirePlatform),
@@ -225,7 +225,7 @@ export const WirePlatformAnalysis = z.object({
   knownIssues: z.array(WireKnownIssue),
   verdict: nullableString(),
 });
-export type WirePlatformAnalysis = z.infer<typeof WirePlatformAnalysis>;
+export type WireSinglePlatformAnalysis = z.infer<typeof WireSinglePlatformAnalysis>;
 
 export const WireHardwareProduct = z.object({
   name: z.string(),

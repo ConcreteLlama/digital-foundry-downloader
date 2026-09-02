@@ -27,6 +27,8 @@ export const makeAnthropicProvider = (config: AiAnalysisConfig): AiProvider => {
     separatesClassification: false,
     // Already locates nearly every quote; markers would be paid for and unused.
     usesTranscriptMarkers: false,
+    // Nothing to reclaim: it does not drop findings for want of a quote.
+    usesQuoteCoverageClause: false,
     callStructured: <T extends z.ZodType>(schema: T, system: string, content: string, instruction: string) =>
       callStructured(client, config, schema, system, content, instruction),
     countInputTokens: (system: string, content: string, instruction: string) =>

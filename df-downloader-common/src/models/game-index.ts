@@ -6,7 +6,7 @@ import { AiContentType } from "./ai-analysis.js";
  *
  * ## Why this is done on read rather than in the prompt
  *
- * `AiConsoleComparisonData.game` and `AiPlatformComparison.platform` are
+ * `AiPlatformComparisonData.game` and `AiPlatformEntry.platform` are
  * free strings, and the extraction prompt deliberately does not constrain
  * them. Constraining it would produce tidier data but would make every
  * stored result a record of what the schema allowed rather than of what

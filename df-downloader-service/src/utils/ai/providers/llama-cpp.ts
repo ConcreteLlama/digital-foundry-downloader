@@ -1,5 +1,5 @@
 import { Agent } from "undici";
-import { AiLocalProviderConfig } from "df-downloader-common/config/ai-analysis-config.js";
+import { AiLocalModels, AiLocalProviderConfig } from "df-downloader-common/config/ai-analysis-config.js";
 import { z } from "zod";
 import { stripJsonFence } from "../anthropic-client.js";
 import { LocalLlamaServer } from "../local-server.js";
@@ -57,11 +57,6 @@ const NO_THINKING = { enable_thinking: false };
  */
 const localDispatcher = new Agent({ headersTimeout: 0, bodyTimeout: 0 });
 
-type ChatResponse = {
-  choices?: { message?: { content?: string | null }; finish_reason?: string }[];
-  usage?: { prompt_tokens?: number; completion_tokens?: number };
-};
-
 /**
  * Turns a fetch failure into something actionable.
  *
@@ -113,6 +108,110 @@ const postJson = async (baseUrl: string, path: string, body: unknown): Promise<a
   return response.json();
 };
 
+/** What a streamed completion yields once it has finished arriving. */
+type StreamedCompletion = {
+  text: string;
+  finishReason?: string;
+  /**
+   * llama-server's own timings, carried on the final chunk.
+   *
+   * Streaming loses nothing: prompt and generation counts and rates all still
+   * arrive, so the usage figures keep working and the throughput estimate has
+   * a real rate to learn from.
+   */
+  timings?: {
+    prompt_n?: number;
+    predicted_n?: number;
+    predicted_per_second?: number;
+    cache_n?: number;
+  };
+};
+
+/**
+ * Streams a completion, reporting generated tokens as they arrive.
+ *
+ * Streaming rather than waiting for the whole answer because generation is
+ * where the time goes - measured at 88% of wall clock against 11% for prompt
+ * processing, which the server's prompt cache frequently skips outright. So
+ * generation is the only phase worth reporting.
+ *
+ * Grammar-constrained output survives it: measured at one chunk per generated
+ * token, with the assembled result parsing cleanly against the wire schema, so
+ * `response_format` is unchanged.
+ *
+ * The count is chunks, which is tokens here. Reported as a running number and
+ * never as a percentage - the model decides when it stops, so there is no
+ * honest denominator to divide by.
+ */
+const postStream = async (
+  baseUrl: string,
+  path: string,
+  body: unknown,
+  onTokens?: (generated: number) => void
+): Promise<StreamedCompletion> => {
+  const startedAt = Date.now();
+  let response: Response;
+  try {
+    response = await fetch(`${baseUrl.replace(/\/$/, "")}${path}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+      dispatcher: localDispatcher,
+    } as RequestInit);
+  } catch (e: any) {
+    throw new Error(describeLocalFailure(e, `${baseUrl}${path}`, Date.now() - startedAt));
+  }
+  if (!response.ok) {
+    throw new Error(`llama-server ${path} returned ${response.status}: ${(await response.text()).slice(0, 300)}`);
+  }
+  if (!response.body) {
+    throw new Error("llama-server returned no body for a streamed request");
+  }
+
+  const decoder = new TextDecoder();
+  let buffered = "";
+  let text = "";
+  let generated = 0;
+  let finishReason: string | undefined;
+  let timings: StreamedCompletion["timings"];
+
+  for await (const chunk of response.body as any) {
+    buffered += decoder.decode(chunk, { stream: true });
+    // Server-sent events are newline delimited, and a read can end mid-line -
+    // the trailing fragment is kept for the next one rather than parsed.
+    const lines = buffered.split("\n");
+    buffered = lines.pop() ?? "";
+    for (const line of lines) {
+      const trimmed = line.trim();
+      if (!trimmed.startsWith("data:")) {
+        continue;
+      }
+      const payload = trimmed.slice(5).trim();
+      if (!payload || payload === "[DONE]") {
+        continue;
+      }
+      let event: any;
+      try {
+        event = JSON.parse(payload);
+      } catch {
+        // One malformed line is not worth failing a whole generation over.
+        continue;
+      }
+      const delta = event?.choices?.[0]?.delta?.content;
+      if (typeof delta === "string" && delta.length) {
+        text += delta;
+        generated++;
+        onTokens?.(generated);
+      }
+      finishReason = event?.choices?.[0]?.finish_reason ?? finishReason;
+      // Carried on the final chunk only, so the last one seen is the real one.
+      timings = event?.timings ?? timings;
+    }
+  }
+
+  return { text, finishReason, timings };
+};
+
 /**
  * Acquires the server per call rather than at construction, so the model is
  * loaded only while there is work and released the moment there is not - see
@@ -127,12 +226,19 @@ export const makeLocalProvider = (config: AiLocalProviderConfig, server: LocalLl
   separatesClassification: true,
   // Measured: 77% -> 85% located, invention 6% -> 3%.
   usesTranscriptMarkers: true,
+  /*
+   * Follows the selected model, not the engine - see AiLocalModelInfo. Where
+   * serverUrl points at a model the user runs themselves, the configured
+   * choice is still the best signal available for what is answering.
+   */
+  usesQuoteCoverageClause: AiLocalModels[config.model].needsQuoteCoverageClause,
 
   callStructured: async <T extends z.ZodType>(
     schema: T,
     system: string,
     content: string,
-    instruction: string
+    instruction: string,
+    onProgress?: (progress: { outputTokens: number }) => void
   ) => {
     const startedAt = Date.now();
     const baseUrl = await server.acquire();
@@ -149,8 +255,11 @@ export const makeLocalProvider = (config: AiLocalProviderConfig, server: LocalLl
        * gate is around the call rather than the whole provider because the
        * work happens in the server process while this request is open.
        */
-      const response: ChatResponse = await localComputeGate.withExclusive("Local analysis", () =>
-        postJson(baseUrl, "/v1/chat/completions", {
+      const streamed = await localComputeGate.withExclusive("Local analysis", () =>
+        postStream(
+          baseUrl,
+          "/v1/chat/completions",
+          {
         messages: [
           { role: "system", content: system },
           // One user message rather than the hosted path's two blocks: those
@@ -164,18 +273,22 @@ export const makeLocalProvider = (config: AiLocalProviderConfig, server: LocalLl
           type: "json_schema",
           json_schema: { name: "analysis", schema: jsonSchema, strict: true },
         },
-          chat_template_kwargs: NO_THINKING,
-        })
+            chat_template_kwargs: NO_THINKING,
+            // Generation is 88% of the wait and the only phase worth
+            // reporting; the grammar constraint survives streaming intact.
+            stream: true,
+          },
+          onProgress ? (outputTokens) => onProgress({ outputTokens }) : undefined
+        )
       );
 
-      const choice = response.choices?.[0];
-      const text = choice?.message?.content;
+      const text = streamed.text;
       if (!text) {
         // Distinguished explicitly because the two causes need different
         // fixes: a truncation wants a smaller input or a bigger cap, an empty
         // answer usually means thinking was not suppressed.
         const reason =
-          choice?.finish_reason === "length"
+          streamed.finishReason === "length"
             ? "ran out of output tokens - the input may be too long for the context size"
             : "returned nothing";
         throw new Error(`Local model ${config.model} ${reason}`);
@@ -186,8 +299,9 @@ export const makeLocalProvider = (config: AiLocalProviderConfig, server: LocalLl
         parsed,
         usage: {
           provider: "local",
-          inputTokens: response.usage?.prompt_tokens ?? 0,
-          outputTokens: response.usage?.completion_tokens ?? 0,
+          // From the final chunk's timings, which streaming still carries.
+          inputTokens: streamed.timings?.prompt_n ?? 0,
+          outputTokens: streamed.timings?.predicted_n ?? 0,
           // No costUsd at all rather than zero - this run cost time.
           durationMs: Date.now() - startedAt,
         },

@@ -14,11 +14,11 @@ import {
   Typography,
 } from "@mui/material";
 import {
-  AiConsoleComparisonData,
+  AiPlatformComparisonData,
   AiHardwareReviewData,
   AiPcReviewSettingsData,
-  AiPlatformAnalysisData,
-  AiPlatformComparison,
+  AiSinglePlatformAnalysisData,
+  AiPlatformEntry,
   AiPreviewData,
   AiQaSegment,
   AiStructuredData,
@@ -178,7 +178,7 @@ const PlatformGrid = ({
   platforms,
   onJumpTo,
 }: {
-  platforms: AiPlatformComparison[];
+  platforms: AiPlatformEntry[];
   onJumpTo?: (seconds: number) => void;
 }) => (
     <Box sx={{ display: "grid", gap: 1.5, gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))" }}>
@@ -231,7 +231,7 @@ const KnownIssues = ({
   issues,
   onJumpTo,
 }: {
-  issues: AiConsoleComparisonData["knownIssues"];
+  issues: AiPlatformComparisonData["knownIssues"];
   onJumpTo?: (seconds: number) => void;
 }) =>
   issues.length ? (
@@ -252,7 +252,7 @@ const KnownIssues = ({
     </Box>
   ) : null;
 
-const ConsoleComparison = ({ data, onJumpTo }: { data: AiConsoleComparisonData; onJumpTo?: (seconds: number) => void }) => (
+const ConsoleComparison = ({ data, onJumpTo }: { data: AiPlatformComparisonData; onJumpTo?: (seconds: number) => void }) => (
   <Stack spacing={2}>
     {(data.game || data.developer) && (
       <Typography variant="body2" sx={{ color: "text.secondary" }}>
@@ -391,7 +391,7 @@ const PlatformAnalysis = ({
   data,
   onJumpTo,
 }: {
-  data: AiPlatformAnalysisData;
+  data: AiSinglePlatformAnalysisData;
   onJumpTo?: (seconds: number) => void;
 }) => (
   <Stack spacing={2}>
@@ -539,9 +539,9 @@ export const AnalysisStructuredData = ({
   switch (data.contentType) {
     case "pc_review_settings":
       return <PcReviewSettings data={data} onJumpTo={onJumpTo} />;
-    case "console_comparison":
+    case "platform_comparison":
       return <ConsoleComparison data={data} onJumpTo={onJumpTo} />;
-    case "platform_analysis":
+    case "single_platform_analysis":
       return <PlatformAnalysis data={data} onJumpTo={onJumpTo} />;
     case "hands_on_preview":
       return <HandsOnPreview data={data} onJumpTo={onJumpTo} />;

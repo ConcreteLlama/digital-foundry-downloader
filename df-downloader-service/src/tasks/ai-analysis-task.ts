@@ -24,6 +24,8 @@ type AiAnalysisTaskContext = {
   transcriptLines?: SrtLine[];
   /** Set as the run progresses, purely so the UI can say what it is doing. */
   stage?: string;
+  /** How much of the run is behind it, advancing only at call boundaries. */
+  fractionComplete?: number;
   /**
    * Re-analyse even if there is already a result.
    *
@@ -82,8 +84,20 @@ const aiAnalysisTaskControls: TaskControls<AiAnalysisResult, AiAnalysisTaskConte
       allowRemoteChapters,
       // Local runs make three calls and can take minutes; without this the
       // status sat on "Analysing" throughout and looked stuck.
-      onStage: ({ step, of, label }) => {
-        context.stage = `${label} (step ${step} of ${of})`;
+      /*
+       * The token count is the part that actually moves.
+       *
+       * The step fraction only advances at boundaries - those are the points
+       * genuinely known - and on a local run extraction is two thirds of the
+       * wait, so between boundaries the count is the only sign of life. It is
+       * a running number rather than a percentage because the model decides
+       * when it stops.
+       */
+      onStage: ({ step, of, label, outputTokens, fractionComplete }) => {
+        context.fractionComplete = fractionComplete;
+        context.stage = `${label} (step ${step} of ${of})${
+          outputTokens ? ` - ${outputTokens} tokens written` : ""
+        }`;
       },
     });
     // analyseContent reports an ordinary failure inside the result rather

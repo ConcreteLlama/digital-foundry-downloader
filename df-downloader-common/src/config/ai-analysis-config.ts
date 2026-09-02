@@ -238,6 +238,18 @@ export type AiLocalModelInfo = {
   fileName: string;
   approxBytes: number;
   notes: string;
+  /**
+   * Whether this model needs telling that a missing quote is not a reason to
+   * drop a finding.
+   *
+   * A property of the model rather than of the local engine, because the two
+   * measured differently. The 9B silently omits real items rather than cite
+   * them awkwardly, and the clause is worth +3 located findings per run
+   * against a non-overlapping noise band. The 35B never had the problem, and
+   * adding the clause raised its elision rate - so switching model has to
+   * switch this with it.
+   */
+  needsQuoteCoverageClause: boolean;
 };
 
 export const AiLocalModels: Record<AiLocalModel, AiLocalModelInfo> = {
@@ -246,16 +258,18 @@ export const AiLocalModels: Record<AiLocalModel, AiLocalModelInfo> = {
     url: "https://huggingface.co/unsloth/Qwen3.5-9B-GGUF/resolve/main/Qwen3.5-9B-UD-Q4_K_XL.gguf",
     fileName: "Qwen3.5-9B-UD-Q4_K_XL.gguf",
     approxBytes: 5_966_095_584,
+    needsQuoteCoverageClause: true,
     notes:
-      "The default, and the right choice on anything but a large-memory machine. 5.6GB, so it fits a 12GB GPU comfortably. Correct on every classification and every game across 27 measured runs; quotes the video accurately enough to place about three findings in four on the timeline.",
+      "The default, and the recommendation for almost everyone. 5.6GB, so it fits a 12GB GPU comfortably and runs about three times faster than the larger model. Correct on every classification and every game across 27 measured runs. It also finds more of what it is looking for: on a settings table it listed ten settings where the larger model listed six, and all four extras were real. Fewer of its quotes carry a clickable timestamp - about three in four against nine in ten.",
   },
   "qwen3.6-35b-a3b": {
     label: "Qwen3.6 35B-A3B",
     url: "https://huggingface.co/unsloth/Qwen3.6-35B-A3B-GGUF/resolve/main/Qwen3.6-35B-A3B-UD-Q4_K_XL.gguf",
     fileName: "Qwen3.6-35B-A3B-UD-Q4_K_XL.gguf",
     approxBytes: 24_051_000_000,
+    needsQuoteCoverageClause: false,
     notes:
-      "Noticeably better at quoting the video accurately, which is what decides how many findings you can click to jump to - measured at roughly nine in ten against the 9B's three in four. The cost is memory: 22.4GB that must stay resident, so realistically a 32GB machine, and more than a 16GB graphics card can hold. Only about 3B parameters are active per token, so it is not as slow as its size suggests, but a machine that cannot keep it cached will read from disk for every token and be unusable.",
+      "A trade rather than an upgrade, and worth understanding before switching. It quotes the video more accurately, so more findings get a timestamp you can click - roughly nine in ten against the 9B's three in four - and it writes fuller summaries. But wherever the answer is a list it returns fewer entries: six settings against the 9B's ten on the same review, with the missing four all genuine. Richer writing, less complete tables. It is also around three times slower, and the memory is the real cost: 22.4GB that must stay resident, so realistically a 32GB machine, and more than a 16GB graphics card can hold. Only about 3B parameters are active per token, so it is not as slow as its size suggests, but a machine that cannot keep it cached will read from disk for every token and be unusable.",
   },
 };
 

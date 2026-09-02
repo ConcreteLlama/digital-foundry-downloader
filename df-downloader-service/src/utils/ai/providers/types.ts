@@ -75,12 +75,42 @@ export type AiProvider = {
    */
   readonly usesTranscriptMarkers: boolean;
 
+  /**
+   * Whether the extraction call should carry the quote-coverage clause.
+   *
+   * Per-engine, and within the local engine per-model, because that is how it
+   * measured. The clause tells the model that whether an item is worth
+   * reporting and whether it can be quoted are separate decisions. Only the
+   * 9B needs it: it drops real findings rather than cite them awkwardly, and
+   * the clause moves located findings from 84% to 86% and article-only
+   * citations from 10% to 9%.
+   *
+   * Not a free win, and deliberately recorded as such: on the Halo settings
+   * table - the standing coverage canary - it returned 9, 10, 8 against a
+   * rock-solid 10, 10, 10 without it. It reduces the coverage damage the
+   * other candidate wordings caused rather than eliminating it. Its clearest
+   * win is the item every other configuration failed: Steam Controller went
+   * from 3/18 located to 12/21.
+   *
+   * False on the hosted path and on the 35B, both of which post 0-1%
+   * article-only citations and so have nothing to reclaim.
+   */
+  readonly usesQuoteCoverageClause: boolean;
+
   /** One structured-output call: prompt in, schema-validated object out. */
   callStructured<T extends z.ZodType>(
     schema: T,
     system: string,
     content: string,
-    instruction: string
+    instruction: string,
+    /**
+     * Called as output arrives, where the engine can report it.
+     *
+     * A running count, never a fraction: the model decides when it stops, so
+     * there is no denominator that is not invented. Local streams and reports;
+     * the hosted path does not, and simply never calls this.
+     */
+    onProgress?: (progress: { outputTokens: number }) => void
   ): Promise<AiCallResult<z.infer<T>>>;
 
   /**

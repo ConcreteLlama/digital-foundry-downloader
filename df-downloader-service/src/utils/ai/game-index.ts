@@ -42,9 +42,9 @@ const primaryGameOf = (result: AiAnalysisResult): string | undefined => {
 
 const platformsFor = (result: AiAnalysisResult): { labels: string[]; viaAlias: boolean } => {
   const data = result.structuredData;
-  // platform_analysis carries the same per-platform shape as a face-off - it
+  // single_platform_analysis carries the same per-platform shape as a face-off - it
   // is the same data with fewer platforms, so it reads the same way here.
-  if (data?.contentType !== "console_comparison" && data?.contentType !== "platform_analysis") {
+  if (data?.contentType !== "platform_comparison" && data?.contentType !== "single_platform_analysis") {
     return { labels: [], viaAlias: false };
   }
   let viaAlias = false;
@@ -70,7 +70,7 @@ const conclusionOf = (result: AiAnalysisResult): string | undefined => {
   if (!data) {
     return undefined;
   }
-  if (data.contentType === "pc_review_settings" || data.contentType === "platform_analysis") {
+  if (data.contentType === "pc_review_settings" || data.contentType === "single_platform_analysis") {
     return data.verdict ?? undefined;
   }
   if (data.contentType === "hardware_review") {
@@ -120,7 +120,7 @@ export const buildGameIndex = async (db: DfDownloaderOperationalDb): Promise<Gam
         platforms: platforms.labels,
         engine: data?.contentType === "pc_review_settings" ? data.engine : undefined,
         developer:
-          data?.contentType === "console_comparison" || data?.contentType === "platform_analysis"
+          data?.contentType === "platform_comparison" || data?.contentType === "single_platform_analysis"
             ? data.developer
             : undefined,
         hasArticle: result.evidence.includes("article"),
