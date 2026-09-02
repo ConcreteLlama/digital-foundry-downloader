@@ -1,4 +1,4 @@
-import { logger } from "df-downloader-common";
+import { logger, LocalComputeStatus } from "df-downloader-common";
 
 /**
  * Stops the two things that saturate this machine from running at once.
@@ -55,6 +55,21 @@ class LocalComputeGate {
     for (const resolve of waiting) {
       resolve();
     }
+  }
+
+  /**
+   * Who holds the machine right now, for the Activity page.
+   *
+   * Reported rather than inferred: an analysis blocked here is "running" as
+   * far as its task is concerned, so nothing else in the system can tell the
+   * difference between waiting for the machine and simply being slow.
+   */
+  getStatus(): LocalComputeStatus {
+    return {
+      transcriptionsRunning: this.shared,
+      analysisHoldingMachine: this.exclusiveHeld,
+      analysesWaiting: this.exclusiveWaiting,
+    };
   }
 
   /** Transcription: runs alongside other transcriptions, never with analysis. */

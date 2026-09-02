@@ -1,5 +1,5 @@
 import { Mutex } from "async-mutex";
-import { mapFilterEmpty } from "df-downloader-common";
+import { mapFilterEmpty, TaskManagerStatus } from "df-downloader-common";
 import { LoggerType, makeLogger } from "../utils/log.js";
 import { RetryOpts } from "../utils/retry-context.js";
 import { PriorityItemManager, PriorityPositionInfo } from "./priority-item-manager.js";
@@ -68,6 +68,8 @@ export class TaskManager {
   private defaultPriority: number;
 
   private autoClearCompletedTasks: boolean;
+  /** Shown in the Activity page's manager panel, as well as in the logs. */
+  readonly label: string;
 
   constructor({
     retries,
@@ -80,6 +82,7 @@ export class TaskManager {
     this.retries = retries || {};
     this._concurrentTasks = concurrentTasks;
     this.autoClearCompletedTasks = autoClearCompletedTasks;
+    this.label = label;
     this.log = makeLogger(label, logger);
     this.defaultPriority = defaultPriority;
   }
@@ -231,6 +234,39 @@ export class TaskManager {
   }
 
   /** How many tasks this manager currently has running. */
+  /**
+   * How many tasks may run at once for this one's sake.
+   *
+   * The allowance is only granted to a task that was actually forced. Reading
+   * canBreakConcurrency unconditionally would let every download exceed the
+   * limit merely by existing, which is not what declaring it means - the
+   * declaration says "if the user insists, one more of these is safe", not
+   * "these are exempt".
+   */
+  private effectiveLimitFor(task: TaskManagerInternalTask<Task<any, any, any>>): number {
+    return this._concurrentTasks + (task.task.forceRunFlag ? task.task.canBreakConcurrency : 0);
+  }
+
+  /**
+   * A summary of what this manager is doing, for the Activity page.
+   *
+   * Lives here because everything it reports is private to the manager, and
+   * because the numbers should come from the same fields the scheduler
+   * actually consults - a panel derived from the task list separately would be
+   * free to disagree with the scheduler, which is exactly the class of bug it
+   * exists to make visible.
+   */
+  getStatus(): TaskManagerStatus {
+    return {
+      label: this.label,
+      running: this.runningTaskCount(),
+      concurrentTasks: this._concurrentTasks,
+      queued: [...this.taskMap.values()].filter((task) => task.isStartable()).length,
+      held: this.heldTasks.size,
+      queueHeld: this.queueHeld,
+    };
+  }
+
   runningTaskCount() {
     return [...this.taskMap.values()].filter((task) => task.task.getTaskState() === "running").length;
   }
@@ -261,9 +297,21 @@ export class TaskManager {
      * may not, because two at once saturates the machine.
      */
     this.heldTasks.delete(taskId);
-    this.changeTaskPriority(taskId, FORCED_PRIORITY);
+    /*
+     * The flag goes on before the priority change, not after. changeTaskPriority
+     * re-selects and can start the task through the ordinary path, and that path
+     * now reads forceRunFlag to decide the allowance - so setting it afterwards
+     * meant the start that actually happened was judged as though it were not
+     * forced.
+     */
     wrapped.task.forceRunFlag = true;
-    const limit = this._concurrentTasks + wrapped.task.canBreakConcurrency;
+    this.changeTaskPriority(taskId, FORCED_PRIORITY);
+    // The re-selection above may already have started it, in which case saying
+    // "queued at the front" would be a plain lie about what happened.
+    if (wrapped.task.getTaskState() === "running") {
+      return "started";
+    }
+    const limit = this.effectiveLimitFor(wrapped);
     if (this.runningTaskCount() >= limit) {
       this.log("info", "Force start queued at the front - no capacity", {
         taskId,
@@ -304,6 +352,26 @@ export class TaskManager {
   private async startEligibleTasks() {
     const eligibleTasks = this.getEligibleStartableTasks();
     for (const task of eligibleTasks) {
+      /*
+       * The capacity check lives here, on the path every start goes through,
+       * rather than only in forceStartTask.
+       *
+       * selectStartableTasks bounds its window by concurrentTasks and counts
+       * running tasks inside it, which is only equivalent to a capacity check
+       * while nothing outranks what is running. A forced task sits at
+       * FORCED_PRIORITY, so it displaces the running task out of that window
+       * and the window stops describing reality - which is how force-starting
+       * a download pipeline ended up running two transcriptions at once.
+       */
+      const limit = this.effectiveLimitFor(task);
+      if (this.runningTaskCount() >= limit) {
+        this.log("info", "Not starting task - at capacity", {
+          taskId: task.task.id,
+          running: this.runningTaskCount(),
+          limit,
+        });
+        continue;
+      }
       this.log("info", "Starting task", { taskId: task.task.id });
       await this.startTask(task);
       this.log("info", "Started task", { taskId: task.task.id });

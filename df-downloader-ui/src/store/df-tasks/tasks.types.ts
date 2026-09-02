@@ -1,4 +1,10 @@
-import { ScheduledDownloadInfo, TaskInfo, TaskPipelineInfo } from "df-downloader-common";
+import {
+  LocalComputeStatus,
+  ScheduledDownloadInfo,
+  TaskInfo,
+  TaskManagerStatus,
+  TaskPipelineInfo,
+} from "df-downloader-common";
 import { QueryableState } from "../utils";
 import { DfUiError } from "../../utils/error";
 
@@ -9,5 +15,7 @@ export interface TasksState extends QueryableState {
   taskIds: string[];
   tasks: Record<string, TaskInfo>;
   scheduledDownloads: ScheduledDownloadInfo[];
+  taskManagers: TaskManagerStatus[];
+  localCompute: LocalComputeStatus;
   error: DfUiError | null;
 }

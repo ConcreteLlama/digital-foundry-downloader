@@ -48,5 +48,7 @@ export const makeBuildTasksResponse =
       taskPipelines: [...taskPipelines, ...historyPipelines],
       tasks: tasks,
       scheduledDownloads: contentManager.getScheduledDownloads(),
+      taskManagers: taskManager.getManagerStatuses(),
+      localCompute: taskManager.getLocalComputeStatus(),
     };
   };

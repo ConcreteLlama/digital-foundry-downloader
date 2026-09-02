@@ -35,6 +35,8 @@ import {
   TaskState,
   TaskStatus,
   TasksResponse,
+  TaskManagerStatus,
+  LocalComputeStatus,
   makeVideoProps,
 } from "df-downloader-common";
 
@@ -367,7 +369,53 @@ const completedStepsBefore = (upTo: number, skip: number[] = []): StepFixtures =
   return steps;
 };
 
-const emptyTasks = (): TasksResponse => ({ taskPipelines: [], tasks: [], scheduledDownloads: [] });
+/**
+ * Manager statuses for the fixtures.
+ *
+ * Present so the Activity page's manager panel can be looked at without a real
+ * download - the same reason the rest of this file exists. Defaults describe an
+ * otherwise idle machine; a fixture that wants to show contention overrides
+ * them.
+ */
+const fixtureManagers = (overrides: Partial<Record<string, Partial<TaskManagerStatus>>> = {}): TaskManagerStatus[] =>
+  (
+    [
+      { label: "Downloads", concurrentTasks: 2 },
+      { label: "Subtitles", concurrentTasks: 1 },
+      { label: "AI analysis", concurrentTasks: 1 },
+      { label: "File operations", concurrentTasks: 5 },
+      { label: "Media processing", concurrentTasks: 1 },
+      { label: "Digital Foundry fetch", concurrentTasks: 1 },
+      { label: "YouTube fetch", concurrentTasks: 1 },
+      { label: "Maintenance", concurrentTasks: 1 },
+    ] as const
+  ).map((manager) => ({
+    label: manager.label,
+    concurrentTasks: manager.concurrentTasks,
+    running: 0,
+    queued: 0,
+    held: 0,
+    queueHeld: false,
+    ...(overrides[manager.label] ?? {}),
+  }));
+
+const IDLE_COMPUTE: LocalComputeStatus = {
+  transcriptionsRunning: 0,
+  analysisHoldingMachine: false,
+  analysesWaiting: 0,
+};
+
+/** Fills in the fields every fixture would otherwise have to repeat. */
+const fixtureResponse = (
+  response: Omit<TasksResponse, "taskManagers" | "localCompute"> &
+    Partial<Pick<TasksResponse, "taskManagers" | "localCompute">>
+): TasksResponse => ({
+  taskManagers: fixtureManagers(),
+  localCompute: IDLE_COMPUTE,
+  ...response,
+});
+
+const emptyTasks = (): TasksResponse => fixtureResponse({ taskPipelines: [], tasks: [], scheduledDownloads: [] });
 
 /**
  * `tick` advances once per runner interval (see fixture-runner). A scenario
@@ -401,7 +449,7 @@ const scenarios: FixtureScenario[] = [
       // A little wobble, so the speed readout behaves like a real connection
       // rather than sitting on a constant nobody would ever actually see.
       const speed = (22 + Math.sin(tick / 4) * 6) * 1024 * 1024;
-      return {
+      return fixtureResponse({
         taskPipelines: [
           makePipeline({
             id: "fixture-downloading",
@@ -426,7 +474,7 @@ const scenarios: FixtureScenario[] = [
         ],
         tasks: [],
         scheduledDownloads: [],
-      };
+      });
     },
   },
   {
@@ -438,7 +486,7 @@ const scenarios: FixtureScenario[] = [
     build: (tick) => {
       const percent = cyclePercent(tick, 0.4, 30);
       const totalSeconds = 11 * 60;
-      return {
+      return fixtureResponse({
         taskPipelines: [
           makePipeline({
             id: "fixture-post-processing",
@@ -463,7 +511,7 @@ const scenarios: FixtureScenario[] = [
         ],
         tasks: [],
         scheduledDownloads: [],
-      };
+      });
     },
   },
   {
@@ -472,7 +520,7 @@ const scenarios: FixtureScenario[] = [
     description:
       "Died in Inject Metadata, with Generate Subtitles skipped earlier - the skipped-step render is the easy one to get wrong.",
     animated: false,
-    build: () => ({
+    build: () => fixtureResponse({
       taskPipelines: [
         makePipeline({
           id: "fixture-failed",
@@ -505,7 +553,7 @@ const scenarios: FixtureScenario[] = [
     label: "Cancelled mid-download",
     description: "Cancelled by hand while downloading, with every later step never reached.",
     animated: false,
-    build: () => ({
+    build: () => fixtureResponse({
       taskPipelines: [
         makePipeline({
           id: "fixture-cancelled",
@@ -539,7 +587,7 @@ const scenarios: FixtureScenario[] = [
     description:
       "Default settings: subtitles are embedded, so Write Subtitles never runs. Dimmed with its reason in the details dialog, absent from the card.",
     animated: false,
-    build: () => ({
+    build: () => fixtureResponse({
       taskPipelines: [
         makePipeline({
           id: "fixture-not-applicable",
@@ -574,7 +622,7 @@ const scenarios: FixtureScenario[] = [
     label: "Paused + awaiting retry",
     description: "One download paused by hand, one backing off between retries, one force-started.",
     animated: false,
-    build: () => ({
+    build: () => fixtureResponse({
       taskPipelines: [
         makePipeline({
           id: "fixture-paused",
@@ -739,11 +787,18 @@ const scenarios: FixtureScenario[] = [
           step: { state: "idle", message: "Queued", position: 22 + index, capabilities: [] },
         })
       );
-      return {
+      return fixtureResponse({
         taskPipelines: [downloading, transcribing, ...subsQueue, ...analysing, ...analysisQueue],
         tasks: [],
         scheduledDownloads: [],
-      };
+        // Matches the lanes above, so the manager panel agrees with the cards.
+        taskManagers: fixtureManagers({
+          Downloads: { running: 1 },
+          Subtitles: { running: 1, queued: 14 },
+          "AI analysis": { running: 2, queued: 8 },
+        }),
+        localCompute: { transcriptionsRunning: 1, analysisHoldingMachine: false, analysesWaiting: 2 },
+      });
     },
   },
   {
@@ -822,7 +877,7 @@ const scenarios: FixtureScenario[] = [
           scheduledFor: new Date(Date.now() + 23 * 60_000),
         },
       ];
-      return { taskPipelines: [...running, ...queued, ...done], tasks: [], scheduledDownloads };
+      return fixtureResponse({ taskPipelines: [...running, ...queued, ...done], tasks: [], scheduledDownloads });
     },
   },
   {

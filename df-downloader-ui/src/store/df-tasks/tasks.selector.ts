@@ -465,3 +465,5 @@ export const selectClearMissingFilesTasks = createDeepEqualSelector(
 );
 
 export const selectScheduledDownloads = (state: RootState) => state.tasks.scheduledDownloads;
+export const selectTaskManagers = (state: RootState) => state.tasks.taskManagers;
+export const selectLocalCompute = (state: RootState) => state.tasks.localCompute;

@@ -18,10 +18,21 @@
 const STEP_WEIGHTS: Record<string, number> = {
   Download: 2.4,
   "Generate Subtitles": 3.2,
+  /*
+   * The most lopsided pair in the app, and the reason this needed extending.
+   * Analysing is minutes to tens of minutes - 26 on a passively-cooled
+   * microserver running the model on CPU - while saving is a single small
+   * write. Left at the default the two rendered as equal halves, so the bar
+   * could not pass the middle until the work was already done.
+   */
+  "Analyse Content": 3.2,
+  "Save Analysis": 0.3,
   "Inject Metadata": 1.4,
   "Move File": 1.2,
   "Measure Duration": 0.6,
   "Fetch Chapters": 0.6,
+  "Fetch chapter info": 0.6,
+  "Refresh content info": 0.6,
   "Write Subtitles": 0.6,
 };
 
@@ -34,7 +45,19 @@ const DEFAULT_WEIGHT = 1;
  */
 const MIN_SEGMENT_PERCENT = 6;
 
-export const stepWeight = (stepName: string) => STEP_WEIGHTS[stepName] ?? DEFAULT_WEIGHT;
+/*
+ * Matched case-insensitively because the same step is spelled two ways across
+ * the pipelines - "Inject Metadata" in one and "Inject metadata" in another,
+ * likewise Measure Duration. Keyed exactly, the second spelling silently took
+ * the default weight, which is the bug this file exists to prevent and is
+ * invisible unless you go looking.
+ */
+const WEIGHTS_BY_LOWER_NAME = new Map(
+  Object.entries(STEP_WEIGHTS).map(([name, weight]) => [name.toLowerCase(), weight])
+);
+
+export const stepWeight = (stepName: string) =>
+  WEIGHTS_BY_LOWER_NAME.get(stepName.toLowerCase()) ?? DEFAULT_WEIGHT;
 
 /**
  * Percentage widths for the given steps, floored and renormalised.

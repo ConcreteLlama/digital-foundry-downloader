@@ -13,6 +13,8 @@ const INITIAL_STATE: TasksState = {
   taskIds: [],
   tasks: {},
   scheduledDownloads: [],
+  taskManagers: [],
+  localCompute: { transcriptionsRunning: 0, analysisHoldingMachine: false, analysesWaiting: 0 },
   error: null,
 };
 let firstFetch = true;
@@ -75,6 +77,8 @@ export const taskPipelinesReducer = createReducer(INITIAL_STATE, (builder) => {
         }
       }
       state.scheduledDownloads = payload.scheduledDownloads;
+      state.taskManagers = payload.taskManagers;
+      state.localCompute = payload.localCompute;
       firstFetch = false;
     },
   });

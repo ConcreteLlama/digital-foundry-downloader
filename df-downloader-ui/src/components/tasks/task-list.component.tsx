@@ -26,6 +26,7 @@ import {
 } from "../../store/df-tasks/tasks.selector.ts";
 import { monoFontFamily } from "../../themes/build-theme.ts";
 import { ScheduledDownloadsList } from "./scheduled-downloads-list.component.tsx";
+import { TaskManagerPanel } from "./task-manager-panel.component.tsx";
 import { StandaloneTaskInfo } from "./standalone-task-info.component.tsx";
 import { DraggableTaskInfo, DraggableTaskInfoData, TaskInfo } from "./task-info.component.tsx";
 
@@ -124,6 +125,11 @@ export const TaskList = () => {
       }}
     >
       <ScheduledDownloadsList />
+
+      {/* Above the filters on purpose: a paused queue explains why nothing is
+          moving, and that has to be readable before the reader starts
+          wondering which filter is hiding their work. */}
+      <TaskManagerPanel />
 
       {(laneItems.length > 0 || counts.completed > 0) && (
         <QueueSummary

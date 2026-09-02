@@ -73,7 +73,14 @@ import { AiAnalysisTaskManager } from "./tasks/ai-analysis-task.js";
 import { BULK_BACKFILL_CONCURRENCY, BulkBackfillTask, isBulkBackfillTask } from "./tasks/bulk-backfill-task.js";
 import { ensureArticleForContent } from "./utils/df-articles/ensure-article.js";
 import { AiAnalysisConfig, AiAnalysisConfigUtils, AiProviderId } from "df-downloader-common/config/ai-analysis-config.js";
-import { AiAnalysisSourceSelection, MetadataBackfillOptions, metadataFingerprintOf } from "df-downloader-common";
+import {
+  AiAnalysisSourceSelection,
+  LocalComputeStatus,
+  MetadataBackfillOptions,
+  metadataFingerprintOf,
+  TaskManagerStatus,
+} from "df-downloader-common";
+import { localComputeGate } from "./utils/local-compute-gate.js";
 import { buildMetadataForBackfill } from "./utils/metadata-backfill.js";
 import { InjectMetadataTask } from "./tasks/inject-metadata-task.js";
 import { Chapter } from "./utils/chatpers.js";
@@ -145,6 +152,22 @@ export class DfTaskManager {
    * would stop some of the queue, which is worse than stopping none.
    */
   private readonly allTaskManagers: TaskManager[] = [];
+
+  /**
+   * What every manager is doing, for the Activity page's manager panel.
+   *
+   * Reported straight from each manager rather than derived from the task
+   * list, so the panel cannot quietly disagree with the scheduler.
+   */
+  getManagerStatuses(): TaskManagerStatus[] {
+    return this.allTaskManagers.map((manager) => manager.getStatus());
+  }
+
+  /** Who holds the machine - see LocalComputeGate. */
+  getLocalComputeStatus(): LocalComputeStatus {
+    return localComputeGate.getStatus();
+  }
+
   readonly tasks = new Map<string, ManagedTask<any, any>>();
 
   /**
@@ -173,6 +196,7 @@ export class DfTaskManager {
     const downloadConfig = configService.config.downloads;
 
     const downloadTaskManager = new DownloadTaskManager({
+      label: "Downloads",
       concurrentTasks: downloadConfig.maxSimultaneousDownloads,
       retries: {
         maxRetries: downloadConfig.maxRetries,
@@ -184,6 +208,7 @@ export class DfTaskManager {
     // Genuinely light filesystem work (ffprobe a file, stat it) - cheap
     // enough that running several at once costs nothing.
     const fileTaskManager = new TaskManager({
+      label: "File operations",
       concurrentTasks: 5,
     });
     this.allTaskManagers.push(fileTaskManager);
@@ -195,19 +220,23 @@ export class DfTaskManager {
     // a NAS array. Serialized deliberately; these used to share
     // fileTaskManager's limit of 5.
     const mediaProcessingTaskManager = new TaskManager({
+      label: "Media processing",
       concurrentTasks: 1,
     });
     this.allTaskManagers.push(mediaProcessingTaskManager);
     this.mediaProcessingTaskManager = mediaProcessingTaskManager;
     const dfFetchTaskManager = new TaskManager({
+      label: "Digital Foundry fetch",
       concurrentTasks: 1,
     });
     this.allTaskManagers.push(dfFetchTaskManager);
     const youtubeFetchTaskManager = new TaskManager({
+      label: "YouTube fetch",
       concurrentTasks: 1,
     });
     this.allTaskManagers.push(youtubeFetchTaskManager);
     const subtitlesTaskManager = new SubtitlesTaskManager({
+      label: "Subtitles",
       // See SubtitlesConfig.maxConcurrent - defaults to 1 because local
       // transcription is CPU-bound and each run already uses most of the
       // machine's cores.
@@ -220,7 +249,7 @@ export class DfTaskManager {
     });
     // One manager shared by both pipelines, so the concurrency cap covers
     // every analysis in flight rather than being applied twice over.
-    const aiAnalysisTaskManager = new AiAnalysisTaskManager();
+    const aiAnalysisTaskManager = new AiAnalysisTaskManager({ label: "AI analysis" });
     this.allTaskManagers.push(aiAnalysisTaskManager);
     this.downloadTaskPipeline = createDownloadTaskPipeline({
       downloadTaskManager: downloadTaskManager,
@@ -238,6 +267,7 @@ export class DfTaskManager {
     });
     // Registered below with the rest, once constructed.
     this.maintenanceOperationsTaskManager = new TaskManager({
+      label: "Maintenance",
       concurrentTasks: 1,
     });
     this.allTaskManagers.push(this.maintenanceOperationsTaskManager);
@@ -261,7 +291,7 @@ export class DfTaskManager {
       this slot was protecting.
     */
     this.bulkOperationsTaskManagers = BulkBackfillTarget.options.reduce((managers, target) => {
-      managers[target] = new TaskManager({ concurrentTasks: 1 });
+      managers[target] = new TaskManager({ concurrentTasks: 1, label: `Maintenance: ${target}` });
       this.allTaskManagers.push(managers[target]);
       return managers;
     }, {} as Record<BulkBackfillTarget, TaskManager>);

@@ -16,10 +16,56 @@ export const ScheduledDownloadInfo = z.object({
 });
 export type ScheduledDownloadInfo = z.infer<typeof ScheduledDownloadInfo>;
 
+/**
+ * What one task manager is currently doing.
+ *
+ * The work is spread over a manager per concern, each with its own queue and
+ * its own concurrency limit, and until this existed none of that was visible -
+ * the Activity page showed tasks, so two transcriptions running under a
+ * one-at-a-time limit looked like two ordinary rows rather than an
+ * impossibility. Reported per manager so a limit can be read against what is
+ * actually running.
+ */
+export const TaskManagerStatus = z.object({
+  label: z.string(),
+  /** Running now, which may legitimately exceed concurrentTasks for a forced download. */
+  running: z.number(),
+  /** The limit this manager schedules against. */
+  concurrentTasks: z.number(),
+  queued: z.number(),
+  /** Individual tasks held by hand - not the same thing as the queue being paused. */
+  held: z.number(),
+  /** Whether "pause all" is holding this manager's queue. */
+  queueHeld: z.boolean(),
+});
+export type TaskManagerStatus = z.infer<typeof TaskManagerStatus>;
+
+/**
+ * Who currently holds the machine.
+ *
+ * Transcription and local analysis cannot run together, and analysis waits for
+ * the machine to be its own. A waiting analysis is still "running" as far as
+ * its task is concerned, so without this it appears to be working while
+ * sitting at nought progress for minutes - which reads as a hang rather than
+ * as the protection doing its job.
+ */
+export const LocalComputeStatus = z.object({
+  transcriptionsRunning: z.number().default(0),
+  analysisHoldingMachine: z.boolean().default(false),
+  analysesWaiting: z.number().default(0),
+});
+export type LocalComputeStatus = z.infer<typeof LocalComputeStatus>;
+
 export const TasksResponse = z.object({
   taskPipelines: TaskPipelineInfo.array(),
   tasks: TaskInfo.array(),
   scheduledDownloads: ScheduledDownloadInfo.array(),
+  taskManagers: TaskManagerStatus.array().default([]),
+  localCompute: LocalComputeStatus.default({
+    transcriptionsRunning: 0,
+    analysisHoldingMachine: false,
+    analysesWaiting: 0,
+  }),
 });
 export type TasksResponse = z.infer<typeof TasksResponse>;
 
