@@ -1,3 +1,4 @@
+import { Agent } from "undici";
 import { AiLocalProviderConfig } from "df-downloader-common/config/ai-analysis-config.js";
 import { z } from "zod";
 import { stripJsonFence } from "../anthropic-client.js";
@@ -40,17 +41,72 @@ const MAX_OUTPUT_TOKENS = 16000;
  */
 const NO_THINKING = { enable_thinking: false };
 
+/**
+ * No timeout, because a local generation legitimately takes minutes.
+ *
+ * Node's fetch gives up after 300 seconds waiting for response headers, and a
+ * non-streaming llama-server sends none until the whole answer is generated -
+ * so a slow machine working correctly gets its request killed mid-thought and
+ * reports the useless "fetch failed". Measured: it throws at 302s with
+ * UND_ERR_HEADERS_TIMEOUT, which is exactly what was seen in the wild on a
+ * six-thread microserver.
+ *
+ * Scoped to this dispatcher rather than set globally: everything else this app
+ * talks to - Digital Foundry, YouTube, Anthropic - should keep a sane ceiling,
+ * and only the local model has a good reason to take this long.
+ */
+const localDispatcher = new Agent({ headersTimeout: 0, bodyTimeout: 0 });
+
 type ChatResponse = {
   choices?: { message?: { content?: string | null }; finish_reason?: string }[];
   usage?: { prompt_tokens?: number; completion_tokens?: number };
 };
 
+/**
+ * Turns a fetch failure into something actionable.
+ *
+ * Node reports every transport problem as a bare "fetch failed" and hides the
+ * real reason on `cause`, which is useless in a task's error field - a model
+ * that took too long, a server that is not running and a server that died
+ * mid-answer all read identically. The elapsed time is included because the
+ * most likely cause here is a slow generation, and a number close to Node's
+ * own 300-second default is the tell.
+ */
+const describeLocalFailure = (e: any, url: string, elapsedMs: number): string => {
+  const code = e?.cause?.code ?? e?.code;
+  const seconds = Math.round(elapsedMs / 1000);
+  switch (code) {
+    case "UND_ERR_HEADERS_TIMEOUT":
+    case "UND_ERR_BODY_TIMEOUT":
+      return `The local model did not answer within ${seconds}s and the request timed out. A slow machine generating a long answer can exceed this - the model is working, but nothing is waiting for it any more.`;
+    case "ECONNREFUSED":
+      return `Nothing is listening at ${url} after ${seconds}s - the model server is not running.`;
+    case "ECONNRESET":
+      return `The connection to ${url} was reset after ${seconds}s, which usually means the model server died mid-answer - check whether it ran out of memory.`;
+    case "UND_ERR_SOCKET":
+      return `The connection to ${url} closed unexpectedly after ${seconds}s, which usually means the model server exited.`;
+    default:
+      break;
+  }
+  const detail = e?.cause?.message ?? e?.message ?? String(e);
+  return `Local model request to ${url} failed after ${seconds}s: ${detail}${code ? ` (${code})` : ""}`;
+};
+
 const postJson = async (baseUrl: string, path: string, body: unknown): Promise<any> => {
-  const response = await fetch(`${baseUrl.replace(/\/$/, "")}${path}`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body),
-  });
+  const startedAt = Date.now();
+  let response: Response;
+  try {
+    response = await fetch(`${baseUrl.replace(/\/$/, "")}${path}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+      // Not in the DOM RequestInit types, but Node's fetch honours it - the
+      // probe above was run against this exact mechanism.
+      dispatcher: localDispatcher,
+    } as RequestInit);
+  } catch (e: any) {
+    throw new Error(describeLocalFailure(e, `${baseUrl}${path}`, Date.now() - startedAt));
+  }
   if (!response.ok) {
     throw new Error(`llama-server ${path} returned ${response.status}: ${(await response.text()).slice(0, 300)}`);
   }

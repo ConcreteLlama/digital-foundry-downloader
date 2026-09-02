@@ -37,6 +37,43 @@ const resolveModelDir = (config: AiLocalProviderConfig) => config.modelDir || pa
  * later run. Progress is logged because this is several gigabytes and
  * otherwise the first analysis looks hung.
  */
+/**
+ * What the model download is doing, or undefined when nothing is downloading.
+ *
+ * Module state rather than a callback threaded through the provider, the
+ * server and the analysis call. Only one download can be in flight - the
+ * server is a singleton and the model is fetched once - and the consumer is a
+ * status message that is polled, so it wants to read a current value rather
+ * than be pushed one.
+ */
+export type LocalModelDownloadState = { label: string; percent: number };
+let localModelDownload: LocalModelDownloadState | undefined;
+
+/**
+ * What setting the local engine up is doing, when it is doing anything.
+ *
+ * Deliberately separate from the analysis step counter rather than being a
+ * step in it. The download has a real percentage and the steps do not, so
+ * folding them together would flatten the better signal into the coarser one -
+ * and setup is conditional, so it would make the step total mean different
+ * things on different runs.
+ */
+let localSetupStatus: string | undefined;
+
+/** For a status message: what, if anything, is being downloaded right now. */
+export const getLocalModelDownload = (): LocalModelDownloadState | undefined => localModelDownload;
+
+/**
+ * For a status message: what the engine is doing before analysis can start.
+ *
+ * Undefined once the server is up and answering, which is the common case -
+ * the server is kept alive between runs, so most analyses skip this entirely.
+ */
+export const getLocalSetupStatus = (): string | undefined =>
+  localModelDownload
+    ? `Downloading ${localModelDownload.label} (${localModelDownload.percent}%) - first use only`
+    : localSetupStatus;
+
 export const ensureLocalModel = async (config: AiLocalProviderConfig): Promise<string> => {
   const info = AiLocalModels[config.model];
   const modelDir = resolveModelDir(config);
@@ -60,11 +97,15 @@ export const ensureLocalModel = async (config: AiLocalProviderConfig): Promise<s
       for await (const chunk of response.body as any) {
         await handle.write(chunk);
         written += chunk.length;
-        const percent = Math.floor((written / info.approxBytes) * 100);
+        const percent = Math.min(Math.floor((written / info.approxBytes) * 100), 100);
+        // Published every chunk, unlike the log line below - it is read on
+        // demand rather than written anywhere, so it costs nothing to keep
+        // current and a status that only moved every 5% would look stuck.
+        localModelDownload = { label: info.label, percent };
         // Every 5%, so a long download says something without flooding the log.
         if (percent >= lastLoggedPercent + 5) {
           lastLoggedPercent = percent;
-          logger.log("info", `${info.label}: ${Math.min(percent, 100)}% downloaded`);
+          logger.log("info", `${info.label}: ${percent}% downloaded`);
         }
       }
     } finally {
@@ -74,6 +115,10 @@ export const ensureLocalModel = async (config: AiLocalProviderConfig): Promise<s
   } catch (e) {
     await fs.promises.rm(tempPath, { force: true }).catch(() => {});
     throw e;
+  } finally {
+    // Cleared on the way out however this ended, so a failed download does
+    // not leave a status claiming it is still going.
+    localModelDownload = undefined;
   }
   logger.log("info", `${info.label} downloaded to ${modelPath}`);
   return modelPath;
@@ -208,7 +253,23 @@ export class LocalLlamaServer {
     child.stderr?.on("data", (chunk) => logger.log("debug", `llama-server: ${String(chunk).trim()}`));
 
     const baseUrl = `http://127.0.0.1:${this.config.port}`;
-    await this.waitForHealth(baseUrl, child);
+    /*
+     * Set here rather than earlier: the process has spawned, so from now on
+     * the wait really is the model loading. Anything that failed before this
+     * point failed synchronously and never got as far as loading anything.
+     *
+     * Not instant and otherwise invisible - measured at ~40s for a 22GB model
+     * with experts on CPU, and a cold read from a network disk is minutes,
+     * during which an analysis looks hung.
+     */
+    localSetupStatus = `Starting the local model (${AiLocalModels[this.config.model]?.label ?? this.config.model})`;
+    try {
+      await this.waitForHealth(baseUrl, child);
+    } finally {
+      // However that ended. A failed start must not leave a status insisting
+      // the model is still on its way.
+      localSetupStatus = undefined;
+    }
     this.baseUrl = baseUrl;
     logger.log("info", `Local analysis server ready on ${baseUrl} (${AiLocalModels[this.config.model].label})`);
     return baseUrl;

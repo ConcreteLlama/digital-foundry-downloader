@@ -8,6 +8,8 @@ import { TaskManager, TaskManagerOpts } from "../task-manager/task-manager.js";
 import { Chapter } from "../utils/chatpers.js";
 import { analyseContent } from "../utils/ai/analyse.js";
 import { serviceLocator } from "../services/service-locator.js";
+import { AiAnalysisConfigUtils } from "df-downloader-common/config/ai-analysis-config.js";
+import { getLocalSetupStatus } from "../utils/ai/local-server.js";
 
 type AiAnalysisTaskContext = {
   entry: DfContentEntry;
@@ -66,8 +68,24 @@ const aiAnalysisTaskControls: TaskControls<AiAnalysisResult, AiAnalysisTaskConte
       }
     }
     context.stage = "Analysing";
-    logger.log("info", `Analysing ${entry.key} with ${config.model}`);
-    const result = await analyseContent(config, { entry, chapters, articleText, articleUrl, articleTitle, transcriptText, transcriptLines, sources, provider, allowRemoteChapters });
+    logger.log("info", `Analysing ${entry.key} with ${AiAnalysisConfigUtils.resolveModelName(config, provider)}`);
+    const result = await analyseContent(config, {
+      entry,
+      chapters,
+      articleText,
+      articleUrl,
+      articleTitle,
+      transcriptText,
+      transcriptLines,
+      sources,
+      provider,
+      allowRemoteChapters,
+      // Local runs make three calls and can take minutes; without this the
+      // status sat on "Analysing" throughout and looked stuck.
+      onStage: ({ step, of, label }) => {
+        context.stage = `${label} (step ${step} of ${of})`;
+      },
+    });
     // analyseContent reports an ordinary failure inside the result rather
     // than throwing, so the task has to promote it - otherwise a run that
     // failed would be recorded as a successful task holding an error.
@@ -77,8 +95,26 @@ const aiAnalysisTaskControls: TaskControls<AiAnalysisResult, AiAnalysisTaskConte
     context.stage = "Complete";
     return { status: "success", result };
   },
-  getStatusMessage: ({ context, state }) =>
-    `Analysing "${context.entry.contentInfo.title}" with ${context.config.model}: ${context.stage ?? state}`,
+  getStatusMessage: ({ context, state }) => {
+    /*
+     * The model that will actually run, not the configured Anthropic one.
+     *
+     * `config.model` is the Claude model regardless of engine, so a run on the
+     * local provider announced itself as claude-haiku while downloading Qwen.
+     */
+    const model = AiAnalysisConfigUtils.resolveModelName(context.config, context.provider);
+    /*
+     * A first local run fetches several gigabytes before anything can happen,
+     * and without this the task sits on "Analysing" for many minutes looking
+     * hung. Read here rather than pushed into context, so it stays current
+     * between the stage changes the run itself makes.
+     */
+    const setup = getLocalSetupStatus();
+    if (setup) {
+      return `${setup}, then "${context.entry.contentInfo.title}"`;
+    }
+    return `Analysing "${context.entry.contentInfo.title}" with ${model}: ${context.stage ?? state}`;
+  },
 };
 
 export const AiAnalysisTaskBuilder = TaskControllerTaskBuilder(aiAnalysisTaskControls, {

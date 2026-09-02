@@ -117,6 +117,20 @@ const SignalSnackbar = forwardRef<HTMLDivElement, CustomContentProps>((props, re
           if (event.button !== 0) {
             return;
           }
+          /*
+           * Nor on a control. This said it excluded the action button and did
+           * not, which is why Dismiss did nothing: capturing the pointer here
+           * retargets the pointerup away from the button, so no click is ever
+           * produced. Verified in a browser - a real click on a button inside
+           * a capturing container fires the container's pointerdown and the
+           * button's click never runs.
+           *
+           * Swiping still worked throughout, which is what made this look like
+           * a styling problem rather than a dead button.
+           */
+          if ((event.target as HTMLElement).closest("button, a, [role=button]")) {
+            return;
+          }
           gesture.current = { startX: event.clientX, moved: false };
           setDragging(true);
           event.currentTarget.setPointerCapture(event.pointerId);

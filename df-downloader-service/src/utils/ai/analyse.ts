@@ -77,8 +77,20 @@ const EXTRACTABLE_TYPES: WireContentType[] = [
   "roundup_list",
 ];
 
+/**
+ * Where a run has got to, for a status message.
+ *
+ * Steps rather than a percentage, because generation has no honest one: the
+ * model decides when it stops, so any bar would rest on a guess about output
+ * length. How many calls a run makes is knowable; how far through one is, is
+ * not.
+ */
+export type AnalysisStage = { step: number; of: number; label: string };
+
 export type AnalysisInputs = {
   entry: DfContentEntry;
+  /** Called as the run moves between calls, purely so the UI can say what it is doing. */
+  onStage?: (stage: AnalysisStage) => void;
   /**
    * Which engine to use, overriding the configured default for this run only.
    * Absent means use the default, which is what an unattended run does.
@@ -818,7 +830,18 @@ export const analyseContent = async (config: AiAnalysisConfig, inputs: AnalysisI
     let overview: WireOverview;
     let usage: AiAnalysisUsage;
 
+    /*
+     * Assumes the extraction call happens, which it may not - whether a type
+     * is extractable is only known once classification has run. The cost
+     * estimate makes the same assumption for the same reason, and erring
+     * towards "one more step" is the right way round: a run that finishes a
+     * step early is a better surprise than one that grows a step.
+     */
+    const totalSteps = (provider.separatesClassification ? 2 : 1) + (config.features.structuredData ? 1 : 0);
+    const reportStage = (step: number, label: string) => inputs.onStage?.({ step, of: totalSteps, label });
+
     if (provider.separatesClassification) {
+      reportStage(1, "Working out what kind of video this is");
       const forClassify = await prepareAnalysis(config, {
         ...inputs,
         sources: { ...(inputs.sources ?? config.sources), transcript: false },
@@ -829,6 +852,7 @@ export const analyseContent = async (config: AiAnalysisConfig, inputs: AnalysisI
         forClassify.content,
         buildClassificationInstruction()
       );
+      reportStage(2, "Writing the summary");
       const summarised = await provider.callStructured(
         WireSummary,
         prepared.system,
@@ -838,6 +862,7 @@ export const analyseContent = async (config: AiAnalysisConfig, inputs: AnalysisI
       overview = { ...classified.parsed, ...summarised.parsed };
       usage = addUsage(classified.usage, summarised.usage);
     } else {
+      reportStage(1, "Reading the video");
       const summarised = await provider.callStructured(
         WireOverview,
         prepared.system,
@@ -851,6 +876,7 @@ export const analyseContent = async (config: AiAnalysisConfig, inputs: AnalysisI
     let structuredData: AiStructuredData | undefined;
 
     if (config.features.structuredData && EXTRACTABLE_TYPES.includes(overview.contentType)) {
+      reportStage(totalSteps, "Pulling out the details");
       const extraction = await extractStructuredData(provider, config, prepared, overview.contentType);
       structuredData = extraction.data ? anchorFindings(extraction.data, prepared.transcript, prepared.articleText) : undefined;
       if (extraction.usage) {

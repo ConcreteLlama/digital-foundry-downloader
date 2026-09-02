@@ -152,6 +152,11 @@ versions:
         - "Picking items in the Backfill list stays responsive with a few thousand of them, and the list is paged rather than cut short - the selection and the select-all buttons still apply across every page"
       bugfixes:
         - "A bulk subtitles run no longer holds up whatever you download while it is going. Transcription runs one at a time, and a backfill could fill that queue with hundreds of items - so a video that finished downloading sat there with no subtitles, no metadata and no analysis until the whole run drained. Anything you did not queue in bulk now goes first, including a subtitle run you start by hand on a single video"
+        - "Analysing locally no longer gives up after five minutes. The request was being abandoned while the model was still working perfectly well - on a slower machine a single long video could take longer than that, and the failure reported nothing more useful than \"fetch failed\". A local analysis is now given as long as it needs"
+        - "When a local analysis does fail, it says why - a model that took too long, a server that is not running, one that ran out of memory mid-answer - rather than the same unhelpful message for all of them"
+        - "Analysing with a local model no longer claims to be using Claude. The status showed whichever Anthropic model was configured regardless of which engine was actually running"
+        - "A local run now says what it is doing rather than sitting on \"Analysing\" for several minutes. The first ever run reports the model download as it goes, starting the model is announced rather than silent, and the analysis itself reports which of its steps it is on"
+        - "The dismiss button on a notification works. It could be swiped away but the X did nothing, because pressing it started a drag on the notification behind it and the button never saw the click"
         - "Transcriptions can be stopped. They could not be before - once one started, the only option was to wait it out, which on a feature-length video is the better part of an hour. Stopping one cleans up the part-finished subtitle file and the audio it extracted, and lets the queue move on"
 
         - "The Activity page makes more sense while a backfill runs":
