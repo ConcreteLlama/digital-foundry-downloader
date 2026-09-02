@@ -58,13 +58,26 @@ export const AnalysisProviderPicker = ({
                 <Chip
                   size="small"
                   label={LABELS[provider].label}
+                  /*
+                   * color="primary" rather than a hand-set bgcolor.
+                   *
+                   * A clickable Chip carries its own hover and focus rules at
+                   * .MuiChip-clickable:hover / :focus - two classes plus a
+                   * pseudo-class, which outranks the single class sx emits. So
+                   * a manual background lost to MUI's default grey the moment
+                   * the chip was focused, and a tap leaves focus behind, which
+                   * is why a selection went grey on a phone and looked fine on
+                   * a desktop until you looked. Letting MUI own the palette
+                   * makes hover and focus derive from primary too.
+                   */
                   variant={on ? "filled" : "outlined"}
+                  color={on ? "primary" : "default"}
                   disabled={disabled}
                   onClick={() => onChange(provider)}
                   sx={{
                     height: 24,
                     fontSize: "0.7rem",
-                    ...(on ? { bgcolor: "primary.main", color: "primary.contrastText" } : { color: "text.secondary" }),
+                    ...(on ? {} : { color: "text.secondary" }),
                   }}
                 />
               </span>
