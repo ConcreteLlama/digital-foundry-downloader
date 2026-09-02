@@ -27,11 +27,22 @@ export const MediaServerPathMapping = z.object({
 });
 export type MediaServerPathMapping = z.infer<typeof MediaServerPathMapping>;
 
+/*
+ * Every field has a default, so a server block that exists but is switched off
+ * parses rather than failing.
+ *
+ * That is the normal state of this form: both blocks render their enable
+ * checkbox, so the moment the page is opened it holds a jellyfin object with
+ * nothing in it. Requiring a URL there made saving a perfectly good Plex
+ * configuration impossible because of a server the user had not touched.
+ * What an *enabled* server needs is enforced below, where it can be asked
+ * conditionally.
+ */
 const MediaServerConfigBase = z.object({
-  enabled: z.boolean().describe("Tell this server when files change."),
+  enabled: z.boolean().default(false).describe("Tell this server when files change."),
   url: z
     .string()
-    .min(1)
+    .default("")
     .describe("Base URL of the server, e.g. http://192.168.1.10:8096. No trailing path."),
   /*
    * One mapping, not a list. Every path this feature announces - a finished
@@ -63,7 +74,7 @@ export const JellyfinServerKey = "jellyfin";
 export const PlexMediaServerConfig = MediaServerConfigBase.extend({
   token: z
     .string()
-    .min(1)
+    .default("")
     .describe(
       "An X-Plex-Token. Get one by opening any item in Plex Web, choosing Get Info then View XML, and copying the X-Plex-Token from the resulting URL."
     ),
@@ -73,7 +84,7 @@ export type PlexMediaServerConfig = z.infer<typeof PlexMediaServerConfig>;
 export const JellyfinMediaServerConfig = MediaServerConfigBase.extend({
   apiKey: z
     .string()
-    .min(1)
+    .default("")
     .describe("An API key, created under Dashboard then API Keys in Jellyfin."),
   /*
    * Play state needs a user, and an API key is not one.
@@ -121,6 +132,40 @@ export const MediaServersConfig = z.object({
     .max(600)
     .default(15)
     .describe("Seconds of no further changes to a folder before the server is told. Batches a download, its metadata and its subtitles into one refresh."),
+})
+.superRefine((config, ctx) => {
+  /*
+   * Credentials are required only where the server is actually switched on.
+   *
+   * Enforced here rather than on the fields so that a disabled block can be
+   * blank, while an enabled one still cannot be saved half-finished and then
+   * fail silently at the moment a download lands.
+   */
+  const required = (
+    server: { enabled: boolean; url: string } | undefined,
+    credential: string | undefined,
+    key: string,
+    credentialKey: string,
+    credentialLabel: string
+  ) => {
+    if (!server?.enabled) {
+      return;
+    }
+    if (!server.url.trim()) {
+      ctx.addIssue({ code: "custom", path: ["servers", key, "url"], message: "Enter the server's address." });
+    }
+    if (!credential?.trim()) {
+      ctx.addIssue({ code: "custom", path: ["servers", key, credentialKey], message: `Enter ${credentialLabel}.` });
+    }
+  };
+  required(config.servers?.[PlexServerKey], config.servers?.[PlexServerKey]?.token, PlexServerKey, "token", "a Plex token");
+  required(
+    config.servers?.[JellyfinServerKey],
+    config.servers?.[JellyfinServerKey]?.apiKey,
+    JellyfinServerKey,
+    "apiKey",
+    "an API key"
+  );
 });
 export type MediaServersConfig = z.infer<typeof MediaServersConfig>;
 export const MediaServersConfigKey = "mediaServers";

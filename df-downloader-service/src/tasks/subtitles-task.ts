@@ -3,6 +3,7 @@ import { SubtitleGenerator, GeneratedSubtitleInfo } from "../media-utils/subtitl
 import { TaskManager, TaskManagerOpts } from "../task-manager/task-manager.js";
 import { configService } from "../config/config.js";
 import { TaskControllerTaskBuilder, TaskControls } from "../task-manager/task/task-controller-task.js";
+import { CommandCancelledError } from "../utils/command.js";
 
 const describeFailure = (serviceType: string, err: unknown) =>
   `${serviceType}: ${err instanceof Error ? err.message : String(err)}`;
@@ -51,6 +52,14 @@ type SubtitlesTaskContext = {
   filePath: string;
   language: LanguageCode | string;
   currentSubtitleGenerator?: SubtitleGenerator;
+  /**
+   * Set once the task starts, so Stop has something to signal.
+   *
+   * Transcription runs a subprocess for minutes - an hour on a long Direct -
+   * and before this there was no way to take one back. The queue behind it
+   * simply waited.
+   */
+  abortController?: AbortController;
   /** Updated by the generator as it works - see SubtitleProgressReporter. */
   progress?: TaskProgress;
 };
@@ -61,14 +70,33 @@ const subtitlesTaskControls: TaskControls<GeneratedSubtitleInfo, SubtitlesTaskCo
     const generators = Array.isArray(subtitleGenerators) ? subtitleGenerators : [subtitleGenerators];
     const failures: string[] = [];
     const startedAt = Date.now();
+    const abortController = new AbortController();
+    context.abortController = abortController;
     const result = await asyncGetFirstMatch(generators, async (generator) => {
       context.currentSubtitleGenerator = generator;
       logger.log("info", `Generating subs for ${filePath} using ${generator.serviceType}`);
       try {
-        return await generator.getSubs(dfContentInfo, filePath, language, (progress) => {
-          context.progress = progress;
-        });
+        return await generator.getSubs(
+          dfContentInfo,
+          filePath,
+          language,
+          (progress) => {
+            context.progress = progress;
+          },
+          abortController.signal
+        );
       } catch (err) {
+        /*
+         * A stop is not a generator failing.
+         *
+         * Swallowing it here would move on to the next generator and then
+         * report "all generators failed" - so pressing Stop would look like
+         * an error, and on a multi-generator setup would start the next one
+         * rather than stopping anything.
+         */
+        if (err instanceof CommandCancelledError || abortController.signal.aborted) {
+          throw err;
+        }
         logger.log("error", `Error getting subs for ${filePath} using ${generator.serviceType}: ${err}`);
         failures.push(describeFailure(generator.serviceType, err));
         return null;
@@ -102,6 +130,21 @@ const subtitlesTaskControls: TaskControls<GeneratedSubtitleInfo, SubtitlesTaskCo
       : `Waiting to generate ${context.language} subs for ${file}`;
   },
   getStatus: (context) => ({ progress: context.progress }),
+  /*
+   * Stops the transcription subprocess.
+   *
+   * A no-op on a task that has not started, which is the state most of a
+   * queued run is in - that case is handled by the pipeline dequeuing the
+   * step instead, so both are covered but by different mechanisms. See
+   * docs/TASKS_AND_PIPELINES.md.
+   *
+   * The generator's own cleanup removes the partial .srt and the extracted
+   * WAV on the way out, because both sit in a finally rather than on the
+   * success path.
+   */
+  cancel: async (context: SubtitlesTaskContext) => {
+    context.abortController?.abort();
+  },
 };
 export const SubtitlesTaskBuilder = TaskControllerTaskBuilder(subtitlesTaskControls, {
   taskType: "subtitles",

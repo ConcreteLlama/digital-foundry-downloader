@@ -11,7 +11,33 @@ export type RunCommandOpts = {
   onStdout?: (chunk: string) => void;
   /** As onStdout, for stderr - which is where ffmpeg reports most things. */
   onStderr?: (chunk: string) => void;
+  /**
+   * Abort to stop the process.
+   *
+   * These tools run for minutes - a transcription of a feature-length video
+   * can run for an hour - so without this there is no way to take one back
+   * once it has started, and the queue behind it is stuck until it finishes
+   * on its own.
+   */
+  signal?: AbortSignal;
 };
+
+/**
+ * Thrown when a command was deliberately stopped, rather than failing.
+ *
+ * Distinguished so callers can tell "the user pressed stop" from "the tool
+ * broke". They want opposite handling: one is a normal outcome that should
+ * clean up quietly, the other is an error worth reporting and retrying.
+ */
+export class CommandCancelledError extends Error {
+  constructor(command: string) {
+    super(`${command} was stopped`);
+    this.name = "CommandCancelledError";
+  }
+}
+
+/** How long a process gets to exit after being asked, before it is killed outright. */
+const KILL_GRACE_MS = 5000;
 
 /**
  * How much stderr to keep for a failure message. Enough to carry the actual
@@ -53,9 +79,36 @@ export const describeExit = (command: string, code: number | null, signal: NodeJ
 export const runCommand = async (command: string, args: string[], input?: string, opts: RunCommandOpts = {}) => {
   let output = "";
   let stderr = "";
+  if (opts.signal?.aborted) {
+    // Nothing spawned yet, so there is nothing to tidy up - just do not start.
+    throw new CommandCancelledError(command);
+  }
   const proc = spawn(command, args);
+  let cancelled = false;
+  let killTimer: NodeJS.Timeout | undefined;
+  const onAbort = () => {
+    cancelled = true;
+    /*
+     * Asked politely, then killed.
+     *
+     * On Windows Node terminates the process outright whatever signal is
+     * named, so the grace period only really does anything on Linux - which
+     * is where this runs in the container, and where whisper.cpp gets to
+     * close its files rather than leaving a half-written one behind.
+     */
+    proc.kill("SIGTERM");
+    killTimer = setTimeout(() => proc.kill("SIGKILL"), KILL_GRACE_MS);
+  };
+  opts.signal?.addEventListener("abort", onAbort, { once: true });
   await new Promise<void>((res, rej) => {
     proc.once("close", (code, signal) => {
+      clearTimeout(killTimer);
+      opts.signal?.removeEventListener("abort", onAbort);
+      if (cancelled) {
+        // A killed process reports a non-zero code or a signal, which would
+        // otherwise be reported as a crash. It was not one.
+        return rej(new CommandCancelledError(command));
+      }
       if (code === 0) {
         return res();
       }
@@ -72,6 +125,8 @@ ${detail}` : " without writing any output"}`;
       rej(new Error(message));
     });
     proc.once("error", (err) => {
+      clearTimeout(killTimer);
+      opts.signal?.removeEventListener("abort", onAbort);
       logger.log("error", `Error running command:`, err);
       rej(err);
     });

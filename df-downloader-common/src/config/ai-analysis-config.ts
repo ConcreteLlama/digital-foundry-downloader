@@ -338,7 +338,9 @@ export const AiLocalProviderConfig = z.object({
     .int()
     .min(4096)
     .default(32768)
-    .describe("How much text the model can consider at once. A long transcript needs a large window."),
+    .describe(
+      "How much text the model can consider at once, prompt and answer together. 32768 is the default and suits everything here: the largest measured prompt - a 77-minute Direct, with transcript positions included - came to roughly 22,000 tokens, leaving room for the answer. Below about 16384 a long transcript gets cut short, and the analysis quietly gets worse rather than failing. Raising it costs memory, since the model's working cache grows with it, so on a card that is already full it is a way to stop a model fitting. There is no benefit in going beyond what your model was trained for - llama-server reports that as n_ctx_train when it loads."
+    ),
   gpuLayers: z
     .number()
     .int()

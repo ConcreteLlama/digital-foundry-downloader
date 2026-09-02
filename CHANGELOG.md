@@ -164,6 +164,8 @@ Downloads also play in the app itself now. Press the still at the top of a downl
   - The file is capped and rotates, so it cannot quietly fill the disk on a long-running install
 - Picking items in the Backfill list stays responsive with a few thousand of them, and the list is paged rather than cut short - the selection and the select-all buttons still apply across every page
 ### Bug Fixes
+- A bulk subtitles run no longer holds up whatever you download while it is going. Transcription runs one at a time, and a backfill could fill that queue with hundreds of items - so a video that finished downloading sat there with no subtitles, no metadata and no analysis until the whole run drained. Anything you did not queue in bulk now goes first, including a subtitle run you start by hand on a single video
+- Transcriptions can be stopped. They could not be before - once one started, the only option was to wait it out, which on a feature-length video is the better part of an hour. Stopping one cleans up the part-finished subtitle file and the audio it extracted, and lets the queue move on
 - The Activity page makes more sense while a backfill runs
   - Finished items are listed newest first. They were oldest first, so whatever ran when the app started sat permanently at the top and anything you had just run appeared at the bottom - it looked like nothing had happened
   - Each finished job now says what it did and to which video, instead of every row reading identically as "Inject metadata" with no clue which file it was

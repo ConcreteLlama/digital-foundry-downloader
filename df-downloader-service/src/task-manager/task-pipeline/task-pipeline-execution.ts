@@ -107,7 +107,10 @@ export class TaskPipelineExecution<
       }
       return;
     }
-    const managedTask = pipelineStep.taskManager.addTask(task);
+    // Every step of a pipeline inherits its priority: a backfill's
+    // transcription should stay behind a download's for the muxing and
+    // metadata steps too, not just the first one.
+    const managedTask = pipelineStep.taskManager.addTask(task, { priority: this.executionOpts.priority });
     this.tasks[index] = managedTask;
     managedTask.task.once("started", () => {
       this.emit("stepTaskStarted", { index, task: managedTask as any });

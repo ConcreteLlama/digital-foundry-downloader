@@ -24,7 +24,16 @@ export interface SubtitleGenerator {
     dfContentInfo: DfContentInfo,
     filename: string,
     language: LanguageCode | string,
-    onProgress?: SubtitleProgressReporter
+    onProgress?: SubtitleProgressReporter,
+    /**
+     * Abort to stop generation part-way.
+     *
+     * Optional because not every generator can honour it - one that makes a
+     * single HTTP request has nothing useful to interrupt. Whisper does: it
+     * runs a subprocess for minutes, and before this there was no way to take
+     * one back once it had started.
+     */
+    signal?: AbortSignal
   ): Promise<GeneratedSubtitleInfo>;
   destroy(): void;
 }

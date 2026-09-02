@@ -6,7 +6,7 @@ import path from "path";
 import _ from "lodash";
 import { configDir, configService } from "../../config/config.js";
 import { fileToAudioFile } from "../audio.js";
-import { runCommand } from "../../utils/command.js";
+import { CommandCancelledError, runCommand } from "../../utils/command.js";
 import { localComputeGate } from "../../utils/local-compute-gate.js";
 import { fileExists } from "../../utils/file-utils.js";
 import { probeMediaDurationSeconds } from "../../utils/media-metadata.js";
@@ -182,7 +182,8 @@ export class WhisperSubtitleGenerator implements SubtitleGenerator {
     args: string[],
     modelPath: string,
     onStderr: (chunk: string) => void,
-    onStdout?: (chunk: string) => void
+    onStdout?: (chunk: string) => void,
+    signal?: AbortSignal
   ) {
     try {
       /*
@@ -192,7 +193,7 @@ export class WhisperSubtitleGenerator implements SubtitleGenerator {
        * localComputeGate.
        */
       return await localComputeGate.withShared("Transcription", () =>
-        runCommand(this.binaryPath, args, undefined, { onStderr, onStdout })
+        runCommand(this.binaryPath, args, undefined, { onStderr, onStdout, signal })
       );
     } catch (e) {
       const size = await fs.promises
@@ -209,7 +210,8 @@ export class WhisperSubtitleGenerator implements SubtitleGenerator {
     dfContentInfo: DfContentInfo,
     filename: string,
     language: LanguageCode | string,
-    onProgress?: SubtitleProgressReporter
+    onProgress?: SubtitleProgressReporter,
+    signal?: AbortSignal
   ): Promise<GeneratedSubtitleInfo> {
     const workDir = configService.config.contentManagement.workDir;
     const modelPath = await ensureModel(this.config);
@@ -299,6 +301,16 @@ export class WhisperSubtitleGenerator implements SubtitleGenerator {
        * starts, instead of the previous phase's caption sitting there inert.
        */
       report(EXTRACTION_PERCENT_SPAN, `Loading ${this.config.model} model`);
+      /*
+       * Checked at the boundary as well as inside.
+       *
+       * Audio extraction runs before this and takes no signal, so a stop
+       * pressed during it lands here instead - which is the right place to
+       * notice, before committing to the long part.
+       */
+      if (signal?.aborted) {
+        throw new CommandCancelledError("Transcription");
+      }
       await this.transcribe(
         args,
         modelPath,

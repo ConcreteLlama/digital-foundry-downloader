@@ -83,7 +83,7 @@ import { ClearMissingFilesTask, isClearMissingFilesTask } from "./tasks/clear-mi
 import { DownloadTask, DownloadTaskManager, isDownloadTask } from "./tasks/download-task.js";
 import { RemoveEmptyDirsTask, isRemoveEmptyDirsTask } from "./tasks/remove-empty-dirs-task.js";
 import { ScanForExistingContentTask, isScanForExistingContentTask } from "./tasks/scan-for-content-task.js";
-import { SubtitlesTaskManager } from "./tasks/subtitles-task.js";
+import { isSubtitlesTask, SubtitlesTaskManager } from "./tasks/subtitles-task.js";
 import { createUpdateDownloadMetadataTaskPipeline, UpdateDownloadMetadataTaskPipeline, UpdateDownloadMetadataTaskPipelineExecution } from "./task-pipelines/update-download-metadata-task-pipeline.js";
 
 type DfTaskManagerOpts = {
@@ -95,6 +95,12 @@ type PipelineExecutionTypes = SubtitlesTaskPipelineExecution | DownloadTaskPipel
  * This class is responsible for managing the task pipelines for downloading and generating subtitles (and any
  * other task pipelines that may be added in the future).
  */
+/**
+ * Queue priority for work a bulk run queued. Lower is sooner, and the task
+ * managers default to 1, so this sits behind everything queued normally.
+ */
+const BACKGROUND_TASK_PRIORITY = 2;
+
 export class DfTaskManager {
   readonly subtitleTaskPipeline: SubtitlesTaskPipeline;
   readonly aiAnalysisTaskPipeline: AiAnalysisTaskPipeline;
@@ -468,14 +474,29 @@ export class DfTaskManager {
     /** Set when a bulk run queued this - see TaskPipelineDetails.backfillJobId. */
     backfillJobId?: string
   ) {
-    const subtitleExecution = this.subtitleTaskPipeline.start({
-      dfContentInfo,
-      mediaInfo,
-      fileLocation,
-      language,
-      subtitleGenerators,
-      backfillJobId,
-    });
+    const subtitleExecution = this.subtitleTaskPipeline.start(
+      {
+        dfContentInfo,
+        mediaInfo,
+        fileLocation,
+        language,
+        subtitleGenerators,
+        backfillJobId,
+      },
+      /*
+       * A bulk run waits; anything else jumps it.
+       *
+       * `subtitlesTaskManager` runs one transcription at a time, and a
+       * backfill can fill it with hundreds. Before this, a download that
+       * completed during a backfill sat behind the whole queue - the file was
+       * there, but its subtitles, metadata and analysis were hours away.
+       *
+       * Only bulk work is demoted, rather than downloads being promoted, so a
+       * subtitle run started by hand from the content page also beats the
+       * backfill. Both are someone waiting on one specific video.
+       */
+      { priority: backfillJobId ? BACKGROUND_TASK_PRIORITY : undefined }
+    );
     const generatorNames = (Array.isArray(subtitleGenerators) ? subtitleGenerators : [subtitleGenerators])
       .map((generator) => generator.serviceType)
       .join(", ");
@@ -1479,6 +1500,8 @@ const makeTaskInfo = (
     return makeRemoveEmptyDirsTaskInfo(managedTask, positionInfo);
   } else if (isBulkBackfillTask(managedTask.task)) {
     return makeBulkBackfillTaskInfo(managedTask, positionInfo);
+  } else if (isSubtitlesTask(managedTask.task)) {
+    return makeSubtitlesTaskInfo(managedTask, positionInfo);
   } else {
     return makeBasicTaskInfo(managedTask, positionInfo);
   }
@@ -1619,6 +1642,23 @@ const makeBulkBackfillTaskInfo = (
           },
         }
       : null,
+  };
+};
+
+/**
+ * Subtitles declare cancel, unlike most task types.
+ *
+ * `capabilities` is the honest signal the UI reads, and transcription is the
+ * one long-running local job worth being able to take back - it can hold a
+ * one-at-a-time queue for an hour.
+ */
+const makeSubtitlesTaskInfo = (
+  managedTask: GenericManagedTask,
+  positionInfo: PriorityPositionInfo | null
+): BasicTaskInfo => {
+  return {
+    ...makeCommonTaskInfo(managedTask, positionInfo),
+    capabilities: ["cancel"],
   };
 };
 

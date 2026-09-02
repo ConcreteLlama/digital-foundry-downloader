@@ -187,6 +187,17 @@ export type TaskPipelineExecutionOpts = {
   label?: string;
   logger?: LoggerType;
   /**
+   * Queue priority for every step this pipeline runs. Lower is sooner; the
+   * managers default to 1.
+   *
+   * Exists because several pipelines share a manager, and the ones that share
+   * `subtitlesTaskManager` are not equally urgent. A bulk backfill can queue
+   * hundreds of transcriptions; a download that just landed needs one. Without
+   * this they are the same FIFO, so a fresh download waits behind the entire
+   * backlog - which is exactly what it did.
+   */
+  priority?: number;
+  /**
    * Restart a pipeline part-way through, with the results of the steps that
    * already completed.
    *
