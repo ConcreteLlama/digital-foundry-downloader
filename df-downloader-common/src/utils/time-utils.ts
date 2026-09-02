@@ -58,7 +58,19 @@ const DURATION_UNITS: [suffix: string, ms: number][] = [
  * anything that re-commits the displayed text writes the truncation back.
  * Exactness beats brevity when the string has to survive a round trip.
  */
-export const formatDurationMs = (ms: number): string => {
+export const formatDurationMs = (
+  ms: number,
+  /**
+   * Drop the millisecond part when a larger unit is present.
+   *
+   * Opt-in, and deliberately not the default: the settings duration field
+   * round-trips this string back into config, so for that caller an exact
+   * rendering is load-bearing - see the note above. For a read-only readout
+   * of how long something took, "34m 29s 655ms" is three digits of noise on
+   * a figure nobody can act on to that precision.
+   */
+  opts?: { coarse?: boolean }
+): string => {
   if (!Number.isFinite(ms)) {
     return String(ms);
   }
@@ -76,8 +88,13 @@ export const formatDurationMs = (ms: number): string => {
     remaining -= count * size;
     parts.push(`${count}${suffix}`);
   }
+  // Only ever drops the smallest unit, and only when something bigger
+  // survives - so a duration that genuinely is 655ms still says so.
+  const shown = opts?.coarse && parts.length > 1 && parts[parts.length - 1].endsWith("ms")
+    ? parts.slice(0, -1)
+    : parts;
   // Sub-millisecond fractions have nowhere to go; better to say 0s than "".
-  return `${negative ? "-" : ""}${parts.join(" ") || "0s"}`;
+  return `${negative ? "-" : ""}${shown.join(" ") || "0s"}`;
 };
 
 /**

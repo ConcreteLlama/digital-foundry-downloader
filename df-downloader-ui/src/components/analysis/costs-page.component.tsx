@@ -187,7 +187,7 @@ export const CostsPage = () => {
                 {entry.costUsd !== undefined
                   ? formatCost(entry.costUsd)
                   : entry.durationMs !== undefined
-                    ? formatDurationMs(entry.durationMs)
+                    ? formatDurationMs(entry.durationMs, { coarse: true })
                     : "-"}
               </Typography>
             </Stack>

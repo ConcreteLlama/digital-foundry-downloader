@@ -240,7 +240,6 @@ export const makeLocalProvider = (config: AiLocalProviderConfig, server: LocalLl
     instruction: string,
     onProgress?: (progress: { outputTokens: number }) => void
   ) => {
-    const startedAt = Date.now();
     const baseUrl = await server.acquire();
     try {
       /*
@@ -255,32 +254,48 @@ export const makeLocalProvider = (config: AiLocalProviderConfig, server: LocalLl
        * gate is around the call rather than the whole provider because the
        * work happens in the server process while this request is open.
        */
-      const streamed = await localComputeGate.withExclusive("Local analysis", () =>
-        postStream(
-          baseUrl,
-          "/v1/chat/completions",
-          {
-        messages: [
-          { role: "system", content: system },
-          // One user message rather than the hosted path's two blocks: those
-          // exist to mark a cacheable prefix, and there is no per-token
-          // billing here for a cache to save.
-          { role: "user", content: `${content}\n\n${instruction}` },
-        ],
-        max_tokens: MAX_OUTPUT_TOKENS,
-        temperature: 0,
-        response_format: {
-          type: "json_schema",
-          json_schema: { name: "analysis", schema: jsonSchema, strict: true },
-        },
-            chat_template_kwargs: NO_THINKING,
-            // Generation is 88% of the wait and the only phase worth
-            // reporting; the grammar constraint survives streaming intact.
-            stream: true,
-          },
-          onProgress ? (outputTokens) => onProgress({ outputTokens }) : undefined
-        )
-      );
+      /*
+       * Timed inside the gate, not outside it.
+       *
+       * durationMs feeds observedLocalTokensPerMs, which divides tokens by it
+       * to learn how fast this machine is - so anything in the window that is
+       * not inference makes the machine look slower than it is, permanently
+       * and cumulatively. Waiting for a transcription to finish can be many
+       * minutes and is not work this run did, and neither is loading the
+       * model, which is not proportional to tokens either way.
+       */
+      let inferenceMs = 0;
+      const streamed = await localComputeGate.withExclusive("Local analysis", async () => {
+        const inferenceStartedAt = Date.now();
+        try {
+          return await postStream(
+            baseUrl,
+            "/v1/chat/completions",
+            {
+              messages: [
+                { role: "system", content: system },
+                // One user message rather than the hosted path's two blocks: those
+                // exist to mark a cacheable prefix, and there is no per-token
+                // billing here for a cache to save.
+                { role: "user", content: `${content}\n\n${instruction}` },
+              ],
+              max_tokens: MAX_OUTPUT_TOKENS,
+              temperature: 0,
+              response_format: {
+                type: "json_schema",
+                json_schema: { name: "analysis", schema: jsonSchema, strict: true },
+              },
+              chat_template_kwargs: NO_THINKING,
+              // Generation is 88% of the wait and the only phase worth
+              // reporting; the grammar constraint survives streaming intact.
+              stream: true,
+            },
+            onProgress ? (outputTokens) => onProgress({ outputTokens }) : undefined
+          );
+        } finally {
+          inferenceMs = Date.now() - inferenceStartedAt;
+        }
+      });
 
       const text = streamed.text;
       if (!text) {
@@ -303,7 +318,9 @@ export const makeLocalProvider = (config: AiLocalProviderConfig, server: LocalLl
           inputTokens: streamed.timings?.prompt_n ?? 0,
           outputTokens: streamed.timings?.predicted_n ?? 0,
           // No costUsd at all rather than zero - this run cost time.
-          durationMs: Date.now() - startedAt,
+          // Inference only - excludes the gate wait and model load, which are
+          // not work this run did and would skew the learned rate.
+          durationMs: inferenceMs,
         },
       };
     } finally {

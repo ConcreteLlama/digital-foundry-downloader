@@ -593,7 +593,7 @@ const RunDetails = ({ result }: { result: AiAnalysisResult }) => {
             {result.usage.costUsd !== undefined
               ? formatCost(result.usage.costUsd)
               : result.usage.durationMs !== undefined
-                ? formatDurationMs(result.usage.durationMs)
+                ? formatDurationMs(result.usage.durationMs, { coarse: true })
                 : "-"}
           </span>
           <span>{new Date(result.analysedAt).toLocaleString()}</span>
