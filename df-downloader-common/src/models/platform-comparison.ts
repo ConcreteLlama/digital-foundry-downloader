@@ -1,7 +1,7 @@
 import { z } from "zod";
 
 /**
- * Every console comparison laid out side by side.
+ * Every per-platform analysis laid out side by side.
  *
  * ## What this is, and what it deliberately is not
  *
@@ -54,6 +54,19 @@ export const PlatformComparisonRow = z.object({
   contentKey: z.string(),
   title: z.string(),
   publishedDate: z.coerce.date(),
+  /**
+   * Whether this row covers two or more platforms.
+   *
+   * Derived from the extracted payload rather than from the content type.
+   * The ledger used to carry a type label for this, back when a face-off and
+   * a single-platform analysis were separate types - but that distinction was
+   * a prediction made from a title before extraction ran, and over 481 items
+   * it accounted for 9 of the local engine's 12 classification errors and 9
+   * of the hosted engine's 15. Counting the platforms that were actually
+   * found is right by construction, so the two types were merged and breadth
+   * became this.
+   */
+  isFaceOff: z.boolean().default(false),
   game: z.string().nullish(),
   developer: z.string().nullish(),
   /** Canonical platform label to that platform's modes. */
@@ -69,7 +82,14 @@ export const PlatformComparisonRow = z.object({
    */
   unrecognised: z.array(UnrecognisedPlatform).default([]),
   knownIssues: z.array(z.string()).default([]),
-  /** DF's own recommendation, shown verbatim and attributed. */
+  /**
+   * DF's own recommendation, shown verbatim and attributed.
+   *
+   * A `single_platform_analysis` has no `recommendation` field - it calls the
+   * same thing `verdict` - so that is read into here. The two are the same
+   * claim under two names, which is one more piece of evidence that the two
+   * content types are one type wearing two labels.
+   */
   recommendation: z.string().nullish(),
   hasArticle: z.boolean().default(false),
   usedTranscript: z.boolean().default(false),
@@ -80,7 +100,7 @@ export const PlatformComparisonResponse = z.object({
   rows: z.array(PlatformComparisonRow).default([]),
   /** Canonical platforms actually present, so empty columns are not drawn. */
   platformsPresent: z.array(z.string()).default([]),
-  /** How many console comparisons this is drawn from. */
+  /** How many per-platform analyses this is drawn from, of either type. */
   comparisonCount: z.number().default(0),
   analysedCount: z.number().default(0),
   libraryCount: z.number().default(0),

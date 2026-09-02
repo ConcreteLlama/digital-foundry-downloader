@@ -60,11 +60,9 @@ const ARTICLE_PRECEDENCE = `You have both Digital Foundry's own written article 
  */
 const BOTH_SOURCES_COUNT = `The article and the transcript are BOTH primary sources for what this video covers. The article frequently names things the presenter never says aloud - those count and must be included. Cover everything named in either source, not only what both mention.`;
 
-const CONTENT_TYPES = `- platform_comparison: a technical comparison of one game across two or more platforms - per-platform resolutions, frame rates, and modes. Any mix of platforms counts: consoles, PC, handhelds.
-- single_platform_analysis: one game examined on a single platform, or a small number, outside a full face-off - a port, a patch, an upgrade, a "have they fixed it yet" revisit, a single-platform review. Choose this over platform_comparison when the point is that game on that hardware rather than a comparison between platforms.
+const CONTENT_TYPES = `- platform_tech_review: one game examined technically, on one or more platforms - per-platform resolutions, frame rates and modes. Covers a full face-off across several platforms, a single-platform review, a port, a patch, an upgrade, and a "have they fixed it yet" revisit alike. Do not consider how many platforms are involved when choosing this: one is as valid as five. Any mix counts - consoles, PC, handhelds.
 - pc_review_settings: a PC technical review OF A GAME, usually with per-setting performance analysis and recommended "optimised settings". The subject is the game; the PC is what it is being run on.
 - hands_on_preview: an early look at unreleased or just-revealed content, typically hedged and provisional.
-- game_retrospective: a look back at an older game, or an anniversary re-release.
 - hardware_review: a review or test OF A PIECE OF HARDWARE - a graphics card, CPU, handheld, display or complete machine. Games appearing in it are benchmarks, not the subject.
   Decide between this and pc_review_settings by asking what is being reviewed, not by what is discussed. A graphics card review talks about PC performance, frame rates and quality settings at length and still is not a PC game review: its subject is the card. If the title names a product rather than a game, it is hardware_review.
 - tech_explainer: a piece about a technology rather than a product - upscaling, ray tracing, frame generation, an engine feature.
@@ -283,18 +281,15 @@ ${BOTH_SOURCES_COUNT}` : "";
 ${MARKER_INSTRUCTION}` : "";
   const coverage = flags?.needsQuoteCoverage ? ` ${QUOTE_COVERAGE_CLAUSE}` : "";
   switch (contentType) {
-    case "platform_comparison":
-      return `Extract the per-platform technical comparison. For each platform covered, record each display/performance mode it offers, with the resolution as described (including upscaling where stated), the target frame rate, and the measured average frame rate if one is actually given. Record known bugs, crashes or performance problems the video calls out, and the overall platform recommendation. Remember that an unstated number is null, not an estimate.
+    case "platform_tech_review":
+      return `Extract the per-platform technical analysis. For each platform covered, record each display or performance mode it offers, with the resolution as described (including upscaling where stated), the target frame rate, and the measured average frame rate only if one is actually given. Where the video is about a change - a patch, a port, a revisit, a new platform version - record what changed in changeSummary, since that delta is usually the point of the piece rather than the raw numbers; leave it null where nothing changed. Record known bugs, crashes or performance problems the video calls out, and the overall recommendation. Cover every platform the video discusses, however many that is - one platform is a complete answer if that is all it covers. Remember that an unstated number is null, not an estimate.
 
 ${QUOTE_INSTRUCTION}${coverage}${bothSources}${markers}`;
     case "pc_review_settings":
       return `Extract the PC settings analysis. For each graphics setting discussed, record the levels tested, the performance cost as a percentage if one is actually stated, any console-equivalent comparison made, and the recommended level. Record the main performance bottleneck if the video identifies one, and the before/after result of the optimised settings if it gives one. A setting described only qualitatively ("barely costs anything") has a null percentage - do not convert words into a number.
 
 ${QUOTE_INSTRUCTION}${coverage}${bothSources}${markers}`;
-    case "single_platform_analysis":
-      return `Extract the technical analysis of this game. For each platform covered, record each display or performance mode, with the resolution as described (including upscaling where stated), the target frame rate, and the measured average frame rate only if one is actually given. Where the video is about a change - a patch, a port, a revisit, a new platform version - record what changed in changeSummary, since that delta is usually the point of the piece rather than the raw numbers. Record known bugs or performance problems it calls out, and the overall verdict. Remember that an unstated number is null, not an estimate.
 
-${QUOTE_INSTRUCTION}${coverage}${bothSources}${markers}`;
     case "hands_on_preview":
       return `Record what was actually shown, not what it might mean. Name the game, the platforms it was seen running on, and what kind of build it was - preview build, beta, demo, near-final - if the video says. List concrete observations rather than general impressions where the video supports them. Put whatever the presenters explicitly said not to conclude yet into caveats.
 
@@ -315,6 +310,12 @@ Getting "game" right matters more here than anywhere else: this is frequently th
 ${QUOTE_INSTRUCTION}${coverage}${bothSources}${markers}`;
     case "roundup_list":
       return `Break this round-up into its entries, in order. For each, give the topic - the game or the category - set "game" to the title it concerns, and record the reasoning given for its inclusion as the summary, with the verdict or placement as the conclusion.
+
+${QUOTE_INSTRUCTION}${coverage}${bothSources}${markers}`;
+    case "interview":
+      return `Break this interview into the distinct topics it covers, in order. For each, give the topic, a summary of what was actually said about it, and the conclusion or claim reached. Set "game" to the game a topic concerns, or null where it does not concern one - an interview about a piece of hardware or an engine often has no game behind a given topic, and a benchmark title used to illustrate a point is not what that topic is about.
+
+Prefer what the developers themselves said over the interviewer's framing of it: the value of this format is the claim from the people who built the thing, not the question that prompted it. Do not record who said what - the transcript does not distinguish speakers reliably, so an attributed name here would be a guess.
 
 ${QUOTE_INSTRUCTION}${coverage}${bothSources}${markers}`;
     case "qa_roundtable":

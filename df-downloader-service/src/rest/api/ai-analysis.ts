@@ -18,6 +18,7 @@ import { buildHardwareIndex } from "../../utils/ai/hardware-index.js";
 import { buildPcSettingsIndex } from "../../utils/ai/pc-settings-index.js";
 import { buildCostLedger } from "../../utils/ai/cost-ledger.js";
 import { buildPlatformComparison } from "../../utils/ai/platform-comparison.js";
+import { buildAnalysisCatalogue } from "../../utils/ai/analysis-catalogue.js";
 import { ensureArticleForContent } from "../../utils/df-articles/ensure-article.js";
 import { DfFetchPriority } from "../../df-request-queue.js";
 import { sanitizeContentName } from "../../utils/df-utils.js";
@@ -92,6 +93,15 @@ export const makeAiAnalysisRouter = (contentManager: DigitalFoundryContentManage
    * browser: results are per-file and several kilobytes each, so the
    * client has no business reading them all to draw a list.
    */
+  /** Every analysed item, flat and filterable - see buildAnalysisCatalogue. */
+  router.get("/catalogue", async (_req, res) => {
+    try {
+      return sendResponse(res, await buildAnalysisCatalogue(contentManager.db));
+    } catch (e) {
+      return sendErrorAsResponse(res, e);
+    }
+  });
+
   router.get("/game-index", async (_req, res) => {
     try {
       return sendResponse(res, await buildGameIndex(contentManager.db));

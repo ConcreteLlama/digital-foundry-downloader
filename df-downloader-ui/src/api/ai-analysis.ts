@@ -12,6 +12,7 @@ import {
   PlatformComparisonResponse,
   parseResponseBody,
   AiCostLedgerResponse,
+  AnalysisCatalogueResponse,
 } from "df-downloader-common";
 import { z } from "zod";
 import { ZodTypeAny } from "zod";
@@ -137,6 +138,12 @@ export const fetchPlatformComparison = async (): Promise<PlatformComparisonRespo
 export const fetchPcSettingsIndex = async (): Promise<PcSettingsIndexResponse> => {
   const response = await fetchJson(`${API_URL}/ai-analysis/pc-settings`);
   return unwrap(response, PcSettingsIndexResponse);
+};
+
+/** Every analysed item, flat and filterable. Aggregated server-side. */
+export const fetchAnalysisCatalogue = async (): Promise<AnalysisCatalogueResponse> => {
+  const response = await fetchJson(`${API_URL}/ai-analysis/catalogue`);
+  return unwrap(response, AnalysisCatalogueResponse);
 };
 
 /** Every analysed hardware review, newest first. Aggregated server-side. */

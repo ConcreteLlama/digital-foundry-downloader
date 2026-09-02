@@ -15,11 +15,9 @@ import { AiAnalysisModel, AiProviderId } from "../config/ai-analysis-config.js";
  * describe it.
  */
 export const AiContentType = z.enum([
-  "platform_comparison",
-  "single_platform_analysis",
+  "platform_tech_review",
   "pc_review_settings",
   "hands_on_preview",
-  "game_retrospective",
   "hardware_review",
   "tech_explainer",
   "interview",
@@ -44,16 +42,38 @@ export type AiContentType = z.infer<typeof AiContentType>;
  * Nothing should read a legacy name at runtime.
  */
 export const AiContentTypeRenames: Record<string, AiContentType> = {
-  console_comparison: "platform_comparison",
-  platform_analysis: "single_platform_analysis",
+  /*
+   * Three generations of the same mistake, now collapsed.
+   *
+   * `console_comparison` asserted a hardware kind the content contradicted -
+   * a Switch 2 against a PC is not two consoles. `platform_comparison` and
+   * `single_platform_analysis` then asserted a *count*, which the payload
+   * contradicts in both directions: a "single" platform analysis of the MGS
+   * Master Collection returns five platforms, and a "comparison" of Crimson
+   * Desert returns one. Measured over 481 items, that boundary carried 9 of
+   * the local engine's 12 classification errors and 9 of the hosted engine's
+   * 15 - because the classifier was being asked to predict, from a title,
+   * a fact extraction was about to establish for certain.
+   *
+   * `platform_tech_review` asserts neither. Breadth is now a filter over
+   * `platforms.length`, which is the honest place for it.
+   *
+   * `game_retrospective` folds in here too: most of its items were technical
+   * analyses wearing a retrospective title, and the genuine ones carry no
+   * per-platform table, so they extract to an empty list rather than a wrong
+   * one.
+   */
+  console_comparison: "platform_tech_review",
+  platform_comparison: "platform_tech_review",
+  platform_analysis: "platform_tech_review",
+  single_platform_analysis: "platform_tech_review",
+  game_retrospective: "platform_tech_review",
 };
 
 export const AiContentTypeLabels: Record<AiContentType, string> = {
-  platform_comparison: "Platform comparison",
-  single_platform_analysis: "Single-platform analysis",
+  platform_tech_review: "Platform tech review",
   pc_review_settings: "PC review & optimised settings",
   hands_on_preview: "Hands-on preview",
-  game_retrospective: "Retrospective",
   hardware_review: "Hardware review",
   tech_explainer: "Tech explainer",
   interview: "Interview",
@@ -78,11 +98,9 @@ export const AiContentTypeLabels: Record<AiContentType, string> = {
  * those still belong in `games` so the piece surfaces under each of them.
  */
 export const AiContentTypeGameSubject: Record<AiContentType, "single" | "maybe" | "none"> = {
-  platform_comparison: "single",
-  single_platform_analysis: "single",
+  platform_tech_review: "single",
   pc_review_settings: "single",
   hands_on_preview: "single",
-  game_retrospective: "single",
   hardware_review: "maybe",
   tech_explainer: "maybe",
   interview: "maybe",
@@ -214,26 +232,6 @@ export const AiKnownIssue = z.preprocess(
 );
 export type AiKnownIssue = z.infer<typeof AiKnownIssue>;
 
-/**
- * Platform face-off data - one game across two or more platforms.
- *
- * Every numeric field is nullable on purpose, and the extraction prompt is
- * explicit that unstated numbers must be left null rather than guessed.
- * Presenters routinely describe a difference qualitatively without ever
- * saying a number, and a fabricated-but-plausible figure is far worse here
- * than an honest gap - the whole point of this data is that it can be
- * trusted enough to compare against.
- */
-export const AiPlatformComparisonData = z.object({
-  contentType: z.literal("platform_comparison"),
-  game: z.string().nullish(),
-  developer: z.string().nullish(),
-  platforms: z.array(AiPlatformEntry).default([]),
-  knownIssues: z.array(AiKnownIssue).default([]),
-  recommendation: z.string().nullish(),
-});
-export type AiPlatformComparisonData = z.infer<typeof AiPlatformComparisonData>;
-
 export const AiSettingEntry = z.object({
   name: z.string(),
   levelsTested: z.array(z.string()).default([]),
@@ -302,29 +300,51 @@ export const AiQaRoundtableData = z.object({
 export type AiQaRoundtableData = z.infer<typeof AiQaRoundtableData>;
 
 /**
- * One game examined on one or more platforms, outside a full face-off.
+ * One game examined technically, on one or more platforms.
  *
- * The single largest category in the library and the one that had no schema
- * at all: a Switch 2 port, a PS5 Pro patch, a "have they fixed it yet"
- * revisit. Structurally it is a face-off with fewer platforms, so it reuses
- * the same per-platform shape rather than inventing a parallel one - which
- * also means these can feed the platform comparison view later.
+ * The largest category in the library by a wide margin, and formerly two
+ * types: a face-off and a single-platform analysis. They held the same
+ * fields and differed only in a breadth claim the classifier had to guess
+ * from a title, before extraction established it for certain - so the two
+ * were merged and breadth became a filter over `platforms.length`. See
+ * AiContentTypeRenames for the measurements behind that.
  *
- * `changeSummary` is what makes it distinct: this format is usually about a
- * delta - what a patch altered, how a port differs from the original - and
- * that is the thing a reader wants and a bare mode table cannot express.
+ * Covers a full console face-off, a Switch 2 port, a PS5 Pro patch, a "have
+ * they fixed it yet" revisit and a remaster round-up equally well, because
+ * structurally they are the same article: a per-platform table plus a
+ * verdict.
+ *
+ * Every numeric field is nullable on purpose, and the extraction prompt is
+ * explicit that unstated numbers must be left null rather than guessed.
+ * Presenters routinely describe a difference qualitatively without ever
+ * saying a number, and a fabricated-but-plausible figure is far worse here
+ * than an honest gap - the whole point of this data is that it can be
+ * trusted enough to compare against.
  */
-export const AiSinglePlatformAnalysisData = z.object({
-  contentType: z.literal("single_platform_analysis"),
+export const AiPlatformTechReviewData = z.object({
+  contentType: z.literal("platform_tech_review"),
   game: z.string().nullish(),
   developer: z.string().nullish(),
   platforms: z.array(AiPlatformEntry).default([]),
-  /** What changed relative to a previous version, patch or platform. */
+  /**
+   * What changed relative to a previous version, patch or platform.
+   *
+   * Optional rather than defining a type of its own, which is what it always
+   * should have been: a patch analysis is a tech review that happens to have
+   * a delta worth naming, not a different kind of article.
+   */
   changeSummary: z.string().nullish(),
   knownIssues: z.array(AiKnownIssue).default([]),
-  verdict: z.string().nullish(),
+  /**
+   * Digital Foundry's own bottom line.
+   *
+   * Named `recommendation` rather than `verdict` because the merged pair used
+   * both words for the identical claim, and this is the one the ledger column
+   * is built on and shows to the reader.
+   */
+  recommendation: z.string().nullish(),
 });
-export type AiSinglePlatformAnalysisData = z.infer<typeof AiSinglePlatformAnalysisData>;
+export type AiPlatformTechReviewData = z.infer<typeof AiPlatformTechReviewData>;
 
 export const AiHardwareProduct = z.object({
   name: z.string(),
@@ -398,6 +418,36 @@ export const AiRoundupData = z.object({
 export type AiRoundupData = z.infer<typeof AiRoundupData>;
 
 /**
+ * A developer interview, or a behind-the-scenes piece built around one.
+ *
+ * The fourth type to reuse the segment shape, and for the same reason as the
+ * other three: an interview is a sequence of topics, each with something said
+ * about it that can be quoted and located. Measured on the two known
+ * interviews it produced 7 and 8 well-scoped technical segments, with `game`
+ * behaving exactly as designed - every segment of the 007 engine interview
+ * carried the game, while the Intel hardware interview left it null except
+ * for the one segment that was a Cyberpunk benchmark.
+ *
+ * **Deliberately not a bespoke schema.** The obvious thing segments cannot
+ * hold is speaker attribution - "id Software said X" is worth more than
+ * "someone said X" - and that is a real gap: nothing in the Intel interview
+ * records that it is Tom Petersen. It is not filled here because the case for
+ * it is untested. Every interview in the library is undownloaded, so the only
+ * measurement available was article-grounded, and whether a transcript-driven
+ * run can attribute a speaker reliably is exactly what that cannot answer.
+ * Whisper does not diarise, and the Q+A schema already refuses to name who
+ * asked a question for precisely that reason (see AiQaSegment). A speaker
+ * field would also cost a union parameter against the 16 the API allows.
+ *
+ * Add one when there is output showing it can be filled correctly, not before.
+ */
+export const AiInterviewData = z.object({
+  contentType: z.literal("interview"),
+  segments: z.array(AiQaSegment).default([]),
+});
+export type AiInterviewData = z.infer<typeof AiInterviewData>;
+
+/**
  * Structured payload, discriminated by content type.
  *
  * Only the two types the source material genuinely supports have a schema.
@@ -407,12 +457,12 @@ export type AiRoundupData = z.infer<typeof AiRoundupData>;
  * manufacture certainty the presenters explicitly disclaimed.
  */
 export const AiStructuredData = z.discriminatedUnion("contentType", [
-  AiPlatformComparisonData,
-  AiSinglePlatformAnalysisData,
+  AiPlatformTechReviewData,
   AiPcReviewSettingsData,
   AiPreviewData,
   AiHardwareReviewData,
   AiQaRoundtableData,
+  AiInterviewData,
   AiNewsDiscussionData,
   AiRoundupData,
 ]);
@@ -668,3 +718,33 @@ export const AiTagDecisionRequest = z.object({
   status: AiTagStatus,
 });
 export type AiTagDecisionRequest = z.infer<typeof AiTagDecisionRequest>;
+
+/**
+ * One analysed item, for the catalogue view.
+ *
+ * Flat and deliberately small: the catalogue lists everything analysed and
+ * filters it, so it needs a row per item rather than the several-kilobyte
+ * result behind it. Titles are joined server-side because the analysis index
+ * does not carry them - the same reason the game index is built there.
+ */
+export const AnalysisCatalogueEntry = z.object({
+  contentKey: z.string(),
+  title: z.string(),
+  publishedDate: z.coerce.date(),
+  analysedAt: z.coerce.date(),
+  contentType: AiContentType,
+  model: z.string(),
+  primaryGame: z.string().nullish(),
+  evidence: z.array(AiEvidenceSource).default([]),
+  hasError: z.boolean().default(false),
+  /** Whether a structured payload was produced, as opposed to summary only. */
+  hasStructuredData: z.boolean().default(false),
+});
+export type AnalysisCatalogueEntry = z.infer<typeof AnalysisCatalogueEntry>;
+
+export const AnalysisCatalogueResponse = z.object({
+  entries: z.array(AnalysisCatalogueEntry),
+  /** Everything in the library, so the view can say what share is analysed. */
+  libraryCount: z.number().default(0),
+});
+export type AnalysisCatalogueResponse = z.infer<typeof AnalysisCatalogueResponse>;

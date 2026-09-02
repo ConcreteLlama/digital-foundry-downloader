@@ -1,9 +1,11 @@
 import InsightsIcon from "@mui/icons-material/Insights";
+import ListAltIcon from "@mui/icons-material/ListAlt";
 import MemoryIcon from "@mui/icons-material/Memory";
 import PaidIcon from "@mui/icons-material/Paid";
 import TuneIcon from "@mui/icons-material/Tune";
 import SportsEsportsIcon from "@mui/icons-material/SportsEsports";
 import TableChartIcon from "@mui/icons-material/TableChart";
+import { CataloguePage } from "../../components/analysis/catalogue-page.component.tsx";
 import { GameIndexPage } from "../../components/analysis/game-index-page.component.tsx";
 import { CostsPage } from "../../components/analysis/costs-page.component.tsx";
 import { HardwarePage } from "../../components/analysis/hardware-page.component.tsx";
@@ -28,13 +30,27 @@ export const analysisRouteDefinitions: NestedSubRoute = {
   // the content needs, to choose between two pages.
   compactNavOnly: true,
   /*
-   * Games first: it is the broadest view - everything analysed, grouped by
-   * what it was about - so it is the one that answers "what do I have on this
-   * game" without knowing which specialised view to look in. The three after
-   * it are narrower cuts of the same corpus, and Costs is last because it is
-   * about running the feature rather than about any content.
+   * Catalogue first, as the hub: it is the only unsliced view, so it is where
+   * you land without having to know which specialised page holds what you
+   * want. Games follows because "what do I have on this game" is the commonest
+   * real question. The three after those are narrower cuts of the same corpus,
+   * and Costs is last because it is about running the feature rather than
+   * about any content.
    */
   routes: [
+    {
+      /*
+       * First, as the hub. Every other page here is a slice - one game, one
+       * payload shape, the spend - and each assumes you already know which
+       * slice you want. This is the unsliced corpus, so it is both the
+       * sensible landing page and the place you come back to when something
+       * has been filed somewhere unexpected.
+       */
+      path: "/analysis/catalogue",
+      element: <CataloguePage />,
+      name: "Catalogue",
+      icon: ListAltIcon,
+    },
     {
       path: "/analysis/games",
       element: <GameIndexPage />,

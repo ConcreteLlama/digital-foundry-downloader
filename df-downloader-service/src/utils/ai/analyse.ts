@@ -37,9 +37,8 @@ import {
   srtLinesToTextWithOffsets,
 } from "./transcript.js";
 import {
-  WirePlatformComparison,
+  WirePlatformTechReview,
   WireHardwareReview,
-  WireSinglePlatformAnalysis,
   WirePreview,
   WireContentType,
   WireOverview,
@@ -65,16 +64,26 @@ const ESTIMATED_OUTPUT_TOKENS_EXTRACTION = 1200;
 const ESTIMATED_OUTPUT_TOKENS_TAGS_ONLY = 200;
 const THINKING_OUTPUT_MULTIPLIER = 3;
 
-/** The types worth a second, structure-extracting call. */
+/**
+ * The types worth a second, structure-extracting call.
+ *
+ * `interview` reuses the segment shape rather than getting a schema of its
+ * own - an interview is a sequence of topics with something quotable said
+ * about each, which is what WireQaSegments already describes. Measured on the
+ * two known interviews it returned 7 and 8 well-scoped technical segments.
+ *
+ * Still no payload for `tech_explainer` or `other`, and
+ * each for its own reason - see docs/AI_CONTENT_TAXONOMY_REVIEW.md.
+ */
 const EXTRACTABLE_TYPES: WireContentType[] = [
-  "platform_comparison",
-  "single_platform_analysis",
+  "platform_tech_review",
   "pc_review_settings",
   "hands_on_preview",
   "hardware_review",
   "qa_roundtable",
   "news_discussion",
   "roundup_list",
+  "interview",
 ];
 
 /**
@@ -459,13 +468,7 @@ const anchorFindings = (
   };
 
   switch (data.contentType) {
-    case "platform_comparison":
-      return {
-        ...data,
-        platforms: data.platforms.map((platform) => ({ ...platform, modes: platform.modes.map(at) })),
-        knownIssues: data.knownIssues.map(at),
-      };
-    case "single_platform_analysis":
+    case "platform_tech_review":
       return {
         ...data,
         platforms: data.platforms.map((platform) => ({ ...platform, modes: platform.modes.map(at) })),
@@ -480,6 +483,7 @@ const anchorFindings = (
     case "qa_roundtable":
     case "news_discussion":
     case "roundup_list":
+    case "interview":
       return { ...data, segments: data.segments.map(at) };
   }
 };
@@ -650,16 +654,17 @@ const extractStructuredData = async (
   const { content, instruction } = await chooseExtractionPrompt(provider, prepared, contentType, plainInstruction);
   try {
     switch (contentType) {
-      case "platform_comparison": {
+      case "platform_tech_review": {
         const { parsed, usage } = await provider.callStructured(
-          WirePlatformComparison, prepared.system, content, instruction, onProgress
+          WirePlatformTechReview, prepared.system, content, instruction, onProgress
         );
         return {
           data: {
-            contentType: "platform_comparison",
+            contentType: "platform_tech_review",
             game: parsed.game,
             developer: parsed.developer,
             platforms: parsed.platforms,
+            changeSummary: parsed.changeSummary,
             knownIssues: parsed.knownIssues,
             recommendation: parsed.recommendation,
           },
@@ -694,23 +699,7 @@ const extractStructuredData = async (
           usage,
         };
       }
-      case "single_platform_analysis": {
-        const { parsed, usage } = await provider.callStructured(
-          WireSinglePlatformAnalysis, prepared.system, content, instruction, onProgress
-        );
-        return {
-          data: {
-            contentType: "single_platform_analysis",
-            game: parsed.game,
-            developer: parsed.developer,
-            platforms: parsed.platforms,
-            changeSummary: parsed.changeSummary,
-            knownIssues: parsed.knownIssues,
-            verdict: parsed.verdict,
-          },
-          usage,
-        };
-      }
+
       case "hands_on_preview": {
         const { parsed, usage } = await provider.callStructured(
           WirePreview, prepared.system, content, instruction, onProgress
@@ -744,7 +733,8 @@ const extractStructuredData = async (
       }
       case "qa_roundtable":
       case "news_discussion":
-      case "roundup_list": {
+      case "roundup_list":
+      case "interview": {
         const { parsed, usage } = await provider.callStructured(
           WireQaSegments, prepared.system, content, instruction, onProgress
         );
@@ -777,6 +767,21 @@ const extractStructuredData = async (
  * found no tags and no structured data, and without this the log would show
  * only that it started.
  */
+/**
+ * What extraction actually produced, in one line.
+ *
+ * Counts every list on the payload rather than naming fields per content type,
+ * so a new schema describes itself without this needing to be revisited. The
+ * numbers are the useful part - "4 platforms" against "0 platforms" is the
+ * difference between a good run and a silently empty one.
+ */
+const describeStructuredData = (data: AiStructuredData): string => {
+  const lists = Object.entries(data)
+    .filter(([, value]) => Array.isArray(value))
+    .map(([key, value]) => `${(value as unknown[]).length} ${key}`);
+  return lists.length ? lists.join(", ") : "no list fields";
+};
+
 const logAnalysisOutcome = (
   entryKey: string,
   result: {
@@ -913,6 +918,10 @@ export const analyseContent = async (config: AiAnalysisConfig, inputs: AnalysisI
         buildClassificationInstruction(),
         reportTokens
       );
+      logger.log(
+        "info",
+        `Analysis ${inputs.entry.key} classified as ${classified.parsed.contentType} (confidence ${classified.parsed.contentTypeConfidence})`
+      );
       reportStage(2, "Writing the summary");
       const summarised = await provider.callStructured(
         WireSummary,
@@ -936,12 +945,25 @@ export const analyseContent = async (config: AiAnalysisConfig, inputs: AnalysisI
       usage = summarised.usage;
     }
 
+    logger.log(
+      "info",
+      `Analysis ${inputs.entry.key} overview: game ${overview.primaryGame ?? "none"}, ` +
+        `summary ${overview.summary?.length ?? 0} chars, conclusion ${overview.conclusion?.length ?? 0} chars, ` +
+        `${overview.tags?.length ?? 0} tag(s)`
+    );
+
     let structuredData: AiStructuredData | undefined;
 
     if (config.features.structuredData && EXTRACTABLE_TYPES.includes(overview.contentType)) {
       reportStage(totalSteps, "Pulling out the details");
       const extraction = await extractStructuredData(provider, config, prepared, overview.contentType, reportTokens);
       structuredData = extraction.data ? anchorFindings(extraction.data, prepared.transcript, prepared.articleText) : undefined;
+      logger.log(
+        "info",
+        structuredData
+          ? `Analysis ${inputs.entry.key} extracted ${overview.contentType}: ${describeStructuredData(structuredData)}`
+          : `Analysis ${inputs.entry.key} extracted nothing for ${overview.contentType}`
+      );
       if (extraction.usage) {
         usage = addUsage(usage, extraction.usage);
       }

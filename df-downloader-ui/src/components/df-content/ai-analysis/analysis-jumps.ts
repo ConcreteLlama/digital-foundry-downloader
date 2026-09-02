@@ -40,7 +40,7 @@ export const analysisJumpsFrom = (data: StructuredData): AnalysisJump[] => {
   };
 
   switch (data.contentType) {
-    case "platform_comparison":
+    case "platform_tech_review":
       for (const platform of data.platforms) {
         for (const mode of platform.modes) {
           push(mode.timestampSeconds, `${platform.platform} · ${mode.label}`, mode.resolution ?? undefined);
@@ -53,16 +53,6 @@ export const analysisJumpsFrom = (data: StructuredData): AnalysisJump[] => {
     case "pc_review_settings":
       for (const setting of data.settings) {
         push(setting.timestampSeconds, setting.name, setting.recommendation ?? undefined);
-      }
-      break;
-    case "single_platform_analysis":
-      for (const platform of data.platforms) {
-        for (const mode of platform.modes) {
-          push(mode.timestampSeconds, `${platform.platform} · ${mode.label}`, mode.resolution ?? undefined);
-        }
-      }
-      for (const known of data.knownIssues) {
-        push(known.timestampSeconds, known.issue);
       }
       break;
     case "hands_on_preview":

@@ -42,9 +42,9 @@ const primaryGameOf = (result: AiAnalysisResult): string | undefined => {
 
 const platformsFor = (result: AiAnalysisResult): { labels: string[]; viaAlias: boolean } => {
   const data = result.structuredData;
-  // single_platform_analysis carries the same per-platform shape as a face-off - it
-  // is the same data with fewer platforms, so it reads the same way here.
-  if (data?.contentType !== "platform_comparison" && data?.contentType !== "single_platform_analysis") {
+  // One type now, covering one platform or five - the face-off and
+  // single-platform variants were the same payload and were merged.
+  if (data?.contentType !== "platform_tech_review") {
     return { labels: [], viaAlias: false };
   }
   let viaAlias = false;
@@ -70,8 +70,13 @@ const conclusionOf = (result: AiAnalysisResult): string | undefined => {
   if (!data) {
     return undefined;
   }
-  if (data.contentType === "pc_review_settings" || data.contentType === "single_platform_analysis") {
+  if (data.contentType === "pc_review_settings") {
     return data.verdict ?? undefined;
+  }
+  // The merged platform type calls its bottom line `recommendation`, which is
+  // the word the ledger column uses and the one both halves meant.
+  if (data.contentType === "platform_tech_review") {
+    return data.recommendation ?? undefined;
   }
   if (data.contentType === "hardware_review") {
     return data.verdict ?? undefined;
@@ -119,10 +124,7 @@ export const buildGameIndex = async (db: DfDownloaderOperationalDb): Promise<Gam
         conclusion: conclusionOf(result),
         platforms: platforms.labels,
         engine: data?.contentType === "pc_review_settings" ? data.engine : undefined,
-        developer:
-          data?.contentType === "platform_comparison" || data?.contentType === "single_platform_analysis"
-            ? data.developer
-            : undefined,
+        developer: data?.contentType === "platform_tech_review" ? data.developer : undefined,
         hasArticle: result.evidence.includes("article"),
         usedTranscript: result.evidence.includes("transcript"),
         // No primary game means nothing here is the subject - a Direct is not

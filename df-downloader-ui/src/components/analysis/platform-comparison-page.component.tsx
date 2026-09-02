@@ -18,7 +18,12 @@ import {
   Typography,
   alpha,
 } from "@mui/material";
-import { PlatformComparisonResponse, PlatformComparisonRow, PlatformMode, normaliseName } from "df-downloader-common";
+import {
+  PlatformComparisonResponse,
+  PlatformComparisonRow,
+  PlatformMode,
+  normaliseName,
+} from "df-downloader-common";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { fetchPlatformComparison } from "../../api/ai-analysis.ts";
 import { monoFontFamily } from "../../themes/build-theme.ts";
@@ -148,6 +153,22 @@ const ComparisonRow = ({
         {conciseFormatDate(row.publishedDate)}
         {row.developer ? ` · ${row.developer}` : ""}
       </Typography>
+      {/*
+        Shown only on single-platform rows, not on every row. A face-off is
+        what this table looks like it is made of, so labelling those adds
+        nothing; a port or patch analysis sitting among them is the case the
+        reader needs telling about, since it populates a single column.
+
+        Derived from the platforms actually extracted rather than from a
+        content type, which is what this used to read - that type was a guess
+        made from the title before extraction ran, and it was wrong often
+        enough that the two types were merged.
+      */}
+      {!row.isFaceOff && (
+        <Typography variant="caption" sx={{ color: "text.disabled", display: "block", fontStyle: "italic" }}>
+          Single platform
+        </Typography>
+      )}
       <Stack direction="row" spacing={0.5} sx={{ mt: 0.5 }}>
         {row.hasArticle && (
           <Tooltip title="Grounded in Digital Foundry's written article">
@@ -301,7 +322,7 @@ export const PlatformComparisonPage = () => {
       {data.rows.length === 0 ? (
         <Paper variant="outlined" sx={{ p: 3 }}>
           <Typography variant="body2" sx={{ color: "text.secondary" }}>
-            No console comparisons analysed yet. Analyse a face-off or tech review and it will appear here.
+            No per-platform analyses yet. Analyse a face-off, a port or a patch review and it will appear here.
           </Typography>
         </Paper>
       ) : (

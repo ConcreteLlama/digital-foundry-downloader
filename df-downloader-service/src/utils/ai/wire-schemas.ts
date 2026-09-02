@@ -36,11 +36,9 @@ const nullableString = () => z.string().nullable();
 const nullableNumber = () => z.number().nullable();
 
 export const WireContentType = z.enum([
-  "platform_comparison",
-  "single_platform_analysis",
+  "platform_tech_review",
   "pc_review_settings",
   "hands_on_preview",
-  "game_retrospective",
   "hardware_review",
   "tech_explainer",
   "interview",
@@ -149,15 +147,7 @@ export const WireKnownIssue = z.object({
   quote: nullableString(),
 });
 
-/** Second call, platform_comparison branch. 9 union params. */
-export const WirePlatformComparison = z.object({
-  game: nullableString(),
-  developer: nullableString(),
-  platforms: z.array(WirePlatform),
-  knownIssues: z.array(WireKnownIssue),
-  recommendation: nullableString(),
-});
-export type WirePlatformComparison = z.infer<typeof WirePlatformComparison>;
+
 
 export const WireSetting = z.object({
   name: z.string(),
@@ -215,17 +205,24 @@ export const WireQaSegment = z.object({
   quote: nullableString(),
 });
 
-/** Second call, single_platform_analysis branch. Same platform shape as a face-off. */
-export const WireSinglePlatformAnalysis = z.object({
+/**
+ * Second call, platform_tech_review branch. 10 union params.
+ *
+ * One schema where there were two. The face-off and single-platform variants
+ * held identical fields apart from `changeSummary`, so the merged type simply
+ * always offers it - a face-off leaves it null, which costs one parameter and
+ * removes a classification decision that was wrong nine times out of twelve.
+ */
+export const WirePlatformTechReview = z.object({
   game: nullableString(),
   developer: nullableString(),
   platforms: z.array(WirePlatform),
-  /** What changed against a previous version, patch or platform. */
+  /** What changed against a previous version, patch or platform. Null when nothing did. */
   changeSummary: nullableString(),
   knownIssues: z.array(WireKnownIssue),
-  verdict: nullableString(),
+  recommendation: nullableString(),
 });
-export type WireSinglePlatformAnalysis = z.infer<typeof WireSinglePlatformAnalysis>;
+export type WirePlatformTechReview = z.infer<typeof WirePlatformTechReview>;
 
 export const WireHardwareProduct = z.object({
   name: z.string(),

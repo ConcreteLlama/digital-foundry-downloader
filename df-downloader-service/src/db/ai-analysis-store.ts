@@ -1,7 +1,6 @@
 import {
   AiAnalysisIndexEntry,
   AiAnalysisResult,
-  AiContentTypeRenames,
   logger,
   makeAiAnalysisIndexEntry,
   zodParse,
@@ -65,7 +64,7 @@ type AiAnalysisIndexFile = z.infer<typeof AiAnalysisIndexFile>;
  * it every analysed item compares against the wrong tags and reads as
  * permanently out of date.
  */
-const CURRENT_VERSION = "1.2.0";
+const CURRENT_VERSION = "1.3.0";
 
 /**
  * Schema version of an individual result file.
@@ -81,7 +80,7 @@ const CURRENT_VERSION = "1.2.0";
  * Files written before this existed carry no version and are treated as
  * 1.0.0.
  */
-const RESULT_SCHEMA_VERSION = "1.1.0";
+const RESULT_SCHEMA_VERSION = "1.2.0";
 const UNVERSIONED_RESULT_SCHEMA = "1.0.0";
 
 /**
@@ -97,6 +96,43 @@ const UNVERSIONED_RESULT_SCHEMA = "1.0.0";
  * untouched rather than guessed at. Downgrading is not supported, but
  * silently mangling the file would be worse than failing to read it.
  */
+/**
+ * Each step's renames, as they were at the time.
+ *
+ * Deliberately not `AiContentTypeRenames`, which flattens every historical
+ * name onto its *current* one. That flat map is right for asking "what is
+ * this old name now", and wrong inside a version chain: a 1.0.0 file run
+ * through it would land on the final name in one hop, skipping the
+ * intermediate state that the next step needs to recognise - which is exactly
+ * how the `verdict` field move below would lose track of which payloads it
+ * applies to.
+ */
+const V1_1_RENAMES: Record<string, string> = {
+  console_comparison: "platform_comparison",
+  platform_analysis: "single_platform_analysis",
+};
+
+const V1_2_RENAMES: Record<string, string> = {
+  platform_comparison: "platform_tech_review",
+  single_platform_analysis: "platform_tech_review",
+  game_retrospective: "platform_tech_review",
+};
+
+/** Applies a rename to both places the content type is recorded. */
+const renameContentType = (result: any, renames: Record<string, string>) => {
+  if (!result) {
+    return;
+  }
+  const renamed = renames[result.contentType];
+  if (renamed) {
+    result.contentType = renamed;
+  }
+  const structuredRenamed = result.structuredData ? renames[result.structuredData.contentType] : undefined;
+  if (structuredRenamed) {
+    result.structuredData.contentType = structuredRenamed;
+  }
+};
+
 const patchResultFile = (stored: any): { stored: any; patched: boolean } => {
   let version: string = stored?.schemaVersion || UNVERSIONED_RESULT_SCHEMA;
   let patched = false;
@@ -107,20 +143,34 @@ const patchResultFile = (stored: any): { stored: any; patched: boolean } => {
       // platform_analysis became single_platform_analysis. The type is
       // recorded in two places and both have to move together, or the
       // discriminated union stops matching the result's own content type.
-      const result = stored?.result;
-      if (result) {
-        const renamed = AiContentTypeRenames[result.contentType];
-        if (renamed) {
-          result.contentType = renamed;
+      renameContentType(stored?.result, V1_1_RENAMES);
+      version = "1.1.0";
+      patched = true;
+    } else if (version === "1.1.0") {
+      /*
+       * 1.1.0 -> 1.2.0: platform_comparison and single_platform_analysis were
+       * one type wearing two labels, and game_retrospective was mostly port
+       * analyses wearing a third. All three become platform_tech_review.
+       *
+       * The payloads also named the same claim differently - `verdict` on the
+       * single-platform type, `recommendation` on the other - so the survivor
+       * takes `recommendation` and the old field is moved into it. That has to
+       * be decided from the type the file had BEFORE the rename, which is why
+       * it is read first: afterwards every one of them says platform_tech_review
+       * and there is no way to tell which payloads carried a verdict.
+       */
+      const structured = stored?.result?.structuredData;
+      const wasSinglePlatform = structured?.contentType === "single_platform_analysis";
+      renameContentType(stored?.result, V1_2_RENAMES);
+      if (wasSinglePlatform && structured) {
+        // Only ever set when the old field was present, so a payload that
+        // genuinely had neither stays absent rather than gaining a null.
+        if (structured.verdict !== undefined) {
+          structured.recommendation = structured.verdict;
         }
-        const structuredRenamed = result.structuredData
-          ? AiContentTypeRenames[result.structuredData.contentType]
-          : undefined;
-        if (structuredRenamed) {
-          result.structuredData.contentType = structuredRenamed;
-        }
+        delete structured.verdict;
       }
-      version = RESULT_SCHEMA_VERSION;
+      version = "1.2.0";
       patched = true;
     } else {
       logger.log("warn", `Analysis result file is at unknown schema version ${version}, leaving it alone`);

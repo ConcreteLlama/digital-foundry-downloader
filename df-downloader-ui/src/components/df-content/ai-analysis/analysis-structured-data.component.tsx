@@ -14,10 +14,9 @@ import {
   Typography,
 } from "@mui/material";
 import {
-  AiPlatformComparisonData,
   AiHardwareReviewData,
   AiPcReviewSettingsData,
-  AiSinglePlatformAnalysisData,
+  AiPlatformTechReviewData,
   AiPlatformEntry,
   AiPreviewData,
   AiQaSegment,
@@ -231,7 +230,7 @@ const KnownIssues = ({
   issues,
   onJumpTo,
 }: {
-  issues: AiPlatformComparisonData["knownIssues"];
+  issues: AiPlatformTechReviewData["knownIssues"];
   onJumpTo?: (seconds: number) => void;
 }) =>
   issues.length ? (
@@ -252,26 +251,6 @@ const KnownIssues = ({
     </Box>
   ) : null;
 
-const ConsoleComparison = ({ data, onJumpTo }: { data: AiPlatformComparisonData; onJumpTo?: (seconds: number) => void }) => (
-  <Stack spacing={2}>
-    {(data.game || data.developer) && (
-      <Typography variant="body2" sx={{ color: "text.secondary" }}>
-        {data.game}
-        {data.developer ? ` · ${data.developer}` : ""}
-      </Typography>
-    )}
-    <PlatformGrid platforms={data.platforms} onJumpTo={onJumpTo} />
-    <KnownIssues issues={data.knownIssues} onJumpTo={onJumpTo} />
-    {data.recommendation && (
-      <Box>
-        <SectionLabel>Recommendation</SectionLabel>
-        <Typography variant="body2" sx={{ mt: 0.5 }}>
-          {data.recommendation}
-        </Typography>
-      </Box>
-    )}
-  </Stack>
-);
 
 /**
  * Per-segment, because a roundtable holds several independent and
@@ -387,11 +366,20 @@ const SegmentList = ({ segments, onJumpTo }: { segments: AiQaSegment[]; onJumpTo
   </Stack>
 );
 
-const PlatformAnalysis = ({
+/**
+ * One game examined technically, on however many platforms.
+ *
+ * A single component where there were two. The face-off and single-platform
+ * renderings differed only in whether they offered "What changed" and whether
+ * they called the bottom line a verdict or a recommendation - and both
+ * sections are conditional, so a face-off with no delta simply omits the
+ * first exactly as it did before.
+ */
+const PlatformTechReview = ({
   data,
   onJumpTo,
 }: {
-  data: AiSinglePlatformAnalysisData;
+  data: AiPlatformTechReviewData;
   onJumpTo?: (seconds: number) => void;
 }) => (
   <Stack spacing={2}>
@@ -413,11 +401,11 @@ const PlatformAnalysis = ({
     )}
     <PlatformGrid platforms={data.platforms} onJumpTo={onJumpTo} />
     <KnownIssues issues={data.knownIssues} onJumpTo={onJumpTo} />
-    {data.verdict && (
+    {data.recommendation && (
       <Box>
-        <SectionLabel>Verdict</SectionLabel>
+        <SectionLabel>Recommendation</SectionLabel>
         <Typography variant="body2" sx={{ mt: 0.5 }}>
-          {data.verdict}
+          {data.recommendation}
         </Typography>
       </Box>
     )}
@@ -539,10 +527,8 @@ export const AnalysisStructuredData = ({
   switch (data.contentType) {
     case "pc_review_settings":
       return <PcReviewSettings data={data} onJumpTo={onJumpTo} />;
-    case "platform_comparison":
-      return <ConsoleComparison data={data} onJumpTo={onJumpTo} />;
-    case "single_platform_analysis":
-      return <PlatformAnalysis data={data} onJumpTo={onJumpTo} />;
+    case "platform_tech_review":
+      return <PlatformTechReview data={data} onJumpTo={onJumpTo} />;
     case "hands_on_preview":
       return <HandsOnPreview data={data} onJumpTo={onJumpTo} />;
     case "hardware_review":
