@@ -99,6 +99,15 @@ export type AnalysisStage = {
   of: number;
   label: string;
   /**
+   * Blocked waiting for the machine rather than working - see LocalComputeGate.
+   *
+   * Reported separately from the label because it is not a step of its own: the
+   * run has not moved on, it has not started. A caller should say so rather
+   * than showing the step it is about to do with a frozen token count, which
+   * is what made a waiting analysis look like a hung one.
+   */
+  waiting?: boolean;
+  /**
    * How much of the run is behind you, from the weights below.
    *
    * Only ever advances at step boundaries, which are the points genuinely
@@ -899,10 +908,13 @@ export const analyseContent = async (config: AiAnalysisConfig, inputs: AnalysisI
       inputs.onStage?.(stage);
     };
     /** Re-reports the current stage with the tokens generated so far. */
-    const reportTokens = ({ outputTokens }: { outputTokens: number }) => {
-      if (stage) {
-        inputs.onStage?.({ ...stage, outputTokens });
+    const reportTokens = ({ outputTokens, waiting }: { outputTokens: number; waiting?: boolean }) => {
+      if (!stage) {
+        return;
       }
+      // A wait carries no token count - nothing has been generated yet - so the
+      // count is left off rather than reported as a genuine zero.
+      inputs.onStage?.(waiting === undefined ? { ...stage, outputTokens } : { ...stage, waiting });
     };
 
     if (provider.separatesClassification) {

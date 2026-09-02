@@ -238,7 +238,7 @@ export const makeLocalProvider = (config: AiLocalProviderConfig, server: LocalLl
     system: string,
     content: string,
     instruction: string,
-    onProgress?: (progress: { outputTokens: number }) => void
+    onProgress?: (progress: { outputTokens: number; waiting?: boolean }) => void
   ) => {
     const baseUrl = await server.acquire();
     try {
@@ -265,7 +265,9 @@ export const makeLocalProvider = (config: AiLocalProviderConfig, server: LocalLl
        * model, which is not proportional to tokens either way.
        */
       let inferenceMs = 0;
-      const streamed = await localComputeGate.withExclusive("Local analysis", async () => {
+      const streamed = await localComputeGate.withExclusive(
+        "Local analysis",
+        async () => {
         const inferenceStartedAt = Date.now();
         try {
           return await postStream(
@@ -295,7 +297,9 @@ export const makeLocalProvider = (config: AiLocalProviderConfig, server: LocalLl
         } finally {
           inferenceMs = Date.now() - inferenceStartedAt;
         }
-      });
+        },
+        (waiting) => onProgress?.({ outputTokens: 0, waiting })
+      );
 
       const text = streamed.text;
       if (!text) {

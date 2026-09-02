@@ -93,11 +93,18 @@ const aiAnalysisTaskControls: TaskControls<AiAnalysisResult, AiAnalysisTaskConte
        * a running number rather than a percentage because the model decides
        * when it stops.
        */
-      onStage: ({ step, of, label, outputTokens, fractionComplete }) => {
+      onStage: ({ step, of, label, outputTokens, fractionComplete, waiting }) => {
         context.fractionComplete = fractionComplete;
-        context.stage = `${label} (step ${step} of ${of})${
-          outputTokens ? ` - ${outputTokens} tokens written` : ""
-        }`;
+        /*
+         * A wait replaces the step description rather than decorating it. The
+         * run has not started this step, so naming it alongside a frozen token
+         * count is the thing that read as a hang - transcription and local
+         * analysis cannot share the machine, and saying which is the honest
+         * answer to "why is nothing happening".
+         */
+        context.stage = waiting
+          ? "Waiting for transcription to finish"
+          : `${label} (step ${step} of ${of})${outputTokens ? ` - ${outputTokens} tokens written` : ""}`;
       },
     });
     // analyseContent reports an ordinary failure inside the result rather

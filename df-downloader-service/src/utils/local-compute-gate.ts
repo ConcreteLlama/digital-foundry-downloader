@@ -73,13 +73,23 @@ class LocalComputeGate {
   }
 
   /** Transcription: runs alongside other transcriptions, never with analysis. */
-  async withShared<T>(label: string, fn: () => Promise<T>): Promise<T> {
-    if (this.exclusiveHeld || this.exclusiveWaiting > 0) {
+  async withShared<T>(
+    label: string,
+    fn: () => Promise<T>,
+    /** Fires true when this has to block, false once it has the machine. */
+    onWait?: (waiting: boolean) => void
+  ): Promise<T> {
+    const mustWait = this.exclusiveHeld || this.exclusiveWaiting > 0;
+    if (mustWait) {
       logger.log("debug", `${label} waiting for local analysis to finish`);
+      onWait?.(true);
     }
     // Queues behind an analysis that is already waiting, rather than
     // overtaking it - see exclusiveWaiting.
     await this.waitUntil(() => !this.exclusiveHeld && this.exclusiveWaiting === 0);
+    if (mustWait) {
+      onWait?.(false);
+    }
     this.shared++;
     try {
       return await fn();
@@ -90,15 +100,33 @@ class LocalComputeGate {
   }
 
   /** Local analysis: waits for the machine to be entirely its own. */
-  async withExclusive<T>(label: string, fn: () => Promise<T>): Promise<T> {
-    if (this.exclusiveHeld || this.shared > 0) {
+  async withExclusive<T>(
+    label: string,
+    fn: () => Promise<T>,
+    /**
+     * Fires true when this genuinely has to block, and false once the machine
+     * is acquired.
+     *
+     * Without it a waiting analysis is indistinguishable from a slow one: the
+     * task is inside a provider call either way, so it reports itself running
+     * and sits at no progress for minutes, which reads as a hang rather than
+     * as this protection working.
+     */
+    onWait?: (waiting: boolean) => void
+  ): Promise<T> {
+    const mustWait = this.exclusiveHeld || this.shared > 0;
+    if (mustWait) {
       logger.log("debug", `${label} waiting for ${this.shared} transcription(s) to finish`);
+      onWait?.(true);
     }
     this.exclusiveWaiting++;
     try {
       await this.waitUntil(() => !this.exclusiveHeld && this.shared === 0);
     } finally {
       this.exclusiveWaiting--;
+      if (mustWait) {
+        onWait?.(false);
+      }
     }
     this.exclusiveHeld = true;
     try {

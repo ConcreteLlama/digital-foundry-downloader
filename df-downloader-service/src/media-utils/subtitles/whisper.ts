@@ -183,7 +183,8 @@ export class WhisperSubtitleGenerator implements SubtitleGenerator {
     modelPath: string,
     onStderr: (chunk: string) => void,
     onStdout?: (chunk: string) => void,
-    signal?: AbortSignal
+    signal?: AbortSignal,
+    onWait?: (waiting: boolean) => void
   ) {
     try {
       /*
@@ -192,8 +193,10 @@ export class WhisperSubtitleGenerator implements SubtitleGenerator {
        * local analysis grinding against them for the same cores - see
        * localComputeGate.
        */
-      return await localComputeGate.withShared("Transcription", () =>
-        runCommand(this.binaryPath, args, undefined, { onStderr, onStdout, signal })
+      return await localComputeGate.withShared(
+        "Transcription",
+        () => runCommand(this.binaryPath, args, undefined, { onStderr, onStdout, signal }),
+        onWait
       );
     } catch (e) {
       const size = await fs.promises
@@ -337,7 +340,26 @@ export class WhisperSubtitleGenerator implements SubtitleGenerator {
           // the file exists, not when the last segment happens to land on the
           // end of the audio.
           report(toOverallPercent(Math.min(99, (seconds / durationSeconds) * 100)), transcribeDetail);
-        }
+        },
+        /*
+         * The signal was declared on transcribe and forwarded to runCommand,
+         * but never actually passed in - so it was always undefined and a stop
+         * could not reach the whisper process. The only abort check was the
+         * boundary one above, which happens before transcription starts, so
+         * stopping a running one did nothing until it finished on its own.
+         */
+        signal,
+        /*
+         * Transcription is not always working when it looks like it. It blocks
+         * here while a local analysis holds the machine, and the last caption
+         * set was "Loading model", so a queued transcription presented as a
+         * progressing one - the same way a waiting analysis used to.
+         */
+        (waiting) =>
+          report(
+            EXTRACTION_PERCENT_SPAN,
+            waiting ? "Waiting for the analysis to finish" : `Loading ${this.config.model} model`
+          )
       );
       logger.log("info", `Transcribed ${filename} in ${Math.round((Date.now() - startedAt) / 1000)}s`);
       if (!(await fileExists(srtPath))) {

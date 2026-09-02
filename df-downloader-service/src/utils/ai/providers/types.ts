@@ -110,7 +110,15 @@ export type AiProvider = {
      * there is no denominator that is not invented. Local streams and reports;
      * the hosted path does not, and simply never calls this.
      */
-    onProgress?: (progress: { outputTokens: number }) => void
+    onProgress?: (progress: {
+      outputTokens: number;
+      /**
+       * Blocked waiting for the machine rather than generating - see
+       * LocalComputeGate. Reported so a caller can say so instead of showing
+       * a stalled token count.
+       */
+      waiting?: boolean;
+    }) => void
   ): Promise<AiCallResult<z.infer<T>>>;
 
   /**
