@@ -1,4 +1,4 @@
-import { Alert, Box, Button, Divider, Stack, Typography } from "@mui/material";
+import { Alert, Box, Button, Divider, Stack, TextField, Typography } from "@mui/material";
 import {
   JellyfinMediaServerConfig,
   JellyfinServerKey,
@@ -9,6 +9,8 @@ import {
   applyPathMapping,
 } from "df-downloader-common/config/media-servers-config";
 import {
+  JellyfinSignInRequest,
+  JellyfinSignInResponse,
   MediaServerLibrary,
   TestMediaServerRequest,
   TestMediaServerResponse,
@@ -57,6 +59,7 @@ const MediaServerSettings = () => (
       credentialSchema={PlexMediaServerConfig.shape.token}
       urlSchema={PlexMediaServerConfig.shape.url}
       enabledSchema={PlexMediaServerConfig.shape.enabled}
+      playStateSchema={PlexMediaServerConfig.shape.syncPlayState}
       urlHint="e.g. http://192.168.1.10:32400"
     />
     <Divider />
@@ -68,6 +71,7 @@ const MediaServerSettings = () => (
       credentialSchema={JellyfinMediaServerConfig.shape.apiKey}
       urlSchema={JellyfinMediaServerConfig.shape.url}
       enabledSchema={JellyfinMediaServerConfig.shape.enabled}
+      playStateSchema={JellyfinMediaServerConfig.shape.syncPlayState}
       urlHint="e.g. http://192.168.1.10:8096"
     />
   </Stack>
@@ -81,6 +85,7 @@ type ServerSectionProps = {
   credentialSchema: any;
   urlSchema: any;
   enabledSchema: any;
+  playStateSchema: any;
   urlHint: string;
 };
 
@@ -92,6 +97,7 @@ const ServerSection = ({
   credentialSchema,
   urlSchema,
   enabledSchema,
+  playStateSchema,
   urlHint,
 }: ServerSectionProps) => {
   const base = `servers.${type}`;
@@ -149,6 +155,18 @@ const ServerSection = ({
           */}
           {test.status === "success" && <Alert severity="success">{test.message}</Alert>}
           {test.status === "error" && <Alert severity="error">{test.message}</Alert>}
+          {/*
+            A separate toggle from "tell this server when files change",
+            because they are different jobs: announcing a changed folder is a
+            server-level action, while play state belongs to a person and
+            needs a credential identifying one.
+          */}
+          <ZodCheckboxField
+            name={`${base}.syncPlayState`}
+            label={`Update ${title} when you watch something in this app's player`}
+            zodBoolean={playStateSchema}
+          />
+          {type === JellyfinServerKey ? <JellyfinPlayStateSignIn base={base} /> : null}
           <PathMapping
             base={base}
             title={title}
@@ -156,6 +174,92 @@ const ServerSection = ({
           />
         </>
       ) : null}
+    </Stack>
+  );
+};
+
+/**
+ * Signs in to Jellyfin so play state can be attributed to a person.
+ *
+ * The username and password live in local state and are never registered as
+ * form fields, so they cannot be written to config.yaml - only the user id and
+ * token the exchange returns are. Jellyfin needs this because play state is
+ * per-user and recent versions refuse played-status writes made with an API
+ * key; Plex needs no equivalent, since its token already identifies a user.
+ */
+type SignInState =
+  | { status: "idle" }
+  | { status: "signing-in" }
+  | { status: "success"; message: string }
+  | { status: "error"; message: string };
+
+const JellyfinPlayStateSignIn = ({ base }: { base: string }) => {
+  const { setValue } = useFormContext();
+  const syncPlayState = useWatch({ name: `${base}.syncPlayState` });
+  const url = useWatch({ name: `${base}.url` });
+  const signedInUserId = useWatch({ name: `${base}.userId` });
+  const [username, setUsername] = useState("");
+  const [password, setPassword] = useState("");
+  const [state, setState] = useState<SignInState>({ status: "idle" });
+
+  if (!syncPlayState) {
+    return null;
+  }
+
+  const signIn = async () => {
+    setState({ status: "signing-in" });
+    try {
+      const body: JellyfinSignInRequest = { url, username, password };
+      const data = await fetchJson(`${API_URL}/media-servers/jellyfin-sign-in`, {
+        method: "POST",
+        body: JSON.stringify(body),
+        headers: { "Content-Type": "application/json" },
+      });
+      const result = parseResponseBody(data, JellyfinSignInResponse);
+      if (result.data?.ok && result.data.userId && result.data.userToken) {
+        setValue(`${base}.userId`, result.data.userId, { shouldDirty: true });
+        setValue(`${base}.userToken`, result.data.userToken, { shouldDirty: true });
+        setPassword("");
+        setState({ status: "success", message: `Signed in as ${result.data.username ?? username}. Save to keep this.` });
+      } else {
+        setState({ status: "error", message: result.data?.error || "Could not sign in." });
+      }
+    } catch (e: any) {
+      setState({ status: "error", message: e?.message || "Could not sign in." });
+    }
+  };
+
+  return (
+    <Stack spacing={1} sx={{ pl: 2, borderLeft: 2, borderColor: "divider" }}>
+      <Typography variant="body2" color="text.secondary">
+        Jellyfin records what was watched against a person, so this needs your Jellyfin login rather than the API
+        key above. Your password is exchanged for a token and not stored.
+      </Typography>
+      {signedInUserId ? (
+        <Alert severity="success">Signed in. Sign in again only if play state stops working.</Alert>
+      ) : null}
+      <Box sx={{ display: "flex", gap: 1, alignItems: "flex-start" }}>
+        <TextField
+          label="Jellyfin username"
+          value={username}
+          onChange={(e) => setUsername(e.target.value)}
+          size="small"
+          sx={{ flex: 1 }}
+        />
+        <TextField
+          label="Jellyfin password"
+          type="password"
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+          size="small"
+          sx={{ flex: 1 }}
+        />
+        <Button variant="outlined" disabled={!username || !url || state.status === "signing-in"} onClick={signIn}>
+          {state.status === "signing-in" ? "Signing in..." : "Sign in"}
+        </Button>
+      </Box>
+      {state.status === "success" && <Alert severity="success">{state.message}</Alert>}
+      {state.status === "error" && <Alert severity="error">{state.message}</Alert>}
     </Stack>
   );
 };

@@ -29,7 +29,13 @@ import {
   buildTagOnlyContentBlock,
   buildTagOnlyInstruction,
 } from "./prompts.js";
-import { ResolvedTranscript, locateQuote, resolveTranscript, srtLinesToTextWithOffsets } from "./transcript.js";
+import {
+  ResolvedTranscript,
+  locateQuote,
+  quoteAppearsIn,
+  resolveTranscript,
+  srtLinesToTextWithOffsets,
+} from "./transcript.js";
 import {
   WireConsoleComparison,
   WireHardwareReview,
@@ -121,6 +127,16 @@ type PreparedCall = {
   evidence: AiEvidenceSource[];
   /** Present when the transcript carried timings, so findings can be anchored. */
   transcript?: ResolvedTranscript;
+  /** Content with `[Ns]` transcript markers, for extraction when it fits the context. */
+  contentMarked?: string;
+  /**
+   * The article text, when one was used.
+   *
+   * Carried purely so anchoring can tell a correct article citation from an
+   * invented quote. Without it every article-sourced finding looks identical
+   * to a hallucination.
+   */
+  articleText?: string;
 };
 
 /**
@@ -214,6 +230,13 @@ export const prepareAnalysis = async (config: AiAnalysisConfig, inputs: Analysis
   const tagsOnly = !transcript && !articleText;
   const flags = { hasTranscript: Boolean(transcript), hasArticle: Boolean(articleText) };
 
+  /*
+   * Markers are only safe when the text sent is exactly the text resolved.
+   * The offsets describe the untruncated transcript, so a truncated one would
+   * carry markers against the wrong words - worse than no markers at all.
+   */
+  const anchorable = resolved && transcript === resolved.text ? resolved : undefined;
+
   return {
     // Carried so the extraction instruction can vary with the sources - see
     // BOTH_SOURCES_COUNT, which only applies when there are two of them.
@@ -232,7 +255,19 @@ export const prepareAnalysis = async (config: AiAnalysisConfig, inputs: Analysis
     // transcript passed in as prose, or dropped for exceeding the length
     // limit, cannot anchor anything - and a quote located against different
     // text would be worse than no timestamp at all.
-    transcript: resolved && transcript === resolved.text ? resolved : undefined,
+    /*
+     * The same content, but with [Ns] markers on the transcript, offered to
+     * the extraction call only. Whether it is actually used is a context
+     * question decided per run - see extractStructuredData.
+     */
+    contentMarked:
+      !tagsOnly && anchorable
+        ? buildContentBlock({ contentInfo, transcript: anchorable.markedText, chapters, articleText })
+        : undefined,
+    transcript: anchorable,
+    // Unconditional, unlike the transcript above: confirming a quote exists in
+    // the article needs no offsets, so there is nothing to invalidate it.
+    articleText,
   };
 };
 
@@ -330,14 +365,52 @@ const mergeGames = (
  * null and keeps the quote, which is the honest outcome and also the
  * evidence for why it failed.
  */
-const anchorFindings = (data: AiStructuredData, transcript?: ResolvedTranscript): AiStructuredData => {
-  if (!transcript) {
+const anchorFindings = (
+  data: AiStructuredData,
+  transcript?: ResolvedTranscript,
+  articleText?: string
+): AiStructuredData => {
+  if (!transcript && !articleText) {
     return data;
   }
-  const at = <T extends { quote?: string | null }>(item: T) => ({
-    ...item,
-    timestampSeconds: item.quote ? locateQuote(transcript, item.quote) ?? null : null,
-  });
+  /*
+   * Transcript first, article second, neither last.
+   *
+   * The order is the point. A quote found in the transcript yields an exact
+   * moment and is the best outcome. One found only in the article is still a
+   * correct citation - Digital Foundry writes as well as talks, and the prompt
+   * tells the model to prefer the written source - it simply has no moment to
+   * jump to. Only a quote in neither is suspect.
+   *
+   * Before this, the second and third cases were indistinguishable, and the
+   * article ones are the more common of the two by roughly two to one.
+   */
+  /*
+   * Transcript first, article second, neither last.
+   *
+   * The order is the point. A quote found in the transcript yields an exact
+   * moment and is the best outcome. One found only in the article is still a
+   * correct citation - Digital Foundry writes as well as talks, and the prompt
+   * tells the model to prefer the written source - it simply has no moment to
+   * jump to. Only a quote in neither is suspect.
+   *
+   * Measured over the stored corpus, the second case outnumbers the third by
+   * roughly two to one, so treating them alike libelled correct citations more
+   * often than it caught real ones.
+   */
+  const at = <T extends { quote?: string | null }>(item: T) => {
+    if (!item.quote) {
+      return { ...item, timestampSeconds: null, quoteSource: null };
+    }
+    const seconds = transcript ? locateQuote(transcript, item.quote) : undefined;
+    if (seconds !== undefined) {
+      return { ...item, timestampSeconds: seconds, quoteSource: "transcript" as const };
+    }
+    if (quoteAppearsIn(articleText, item.quote)) {
+      return { ...item, timestampSeconds: null, quoteSource: "article" as const };
+    }
+    return { ...item, timestampSeconds: null, quoteSource: null };
+  };
 
   switch (data.contentType) {
     case "console_comparison":
@@ -386,6 +459,8 @@ export const estimateAnalysisCost = async (
   const provider = makeProvider(config, inputs.provider);
   const prepared = await prepareAnalysis(config, inputs);
   const instruction = prepared.tagsOnly ? buildTagOnlyInstruction(config) : buildOverviewInstruction(config);
+  // The plain content deliberately: this sizes the overview call, which never
+  // carries transcript markers - only extraction does.
   const inputTokens = await provider.countInputTokens(prepared.system, prepared.content, instruction);
 
   const capabilities = AiAnalysisConfigUtils.capabilities(config.model);
@@ -453,21 +528,77 @@ const mapTags = (
  * keeping - losing the whole result over the optional half would be a
  * poor trade, and the failure is logged either way.
  */
+/**
+ * How much of the window to leave for the model's own answer.
+ *
+ * Extraction is the long output - a face-off returns every platform and mode -
+ * so this is deliberately generous. The measured worst case left ~10,900
+ * tokens spare with markers on, and succeeded.
+ */
+const EXTRACTION_OUTPUT_HEADROOM_TOKENS = 8000;
+
+/**
+ * Transcript markers if they fit, plain text if they do not.
+ *
+ * A context-budget question, answered by counting the tokens rather than by
+ * guessing from duration. Duration is a poor proxy: token density per minute
+ * runs *inversely* to length - a short, densely-spoken preview measured 576
+ * tokens per minute against 282 for a feature-length Direct - so the longest
+ * video is not reliably the tightest fit.
+ */
+const chooseExtractionPrompt = async (
+  provider: AiProvider,
+  prepared: PreparedCall,
+  contentType: WireContentType,
+  plainInstruction: string
+): Promise<{ content: string; instruction: string }> => {
+  const plain = { content: prepared.content, instruction: plainInstruction };
+  if (!prepared.contentMarked || !provider.usesTranscriptMarkers) {
+    return plain;
+  }
+  // The marked instruction explains the markers, so it is what must be sized -
+  // measuring the plain one would under-count what actually gets sent.
+  const instruction = buildExtractionInstruction(contentType, { ...prepared.flags, hasMarkers: true });
+  if (!instruction) {
+    return plain;
+  }
+  const marked = { content: prepared.contentMarked, instruction };
+  if (!provider.contextTokens) {
+    return marked;
+  }
+  try {
+    const tokens = await provider.countInputTokens(prepared.system, marked.content, marked.instruction);
+    if (tokens + EXTRACTION_OUTPUT_HEADROOM_TOKENS <= provider.contextTokens) {
+      return marked;
+    }
+    logger.log(
+      "info",
+      `Transcript position markers would need ${tokens} prompt tokens against a ${provider.contextTokens} window, so they were left out for this one. Findings will still be located, just slightly less often.`
+    );
+  } catch (e) {
+    // Counting is a convenience, not a requirement - fall back to the form
+    // that certainly fits rather than failing the analysis over it.
+    logger.log("debug", `Could not size the marked prompt, using the plain transcript: ${e}`);
+  }
+  return plain;
+};
+
 const extractStructuredData = async (
   provider: AiProvider,
   config: AiAnalysisConfig,
   prepared: PreparedCall,
   contentType: WireContentType
 ): Promise<{ data?: AiStructuredData; usage?: AiAnalysisUsage }> => {
-  const instruction = buildExtractionInstruction(contentType, prepared.flags);
-  if (!instruction) {
+  const plainInstruction = buildExtractionInstruction(contentType, prepared.flags);
+  if (!plainInstruction) {
     return {};
   }
+  const { content, instruction } = await chooseExtractionPrompt(provider, prepared, contentType, plainInstruction);
   try {
     switch (contentType) {
       case "console_comparison": {
         const { parsed, usage } = await provider.callStructured(
-          WireConsoleComparison, prepared.system, prepared.content, instruction
+          WireConsoleComparison, prepared.system, content, instruction
         );
         return {
           data: {
@@ -483,7 +614,7 @@ const extractStructuredData = async (
       }
       case "pc_review_settings": {
         const { parsed, usage } = await provider.callStructured(
-          WirePcReviewSettings, prepared.system, prepared.content, instruction
+          WirePcReviewSettings, prepared.system, content, instruction
         );
         return {
           data: {
@@ -511,7 +642,7 @@ const extractStructuredData = async (
       }
       case "platform_analysis": {
         const { parsed, usage } = await provider.callStructured(
-          WirePlatformAnalysis, prepared.system, prepared.content, instruction
+          WirePlatformAnalysis, prepared.system, content, instruction
         );
         return {
           data: {
@@ -528,7 +659,7 @@ const extractStructuredData = async (
       }
       case "hands_on_preview": {
         const { parsed, usage } = await provider.callStructured(
-          WirePreview, prepared.system, prepared.content, instruction
+          WirePreview, prepared.system, content, instruction
         );
         return {
           data: {
@@ -544,7 +675,7 @@ const extractStructuredData = async (
       }
       case "hardware_review": {
         const { parsed, usage } = await provider.callStructured(
-          WireHardwareReview, prepared.system, prepared.content, instruction
+          WireHardwareReview, prepared.system, content, instruction
         );
         return {
           data: {
@@ -561,7 +692,7 @@ const extractStructuredData = async (
       case "news_discussion":
       case "roundup_list": {
         const { parsed, usage } = await provider.callStructured(
-          WireQaSegments, prepared.system, prepared.content, instruction
+          WireQaSegments, prepared.system, content, instruction
         );
         return parsed.segments.length
           ? { data: { contentType, segments: parsed.segments }, usage }
@@ -721,7 +852,7 @@ export const analyseContent = async (config: AiAnalysisConfig, inputs: AnalysisI
 
     if (config.features.structuredData && EXTRACTABLE_TYPES.includes(overview.contentType)) {
       const extraction = await extractStructuredData(provider, config, prepared, overview.contentType);
-      structuredData = extraction.data ? anchorFindings(extraction.data, prepared.transcript) : undefined;
+      structuredData = extraction.data ? anchorFindings(extraction.data, prepared.transcript, prepared.articleText) : undefined;
       if (extraction.usage) {
         usage = addUsage(usage, extraction.usage);
       }

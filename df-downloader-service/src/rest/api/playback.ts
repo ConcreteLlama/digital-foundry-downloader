@@ -1,4 +1,11 @@
-import { Chapter, PlaybackInfo, PlaybackSubtitleTrack, PlaybackVideoCodec, logger } from "df-downloader-common";
+import {
+  Chapter,
+  PlaybackInfo,
+  PlaybackProgressRequest,
+  PlaybackSubtitleTrack,
+  PlaybackVideoCodec,
+  logger,
+} from "df-downloader-common";
 import express, { Request, Response } from "express";
 import fs from "fs";
 import path from "path";
@@ -11,7 +18,8 @@ import {
 import { sanitizeContentName } from "../../utils/df-utils.js";
 import { extractBaseMetadata } from "../../utils/media-metadata.js";
 import { ServiceContentUtils } from "../../utils/service-content-utils.js";
-import { sendError, sendResponse } from "../utils/utils.js";
+import { serviceLocator } from "../../services/service-locator.js";
+import { sendError, sendResponse, zodParseHttp } from "../utils/utils.js";
 
 /**
  * In-app playback of files this app has already downloaded.
@@ -305,6 +313,25 @@ export const makePlaybackRouter = (contentManager: DigitalFoundryContentManager)
    *
    * See point 1 in the file comment for why Range is mandatory here.
    */
+  /**
+   * The player reporting where it has got to, which is passed on to any media
+   * server set up for play state.
+   *
+   * Answers 200 even when nothing was recorded. The player is not in a
+   * position to do anything useful about a media server being down, and a
+   * failed request here would only produce console noise during playback.
+   */
+  router.post("/:contentKey/progress", async (req: Request, res: Response) => {
+    const resolved = await resolveDownload(req);
+    if (!resolved.ok) {
+      return sendError(res, resolved.error, resolved.code);
+    }
+    await zodParseHttp(PlaybackProgressRequest, req, res, async ({ positionSeconds, durationSeconds }) => {
+      await serviceLocator.mediaServers.reportPlayback(resolved.filePath, positionSeconds, durationSeconds);
+      return sendResponse(res, { recorded: true });
+    });
+  });
+
   router.get("/:contentKey/stream", async (req: Request, res: Response) => {
     const resolved = await resolveDownload(req);
     if (!resolved.ok) {

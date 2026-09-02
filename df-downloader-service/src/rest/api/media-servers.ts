@@ -1,5 +1,6 @@
-import { TestMediaServerRequest } from "df-downloader-common";
+import { JellyfinSignInRequest, TestMediaServerRequest } from "df-downloader-common";
 import express, { Request, Response } from "express";
+import { jellyfinSignIn } from "../../media-servers/jellyfin.js";
 import { serviceLocator } from "../../services/service-locator.js";
 import { sendResponse, zodParseHttp } from "../utils/utils.js";
 
@@ -21,6 +22,24 @@ export const makeMediaServersRouter = () => {
         res,
         result.ok
           ? { ok: true, detail: result.detail, libraries: result.libraries }
+          : { ok: false, error: result.error }
+      );
+    });
+  });
+
+  /**
+   * Trades a Jellyfin username and password for a user token.
+   *
+   * The password is used here and not stored - only the id and token it
+   * returns get written to config, which the settings form then saves.
+   */
+  router.post("/jellyfin-sign-in", async (req: Request, res: Response) => {
+    zodParseHttp(JellyfinSignInRequest, req, res, async ({ url, username, password }) => {
+      const result = await jellyfinSignIn(url, username, password);
+      return sendResponse(
+        res,
+        result.ok
+          ? { ok: true, userId: result.userId, userToken: result.userToken, username: result.username }
           : { ok: false, error: result.error }
       );
     });

@@ -33,6 +33,16 @@ export type AiProvider = {
   readonly model: string;
 
   /**
+   * The model's usable context window, when it has one worth checking.
+   *
+   * Undefined for a hosted model, whose window is large enough that nothing
+   * this app sends comes close. Set for local models, where deciding whether
+   * transcript position markers fit is a real question - they cost 18-38% more
+   * prompt tokens.
+   */
+  readonly contextTokens?: number;
+
+  /**
    * Whether this engine wants classification as a call of its own.
    *
    * A per-engine answer because it was measured as one. Asked to classify,
@@ -54,6 +64,16 @@ export type AiProvider = {
    * improvement.
    */
   readonly separatesClassification: boolean;
+
+  /**
+   * Whether the extraction call should carry `[Ns]` transcript markers.
+   *
+   * Per-engine because the measurement was. On a local model they take located
+   * findings from 77% to 85% and halve invented quotes, for 18-38% more prompt
+   * tokens. A hosted model already locates very nearly everything, so the same
+   * tokens would buy nothing and cost money on every run.
+   */
+  readonly usesTranscriptMarkers: boolean;
 
   /** One structured-output call: prompt in, schema-validated object out. */
   callStructured<T extends z.ZodType>(

@@ -38,3 +38,42 @@ export interface MediaServerClient {
    */
   testConnection(): Promise<MediaServerTestResult>;
 }
+
+/** How far through counts as watched. Matches the convention both servers use themselves. */
+export const WATCHED_FRACTION = 0.9;
+
+export type PlaybackReport = {
+  positionSeconds: number;
+  durationSeconds: number;
+};
+
+/**
+ * A server that can be told what you watched, as opposed to merely that a file
+ * changed.
+ *
+ * Separate from MediaServerClient because it is a genuinely different
+ * capability with a different credential. Announcing a changed folder is a
+ * server-level action an API key can perform; play state belongs to a person,
+ * and recent Jellyfin versions reject played-status writes made with an API
+ * key outright. A client that cannot do this simply does not implement it.
+ */
+export interface PlayStateWriter {
+  /**
+   * The server's own id for the file at this path, or null if it has no such
+   * item.
+   *
+   * Takes a path already in the server's namespace - the manager owns mapping.
+   * Null is an ordinary answer, not an error: the server may not have scanned
+   * the file yet, which is likely for something downloaded moments ago.
+   */
+  resolveItemId(serverPath: string): Promise<string | null>;
+
+  /** Record where you got to, and mark it watched once past WATCHED_FRACTION. */
+  reportPlayback(itemId: string, report: PlaybackReport): Promise<void>;
+}
+
+export const canWritePlayState = (
+  client: MediaServerClient
+): client is MediaServerClient & PlayStateWriter =>
+  typeof (client as Partial<PlayStateWriter>).resolveItemId === "function" &&
+  typeof (client as Partial<PlayStateWriter>).reportPlayback === "function";

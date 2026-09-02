@@ -219,9 +219,16 @@ export type AiAnalysisSourcesConfig = z.infer<typeof AiAnalysisSourcesConfig>;
  *
  * A short list on purpose. Any GGUF will load, but "it runs" and "it fills
  * this schema without inventing numbers" are different claims, and only these
- * have been checked - see docs/LOCAL_AI_ANALYSIS_SPIKE.md.
+ * have been checked - see docs/LOCAL_AI_ANALYSIS_SPIKE.md and
+ * docs/LOCAL_AI_QUALITY_FINDINGS.md.
+ *
+ * Deliberately short. Gemma 4 26B-A4B and gpt-oss-20b were both measured
+ * against the same corpus and both rejected: Gemma grounds fewer quotes and
+ * drops the conclusion on a third of items, and gpt-oss invented a quarter of
+ * its quotes and once returned 135 platforms for a four-platform comparison.
+ * A model that will not be recommended should not be offered.
  */
-export const AiLocalModel = z.enum(["qwen3.5-9b"]);
+export const AiLocalModel = z.enum(["qwen3.5-9b", "qwen3.6-35b-a3b"]);
 export type AiLocalModel = z.infer<typeof AiLocalModel>;
 
 export type AiLocalModelInfo = {
@@ -240,7 +247,15 @@ export const AiLocalModels: Record<AiLocalModel, AiLocalModelInfo> = {
     fileName: "Qwen3.5-9B-UD-Q4_K_XL.gguf",
     approxBytes: 5_966_095_584,
     notes:
-      "Schema-valid on every measured call, correct on every classification, and invented no numbers across the runs measured. To use something else, run your own llama-server and point at it below.",
+      "The default, and the right choice on anything but a large-memory machine. 5.6GB, so it fits a 12GB GPU comfortably. Correct on every classification and every game across 27 measured runs; quotes the video accurately enough to place about three findings in four on the timeline.",
+  },
+  "qwen3.6-35b-a3b": {
+    label: "Qwen3.6 35B-A3B",
+    url: "https://huggingface.co/unsloth/Qwen3.6-35B-A3B-GGUF/resolve/main/Qwen3.6-35B-A3B-UD-Q4_K_XL.gguf",
+    fileName: "Qwen3.6-35B-A3B-UD-Q4_K_XL.gguf",
+    approxBytes: 24_051_000_000,
+    notes:
+      "Noticeably better at quoting the video accurately, which is what decides how many findings you can click to jump to - measured at roughly nine in ten against the 9B's three in four. The cost is memory: 22.4GB that must stay resident, so realistically a 32GB machine, and more than a 16GB graphics card can hold. Only about 3B parameters are active per token, so it is not as slow as its size suggests, but a machine that cannot keep it cached will read from disk for every token and be unusable.",
   },
 };
 

@@ -42,6 +42,19 @@ const MediaServerConfigBase = z.object({
   pathMapping: MediaServerPathMapping.optional().describe(
     "How to translate this app's download folder into the server's. Leave unset only if both see the same paths."
   ),
+  /**
+   * Whether watching something in this app's own player updates the server.
+   *
+   * Separate from `enabled` because they are different jobs with different
+   * requirements. Announcing a changed folder is a server-level action an API
+   * key can perform; play state belongs to a person, so it needs a credential
+   * that identifies one. Someone may reasonably want the first and not the
+   * second.
+   */
+  syncPlayState: z
+    .boolean()
+    .default(false)
+    .describe("Mark items watched, and record where you got to, when you play them in this app."),
 });
 
 export const PlexServerKey = "plex";
@@ -62,6 +75,20 @@ export const JellyfinMediaServerConfig = MediaServerConfigBase.extend({
     .string()
     .min(1)
     .describe("An API key, created under Dashboard then API Keys in Jellyfin."),
+  /*
+   * Play state needs a user, and an API key is not one.
+   *
+   * Recent Jellyfin versions refuse played-status writes made with an API key,
+   * and the endpoints are user-scoped regardless
+   * (POST /Users/{userId}/PlayedItems/{itemId}). So signing in once produces a
+   * user id and token, and those are what get stored - the password is
+   * exchanged and discarded rather than written to config.yaml, which is the
+   * approach WatchState takes for the same reason.
+   *
+   * Plex needs no equivalent: an X-Plex-Token already identifies a user.
+   */
+  userId: z.string().optional().describe("Set by signing in - not edited by hand."),
+  userToken: z.string().optional().describe("Set by signing in - not edited by hand."),
 });
 export type JellyfinMediaServerConfig = z.infer<typeof JellyfinMediaServerConfig>;
 

@@ -67,3 +67,24 @@ export const apiIsCrossOrigin = (): boolean => {
   }
 };
 
+
+/**
+ * Tell the service where the player has got to.
+ *
+ * Fire and forget by design: this happens while a video is playing, and a
+ * media server being unreachable is not something the viewer can act on or
+ * should be told about mid-playback. The service decides which servers, if
+ * any, care.
+ */
+export const reportPlaybackProgress = async (
+  contentKey: string,
+  downloadLocation: string,
+  positionSeconds: number,
+  durationSeconds: number
+) => {
+  await fetchJson(playbackUrl(contentKey, downloadLocation, "progress"), {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ positionSeconds, durationSeconds }),
+  });
+};

@@ -25,6 +25,8 @@ export const makeAnthropicProvider = (config: AiAnalysisConfig): AiProvider => {
     model: config.model,
     // Handles all three jobs in one call; splitting would only add a round trip.
     separatesClassification: false,
+    // Already locates nearly every quote; markers would be paid for and unused.
+    usesTranscriptMarkers: false,
     callStructured: <T extends z.ZodType>(schema: T, system: string, content: string, instruction: string) =>
       callStructured(client, config, schema, system, content, instruction),
     countInputTokens: (system: string, content: string, instruction: string) =>

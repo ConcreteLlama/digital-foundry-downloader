@@ -95,7 +95,7 @@ Be strict about this. Do NOT include a game that is mentioned as an example, a c
 
 Write each name as it would normally be written, not as the transcript renders it - transcription garbles titles badly, so "Crisis" is Crysis, "Elden Ring" may arrive misspelt, and numbers get mangled. Exclude games used purely as benchmarks in a hardware review: those are instruments, not coverage.`;
 
-export type PromptFlags = { hasTranscript: boolean; hasArticle: boolean };
+export type PromptFlags = { hasTranscript: boolean; hasArticle: boolean; hasMarkers?: boolean };
 
 /**
  * The shared system prompt, identical across both calls of a run so the
@@ -238,49 +238,64 @@ const QUOTE_INSTRUCTION = [
   `Set quote to null if there is no exact span to copy - for example when the item comes from the article rather than the video, or when you are summarising something said across several places. A null is expected and fine; an approximated quote is not, because it silently fails to locate.`,
 ].join(" ");
 
+/**
+ * Explains the `[Ns]` markers, when the transcript carries them.
+ *
+ * Only tells the model to keep them out of the quote. It is deliberately not
+ * asked to report a position: that would need a field in the shared wire
+ * schema, which a hosted model would then be handed without explanation while
+ * gaining nothing - and on the tightest schema that field cost one of only
+ * three remaining union parameters. The markers earn their place by helping
+ * the model copy the right span, not by having it tell us where the span was.
+ */
+const MARKER_INSTRUCTION = `The transcript is annotated with position markers like [123s], giving the number of seconds into the video at which the following words were said. They are there to help you find the right moment - do NOT copy a marker into "quote". The quote must be the words only, exactly as spoken, with no marker in it.`;
+
 export const buildExtractionInstruction = (contentType: WireContentType, flags?: PromptFlags): string => {
   const bothSources = flags?.hasTranscript && flags?.hasArticle ? `
 
 ${BOTH_SOURCES_COUNT}` : "";
+  const markers = flags?.hasMarkers ? `
+
+${MARKER_INSTRUCTION}` : "";
   switch (contentType) {
     case "console_comparison":
       return `Extract the per-platform technical comparison. For each platform covered, record each display/performance mode it offers, with the resolution as described (including upscaling where stated), the target frame rate, and the measured average frame rate if one is actually given. Record known bugs, crashes or performance problems the video calls out, and the overall platform recommendation. Remember that an unstated number is null, not an estimate.
 
-${QUOTE_INSTRUCTION}${bothSources}`;
+${QUOTE_INSTRUCTION}${bothSources}${markers}`;
     case "pc_review_settings":
       return `Extract the PC settings analysis. For each graphics setting discussed, record the levels tested, the performance cost as a percentage if one is actually stated, any console-equivalent comparison made, and the recommended level. Record the main performance bottleneck if the video identifies one, and the before/after result of the optimised settings if it gives one. A setting described only qualitatively ("barely costs anything") has a null percentage - do not convert words into a number.
 
-${QUOTE_INSTRUCTION}${bothSources}`;
+${QUOTE_INSTRUCTION}${bothSources}${markers}`;
     case "platform_analysis":
       return `Extract the technical analysis of this game. For each platform covered, record each display or performance mode, with the resolution as described (including upscaling where stated), the target frame rate, and the measured average frame rate only if one is actually given. Where the video is about a change - a patch, a port, a revisit, a new platform version - record what changed in changeSummary, since that delta is usually the point of the piece rather than the raw numbers. Record known bugs or performance problems it calls out, and the overall verdict. Remember that an unstated number is null, not an estimate.
 
-${QUOTE_INSTRUCTION}${bothSources}`;
+${QUOTE_INSTRUCTION}${bothSources}${markers}`;
     case "hands_on_preview":
       return `Record what was actually shown, not what it might mean. Name the game, the platforms it was seen running on, and what kind of build it was - preview build, beta, demo, near-final - if the video says. List concrete observations rather than general impressions where the video supports them. Put whatever the presenters explicitly said not to conclude yet into caveats.
 
 Do not produce performance figures here even if some are mentioned in passing. This format is provisional by design, and a number from an early build implies a precision nobody claimed.
 
-${QUOTE_INSTRUCTION}${bothSources}`;
+${QUOTE_INSTRUCTION}${bothSources}${markers}`;
     case "hardware_review":
       return `Extract the hardware under review. For each product, record its name, what class of thing it is (GPU, CPU, handheld, display, complete machine), and the verdict reached on it specifically. Record the overall verdict separately, and any known issues or caveats raised.
 
 Record the games used as benchmarks in gamesTested. These are test instruments rather than subjects - the video is not coverage of those games, and they must not be presented as though it were.
 
-${QUOTE_INSTRUCTION}${bothSources}`;
+${QUOTE_INSTRUCTION}${bothSources}${markers}`;
     case "news_discussion":
       return `Break this show into its distinct items, in order. For each, give the topic, and set "game" to the specific game it is about, or null where the item is not about one - a hardware rumour, an industry story. Give a summary of what was said and the conclusion reached, or null where the participants disagreed or left it open, which is common and should not be smoothed over into false agreement.
 
 Getting "game" right matters more here than anywhere else: this is frequently the only record of what Digital Foundry said about that title, and an item filed under no game is invisible.
 
-${QUOTE_INSTRUCTION}${bothSources}`;
+${QUOTE_INSTRUCTION}${bothSources}${markers}`;
     case "roundup_list":
       return `Break this round-up into its entries, in order. For each, give the topic - the game or the category - set "game" to the title it concerns, and record the reasoning given for its inclusion as the summary, with the verdict or placement as the conclusion.
 
-${QUOTE_INSTRUCTION}${bothSources}`;
+${QUOTE_INSTRUCTION}${bothSources}${markers}`;
     case "qa_roundtable":
       return `Break this discussion into its distinct topics, in order. For each, give the topic, a summary of what was said, and the conclusion reached - or null where the participants disagreed or left it open, which is common and should not be smoothed over into false agreement. Set "game" to the specific game a topic concerns, or null where it is not about one. Do not record who asked a question: usernames cannot be transcribed reliably and there is nothing to check them against.
 
-${QUOTE_INSTRUCTION}${bothSources}`;
+${QUOTE_INSTRUCTION}${bothSources}${markers}`;
     default:
       return "";
   }

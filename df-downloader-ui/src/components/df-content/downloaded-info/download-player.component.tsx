@@ -7,12 +7,16 @@ import { rememberPlaybackPosition, rememberedPlaybackPosition } from "./playback
 import {
   apiIsCrossOrigin,
   getPlaybackInfo,
+  reportPlaybackProgress,
   playbackEmbeddedSubtitlesUrl,
   playbackStreamUrl,
   playbackSubtitlesUrl,
 } from "../../../api/playback.ts";
 import { useQuery } from "../../../hooks/use-query.ts";
 import { monoFontFamily } from "../../../themes/build-theme";
+
+/** How much playback has to move before the service is told again. */
+const REPORT_INTERVAL_SECONDS = 10;
 
 export type DownloadPlayerProps = {
   contentEntry: DfContentEntry;
@@ -382,6 +386,54 @@ export const DownloadPlayer = ({
       video.removeEventListener("seeked", publish);
     };
   }, [supported, layout, download.downloadLocation]);
+
+  /*
+    Report progress to the service, which passes it to any media server set up
+    for play state.
+
+    Throttled hard. `timeupdate` fires about four times a second and each
+    report is a request that may fan out to two media servers, so it only
+    speaks every REPORT_INTERVAL_SECONDS of movement - plus immediately on
+    pause, on ending, and when the player closes, which are the moments that
+    actually matter for a resume point.
+
+    Failures are swallowed on purpose. Nothing here is worth interrupting a
+    video for, and the service already logs what went wrong.
+  */
+  useEffect(() => {
+    const video = videoRef.current;
+    if (!video || !supported) {
+      return;
+    }
+    const contentKey = contentEntry.key;
+    const { downloadLocation } = download;
+    let lastReportedSecond = Number.NEGATIVE_INFINITY;
+    const send = (force: boolean) => {
+      if (video.readyState < 1 || !Number.isFinite(video.duration) || video.duration <= 0) {
+        return;
+      }
+      const seconds = Math.floor(video.currentTime);
+      if (!force && Math.abs(seconds - lastReportedSecond) < REPORT_INTERVAL_SECONDS) {
+        return;
+      }
+      lastReportedSecond = seconds;
+      void reportPlaybackProgress(contentKey, downloadLocation, seconds, Math.floor(video.duration)).catch(
+        () => {}
+      );
+    };
+    const onTimeUpdate = () => send(false);
+    const onStopped = () => send(true);
+    video.addEventListener("timeupdate", onTimeUpdate);
+    video.addEventListener("pause", onStopped);
+    video.addEventListener("ended", onStopped);
+    return () => {
+      video.removeEventListener("timeupdate", onTimeUpdate);
+      video.removeEventListener("pause", onStopped);
+      video.removeEventListener("ended", onStopped);
+      // Closing the player is exactly when the resume point matters most.
+      send(true);
+    };
+  }, [supported, contentEntry.key, download.downloadLocation]);
 
   /*
     Pick up where this file was left off.

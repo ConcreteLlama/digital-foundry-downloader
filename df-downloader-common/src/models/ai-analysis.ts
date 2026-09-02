@@ -137,13 +137,30 @@ export type AiTagSuggestion = z.infer<typeof AiTagSuggestion>;
  * yields an honest null. Measured over two videos and twenty-five
  * findings, every quote returned was found verbatim.
  *
- * Both are nullish: analyses written before this existed have neither, and
- * a finding drawn from the article rather than the speech has a quote that
- * will never locate.
+ * All are nullish: analyses written before this existed have none of them.
+ *
+ * `quoteSource` exists because a quote that does not locate is not
+ * necessarily wrong. Digital Foundry publishes a written article alongside
+ * much of this content, the prompt tells the model to prefer it, and a
+ * finding drawn from it carries a quote that is correct, checkable, and will
+ * never appear in the transcript. Measured over 327 findings, 14% were
+ * verbatim article text against 6% genuinely invented - so treating "did not
+ * locate" as "made up" mislabels correct citations more often than it catches
+ * real ones. The source is recorded so the difference is visible instead of
+ * being guessed at.
  */
 export const AiAnchorFields = {
   quote: z.string().nullish(),
   timestampSeconds: z.number().nullish(),
+  /**
+   * Where the quote was actually found.
+   *
+   * `transcript` means a timestamp was derived and is exact. `article` means
+   * the citation checks out but has no moment attached - the article is
+   * written, not spoken, so there is nothing to jump to. Absent means neither
+   * source contained it, which is the case worth being suspicious of.
+   */
+  quoteSource: z.enum(["transcript", "article"]).nullish(),
 };
 
 export const AiPlatformMode = z.object({

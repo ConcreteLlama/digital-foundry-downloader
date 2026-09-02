@@ -50,3 +50,29 @@ export const TestMediaServerResponse = z.object({
   error: z.string().optional(),
 });
 export type TestMediaServerResponse = z.infer<typeof TestMediaServerResponse>;
+
+/**
+ * Exchanges a Jellyfin username and password for a user token.
+ *
+ * Done once, in settings. The password is used for the exchange and then
+ * discarded - only the resulting user id and token are stored, which is how
+ * WatchState handles the same problem. Play state is per-user and recent
+ * Jellyfin versions refuse played-status writes made with an API key, so
+ * there is no way to avoid a user credential here.
+ */
+export const JellyfinSignInRequest = z.object({
+  url: z.string().min(1),
+  username: z.string().min(1),
+  password: z.string(),
+});
+export type JellyfinSignInRequest = z.infer<typeof JellyfinSignInRequest>;
+
+export const JellyfinSignInResponse = z.object({
+  ok: z.boolean(),
+  userId: z.string().optional(),
+  userToken: z.string().optional(),
+  /** Echoed back so the form can show who it signed in as. */
+  username: z.string().optional(),
+  error: z.string().optional(),
+});
+export type JellyfinSignInResponse = z.infer<typeof JellyfinSignInResponse>;

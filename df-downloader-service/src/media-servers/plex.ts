@@ -1,7 +1,13 @@
 import { logger } from "df-downloader-common";
 import { PlexMediaServerConfig, PlexServerKey } from "df-downloader-common/config/media-servers-config.js";
 import { describeConnectionError } from "./errors.js";
-import { MediaServerClient, MediaServerTestResult } from "./types.js";
+import {
+  MediaServerClient,
+  MediaServerTestResult,
+  PlayStateWriter,
+  PlaybackReport,
+  WATCHED_FRACTION,
+} from "./types.js";
 
 const REQUEST_TIMEOUT_MS = 15_000;
 
@@ -23,7 +29,7 @@ const normalise = (p: string) => p.replace(/\\/g, "/").replace(/\/+$/, "");
  * silently does nothing forever. Instead the section is matched by which of
  * its own reported locations contains the changed path.
  */
-export class PlexMediaServer implements MediaServerClient {
+export class PlexMediaServer implements MediaServerClient, PlayStateWriter {
   readonly type = PlexServerKey;
 
   /** Only the connection fields - the mapping is the manager's concern, not this client's. */
@@ -113,6 +119,76 @@ export class PlexMediaServer implements MediaServerClient {
           ? `${message} - the Plex token looks wrong or expired.`
           : describeConnectionError(e, this.config.url),
       };
+    }
+  }
+
+  /**
+   * Resolved once per file and remembered, including the misses.
+   *
+   * Resolution means reading a whole library section back and comparing file
+   * paths, because Plex offers no "give me the item at this path" call. That is
+   * far too expensive to repeat on every progress tick - which arrives every
+   * few seconds while something plays.
+   *
+   * Misses are deliberately NOT cached. A file downloaded moments ago
+   * genuinely may not be in Plex yet, and remembering that as a permanent
+   * "no such item" would mean it never gained play state at all.
+   */
+  private itemIdByPath = new Map<string, string | null>();
+
+  async resolveItemId(serverPath: string): Promise<string | null> {
+    if (this.itemIdByPath.has(serverPath)) {
+      return this.itemIdByPath.get(serverPath) ?? null;
+    }
+    const sections = await this.getSections();
+    const section = PlexMediaServer.sectionFor(sections, serverPath);
+    if (!section) {
+      logger.log("warn", `Plex has no library containing "${serverPath}", so play state cannot be recorded for it. This usually means the path mapping for Plex is wrong.`);
+      return null;
+    }
+    const body: any = await (await this.request(`/library/sections/${section.key}/all`)).json();
+    const items: any[] = body?.MediaContainer?.Metadata ?? [];
+    const target = normalise(serverPath);
+    let found: string | null = null;
+    for (const item of items) {
+      for (const media of item?.Media ?? []) {
+        for (const part of media?.Part ?? []) {
+          if (part?.file && normalise(String(part.file)) === target) {
+            found = String(item.ratingKey);
+          }
+        }
+      }
+    }
+    if (found) {
+      this.itemIdByPath.set(serverPath, found);
+    } else {
+      logger.log(
+        "info",
+        `Plex has not indexed "${serverPath}" yet, so there is nothing to record play state against. It will be looked for again next time.`
+      );
+    }
+    return found;
+  }
+
+  /**
+   * Reports position, and scrobbles once past the watched mark.
+   *
+   * These two endpoints are Plex's long-standing timeline API rather than
+   * anything documented for third parties, so they are the part of this most
+   * likely to need adjusting - hence both are best effort and log rather than
+   * throw upward into a playing video.
+   */
+  async reportPlayback(itemId: string, { positionSeconds, durationSeconds }: PlaybackReport): Promise<void> {
+    const watched = durationSeconds > 0 && positionSeconds / durationSeconds >= WATCHED_FRACTION;
+    await this.request("/:/progress", {
+      key: itemId,
+      identifier: "com.plexapp.plugins.library",
+      time: String(Math.floor(positionSeconds * 1000)),
+      state: watched ? "stopped" : "playing",
+    });
+    if (watched) {
+      await this.request("/:/scrobble", { key: itemId, identifier: "com.plexapp.plugins.library" });
+      logger.log("info", `Marked Plex item ${itemId} watched.`);
     }
   }
 }

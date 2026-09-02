@@ -66,8 +66,11 @@ const postJson = async (baseUrl: string, path: string, body: unknown): Promise<a
 export const makeLocalProvider = (config: AiLocalProviderConfig, server: LocalLlamaServer): AiProvider => ({
   id: "local",
   model: config.model,
+  contextTokens: config.contextSize,
   // Measured: classifying in the same call costs it most of the summary.
   separatesClassification: true,
+  // Measured: 77% -> 85% located, invention 6% -> 3%.
+  usesTranscriptMarkers: true,
 
   callStructured: async <T extends z.ZodType>(
     schema: T,

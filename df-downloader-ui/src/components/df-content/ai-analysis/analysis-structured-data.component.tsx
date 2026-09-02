@@ -138,7 +138,7 @@ const PcReviewSettings = ({ data, onJumpTo }: { data: AiPcReviewSettingsData; on
                     <TableCell sx={{ fontWeight: 500 }}>
                       <Stack direction="row" spacing={0.75} alignItems="center" flexWrap="wrap" useFlexGap>
                         <span>{setting.name}</span>
-                        <JumpChip seconds={setting.timestampSeconds} onJumpTo={onJumpTo} />
+                        <JumpChip seconds={setting.timestampSeconds} quoteSource={setting.quoteSource} onJumpTo={onJumpTo} />
                       </Stack>
                       {setting.levelsTested.length > 0 && (
                         <Typography variant="caption" sx={{ color: "text.disabled", display: "block" }}>
@@ -197,7 +197,7 @@ const PlatformGrid = ({
                   <Typography variant="body2" sx={{ fontWeight: 500 }}>
                     {mode.label}
                   </Typography>
-                  <JumpChip seconds={mode.timestampSeconds} onJumpTo={onJumpTo} />
+                  <JumpChip seconds={mode.timestampSeconds} quoteSource={mode.quoteSource} onJumpTo={onJumpTo} />
                 </Stack>
                 {mode.fpsTarget != null && (
                   <Typography variant="body2" sx={{ color: "primary.main", fontFamily: monoFontFamily }}>
@@ -241,9 +241,9 @@ const KnownIssues = ({
         {issues.map((known, index) => (
           <Typography component="li" variant="body2" key={index}>
             {known.issue}
-            {known.timestampSeconds != null && onJumpTo && (
+            {(known.timestampSeconds != null || known.quoteSource === "article") && (
               <Box component="span" sx={{ ml: 0.75, verticalAlign: "middle" }}>
-                <JumpChip seconds={known.timestampSeconds} onJumpTo={onJumpTo} />
+                <JumpChip seconds={known.timestampSeconds} quoteSource={known.quoteSource} onJumpTo={onJumpTo} />
               </Box>
             )}
           </Typography>
@@ -289,8 +289,38 @@ const ConsoleComparison = ({ data, onJumpTo }: { data: AiConsoleComparisonData; 
  * presentation of that is nothing at all rather than a button that goes
  * somewhere approximate.
  */
-const JumpChip = ({ seconds, onJumpTo }: { seconds?: number | null; onJumpTo?: (seconds: number) => void }) => {
+/**
+ * The moment a finding was stated, or an honest account of why there isn't one.
+ *
+ * A finding with no timestamp used to render as blank space, which made a
+ * correct citation of Digital Foundry's written article look identical to a
+ * fabrication. Measured over the stored corpus, 18% of quoted findings are
+ * article-sourced against 13% found in neither source - so blank space was
+ * misrepresenting good citations more often than it was hiding bad ones.
+ *
+ * Deliberately not clickable: an article is written rather than spoken, so
+ * there is genuinely nowhere in the video to jump to.
+ */
+const JumpChip = ({
+  seconds,
+  quoteSource,
+  onJumpTo,
+}: {
+  seconds?: number | null;
+  quoteSource?: "transcript" | "article" | null;
+  onJumpTo?: (seconds: number) => void;
+}) => {
   if (seconds == null || !onJumpTo) {
+    if (quoteSource === "article") {
+      return (
+        <Chip
+          size="small"
+          variant="outlined"
+          label="in the article"
+          sx={{ height: 20, fontSize: "0.65rem", color: "text.secondary", borderColor: "divider" }}
+        />
+      );
+    }
     return null;
   }
   return (
@@ -336,7 +366,7 @@ const SegmentList = ({ segments, onJumpTo }: { segments: AiQaSegment[]; onJumpTo
               sx={{ height: 20, fontSize: "0.65rem" }}
             />
           )}
-          <JumpChip seconds={segment.timestampSeconds} onJumpTo={onJumpTo} />
+          <JumpChip seconds={segment.timestampSeconds} quoteSource={segment.quoteSource} onJumpTo={onJumpTo} />
         </Stack>
         {segment.summary && (
           <Typography variant="body2" sx={{ color: "text.secondary" }}>
@@ -427,9 +457,9 @@ const HandsOnPreview = ({ data, onJumpTo }: { data: AiPreviewData; onJumpTo?: (s
           {data.observations.map((item, index) => (
             <Typography component="li" variant="body2" key={index}>
               {item.observation}
-              {item.timestampSeconds != null && onJumpTo && (
+              {(item.timestampSeconds != null || item.quoteSource === "article") && (
                 <Box component="span" sx={{ ml: 0.75, verticalAlign: "middle" }}>
-                  <JumpChip seconds={item.timestampSeconds} onJumpTo={onJumpTo} />
+                  <JumpChip seconds={item.timestampSeconds} quoteSource={item.quoteSource} onJumpTo={onJumpTo} />
                 </Box>
               )}
             </Typography>

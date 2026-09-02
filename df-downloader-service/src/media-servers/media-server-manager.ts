@@ -10,12 +10,16 @@ import {
 } from "df-downloader-common/config/media-servers-config.js";
 import { JellyfinMediaServer } from "./jellyfin.js";
 import { PlexMediaServer } from "./plex.js";
-import { MediaServerClient, MediaServerTestResult } from "./types.js";
+import { MediaServerClient, MediaServerTestResult, canWritePlayState } from "./types.js";
 
 /** Why a file changed. Only ever used for the log line, but that line is the whole diagnostic story. */
 export type MediaChangeReason = "download" | "metadata" | "subtitles" | "moved";
 
-type ConfiguredServer = { client: MediaServerClient; mapping?: MediaServerPathMapping };
+type ConfiguredServer = {
+  client: MediaServerClient;
+  mapping?: MediaServerPathMapping;
+  syncPlayState: boolean;
+};
 
 type PendingRefresh = { timer: NodeJS.Timeout; firstSeenMs: number; reasons: Set<MediaChangeReason> };
 
@@ -47,11 +51,15 @@ export class MediaServerManager {
     const servers: ConfiguredServer[] = [];
     const plex = config?.servers?.[PlexServerKey];
     if (plex?.enabled) {
-      servers.push({ client: new PlexMediaServer(plex), mapping: plex.pathMapping });
+      servers.push({ client: new PlexMediaServer(plex), mapping: plex.pathMapping, syncPlayState: plex.syncPlayState });
     }
     const jellyfin = config?.servers?.[JellyfinServerKey];
     if (jellyfin?.enabled) {
-      servers.push({ client: new JellyfinMediaServer(jellyfin), mapping: jellyfin.pathMapping });
+      servers.push({
+        client: new JellyfinMediaServer(jellyfin),
+        mapping: jellyfin.pathMapping,
+        syncPlayState: jellyfin.syncPlayState,
+      });
     }
     this.servers = servers;
     logger.log(
@@ -134,6 +142,35 @@ export class MediaServerManager {
         ? new PlexMediaServer(request.config)
         : new JellyfinMediaServer(request.config);
     return client.testConnection();
+  }
+
+  /**
+   * Record that someone watched part of a file, on every server set up for it.
+   *
+   * Deliberately does not throw. This is called while a video is playing, and
+   * a media server being unreachable is not a reason to disturb playback - the
+   * worst outcome is that the watch is not recorded, which is where things
+   * stood before this existed.
+   *
+   * Resolving a path to an item is cached per client, because this arrives
+   * repeatedly during a single viewing.
+   */
+  async reportPlayback(localPath: string, positionSeconds: number, durationSeconds: number) {
+    for (const { client, mapping, syncPlayState } of this.servers) {
+      if (!syncPlayState || !canWritePlayState(client)) {
+        continue;
+      }
+      const serverPath = applyPathMapping(localPath, mapping);
+      try {
+        const itemId = await client.resolveItemId(serverPath);
+        if (!itemId) {
+          continue;
+        }
+        await client.reportPlayback(itemId, { positionSeconds, durationSeconds });
+      } catch (e: any) {
+        logger.log("warn", `Could not record play state on ${client.type} for "${serverPath}": ${e?.message ?? e}`);
+      }
+    }
   }
 
   /** Cancels anything still waiting. Used on shutdown so a pending timer cannot outlive the process. */
