@@ -50,6 +50,23 @@ export class FileConfig extends ConfigService {
   }
   static patchConfig(rawConfig: any) {
     let patched: boolean = false;
+    /*
+     * subtitles.maxConcurrent became localModels.maxConcurrent.
+     *
+     * Transcription and local analysis now share one queue, so the limit
+     * belongs to that queue rather than to subtitles - see
+     * docs/LOCAL_MODELS_QUEUE_DESIGN.md. Carried across rather than dropped,
+     * because someone who deliberately raised it should not silently find it
+     * back at 1; only moved when the new key is absent, so a value set since
+     * wins.
+     */
+    if (rawConfig.subtitles && rawConfig.subtitles.maxConcurrent !== undefined) {
+      patched = true;
+      if (rawConfig.localModels?.maxConcurrent === undefined) {
+        rawConfig.localModels = { ...rawConfig.localModels, maxConcurrent: rawConfig.subtitles.maxConcurrent };
+      }
+      delete rawConfig.subtitles.maxConcurrent;
+    }
     if (rawConfig.subtitles) {
       if (rawConfig.subtitles.subtitlesService) {
         patched = true;

@@ -219,18 +219,6 @@ export const SubtitlesServicesConfig = z.object({
 });
 export type SubtitlesServicesConfig = z.infer<typeof SubtitlesServicesConfig>;
 
-/**
- * Exported separately so the settings form can take its bounds from here
- * rather than restating them. SubtitlesConfig itself carries a superRefine,
- * which leaves it without a `.shape` to reach into.
- */
-export const MaxConcurrentSubtitles = z
-  .number()
-  .int()
-  .min(1)
-  .describe(
-    "How many subtitle jobs may run at once. Transcribing locally already uses most of this machine's cores, so running several at a time makes everything slower rather than finishing sooner. Worth raising only if you use a paid service, where the work happens elsewhere."
-  );
 
 export const SubtitlesConfig = z
   .object({
@@ -254,19 +242,6 @@ export const SubtitlesConfig = z
       .describe(
         "Also save the subtitles as a separate .srt next to the video, even when they are being embedded in it. Useful if you want a readable transcript you can search or open on its own - embedding alone leaves no file to read."
       ),
-    /**
-     * How many subtitle generations may run at once.
-     *
-     * Defaults to 1, deliberately. This was effectively 5 back when
-     * subtitles meant an API call to Deepgram or a caption fetch from
-     * YouTube - network-bound work where running several at once is free.
-     * Local Whisper transcription is the opposite: each run is CPU-bound and
-     * already claims most of the machine's cores (see WhisperConfig.threads),
-     * so allowing several concurrently oversubscribes the CPU several times
-     * over and makes everything - including anything else running on the same
-     * box - crawl. Raise it only if your subtitles service is a remote API.
-     */
-    maxConcurrent: MaxConcurrentSubtitles.default(1),
     /** The subtitles service to use */
     servicePriorities: SubtitlesService.array()
       .default([])

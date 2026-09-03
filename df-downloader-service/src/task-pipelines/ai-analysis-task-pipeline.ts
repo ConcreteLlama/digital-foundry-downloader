@@ -49,7 +49,14 @@ const SaveAnalysisTask = taskify(saveAnalysis, {
 });
 
 type AiAnalysisTaskPipelineCreatorOpts = {
-  aiAnalysisTaskManager: AiAnalysisTaskManager;
+  /*
+   * A plain TaskManager, because which queue an analysis belongs to depends on
+   * the engine rather than on the work: a local run goes in the local models
+   * queue and contends with transcription, a hosted run uses none of this
+   * machine and has its own. Two pipelines are built from this factory, one
+   * bound to each - see DfTaskManager.analyseContent.
+   */
+  aiAnalysisTaskManager: TaskManager;
   /** Small, ordered bookkeeping work - reuses the maintenance manager. */
   storageTaskManager: TaskManager;
   db: DfDownloaderOperationalDb;

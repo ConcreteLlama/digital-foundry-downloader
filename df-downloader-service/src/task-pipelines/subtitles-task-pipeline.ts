@@ -7,16 +7,17 @@ import { InjectMetadataTask } from "../tasks/inject-metadata-task.js";
 import { WriteSubtitlesSidecarTask } from "../tasks/write-subtitles-sidecar-task.js";
 import { resolveSubtitlesOutput } from "../media-utils/subtitles/sidecar.js";
 import { configService } from "../config/config.js";
-import { SubtitlesTaskBuilder, SubtitlesTaskManager } from "../tasks/subtitles-task.js";
+import { SubtitlesTaskBuilder } from "../tasks/subtitles-task.js";
+import { LocalModelsTaskManager } from "../tasks/local-models-task-manager.js";
 
 type SubtitlesTaskPipelineCreatorOpts = {
-  subtitlesTaskManager: SubtitlesTaskManager;
+  localModelsTaskManager: LocalModelsTaskManager;
   /** Whole-file reads/writes (remux) - serialized, see df-task-manager.ts. */
   mediaProcessingTaskManager: TaskManager;
 };
 
 export const createSubtitlesTaskPipeline = (opts: SubtitlesTaskPipelineCreatorOpts) => {
-  const { subtitlesTaskManager, mediaProcessingTaskManager } = opts;
+  const { localModelsTaskManager, mediaProcessingTaskManager } = opts;
   return makeTaskPipeline<
     {
       dfContentInfo: DfContentInfo;
@@ -40,7 +41,7 @@ export const createSubtitlesTaskPipeline = (opts: SubtitlesTaskPipelineCreatorOp
           language,
         });
       },
-      taskManager: subtitlesTaskManager,
+      taskManager: localModelsTaskManager,
     })
     .next({
       stepName: "Inject Metadata",

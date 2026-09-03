@@ -12,7 +12,8 @@ import { DfContentAvailability } from "df-downloader-common";
 import { AiAnalysisTaskBuilder, AiAnalysisTaskManager } from "../tasks/ai-analysis-task.js";
 import { AiAnalysisConfigUtils } from "df-downloader-common/config/ai-analysis-config.js";
 import { srtLinesToText } from "../utils/ai/transcript.js";
-import { SubtitlesTaskBuilder, SubtitlesTaskManager } from "../tasks/subtitles-task.js";
+import { SubtitlesTaskBuilder } from "../tasks/subtitles-task.js";
+import { LocalModelsTaskManager } from "../tasks/local-models-task-manager.js";
 import { makeFilePathWithTemplate } from "../utils/template-utils.js";
 import { pathIsEqual } from "../utils/file-utils.js";
 import { FetchChaptersTask } from "../tasks/fetch-chapters-task.js";
@@ -49,7 +50,7 @@ const STEP = {
 
 type DownloadTaskPipelineOpts = {
   downloadTaskManager: DownloadTaskManager;
-  subtitlesTaskManager: SubtitlesTaskManager;
+  localModelsTaskManager: LocalModelsTaskManager;
   /** Cheap filesystem work - see df-task-manager.ts. */
   fileTaskManager: TaskManager;
   /** Whole-file reads/writes (remux, move) - serialized, see df-task-manager.ts. */
@@ -63,7 +64,7 @@ type DownloadTaskPipelineOpts = {
 export const createDownloadTaskPipeline = (opts: DownloadTaskPipelineOpts) => {
   const {
     downloadTaskManager,
-    subtitlesTaskManager,
+    localModelsTaskManager,
     fileTaskManager,
     mediaProcessingTaskManager,
     youtubeFetchTaskManager,
@@ -196,7 +197,7 @@ export const createDownloadTaskPipeline = (opts: DownloadTaskPipelineOpts) => {
         }
       },
       continueOnFail: true,
-      taskManager: subtitlesTaskManager,
+      taskManager: localModelsTaskManager,
     })
     .next({
       stepName: "Analyse Content",

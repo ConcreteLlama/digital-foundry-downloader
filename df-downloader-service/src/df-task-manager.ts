@@ -46,7 +46,11 @@ import { serviceLocator } from "./services/service-locator.js";
 import { CompletedPipeline, PersistedPipeline, PersistedStepResult, summariseForArchive } from "./db/pipeline-db-model.js";
 import { PriorityPositionInfo } from "./task-manager/priority-item-manager.js";
 import { TypedEventEmitter } from "./utils/event-emitter.js";
-import { TaskManager } from "./task-manager/task-manager.js";
+import {
+  BACKGROUND_TASK_PRIORITY,
+  PIPELINE_TASK_PRIORITY,
+  TaskManager,
+} from "./task-manager/task-manager.js";
 import {
   isPipelineExecutionFailedResult,
   isPipelineExecutionSuccessResult,
@@ -90,7 +94,8 @@ import { ClearMissingFilesTask, isClearMissingFilesTask } from "./tasks/clear-mi
 import { DownloadTask, DownloadTaskManager, isDownloadTask } from "./tasks/download-task.js";
 import { RemoveEmptyDirsTask, isRemoveEmptyDirsTask } from "./tasks/remove-empty-dirs-task.js";
 import { ScanForExistingContentTask, isScanForExistingContentTask } from "./tasks/scan-for-content-task.js";
-import { isSubtitlesTask, SubtitlesTaskManager } from "./tasks/subtitles-task.js";
+import { isSubtitlesTask } from "./tasks/subtitles-task.js";
+import { LocalModelsTaskManager } from "./tasks/local-models-task-manager.js";
 import { createUpdateDownloadMetadataTaskPipeline, UpdateDownloadMetadataTaskPipeline, UpdateDownloadMetadataTaskPipelineExecution } from "./task-pipelines/update-download-metadata-task-pipeline.js";
 
 type DfTaskManagerOpts = {
@@ -106,11 +111,13 @@ type PipelineExecutionTypes = SubtitlesTaskPipelineExecution | DownloadTaskPipel
  * Queue priority for work a bulk run queued. Lower is sooner, and the task
  * managers default to 1, so this sits behind everything queued normally.
  */
-const BACKGROUND_TASK_PRIORITY = 2;
+
 
 export class DfTaskManager {
   readonly subtitleTaskPipeline: SubtitlesTaskPipeline;
   readonly aiAnalysisTaskPipeline: AiAnalysisTaskPipeline;
+  /** The same pipeline, queued in the local models queue - see the constructor. */
+  readonly localAnalysisTaskPipeline: AiAnalysisTaskPipeline;
   readonly downloadTaskPipeline: DownloadTaskPipeline;
   readonly updateDownloadMetadataTaskPipeline: UpdateDownloadMetadataTaskPipeline;
 
@@ -235,16 +242,25 @@ export class DfTaskManager {
       concurrentTasks: 1,
     });
     this.allTaskManagers.push(youtubeFetchTaskManager);
-    const subtitlesTaskManager = new SubtitlesTaskManager({
-      label: "Subtitles",
-      // See SubtitlesConfig.maxConcurrent - defaults to 1 because local
-      // transcription is CPU-bound and each run already uses most of the
-      // machine's cores.
-      concurrentTasks: configService.config.subtitles?.maxConcurrent ?? 1,
+    const localModelsTaskManager = new LocalModelsTaskManager({
+      /*
+       * Named for what shares it, not for subtitles. Transcription and local
+       * analysis both queue here; a hosted analysis does not, since it uses
+       * none of this machine.
+       */
+      label: "Local models",
+      /*
+       * See LocalModelsConfig.maxConcurrent. The limit moved off subtitles
+       * because it was never really about subtitles: transcription and local
+       * analysis contend for the same cores, so a subtitles-only number could
+       * not describe what actually happens - it was overridden whenever an
+       * analysis wanted the machine.
+       */
+      concurrentTasks: configService.config.localModels?.maxConcurrent ?? 1,
     });
-    this.allTaskManagers.push(subtitlesTaskManager);
+    this.allTaskManagers.push(localModelsTaskManager);
     this.subtitleTaskPipeline = createSubtitlesTaskPipeline({
-      subtitlesTaskManager: subtitlesTaskManager,
+      localModelsTaskManager: localModelsTaskManager,
       mediaProcessingTaskManager: mediaProcessingTaskManager,
     });
     // One manager shared by both pipelines, so the concurrency cap covers
@@ -253,7 +269,7 @@ export class DfTaskManager {
     this.allTaskManagers.push(aiAnalysisTaskManager);
     this.downloadTaskPipeline = createDownloadTaskPipeline({
       downloadTaskManager: downloadTaskManager,
-      subtitlesTaskManager: subtitlesTaskManager,
+      localModelsTaskManager: localModelsTaskManager,
       fileTaskManager: fileTaskManager,
       mediaProcessingTaskManager: mediaProcessingTaskManager,
       youtubeFetchTaskManager: youtubeFetchTaskManager,
@@ -295,8 +311,22 @@ export class DfTaskManager {
       this.allTaskManagers.push(managers[target]);
       return managers;
     }, {} as Record<BulkBackfillTarget, TaskManager>);
+    /*
+     * Two pipelines, identical but for the queue they run in.
+     *
+     * A local analysis competes with transcription for the same cores, so it
+     * belongs in the local models queue. A hosted one uses none of this
+     * machine, so putting it there would buy a delay for nothing. Which is
+     * used is decided per run, in analyseContent, from the engine that will
+     * actually answer.
+     */
     this.aiAnalysisTaskPipeline = createAiAnalysisTaskPipeline({
       aiAnalysisTaskManager,
+      storageTaskManager: this.maintenanceOperationsTaskManager,
+      db: serviceLocator.db,
+    });
+    this.localAnalysisTaskPipeline = createAiAnalysisTaskPipeline({
+      aiAnalysisTaskManager: localModelsTaskManager,
       storageTaskManager: this.maintenanceOperationsTaskManager,
       db: serviceLocator.db,
     });
@@ -443,6 +473,16 @@ export class DfTaskManager {
       headers = downloadParams.headers;
     }
 
+    /*
+     * Everything a download pipeline queues outranks standalone work.
+     *
+     * Its steps now share the local models queue with hand-started
+     * transcriptions and analyses, so for the first time they compete. A
+     * download is not usable until its subtitles and metadata land, so leaving
+     * one half finished behind unrelated requests is worse than either being
+     * slightly late - see PIPELINE_TASK_PRIORITY. Steps inherit this, so it is
+     * claimed once here rather than per step.
+     */
     const downloadExecution = this.downloadTaskPipeline.start(
       {
         dfContentInfo,
@@ -454,7 +494,10 @@ export class DfTaskManager {
         headers,
         resumeAttempts: resumeFrom?.resumeAttempts,
       },
-      resumeFrom ? { resumeFrom: { stepIndex: resumeFrom.stepIndex, results: resumeFrom.results } } : {}
+      {
+        priority: PIPELINE_TASK_PRIORITY,
+        ...(resumeFrom ? { resumeFrom: { stepIndex: resumeFrom.stepIndex, results: resumeFrom.results } } : {}),
+      }
     );
     logger.log(
       "info",
@@ -516,7 +559,7 @@ export class DfTaskManager {
       /*
        * A bulk run waits; anything else jumps it.
        *
-       * `subtitlesTaskManager` runs one transcription at a time, and a
+       * `localModelsTaskManager` runs one transcription at a time, and a
        * backfill can fill it with hundreds. Before this, a download that
        * completed during a backfill sat behind the whole queue - the file was
        * there, but its subtitles, metadata and analysis were hours away.
@@ -524,6 +567,17 @@ export class DfTaskManager {
        * Only bulk work is demoted, rather than downloads being promoted, so a
        * subtitle run started by hand from the content page also beats the
        * backfill. Both are someone waiting on one specific video.
+       */
+      /*
+       * A bulk run waits; anything else takes the default tier.
+       *
+       * localModelsTaskManager runs one at a time and a backfill can fill it
+       * with hundreds, so a subtitle run started by hand from the content page
+       * has to beat it - both are someone waiting on one specific video, but
+       * only one of them asked just now.
+       *
+       * Work owned by a download pipeline outranks both, and claims that tier
+       * where it is started rather than here.
        */
       { priority: backfillJobId ? BACKGROUND_TASK_PRIORITY : undefined }
     );
@@ -546,7 +600,16 @@ export class DfTaskManager {
    * "analyse with a different model" path in the UI needs.
    */
   analyseContent(entry: DfContentEntry, config: AiAnalysisConfig, opts: { chapters?: Chapter[]; articleText?: string; articleUrl?: string; articleTitle?: string; backfillJobId?: string; force?: boolean; sources?: AiAnalysisSourceSelection; provider?: AiProviderId } = {}) {
-    const analysisExecution = this.aiAnalysisTaskPipeline.start({
+    /*
+     * Resolved here rather than at run time so the queue and the engine agree.
+     * makeProvider resolves again when the task runs and may fall back, so a
+     * config change between queueing and running could land a local run in the
+     * hosted queue - rare, and preferable to guessing later.
+     */
+    const resolvedProvider = AiAnalysisConfigUtils.resolveProvider(config, opts.provider);
+    const pipeline =
+      resolvedProvider === "local" ? this.localAnalysisTaskPipeline : this.aiAnalysisTaskPipeline;
+    const analysisExecution = pipeline.start({
       dfContentInfo: entry.contentInfo,
       entry,
       config,

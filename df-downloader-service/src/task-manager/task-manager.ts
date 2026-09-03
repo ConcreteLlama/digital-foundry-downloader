@@ -50,6 +50,25 @@ export type ForceStartOutcome =
 export const FORCED_PRIORITY = 0;
 
 /**
+ * The priority tiers, lowest number first.
+ *
+ * Kept together because they only mean anything relative to each other, and
+ * because the gaps matter: FORCED sits below PIPELINE so a forced task still
+ * jumps its own pipeline's work, and there is deliberately no room below
+ * PIPELINE for anything else to claim.
+ *
+ * PIPELINE exists because transcription and local analysis now share a queue
+ * (see docs/LOCAL_MODELS_QUEUE_DESIGN.md) and therefore compete for the first
+ * time. Work that belongs to a download outranks a standalone request: a
+ * download is not usable until its enrichment lands, so leaving it half
+ * finished behind a long queue of unrelated items is worse than either job
+ * being slightly late. Within a tier, ordering is arrival order.
+ */
+export const PIPELINE_TASK_PRIORITY = 1;
+export const DEFAULT_TASK_PRIORITY = 2;
+export const BACKGROUND_TASK_PRIORITY = 3;
+
+/**
  * TaskManager is a class that manages tasks and their execution order. It allows for tasks to be added, removed, and reordered,
  * and will automatically start and stop tasks based on the number of concurrent tasks allowed.
  *
@@ -77,7 +96,7 @@ export class TaskManager {
     autoClearCompletedTasks = true,
     label = "Task Manager",
     logger,
-    defaultPriority = 1,
+    defaultPriority = DEFAULT_TASK_PRIORITY,
   }: TaskManagerOpts = {}) {
     this.retries = retries || {};
     this._concurrentTasks = concurrentTasks;

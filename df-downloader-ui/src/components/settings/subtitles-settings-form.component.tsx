@@ -9,7 +9,6 @@ import {
   SubtitlesOutputMode,
   SubtitlesService,
   SubtitlesServicesConfig,
-  MaxConcurrentSubtitles,
   WhisperConfig,
 } from "df-downloader-common/config/subtitles-config";
 import { Fragment, useState } from "react";
@@ -113,11 +112,6 @@ const SubtitlesSettings = () => {
             { id: "sidecar", label: "Always write a separate .srt file" },
             { id: "both", label: "Both - embed in the video and write a separate .srt file" },
           ]}
-        />
-        <ZodNumberField
-          name="maxConcurrent"
-          label="Maximum simultaneous subtitle jobs"
-          zodNumber={MaxConcurrentSubtitles}
         />
         {/* Deliberately not hidden when automatic generation is off. This list
             is also what the manual "Generate Subtitles" action offers, so

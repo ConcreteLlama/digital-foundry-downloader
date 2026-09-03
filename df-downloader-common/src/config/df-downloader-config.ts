@@ -15,6 +15,7 @@ import { DevConfig, DevConfigKey } from "./dev-config.js";
 import { MediaFormatsConfigKey, MediaFormatsConfig } from "./media-formats-config.js";
 import { UiConfig, UiConfigKey } from "./ui-config.js";
 import { AiAnalysisConfig, AiAnalysisConfigKey } from "./ai-analysis-config.js";
+import { LocalModelsConfig, LocalModelsConfigKey } from "./local-models-config.js";
 import { DfArticlesConfig, DfArticlesConfigKey } from "./df-articles-config.js";
 
 // prefault(), not default() - these sections are {} with every field having
@@ -36,6 +37,7 @@ export const DfDownloaderConfig = z.object({
   [MetadataConfigKey]: MetadataConfig.default(DefaultMetadataConfig),
   [SubtitlesConfigKey]: SubtitlesConfig.optional(),
   [AiAnalysisConfigKey]: AiAnalysisConfig.optional(),
+  [LocalModelsConfigKey]: LocalModelsConfig.optional(),
   [DfArticlesConfigKey]: DfArticlesConfig.prefault({}),
   [NotificationsConfigKey]: NotificationsConfig.optional(),
   [MediaServersConfigKey]: MediaServersConfig.optional(),
