@@ -110,6 +110,11 @@ Downloads play in the app itself now, with their subtitles and a list of what is
   - Instead of a black rectangle you are told this machine has no decoder for the video, along with where the file is, so you can open it in a real player or through your media server
   - The check asks your browser what it can actually decode rather than assuming from the format, so an HEVC download is not refused on a machine that plays it perfectly well
 ### Enhancements
+- Transcription and local AI analysis now share one queue, under Settings then Local models
+  - They cannot usefully run at the same time - each already uses most of your processor - so they now take turns in a single queue rather than sitting in separate ones with an invisible lock between them. You can see that queue, reorder it and cancel things waiting in it, none of which was possible while the two were kept apart
+  - The "Maximum simultaneous subtitle jobs" setting has moved there and is now "Maximum simultaneous local model jobs". Your existing value is carried over. It was never really about subtitles: an analysis wanting the machine would override it, so setting it to three did not actually give you three
+  - Work belonging to a download goes first. A download is not much use until its subtitles and metadata land, so it is no longer left half finished behind a long queue of unrelated requests
+  - Analysing with Claude is unaffected and keeps its own queue, since it uses none of your machine and so has nothing to wait for
 - The metadata backfill can now tell which files actually need it
   - Each file remembers what was written into it, so the list marks items "Up to date", "Out of date" or "Never written" instead of offering everything you have downloaded with no way to tell them apart
   - "Select all missing" works for it now, and the status filters do too - so keeping a library current is picking the handful that drifted rather than rewriting all of it

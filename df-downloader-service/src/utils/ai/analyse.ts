@@ -72,8 +72,11 @@ const THINKING_OUTPUT_MULTIPLIER = 3;
  * about each, which is what WireQaSegments already describes. Measured on the
  * two known interviews it returned 7 and 8 well-scoped technical segments.
  *
- * Still no payload for `tech_explainer` or `other`, and
- * each for its own reason - see docs/AI_CONTENT_TAXONOMY_REVIEW.md.
+ * Still no payload for `tech_explainer` or `other`, each for its own reason.
+ * `tech_explainer` probably deserves one - 21 items, strikingly coherent, all
+ * "a named technology, tested or compared" - but the schema needs designing
+ * against real transcript-grounded output rather than guessed at. `other` is
+ * the deliberate escape hatch and should stay empty of structure.
  */
 const EXTRACTABLE_TYPES: WireContentType[] = [
   "platform_tech_review",

@@ -21,8 +21,8 @@ position numbering:
 | `downloadTaskManager` | `downloadConfig.maxSimultaneousDownloads` | the transfer itself |
 | `fileTaskManager` | 5 | cheap filesystem work (stat, ffprobe) |
 | `mediaProcessingTaskManager` | 1 | muxing, metadata injection, sidecar writes |
-| `subtitlesTaskManager` | `subtitles.maxConcurrent ?? 1` | transcription |
-| `aiAnalysisTaskManager` | 1 | Claude calls |
+| `localModelsTaskManager` | `localModels.maxConcurrent ?? 1` | **anything running a model here** - transcription and local AI analysis |
+| `aiAnalysisTaskManager` | 2 | **hosted** analysis only - Claude calls |
 | `dfFetchTaskManager` | 1 | requests to digitalfoundry.net |
 | `youtubeFetchTaskManager` | 1 | requests to YouTube |
 | `maintenanceOperationsTaskManager` | 1 | batch moves, scans, cleanup |
@@ -31,10 +31,10 @@ position numbering:
 Two consequences that are easy to get wrong:
 
 **A pipeline's steps span several managers, so a pipeline changes queue as it
-advances.** The subtitles pipeline starts on `subtitlesTaskManager` and its
+advances.** The subtitles pipeline starts on `localModelsTaskManager` and its
 remaining steps run on `mediaProcessingTaskManager`. The download pipeline
 touches `downloadTaskManager`, `fileTaskManager`, `youtubeFetchTaskManager`,
-`subtitlesTaskManager`, `aiAnalysisTaskManager` and `mediaProcessingTaskManager`
+`localModelsTaskManager` and `mediaProcessingTaskManager`
 across its seven steps. See `src/task-pipelines/*.ts`, where each step names its
 manager.
 
@@ -44,6 +44,54 @@ and `change_position` moves a task to that index *in its own* queue. This is
 why the Activity page only offers reordering within a group whose items all
 share a `taskType`, and why the bulk managers being one-per-target is what lets
 a subtitles backfill and an articles backfill genuinely run at the same time.
+
+## One queue for local models, and why
+
+`localModelsTaskManager` holds **both** transcription and local AI analysis.
+They cannot usefully run together - each already claims most of the cores - so
+they take turns in one queue rather than sitting in two with a lock between
+them.
+
+There used to be such a lock (`LocalComputeGate`), and it worked, but it sat
+*below* the task layer inside a provider call. Three things followed from that,
+all of which the shared queue removes:
+
+- **A blocked task reported itself running.** It held a running slot and showed
+  no progress, so the manager's count and the truth disagreed.
+- **The lock was per call, not per run.** A local analysis is three calls, and
+  the lock was released between them, so a queued transcription could take the
+  machine mid-analysis and the analysis then waited for it to finish.
+- **A task blocked inside a call has no clean cancellation point.** Queued work
+  cancels trivially; work stuck in a provider call does not.
+
+**Hosted analysis deliberately does not come here.** It uses none of this
+machine, so queueing a Claude run behind a transcription would buy a delay for
+nothing. Which queue an analysis lands in is decided per run, from the resolved
+engine, in `DfTaskManager.analyseContent` - both pipelines come from the same
+factory and differ only in the manager they are given.
+
+## Priority tiers
+
+Lower is sooner. Defined together in `task-manager.ts`, because they only mean
+anything relative to each other.
+
+| Tier | Value | Used for |
+| --- | --- | --- |
+| `FORCED_PRIORITY` | 0 | force-started work |
+| `PIPELINE_TASK_PRIORITY` | 1 | work owned by a download pipeline |
+| `DEFAULT_TASK_PRIORITY` | 2 | standalone, hand-started work |
+| `BACKGROUND_TASK_PRIORITY` | 3 | bulk backfills |
+
+**Within a tier, ordering is arrival order** - `addItem` appends by default.
+
+Pipeline work outranks standalone because a download is not usable until its
+subtitles and metadata land, so leaving one half finished behind a long queue of
+unrelated requests is worse than either job being slightly late. A pipeline
+claims its tier once when it starts and every step inherits it.
+
+This only began to matter when transcription and local analysis started sharing
+a queue: before that they never competed, so their relative order was never a
+question anyone could ask.
 
 ## Control actions do much less than their names suggest
 
