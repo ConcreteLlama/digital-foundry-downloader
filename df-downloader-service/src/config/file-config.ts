@@ -4,7 +4,8 @@ import fs, { mkdirSync } from "fs";
 import path from "path";
 import YAML from "yaml";
 import { fromZodError } from "zod-validation-error";
-import { code_dir } from "../utils/file-utils.js";
+import { code_dir, ensureDirectory } from "../utils/file-utils.js";
+import { CURRENT_VERSION } from "../version.js";
 import { DfDownloaderServiceConfigSchema } from "./config-schema.js";
 import { ConfigService } from "./config-service.js";
 
@@ -35,6 +36,7 @@ export class FileConfig extends ConfigService {
       throw new Error(fromZodError(result.error).toString());
     }
     if (patched) {
+      FileConfig.backupConfig(dir, configStr);
       fs.writeFileSync(configFilePath, YAML.stringify(result.data));
     }
     const config = result.data;
@@ -48,6 +50,37 @@ export class FileConfig extends ConfigService {
     this.cachedConfig = config;
     await fs.promises.writeFile(this.configFilePath, YAML.stringify(this.cachedConfig));
   }
+  /**
+   * Keeps a copy of the config as it was before a patch rewrote it.
+   *
+   * Follows the FileDb convention - a `backups/` directory beside the file,
+   * named with the version being left behind and a timestamp, so successive
+   * upgrades do not overwrite each other. Like FileDb, a backup is only kept
+   * when a patch actually happened; unlike FileDb, which copies first and
+   * deletes the copy if nothing changed, this is written after the fact
+   * because the original text is still in hand.
+   *
+   * Writing that original text rather than re-serialising matters here.
+   * Patching rewrites the whole file from the parsed object, so comments and
+   * formatting are lost on any patch whether or not it touched them - the
+   * backup is the only thing that preserves them.
+   *
+   * Best-effort by design: failing to write a backup must not stop the app
+   * starting, since the config it would have protected is still valid and
+   * still about to be written correctly.
+   */
+  private static backupConfig(dir: string, originalConfig: string) {
+    try {
+      const backupDir = path.join(dir, "backups");
+      ensureDirectory(backupDir);
+      const backupPath = path.join(backupDir, `config-${CURRENT_VERSION}-${Date.now()}.yaml`);
+      fs.writeFileSync(backupPath, originalConfig);
+      logger.log("info", `Config patched - previous version backed up to ${backupPath}`);
+    } catch (e) {
+      logger.log("warn", `Could not back up config before patching: ${e}`);
+    }
+  }
+
   static patchConfig(rawConfig: any) {
     let patched: boolean = false;
     /*
