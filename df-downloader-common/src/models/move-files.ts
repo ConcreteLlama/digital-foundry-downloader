@@ -20,6 +20,21 @@ export type MoveFileInfo = z.infer<typeof MoveFileInfo>;
 
 export const ContentMoveFileInfo = MoveFileInfo.extend({
     contentName: z.string(),
+    /**
+     * Files that live beside the video and have to travel with it - subtitle
+     * sidecars, today.
+     *
+     * Carried on the download's own entry rather than listed as moves in their
+     * own right, because a sidecar is not a download: the content database is
+     * keyed by download location, so a standalone entry for a .srt would find
+     * no record to update and report a phantom failure.
+     *
+     * A .srt left behind is worse than untidy - a sidecar only works when it
+     * sits next to its video, so the subtitles silently stop being found, and
+     * the old directory can never be cleaned up because something is still in
+     * it.
+     */
+    sidecars: z.array(MoveFileInfo).default([]),
 });
 export type ContentMoveFileInfo = z.infer<typeof ContentMoveFileInfo>;
 

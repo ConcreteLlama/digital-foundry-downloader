@@ -39,7 +39,25 @@ export type MediaServerPathMapping = z.infer<typeof MediaServerPathMapping>;
  * conditionally.
  */
 const MediaServerConfigBase = z.object({
-  enabled: z.boolean().default(false).describe("Tell this server when files change."),
+  /**
+   * Whether this app talks to this server at all.
+   *
+   * Deliberately just the connection: it used to mean "announce file changes",
+   * which quietly made that the price of admission for everything else. Watch
+   * state and library scans are separate jobs wanted by different people - a
+   * dev box has no interest in telling a server to rescan, but every interest
+   * in knowing what has been watched - so each has its own switch below.
+   */
+  enabled: z.boolean().default(false).describe("Connect to this server."),
+  /**
+   * Whether a finished download, new metadata or a moved file makes this
+   * server rescan. The original purpose of this feature, and on by default
+   * for that reason.
+   */
+  notifyOnChange: z
+    .boolean()
+    .default(true)
+    .describe("Tell this server to rescan when files change, so downloads appear without waiting for its own scan."),
   url: z
     .string()
     .default("")
@@ -65,7 +83,9 @@ const MediaServerConfigBase = z.object({
   syncPlayState: z
     .boolean()
     .default(false)
-    .describe("Mark items watched, and record where you got to, when you play them in this app."),
+    .describe(
+      "Keep watched state in step with this server, both ways: playing something here marks it there, and what you watch there is pulled back in."
+    ),
 });
 
 export const PlexServerKey = "plex";
@@ -87,14 +107,21 @@ export const JellyfinMediaServerConfig = MediaServerConfigBase.extend({
     .default("")
     .describe("An API key, created under Dashboard then API Keys in Jellyfin."),
   /*
-   * Play state needs a user, and an API key is not one.
+   * Play state needs to know WHOSE it is, which is a user id - not a login.
    *
-   * Recent Jellyfin versions refuse played-status writes made with an API key,
-   * and the endpoints are user-scoped regardless
-   * (POST /Users/{userId}/PlayedItems/{itemId}). So signing in once produces a
-   * user id and token, and those are what get stored - the password is
-   * exchanged and discarded rather than written to config.yaml, which is the
-   * approach WatchState takes for the same reason.
+   * Jellyfin's play-state endpoints are user-scoped
+   * (POST /Users/{userId}/PlayedItems/{itemId}), so an id is required. An API
+   * key is a server-level credential that can already act for any user, so the
+   * id is the only missing piece and it comes from a picker.
+   *
+   * This used to claim that recent Jellyfin versions refuse played-status
+   * writes made with an API key, and asked for a username and password on that
+   * basis. That was never measured and is not true: tested against a real
+   * server, the API key alone lists users, reads their items and writes played
+   * status. The password flow is gone.
+   *
+   * userToken is kept only so installs that did sign in keep working - it is
+   * used when present, with the API key as the fallback.
    *
    * Plex needs no equivalent: an X-Plex-Token already identifies a user.
    */
@@ -132,6 +159,24 @@ export const MediaServersConfig = z.object({
     .max(600)
     .default(15)
     .describe("Seconds of no further changes to a folder before the server is told. Batches a download, its metadata and its subtitles into one refresh."),
+  /**
+   * How often to pull watched state back from the servers.
+   *
+   * Zero turns only the *background* pull off - opening something still checks
+   * it, which is the case where staleness is actually visible. Generous by
+   * default because watch state is not time-critical: being half an hour
+   * behind on "have I seen this" costs nothing, and these are usually the same
+   * machine or the same LAN.
+   */
+  playStateSyncMinutes: z
+    .number()
+    .int()
+    .min(0)
+    .max(1440)
+    .default(30)
+    .describe(
+      "How often to pull watched state back from these servers, in minutes. 0 turns the background pull off; anything you open is still checked."
+    ),
 })
 .superRefine((config, ctx) => {
   /*

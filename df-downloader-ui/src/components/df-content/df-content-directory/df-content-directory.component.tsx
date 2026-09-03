@@ -1,4 +1,7 @@
+import CheckCircleIcon from "@mui/icons-material/CheckCircle";
 import DownloadDoneIcon from "@mui/icons-material/DownloadDone";
+import PlayCircleOutlineIcon from "@mui/icons-material/PlayCircleOutline";
+import RadioButtonUncheckedIcon from "@mui/icons-material/RadioButtonUnchecked";
 import GridViewIcon from "@mui/icons-material/GridView";
 import ViewListIcon from "@mui/icons-material/ViewList";
 import DensitySmallIcon from "@mui/icons-material/DensitySmall";
@@ -198,6 +201,7 @@ type TopBarProps = {
 const TopBar = ({ density, onDensity, view, onView, compact }: TopBarProps) => {
   const [quickSearchClear, setQuickSearchClear] = useState(false);
   const downloadedOnly = Boolean(useSelector(selectCurrentQuery)?.downloadedOnly);
+  const watchState = useSelector(selectCurrentQuery)?.watchState;
   return (
     <Box
       sx={{
@@ -228,6 +232,32 @@ const TopBar = ({ density, onDensity, view, onView, compact }: TopBarProps) => {
           <DownloadDoneIcon fontSize="small" />
         </Tooltip>
       </ToggleButton>
+      {/* Beside the downloaded toggle for the same reason: "what have I not
+          seen yet" is a thing you flip while browsing, not a query you compose.
+          Exclusive and clearable - pressing the selected one again clears it,
+          so "no opinion" stays reachable without a fourth "all" button. */}
+      <ToggleButtonGroup
+        size="small"
+        exclusive
+        value={watchState ?? null}
+        onChange={(_, next) => store.dispatch(updateDfContentQuery({ watchState: next ?? undefined }))}
+      >
+        <ToggleButton value="unwatched" sx={{ paddingY: 0.25 }}>
+          <Tooltip title="Not started">
+            <RadioButtonUncheckedIcon fontSize="small" />
+          </Tooltip>
+        </ToggleButton>
+        <ToggleButton value="inProgress" sx={{ paddingY: 0.25 }}>
+          <Tooltip title="Part-watched">
+            <PlayCircleOutlineIcon fontSize="small" />
+          </Tooltip>
+        </ToggleButton>
+        <ToggleButton value="watched" sx={{ paddingY: 0.25 }}>
+          <Tooltip title="Watched">
+            <CheckCircleIcon fontSize="small" />
+          </Tooltip>
+        </ToggleButton>
+      </ToggleButtonGroup>
       {/* Shown at every width: hiding these below md meant a phone that
           landed in grid view had no way back out of it. Density is desktop-only
           because the mobile row has a single density. */}

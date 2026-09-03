@@ -4,8 +4,10 @@ import { describeConnectionError } from "./errors.js";
 import {
   MediaServerClient,
   MediaServerTestResult,
+  PlayStateReader,
   PlayStateWriter,
   PlaybackReport,
+  ServerPlayState,
   WATCHED_FRACTION,
 } from "./types.js";
 
@@ -79,7 +81,7 @@ export class PlexMediaServer implements MediaServerClient, PlayStateWriter {
       .sort((a, b) => b.location.length - a.location.length)[0]?.section;
   }
 
-  async refreshPath(serverPath: string): Promise<void> {
+  async refreshPath(serverPath: string, reason?: string): Promise<void> {
     const sections = await this.getSections();
     const section = PlexMediaServer.sectionFor(sections, serverPath);
     if (!section) {
@@ -95,7 +97,10 @@ export class PlexMediaServer implements MediaServerClient, PlayStateWriter {
       return;
     }
     await this.request(`/library/sections/${section.key}/refresh`, { path: serverPath });
-    logger.log("info", `Asked Plex to rescan "${serverPath}" in library "${section.title}"`);
+    logger.log(
+      "info",
+      `Asked Plex to rescan "${serverPath}" in library "${section.title}"${reason ? ` (${reason})` : ""}`
+    );
   }
 
   async testConnection(): Promise<MediaServerTestResult> {
@@ -171,6 +176,57 @@ export class PlexMediaServer implements MediaServerClient, PlayStateWriter {
   }
 
   /**
+   * Play state for many paths, one library read per section.
+   *
+   * Grouped by section deliberately: reading a section back is the expensive
+   * part, so a hundred files in one library cost one request rather than a
+   * hundred. Paths in no library are skipped rather than reported - that is
+   * the path-mapping symptom, and resolveItemId already says so loudly.
+   */
+  async readPlayState(serverPaths: string[]): Promise<Map<string, ServerPlayState>> {
+    const out = new Map<string, ServerPlayState>();
+    if (!serverPaths.length) {
+      return out;
+    }
+    const sections = await this.getSections();
+    const bySection = new Map<string, Map<string, string>>();
+    for (const serverPath of serverPaths) {
+      const section = PlexMediaServer.sectionFor(sections, serverPath);
+      if (!section) {
+        continue;
+      }
+      const key = String(section.key);
+      let targets = bySection.get(key);
+      if (!targets) {
+        targets = new Map();
+        bySection.set(key, targets);
+      }
+      targets.set(normalise(serverPath), serverPath);
+    }
+    for (const [key, targets] of bySection) {
+      const body: any = await (await this.request(`/library/sections/${key}/all`)).json();
+      for (const item of body?.MediaContainer?.Metadata ?? []) {
+        for (const media of item?.Media ?? []) {
+          for (const part of media?.Part ?? []) {
+            const original = part?.file ? targets.get(normalise(String(part.file))) : undefined;
+            if (!original) {
+              continue;
+            }
+            out.set(original, {
+              watched: Number(item?.viewCount ?? 0) > 0,
+              // Plex counts in milliseconds; lastViewedAt is epoch seconds.
+              positionSeconds: Number(item?.viewOffset ?? 0) / 1000,
+              durationSeconds: item?.duration ? Number(item.duration) / 1000 : undefined,
+              updatedAt: item?.lastViewedAt ? new Date(Number(item.lastViewedAt) * 1000) : undefined,
+            });
+          }
+        }
+      }
+    }
+    return out;
+  }
+
+  /**
    * Reports position, and scrobbles once past the watched mark.
    *
    * These two endpoints are Plex's long-standing timeline API rather than
@@ -178,17 +234,37 @@ export class PlexMediaServer implements MediaServerClient, PlayStateWriter {
    * likely to need adjusting - hence both are best effort and log rather than
    * throw upward into a playing video.
    */
-  async reportPlayback(itemId: string, { positionSeconds, durationSeconds }: PlaybackReport): Promise<void> {
+  /**
+   * Items already scrobbled, so the mark happens once per viewing.
+   *
+   * A report arrives every ten seconds while a video plays, and everything
+   * past WATCHED_FRACTION counts as watched - so without this the last tenth
+   * of every file re-scrobbles and re-logs on every tick. Cleared when a
+   * report comes in below the mark, which is what re-watching looks like.
+   */
+  private markedWatched = new Set<string>();
+
+  async reportPlayback(
+    itemId: string,
+    { positionSeconds, durationSeconds, serverPath }: PlaybackReport
+  ): Promise<void> {
     const watched = durationSeconds > 0 && positionSeconds / durationSeconds >= WATCHED_FRACTION;
+    // The progress report still goes every tick - that is the resume point.
     await this.request("/:/progress", {
       key: itemId,
       identifier: "com.plexapp.plugins.library",
       time: String(Math.floor(positionSeconds * 1000)),
       state: watched ? "stopped" : "playing",
     });
-    if (watched) {
-      await this.request("/:/scrobble", { key: itemId, identifier: "com.plexapp.plugins.library" });
-      logger.log("info", `Marked Plex item ${itemId} watched.`);
+    if (!watched) {
+      this.markedWatched.delete(itemId);
+      return;
     }
+    if (this.markedWatched.has(itemId)) {
+      return;
+    }
+    await this.request("/:/scrobble", { key: itemId, identifier: "com.plexapp.plugins.library" });
+    this.markedWatched.add(itemId);
+    logger.log("info", `Marked "${serverPath}" watched on Plex.`);
   }
 }

@@ -1,7 +1,8 @@
 import ArticleIcon from "@mui/icons-material/Article";
 import AutoAwesomeIcon from "@mui/icons-material/AutoAwesome";
-import { Stack, Tooltip } from "@mui/material";
-import { AiEvidenceSourceLabels, DfContentBadgeState } from "df-downloader-common";
+import CheckCircleIcon from "@mui/icons-material/CheckCircle";
+import { Box, CircularProgress, Stack, Tooltip } from "@mui/material";
+import { AiEvidenceSourceLabels, DfContentBadgeState, STARTED_FRACTION } from "df-downloader-common";
 import { useSelector } from "react-redux";
 import { selectContentBadges } from "../../../store/df-content/df-content.selector.ts";
 
@@ -34,9 +35,20 @@ const isStrongEvidence = (evidence: DfContentBadgeState["analysisEvidence"]) =>
 export const RowBadges = ({ contentKey }: { contentKey: string }) => {
   const badges = useSelector(selectContentBadges(contentKey));
 
-  if (!badges || (!badges.analysed && !badges.hasArticle)) {
+  if (!badges || (!badges.analysed && !badges.hasArticle && !badges.watched && !badges.watchedFraction)) {
     return null;
   }
+
+  /*
+    Part-way through is its own state, not a weaker "watched".
+
+    Drawn as a determinate ring rather than another glyph because the glyph
+    then carries the answer to the question actually being asked - "how far in
+    was I" - without a tooltip. Below a couple of percent it is treated as not
+    started: opening something and closing it should not mark the row.
+  */
+  const fraction = badges.watchedFraction ?? 0;
+  const inProgress = !badges.watched && fraction > STARTED_FRACTION;
 
   const strong = isStrongEvidence(badges.analysisEvidence);
   const readLabels = badges.analysisEvidence.map((source) => AiEvidenceSourceLabels[source]);
@@ -61,6 +73,24 @@ export const RowBadges = ({ contentKey }: { contentKey: string }) => {
       {badges.hasArticle && (
         <Tooltip title="Has a Digital Foundry article">
           <ArticleIcon sx={{ fontSize: "0.875rem", color: "text.secondary" }} />
+        </Tooltip>
+      )}
+      {badges.watched && (
+        <Tooltip title="Watched">
+          <CheckCircleIcon sx={{ fontSize: "0.875rem", color: "success.main" }} />
+        </Tooltip>
+      )}
+      {inProgress && (
+        <Tooltip title={`${Math.round(fraction * 100)}% watched`}>
+          <Box sx={{ display: "flex", alignItems: "center" }}>
+            <CircularProgress
+              variant="determinate"
+              value={fraction * 100}
+              size={12}
+              thickness={7}
+              sx={{ color: "text.secondary" }}
+            />
+          </Box>
         </Tooltip>
       )}
     </Stack>

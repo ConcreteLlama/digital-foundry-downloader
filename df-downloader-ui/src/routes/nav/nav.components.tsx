@@ -388,13 +388,62 @@ export const NavPage = () => {
     // Grows to fill the scroll area rather than stopping at its content, so
     // a short page still covers the screen - both for the swipe handler and
     // for the save bar a settings page puts at its bottom.
-    <Box sx={{ display: "flex", padding: { xs: 1.5, md: 4 }, width: "100%", minWidth: 0, flex: "1 1 auto" }}>
+    <Box
+      sx={{
+        display: "flex",
+        paddingX: { xs: 1.5, md: 4 },
+        paddingTop: { xs: 1.5, md: 4 },
+        /*
+          No bottom padding once the columns scroll themselves.
+
+          The settings save bar is sticky to the bottom of its scroll
+          container, so any padding below that container leaves the bar
+          floating short of the screen with dead space under it. Below lg the
+          page scrolls as one and the padding is still wanted.
+        */
+        paddingBottom: { xs: 1.5, md: 4, lg: 0 },
+        width: "100%",
+        minWidth: 0,
+        flex: "1 1 auto",
+        /*
+          From lg, the two columns scroll independently rather than the page
+          scrolling as one - scrolling a long settings form used to carry the
+          section list away with it.
+
+          That needs this row to stop growing with its content: minHeight 0
+          lets it shrink to the height the app scroller gives it, and hidden
+          stops it handing overflow back up. The panes inside then own their
+          own scrolling.
+
+          Deliberately lg and up only. Below that the section list is not
+          rendered at all, and the app scroller carries bottom padding for the
+          mobile tab bar that an inner scroller would not apply - so phones
+          keep the single-scroller behaviour they already had.
+        */
+        minHeight: { lg: 0 },
+        overflow: { lg: "hidden" },
+      }}
+    >
       <SectionNav />
       {/* A column, so the page inside can grow to fill it rather than
           depending on a percentage height resolving against a box that only
           has a stretched one - which it does not do reliably, and was why
           the settings save bar sat under the content on desktop. */}
-      <Box sx={{ flex: "1 1 auto", minWidth: 0, display: "flex", flexDirection: "column" }} {...swipe}>
+      <Box
+        sx={{
+          flex: "1 1 auto",
+          minWidth: 0,
+          display: "flex",
+          flexDirection: "column",
+          // The other half of the row above: this is what actually scrolls a
+          // long settings page from lg up. The save bar's sticky bottom:0
+          // resolves against this instead of the app scroller, which puts it
+          // in the same place on screen.
+          minHeight: { lg: 0 },
+          overflowY: { lg: "auto" },
+        }}
+        {...swipe}
+      >
         <SectionNavCompact />
         <Outlet />
       </Box>

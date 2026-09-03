@@ -54,12 +54,40 @@ export type TestMediaServerResponse = z.infer<typeof TestMediaServerResponse>;
 /**
  * Exchanges a Jellyfin username and password for a user token.
  *
- * Done once, in settings. The password is used for the exchange and then
- * discarded - only the resulting user id and token are stored, which is how
- * WatchState handles the same problem. Play state is per-user and recent
- * Jellyfin versions refuse played-status writes made with an API key, so
- * there is no way to avoid a user credential here.
+ * Legacy: nothing in the app calls this any more. Play state only ever needed
+ * a user id, and an API key can both list users and write played status - so
+ * the settings form picks a user instead of asking for a password. Kept for
+ * now against the possibility of a server that genuinely refuses API keys,
+ * which has not been observed.
  */
+/**
+ * Lists the Jellyfin accounts an API key can see, so one can be picked.
+ *
+ * Replaces signing in. Play state is user-scoped, so this app needs to know
+ * *whose* state it is keeping - but a Jellyfin API key is a server-level
+ * credential that can already act for any user, so a user id is all that was
+ * ever actually required. Confirmed against a real server: the key alone
+ * lists users, reads their items, and writes played status.
+ */
+export const JellyfinListUsersRequest = z.object({
+  url: z.string().min(1),
+  apiKey: z.string().min(1),
+});
+export type JellyfinListUsersRequest = z.infer<typeof JellyfinListUsersRequest>;
+
+export const JellyfinUser = z.object({
+  id: z.string(),
+  name: z.string(),
+});
+export type JellyfinUser = z.infer<typeof JellyfinUser>;
+
+export const JellyfinListUsersResponse = z.object({
+  ok: z.boolean(),
+  users: JellyfinUser.array().optional(),
+  error: z.string().optional(),
+});
+export type JellyfinListUsersResponse = z.infer<typeof JellyfinListUsersResponse>;
+
 export const JellyfinSignInRequest = z.object({
   url: z.string().min(1),
   username: z.string().min(1),

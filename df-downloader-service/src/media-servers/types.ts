@@ -26,7 +26,7 @@ export interface MediaServerClient {
    * existing on that version, must not fail a download. Implementations throw
    * and the manager logs; nothing upstream depends on this succeeding.
    */
-  refreshPath(serverPath: string): Promise<void>;
+  refreshPath(serverPath: string, reason?: string): Promise<void>;
 
   /**
    * Check the URL and credentials without changing anything.
@@ -39,12 +39,23 @@ export interface MediaServerClient {
   testConnection(): Promise<MediaServerTestResult>;
 }
 
-/** How far through counts as watched. Matches the convention both servers use themselves. */
-export const WATCHED_FRACTION = 0.9;
+/**
+ * How far through counts as watched.
+ *
+ * Re-exported rather than redefined: this app now keeps its own watch state,
+ * and two constants for one rule is exactly how a file ends up watched here
+ * and unwatched there.
+ */
+export { WATCHED_FRACTION } from "df-downloader-common";
 
 export type PlaybackReport = {
   positionSeconds: number;
   durationSeconds: number;
+  /**
+   * The path in the server's namespace, carried purely so the log line can
+   * name the file. An item id alone says nothing to anyone reading a log.
+   */
+  serverPath: string;
 };
 
 /**
@@ -71,6 +82,43 @@ export interface PlayStateWriter {
   /** Record where you got to, and mark it watched once past WATCHED_FRACTION. */
   reportPlayback(itemId: string, report: PlaybackReport): Promise<void>;
 }
+
+/** What a server says about one file. */
+export type ServerPlayState = {
+  watched: boolean;
+  positionSeconds: number;
+  durationSeconds?: number;
+  /** When the server last saw it played, where it says. Drives the merge. */
+  updatedAt?: Date;
+};
+
+/**
+ * A server this app can ask what you have already watched.
+ *
+ * Deliberately bulk. Resolving a single path means reading a whole library
+ * back and comparing file paths - neither server offers a lookup by path - so
+ * a per-item version of this would re-read the entire library once per item.
+ * One call, many paths, one library read.
+ *
+ * Separate from PlayStateWriter because reading and writing are not the same
+ * permission on either server, and a client may sensibly do one and not the
+ * other.
+ */
+export interface PlayStateReader {
+  /**
+   * Play state for each of these paths that the server knows about.
+   *
+   * Paths arrive already in the server's namespace - the manager owns mapping.
+   * A path the server has never indexed is simply absent from the result,
+   * which is an ordinary answer rather than an error.
+   */
+  readPlayState(serverPaths: string[]): Promise<Map<string, ServerPlayState>>;
+}
+
+export const canReadPlayState = (
+  client: MediaServerClient
+): client is MediaServerClient & PlayStateReader =>
+  typeof (client as Partial<PlayStateReader>).readPlayState === "function";
 
 export const canWritePlayState = (
   client: MediaServerClient

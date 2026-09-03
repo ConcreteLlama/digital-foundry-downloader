@@ -28,7 +28,37 @@ export const BatchMoveFilesTask = BatchOperationTaskBuilder(async (moveFileInfo:
          */
         serviceLocator.mediaServers.fileChanged(moveFileInfo.oldFilename, "moved");
         serviceLocator.mediaServers.fileChanged(moveFileInfo.newFilename, "moved");
-        const { missingFiles } = await taskOpts.db.moveDownload(moveFileInfo.contentName, moveFileInfo.oldFilename, moveFileInfo.newFilename);
+        /*
+         * Sidecars travel with the video, and their failures are contained.
+         *
+         * Deliberately caught per file rather than allowed to escape: an
+         * absent .srt must not fail the video's move, and must certainly not
+         * reach the ENOENT branch below, which would remove the download
+         * record for a file that is present and correct.
+         */
+        const movedSidecars: { oldFilename: string; newFilename: string }[] = [];
+        for (const sidecar of moveFileInfo.sidecars ?? []) {
+            try {
+                await moveFile(sidecar.oldFilename, sidecar.newFilename, {
+                    clobber: taskOpts.overwrite,
+                    mkdirp: true,
+                });
+                movedSidecars.push(sidecar);
+                serviceLocator.mediaServers.fileChanged(sidecar.oldFilename, "moved");
+                serviceLocator.mediaServers.fileChanged(sidecar.newFilename, "moved");
+            } catch (e: any) {
+                logger.log(
+                    "warn",
+                    `Moved ${moveFileInfo.contentName} but could not move its subtitle file ${sidecar.oldFilename}: ${e?.message ?? e}`
+                );
+            }
+        }
+        const { missingFiles } = await taskOpts.db.moveDownload(
+            moveFileInfo.contentName,
+            moveFileInfo.oldFilename,
+            moveFileInfo.newFilename,
+            movedSidecars
+        );
         if (missingFiles.length) {
             // The file is already on disk at its new home, but nothing in the DB
             // matched it, so the record still points at the old path. That is a

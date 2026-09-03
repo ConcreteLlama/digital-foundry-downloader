@@ -1,6 +1,8 @@
 import { Box, Stack, Typography } from "@mui/material";
-import { DfContentInfoUtils, secondsToHHMMSS } from "df-downloader-common";
+import { DfContentInfoUtils, STARTED_FRACTION, secondsToHHMMSS } from "df-downloader-common";
+import { useSelector } from "react-redux";
 import { useDfContentEntry } from "../../../hooks/use-df-content-entry.ts";
+import { selectContentBadges } from "../../../store/df-content/df-content.selector.ts";
 import { monoFontFamily } from "../../../themes/build-theme.ts";
 import { DfThumbnailImage } from "../../general/df-thumbnail-image.component.tsx";
 import { contentRowStateSpecs, spineStyles } from "./content-row-state.ts";
@@ -22,6 +24,7 @@ export type ContentGridCardProps = {
 export const ContentGridCard = ({ dfContentName, onClick }: ContentGridCardProps) => {
   const entry = useDfContentEntry(dfContentName);
   const status = useContentRowStatus(entry);
+  const badges = useSelector(selectContentBadges(dfContentName));
   if (!entry) {
     return null;
   }
@@ -29,6 +32,14 @@ export const ContentGridCard = ({ dfContentName, onClick }: ContentGridCardProps
   const spec = contentRowStateSpecs[status.state];
   const durationSeconds = DfContentInfoUtils.getDurationSeconds(contentInfo);
   const spine = spineStyles(spec);
+  /*
+    How far through, along the bottom of the thumbnail.
+
+    Watched fills the bar rather than showing wherever you stopped: people
+    routinely leave the last thirty seconds of credits, and a bar sitting at
+    96% reads as unfinished business when it is not.
+  */
+  const watchProgress = badges?.watched ? 1 : badges?.watchedFraction ?? 0;
 
   return (
     <Box
@@ -87,6 +98,26 @@ export const ContentGridCard = ({ dfContentName, onClick }: ContentGridCardProps
           >
             {secondsToHHMMSS(durationSeconds)}
           </Typography>
+        )}
+        {watchProgress > STARTED_FRACTION && (
+          <Box
+            sx={{
+              position: "absolute",
+              left: 0,
+              right: 0,
+              bottom: 0,
+              height: "3px",
+              backgroundColor: "rgba(0, 0, 0, 0.45)",
+            }}
+          >
+            <Box
+              sx={{
+                width: `${watchProgress * 100}%`,
+                height: "100%",
+                backgroundColor: badges?.watched ? "success.main" : "primary.main",
+              }}
+            />
+          </Box>
         )}
       </Box>
       <Stack sx={{ padding: 1, gap: 0.5, flex: "1 1 auto" }}>

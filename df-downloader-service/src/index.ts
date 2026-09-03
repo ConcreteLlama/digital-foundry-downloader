@@ -12,6 +12,8 @@ import { makeRoutes } from "./rest/routes.js";
 import { loadServices } from "./services/service-loader.js";
 import { JwtManager } from "./rest/auth/jwt.js";
 import { serviceLocator } from "./services/service-locator.js";
+import { WatchStateStore } from "./db/watch-state-store.js";
+import { WatchStateSync } from "./services/watch-state-sync.js";
 import { DfFileOperationalDb } from "./db/df-file-operational-db.js";
 import { closeAllQueues, forceCloseAllQueues } from "./utils/queue-utils.js";
 import { ActivePipelineDb, CompletedPipelineDb } from "./db/file-dbs/pipeline-db.js";
@@ -61,8 +63,21 @@ async function start() {
   // cadence (see db/file-dbs/pipeline-db.ts).
   const dbDir = ensureEnvString("DB_DIR", "db");
   serviceLocator.setPipelineDbs(await ActivePipelineDb.create(dbDir), await CompletedPipelineDb.create(dbDir));
+  /*
+   * Watch state is this app's own, kept whether or not a media server is
+   * configured - so it is built here unconditionally rather than alongside
+   * the media server manager. The sync is the optional half: with nothing
+   * configured it never does anything.
+   */
+  const watchStateStore = await WatchStateStore.create(dbDir);
+  const watchStateSync = new WatchStateSync(watchStateStore, serviceLocator.mediaServers, db);
+  serviceLocator.setWatchState(watchStateStore, watchStateSync);
+  // Lets the content query filter on watched/unwatched without the db layer
+  // importing the service locator - see setWatchStateLookup.
+  db.setWatchStateLookup(watchStateStore);
   const dfContentManager = new DigitalFoundryContentManager(db);
   loadServices();
+  watchStateSync.start();
   if (configService.config.restApi) {
     const jwtManager = await JwtManager.create(86400);
     makeRoutes(dfContentManager, jwtManager);

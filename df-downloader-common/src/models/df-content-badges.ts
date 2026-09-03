@@ -23,6 +23,17 @@ export const DfContentBadgeState = z.object({
    */
   analysisEvidence: z.array(AiEvidenceSource).default([]),
   hasArticle: z.boolean().default(false),
+  /** Whether you have seen it, from this app's own watch state. */
+  watched: z.boolean().default(false),
+  /**
+   * How far through, 0-1, when a position and a duration are both known.
+   *
+   * Carried separately from `watched` because "started" and "finished" are
+   * different things to draw: a part-watched row wants a progress hint, a
+   * finished one wants a tick. Absent when nothing has been played, or when
+   * whatever reported the position never said how long the file was.
+   */
+  watchedFraction: z.number().min(0).max(1).optional(),
 });
 export type DfContentBadgeState = z.infer<typeof DfContentBadgeState>;
 

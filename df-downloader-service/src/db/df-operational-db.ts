@@ -12,6 +12,7 @@ import {
   DfUserInfo,
   UserInfo,
   AiCostLogEntry,
+  WatchState,
 } from "df-downloader-common";
 import { DfContentDownloadInfo, DfContentSubtitleInfo } from "df-downloader-common/models/df-content-download-info.js";
 
@@ -45,6 +46,13 @@ export type MoveDownloadOpts = {
   contentName: string;
   oldLocation: string;
   newLocation: string;
+  /**
+   * Sidecars that moved with the video, as old-to-new pairs.
+   *
+   * Remapped here rather than by the caller because the record is what knows
+   * which subtitle sits where - a mover only knows which files it shifted.
+   */
+  sidecars?: { oldFilename: string; newFilename: string }[];
 };
 export type AddContentEntryOpts = {
   contentInfo: DfContentInfo;
@@ -140,6 +148,20 @@ export abstract class DfDownloaderOperationalDb {
   abstract setDfArticleArchiveWalkState(state: { year?: number; complete?: boolean }): Promise<void>;
   abstract getDfArticleScanCursor(): Date | undefined;
   abstract setDfArticleScanCursor(cursor: Date): Promise<void>;
+  /**
+   * Watch state, for the query's watchState filter.
+   *
+   * Injected rather than reached for through the service locator: the locator
+   * imports this module for its types, so a db that imported it back would
+   * close a cycle. A structural type keeps the store itself out of the db
+   * layer too.
+   */
+  protected watchStateLookup?: { get(contentKey: string): WatchState | undefined };
+
+  setWatchStateLookup(lookup: { get(contentKey: string): WatchState | undefined }) {
+    this.watchStateLookup = lookup;
+  }
+
   protected abstract doQuery(params: DfContentInfoQueryParams): Promise<DfDbQueryResult>;
 
   async setContentInfosWithAvailability(contentInfosWithStatuses: ContentInfoWithAvailability[], userTier: string) {
@@ -161,8 +183,15 @@ export abstract class DfDownloaderOperationalDb {
   async removeDownload(dfContentName: string, downloadLocation: string) {
     return this.removeDownloads([{ contentName: dfContentName, downloadLocation }]);
   }
-  async moveDownload(dfContentName: string, oldDownloadLocation: string, newDownloadLocation: string) {
-    return this.moveDownloads([{ contentName: dfContentName, oldLocation: oldDownloadLocation, newLocation: newDownloadLocation }]);
+  async moveDownload(
+    dfContentName: string,
+    oldDownloadLocation: string,
+    newDownloadLocation: string,
+    sidecars?: { oldFilename: string; newFilename: string }[]
+  ) {
+    return this.moveDownloads([
+      { contentName: dfContentName, oldLocation: oldDownloadLocation, newLocation: newDownloadLocation, sidecars },
+    ]);
   };
   async setContentInfo(contentInfo: DfContentInfo) {
     return this.setContentInfos([contentInfo]);

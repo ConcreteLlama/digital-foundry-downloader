@@ -1,4 +1,4 @@
-import { Alert, Box, Button, Divider, Stack, TextField, Typography } from "@mui/material";
+import { Alert, Box, Button, Divider, MenuItem, Stack, TextField, Typography } from "@mui/material";
 import {
   JellyfinMediaServerConfig,
   JellyfinServerKey,
@@ -9,11 +9,13 @@ import {
   applyPathMapping,
 } from "df-downloader-common/config/media-servers-config";
 import {
-  JellyfinSignInRequest,
-  JellyfinSignInResponse,
+  JellyfinListUsersRequest,
+  JellyfinListUsersResponse,
+  JellyfinUser,
   MediaServerLibrary,
   TestMediaServerRequest,
   TestMediaServerResponse,
+  WatchStateSyncResult,
   parseResponseBody,
 } from "df-downloader-common";
 import { useEffect, useState } from "react";
@@ -21,6 +23,7 @@ import { AutocompleteElement, useFormContext, useWatch } from "react-hook-form-m
 import { ContentManagementConfig } from "df-downloader-common/config/content-management-config";
 import { API_URL } from "../../config";
 import { fetchJson } from "../../utils/fetch";
+import { syncWatchStateNow } from "../../api/watch-state";
 import { ZodCheckboxField } from "../zod-fields/zod-checkbox-field.component";
 import { ZodNumberField } from "../zod-fields/zod-number-field.component";
 import { ZodTextField } from "../zod-fields/zod-text-field.component";
@@ -41,15 +44,22 @@ type TestState =
 const MediaServerSettings = () => (
   <Stack spacing={3}>
     <Typography variant="body2" color="text.secondary">
-      Tell Plex or Jellyfin when files change, so a download appears in your library straight away rather than
-      waiting for the server's next scheduled scan. Metadata written into a file, new subtitles and files moved by
-      the Reorganize tool all count as changes.
+      Connect Plex or Jellyfin, then choose what the connection does. It can tell the server to rescan when files
+      change - so a download appears in your library straight away rather than waiting for its next scheduled scan -
+      and it can keep watched state in step, both ways. The two are independent: a machine that never serves media
+      can still be worth reading watched state from.
     </Typography>
     <ZodNumberField
       name="settleSeconds"
       label="Settle time (seconds)"
       zodNumber={MediaServersConfig.shape.settleSeconds}
     />
+    <ZodNumberField
+      name="playStateSyncMinutes"
+      label="Pull watched state every (minutes)"
+      zodNumber={MediaServersConfig.shape.playStateSyncMinutes}
+    />
+    <SyncNowButton />
     <Divider />
     <ServerSection
       type={PlexServerKey}
@@ -59,6 +69,7 @@ const MediaServerSettings = () => (
       credentialSchema={PlexMediaServerConfig.shape.token}
       urlSchema={PlexMediaServerConfig.shape.url}
       enabledSchema={PlexMediaServerConfig.shape.enabled}
+      notifyOnChangeSchema={PlexMediaServerConfig.shape.notifyOnChange}
       playStateSchema={PlexMediaServerConfig.shape.syncPlayState}
       urlHint="e.g. http://192.168.1.10:32400"
     />
@@ -71,6 +82,7 @@ const MediaServerSettings = () => (
       credentialSchema={JellyfinMediaServerConfig.shape.apiKey}
       urlSchema={JellyfinMediaServerConfig.shape.url}
       enabledSchema={JellyfinMediaServerConfig.shape.enabled}
+      notifyOnChangeSchema={JellyfinMediaServerConfig.shape.notifyOnChange}
       playStateSchema={JellyfinMediaServerConfig.shape.syncPlayState}
       urlHint="e.g. http://192.168.1.10:8096"
     />
@@ -85,8 +97,78 @@ type ServerSectionProps = {
   credentialSchema: any;
   urlSchema: any;
   enabledSchema: any;
+  notifyOnChangeSchema: any;
   playStateSchema: any;
   urlHint: string;
+};
+
+type SyncState =
+  | { status: "idle" }
+  | { status: "syncing" }
+  | { status: "done"; result: WatchStateSyncResult }
+  | { status: "error"; message: string };
+
+/**
+ * Pull from the servers without waiting for the timer.
+ *
+ * Worth a button because the timer is measured in half-hours: having just
+ * entered credentials, the question "did that work" is immediate and the
+ * answer would otherwise be half an hour away.
+ *
+ * Reports what each server recognised rather than a bare "done". A server
+ * that answers happily and matches none of your files is the signature of a
+ * wrong path mapping, and without the numbers that is indistinguishable from
+ * having nothing to do.
+ */
+const SyncNowButton = () => {
+  const [state, setState] = useState<SyncState>({ status: "idle" });
+  return (
+    <Box>
+      <Button
+        variant="outlined"
+        disabled={state.status === "syncing"}
+        onClick={async () => {
+          setState({ status: "syncing" });
+          try {
+            setState({ status: "done", result: await syncWatchStateNow() });
+          } catch (e) {
+            setState({ status: "error", message: e instanceof Error ? e.message : String(e) });
+          }
+        }}
+      >
+        {state.status === "syncing" ? "Syncing..." : "Sync watched state now"}
+      </Button>
+      {state.status === "error" && (
+        <Alert severity="error" sx={{ marginTop: 1 }}>
+          {state.message}
+        </Alert>
+      )}
+      {state.status === "done" && (
+        <Stack spacing={1} sx={{ marginTop: 1 }}>
+          {!state.result.ran || !state.result.servers.length ? (
+            <Alert severity="info">
+              Nothing to sync - no server has "Keep watched state in step" switched on.
+            </Alert>
+          ) : (
+            <>
+              {state.result.servers.map((server) => (
+                <Alert key={server.source} severity={server.matched ? "success" : "warning"}>
+                  {server.matched
+                    ? `${server.source} recognised ${server.matched} of your ${server.asked} downloaded files.`
+                    : `${server.source} recognised none of your ${server.asked} downloaded files. If it does have them, the path mapping above is probably wrong.`}
+                </Alert>
+              ))}
+              <Alert severity={state.result.changed ? "success" : "info"}>
+                {state.result.changed
+                  ? `Updated watched state for ${state.result.changed} item${state.result.changed === 1 ? "" : "s"}.`
+                  : "Nothing had changed since the last sync."}
+              </Alert>
+            </>
+          )}
+        </Stack>
+      )}
+    </Box>
+  );
 };
 
 const ServerSection = ({
@@ -97,6 +179,7 @@ const ServerSection = ({
   credentialSchema,
   urlSchema,
   enabledSchema,
+  notifyOnChangeSchema,
   playStateSchema,
   urlHint,
 }: ServerSectionProps) => {
@@ -108,7 +191,7 @@ const ServerSection = ({
   return (
     <Stack spacing={2}>
       <Typography variant="h6">{title}</Typography>
-      <ZodCheckboxField name={`${base}.enabled`} label={`Tell ${title} when files change`} zodBoolean={enabledSchema} />
+      <ZodCheckboxField name={`${base}.enabled`} label={`Connect to ${title}`} zodBoolean={enabledSchema} />
       {enabled ? (
         <>
           <ZodTextField
@@ -156,109 +239,138 @@ const ServerSection = ({
           {test.status === "success" && <Alert severity="success">{test.message}</Alert>}
           {test.status === "error" && <Alert severity="error">{test.message}</Alert>}
           {/*
-            A separate toggle from "tell this server when files change",
-            because they are different jobs: announcing a changed folder is a
-            server-level action, while play state belongs to a person and
-            needs a credential identifying one.
+            Part of setting the connection up, not of either job: both the
+            rescan and the watched-state sync match on paths, so a wrong
+            mapping breaks them equally. It sits directly under the test
+            because the test is what lists the folders the server really has.
           */}
-          <ZodCheckboxField
-            name={`${base}.syncPlayState`}
-            label={`Update ${title} when you watch something in this app's player`}
-            zodBoolean={playStateSchema}
-          />
-          {type === JellyfinServerKey ? <JellyfinPlayStateSignIn base={base} /> : null}
           <PathMapping
             base={base}
             title={title}
             libraries={test.status === "success" ? test.libraries : []}
           />
+          {/*
+            The two jobs a connection can do, kept apart because people want
+            them separately: a machine that never serves media has no use for
+            rescans but every use for watched state, and before this the only
+            way to get the second was to accept the first.
+          */}
+          <ZodCheckboxField
+            name={`${base}.notifyOnChange`}
+            label={`Tell ${title} to rescan when files change`}
+            zodBoolean={notifyOnChangeSchema}
+          />
+          <ZodCheckboxField
+            name={`${base}.syncPlayState`}
+            label={`Keep watched state in step with ${title}`}
+            zodBoolean={playStateSchema}
+          />
+          {type === JellyfinServerKey ? <JellyfinPlayStateUser base={base} /> : null}
         </>
       ) : null}
     </Stack>
   );
 };
 
-/**
- * Signs in to Jellyfin so play state can be attributed to a person.
- *
- * The username and password live in local state and are never registered as
- * form fields, so they cannot be written to config.yaml - only the user id and
- * token the exchange returns are. Jellyfin needs this because play state is
- * per-user and recent versions refuse played-status writes made with an API
- * key; Plex needs no equivalent, since its token already identifies a user.
- */
-type SignInState =
+type UsersState =
   | { status: "idle" }
-  | { status: "signing-in" }
-  | { status: "success"; message: string }
+  | { status: "loading" }
+  | { status: "loaded"; users: JellyfinUser[] }
   | { status: "error"; message: string };
 
-const JellyfinPlayStateSignIn = ({ base }: { base: string }) => {
+/**
+ * Which Jellyfin account watched state belongs to.
+ *
+ * A picker rather than a sign-in. Jellyfin's play-state endpoints are
+ * user-scoped, so this app has to know whose state it is keeping - but an API
+ * key is a server-level credential that can already act for any user, so a
+ * user id was the only thing ever actually needed. Verified against a real
+ * server: the key alone lists users, reads their items and writes played
+ * status.
+ *
+ * The old flow asked for a username and password purely to obtain that id,
+ * which meant handling a password to learn something the key could already
+ * tell us. Existing installs keep working untouched - a stored user token is
+ * still used when present, and the API key is the fallback.
+ */
+const JellyfinPlayStateUser = ({ base }: { base: string }) => {
   const { setValue } = useFormContext();
   const syncPlayState = useWatch({ name: `${base}.syncPlayState` });
   const url = useWatch({ name: `${base}.url` });
-  const signedInUserId = useWatch({ name: `${base}.userId` });
-  const [username, setUsername] = useState("");
-  const [password, setPassword] = useState("");
-  const [state, setState] = useState<SignInState>({ status: "idle" });
+  const apiKey = useWatch({ name: `${base}.apiKey` });
+  const userId = useWatch({ name: `${base}.userId` });
+  const [state, setState] = useState<UsersState>({ status: "idle" });
+
+  const load = async () => {
+    if (!url || !apiKey) {
+      setState({ status: "error", message: "Enter the server URL and API key first." });
+      return;
+    }
+    setState({ status: "loading" });
+    try {
+      const body: JellyfinListUsersRequest = { url, apiKey };
+      const data = await fetchJson(`${API_URL}/media-servers/jellyfin-users`, {
+        method: "POST",
+        body: JSON.stringify(body),
+        headers: { "Content-Type": "application/json" },
+      });
+      const result = parseResponseBody(data, JellyfinListUsersResponse);
+      if (result.data?.ok && result.data.users?.length) {
+        setState({ status: "loaded", users: result.data.users });
+      } else {
+        setState({ status: "error", message: result.data?.error || "Could not list Jellyfin users." });
+      }
+    } catch (e: any) {
+      setState({ status: "error", message: e?.message || "Could not list Jellyfin users." });
+    }
+  };
+
+  // Only once the job is actually switched on, and only when there is a
+  // credential to ask with - otherwise this fires a doomed request every time
+  // the settings page is opened.
+  useEffect(() => {
+    if (syncPlayState && url && apiKey && state.status === "idle") {
+      void load();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [syncPlayState, url, apiKey]);
 
   if (!syncPlayState) {
     return null;
   }
 
-  const signIn = async () => {
-    setState({ status: "signing-in" });
-    try {
-      const body: JellyfinSignInRequest = { url, username, password };
-      const data = await fetchJson(`${API_URL}/media-servers/jellyfin-sign-in`, {
-        method: "POST",
-        body: JSON.stringify(body),
-        headers: { "Content-Type": "application/json" },
-      });
-      const result = parseResponseBody(data, JellyfinSignInResponse);
-      if (result.data?.ok && result.data.userId && result.data.userToken) {
-        setValue(`${base}.userId`, result.data.userId, { shouldDirty: true });
-        setValue(`${base}.userToken`, result.data.userToken, { shouldDirty: true });
-        setPassword("");
-        setState({ status: "success", message: `Signed in as ${result.data.username ?? username}. Save to keep this.` });
-      } else {
-        setState({ status: "error", message: result.data?.error || "Could not sign in." });
-      }
-    } catch (e: any) {
-      setState({ status: "error", message: e?.message || "Could not sign in." });
-    }
-  };
+  const users = state.status === "loaded" ? state.users : [];
+  // Keeps a saved id selectable before the list arrives, so the field does not
+  // read as empty for an install that is already configured.
+  const options = userId && !users.some((u) => u.id === userId) ? [{ id: userId, name: userId }, ...users] : users;
 
   return (
     <Stack spacing={1} sx={{ pl: 2, borderLeft: 2, borderColor: "divider" }}>
       <Typography variant="body2" color="text.secondary">
-        Jellyfin records what was watched against a person, so this needs your Jellyfin login rather than the API
-        key above. Your password is exchanged for a token and not stored.
+        Jellyfin records what was watched against a person, so pick whose watched state this should keep in step. The
+        API key above is all that is needed - no password.
       </Typography>
-      {signedInUserId ? (
-        <Alert severity="success">Signed in. Sign in again only if play state stops working.</Alert>
-      ) : null}
       <Box sx={{ display: "flex", gap: 1, alignItems: "flex-start" }}>
         <TextField
-          label="Jellyfin username"
-          value={username}
-          onChange={(e) => setUsername(e.target.value)}
+          select
+          label="Jellyfin user"
           size="small"
-          sx={{ flex: 1 }}
-        />
-        <TextField
-          label="Jellyfin password"
-          type="password"
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-          size="small"
-          sx={{ flex: 1 }}
-        />
-        <Button variant="outlined" disabled={!username || !url || state.status === "signing-in"} onClick={signIn}>
-          {state.status === "signing-in" ? "Signing in..." : "Sign in"}
+          sx={{ flex: 1, maxWidth: 320 }}
+          value={options.length ? userId ?? "" : ""}
+          onChange={(e) => setValue(`${base}.userId`, e.target.value, { shouldDirty: true })}
+          disabled={state.status === "loading" || !options.length}
+          helperText={state.status === "loading" ? "Loading users..." : undefined}
+        >
+          {options.map((user) => (
+            <MenuItem key={user.id} value={user.id}>
+              {user.name}
+            </MenuItem>
+          ))}
+        </TextField>
+        <Button onClick={load} disabled={state.status === "loading"} sx={{ marginTop: 0.5 }}>
+          {state.status === "loading" ? "Loading..." : "Reload"}
         </Button>
       </Box>
-      {state.status === "success" && <Alert severity="success">{state.message}</Alert>}
       {state.status === "error" && <Alert severity="error">{state.message}</Alert>}
     </Stack>
   );

@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { WatchStateCategory } from "./watch-state.js";
 import { ContentEntryFilter } from "./filter.js";
 import { DfContentBadgeMap } from "./df-content-badges.js";
 import { DfContentEntry, DfContentEntryUtils } from "./df-content-entry.js";
@@ -35,6 +36,16 @@ export const DfContentEntrySearchBody = z.object({
    * include and exclude, so it always narrows whatever they produced.
    */
   downloadedOnly: z.boolean().optional(),
+  /**
+   * Narrow to what you have or have not seen.
+   *
+   * Top-level for exactly the reason downloadedOnly is: include filters are
+   * OR'd together, so expressed there this would widen rather than narrow.
+   *
+   * Applied by the route rather than by the search util below - the util is
+   * pure and watch state lives in the service, the same split the badges use.
+   */
+  watchState: WatchStateCategory.optional(),
 });
 export type DfContentEntrySearchBody = z.infer<typeof DfContentEntrySearchBody>;
 export type DfContentEntrySearchBodyInput = z.input<typeof DfContentEntrySearchBody>;

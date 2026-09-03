@@ -154,3 +154,35 @@ export const parseDurationMs = (input: string): number | undefined => {
   }
   return matched ? Math.round(total) : undefined;
 };
+
+/**
+ * "Every x milliseconds, and also once now."
+ *
+ * `setInterval` has no leading-edge option - the first call always waits the
+ * full delay - so a poll set up at startup does nothing at all until one
+ * interval has passed. For anything on a half-hour timer that reads as broken
+ * rather than as waiting, and it is the single most common reason a newly
+ * configured background job looks like it is not working.
+ *
+ * `initialDelayMs` exists because "now" is rarely wanted literally at boot,
+ * where it would compete with the rest of startup; a few seconds is usually
+ * the right kind of "now".
+ *
+ * Deliberately NOT applied to the Digital Foundry polling loops: those are
+ * paced to be gentle on someone else's servers, and an immediate hit on every
+ * restart is exactly what that pacing exists to avoid.
+ *
+ * Returns a stop function that cancels both the leading call and the interval.
+ */
+export const setIntervalImmediate = (
+  fn: () => void,
+  intervalMs: number,
+  { initialDelayMs = 0 }: { initialDelayMs?: number } = {}
+): (() => void) => {
+  const leading = setTimeout(fn, initialDelayMs);
+  const interval = setInterval(fn, intervalMs);
+  return () => {
+    clearTimeout(leading);
+    clearInterval(interval);
+  };
+};

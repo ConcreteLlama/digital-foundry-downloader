@@ -6,6 +6,8 @@ import { NotificationConsumerManager } from "../notifiers/notification-consumer-
 import { DfDownloaderOperationalDb } from "../db/df-operational-db.js";
 import { ActivePipelineDb, CompletedPipelineDb } from "../db/file-dbs/pipeline-db.js";
 import { MediaServerManager } from "../media-servers/media-server-manager.js";
+import { WatchStateStore } from "../db/watch-state-store.js";
+import { WatchStateSync } from "./watch-state-sync.js";
 
 class ServiceLocator {
   public static instance = new ServiceLocator();
@@ -13,6 +15,8 @@ class ServiceLocator {
   private _notificationConsumerManager: NotificationConsumerManager = new NotificationConsumerManager();
   private _mediaServerManager: MediaServerManager = new MediaServerManager();
   private _db!: DfDownloaderOperationalDb;
+  private _watchStateStore?: WatchStateStore;
+  private _watchStateSync?: WatchStateSync;
   private _activePipelineDb?: ActivePipelineDb;
   private _completedPipelineDb?: CompletedPipelineDb;
 
@@ -52,6 +56,27 @@ class ServiceLocator {
   setPipelineDbs(active: ActivePipelineDb, completed: CompletedPipelineDb) {
     this._activePipelineDb = active;
     this._completedPipelineDb = completed;
+  }
+
+  setWatchState(store: WatchStateStore, sync: WatchStateSync) {
+    this._watchStateStore = store;
+    this._watchStateSync = sync;
+  }
+
+  /**
+   * What this app knows about what you have watched.
+   *
+   * Optional for the same reason the pipeline DBs are: something constructing
+   * a partial service (a script, a test) should skip watch state rather than
+   * crash, and every caller already has a sensible "we do not know" branch.
+   */
+  get watchState() {
+    return this._watchStateStore;
+  }
+
+  /** Pulls watched state back from media servers. Absent when startup skipped it. */
+  get watchStateSync() {
+    return this._watchStateSync;
   }
 
   get activePipelineDb() {

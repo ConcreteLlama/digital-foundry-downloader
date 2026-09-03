@@ -4,8 +4,10 @@ import { describeConnectionError } from "./errors.js";
 import {
   MediaServerClient,
   MediaServerTestResult,
+  PlayStateReader,
   PlayStateWriter,
   PlaybackReport,
+  ServerPlayState,
   WATCHED_FRACTION,
 } from "./types.js";
 
@@ -86,14 +88,14 @@ export class JellyfinMediaServer implements MediaServerClient, PlayStateWriter {
     });
   }
 
-  async refreshPath(serverPath: string): Promise<void> {
+  async refreshPath(serverPath: string, reason?: string): Promise<void> {
     if (!this.targetedScanUnavailable) {
       const response = await this.request("/Library/ScanPath", {
         method: "POST",
         body: JSON.stringify({ Path: serverPath }),
       });
       if (response.ok) {
-        logger.log("info", `Asked Jellyfin to scan "${serverPath}"`);
+        logger.log("info", `Asked Jellyfin to scan "${serverPath}"${reason ? ` (${reason})` : ""}`);
         return;
       }
       // 404 means no Targeted Scans plugin; anything else in that family means
@@ -114,7 +116,10 @@ export class JellyfinMediaServer implements MediaServerClient, PlayStateWriter {
     if (!refresh.ok) {
       throw new Error(`Jellyfin responded ${refresh.status} ${refresh.statusText} to a library refresh`);
     }
-    logger.log("info", `Asked Jellyfin to refresh its libraries after a change to "${serverPath}"`);
+    logger.log(
+      "info",
+      `Asked Jellyfin to refresh its libraries after a change to "${serverPath}"${reason ? ` (${reason})` : ""}`
+    );
   }
 
   /**
@@ -213,10 +218,61 @@ export class JellyfinMediaServer implements MediaServerClient, PlayStateWriter {
     return String(match.Id);
   }
 
+  /**
+   * Play state for many paths in one listing.
+   *
+   * The same listing resolveItemId uses - Jellyfin has no lookup by path - but
+   * read once for the whole set rather than once per file. UserData comes back
+   * on user-scoped item endpoints, which is why this is a /Users/ call.
+   */
+  async readPlayState(serverPaths: string[]): Promise<Map<string, ServerPlayState>> {
+    const out = new Map<string, ServerPlayState>();
+    const userId = this.config.userId;
+    if (!serverPaths.length || !userId) {
+      return out;
+    }
+    const targets = new Map(serverPaths.map((p) => [p.replace(/\\/g, "/").toLowerCase(), p]));
+    const response = await this.userRequest(
+      `/Users/${userId}/Items?Recursive=true&Fields=Path&IncludeItemTypes=Movie,Episode,Video`
+    );
+    if (!response.ok) {
+      throw new Error(`Jellyfin responded ${response.status} ${response.statusText} when reading play state`);
+    }
+    const body: any = await response.json();
+    for (const item of body?.Items ?? []) {
+      const original = item?.Path ? targets.get(String(item.Path).replace(/\\/g, "/").toLowerCase()) : undefined;
+      if (!original) {
+        continue;
+      }
+      const userData: any = item?.UserData ?? {};
+      out.set(original, {
+        watched: Boolean(userData.Played),
+        // Ticks are 100-nanosecond units.
+        positionSeconds: Number(userData.PlaybackPositionTicks ?? 0) / 10_000_000,
+        durationSeconds: item?.RunTimeTicks ? Number(item.RunTimeTicks) / 10_000_000 : undefined,
+        updatedAt: userData.LastPlayedDate ? new Date(userData.LastPlayedDate) : undefined,
+      });
+    }
+    return out;
+  }
+
   /** Set once the server refuses progress reports, so it is tried once rather than every tick. */
   private progressUnavailable = false;
 
-  async reportPlayback(itemId: string, { positionSeconds, durationSeconds }: PlaybackReport): Promise<void> {
+  /**
+   * Items already marked played, so the mark happens once per viewing.
+   *
+   * See the matching note on the Plex client: reports arrive every ten
+   * seconds, so without this every tick past WATCHED_FRACTION writes played
+   * state and logs again. Cleared by a report below the mark, which is what
+   * re-watching looks like.
+   */
+  private markedWatched = new Set<string>();
+
+  async reportPlayback(
+    itemId: string,
+    { positionSeconds, durationSeconds, serverPath }: PlaybackReport
+  ): Promise<void> {
     const userId = this.config.userId;
     if (!userId) {
       return;
@@ -239,15 +295,62 @@ export class JellyfinMediaServer implements MediaServerClient, PlayStateWriter {
       }
     }
 
-    if (watched) {
-      const played = await this.userRequest(`/Users/${userId}/PlayedItems/${itemId}`, { method: "POST" });
-      if (!played.ok) {
-        throw new Error(`Jellyfin responded ${played.status} ${played.statusText} when marking an item played`);
-      }
-      logger.log("info", `Marked Jellyfin item ${itemId} watched.`);
+    if (!watched) {
+      this.markedWatched.delete(itemId);
+      return;
     }
+    if (this.markedWatched.has(itemId)) {
+      return;
+    }
+    const played = await this.userRequest(`/Users/${userId}/PlayedItems/${itemId}`, { method: "POST" });
+    if (!played.ok) {
+      throw new Error(`Jellyfin responded ${played.status} ${played.statusText} when marking an item played`);
+    }
+    this.markedWatched.add(itemId);
+    logger.log("info", `Marked "${serverPath}" watched on Jellyfin.`);
   }
 }
+
+/**
+ * The accounts an API key can see.
+ *
+ * Standalone like jellyfinSignIn, and for the same reason: it runs from the
+ * settings form before any server is configured, so there is nothing to build
+ * a client from yet.
+ */
+export const jellyfinListUsers = async (
+  url: string,
+  apiKey: string
+): Promise<{ ok: true; users: { id: string; name: string }[] } | { ok: false; error: string }> => {
+  const base = url.replace(/\/+$/, "");
+  const credential = `MediaBrowser Token="${apiKey}"`;
+  try {
+    const response = await fetch(`${base}/Users`, {
+      headers: {
+        Authorization: credential,
+        "X-Emby-Authorization": credential,
+        Accept: "application/json",
+      },
+      signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+    });
+    if (!response.ok) {
+      return {
+        ok: false,
+        error:
+          response.status === 401
+            ? "Jellyfin rejected that API key."
+            : `Jellyfin responded ${response.status} ${response.statusText} when listing users.`,
+      };
+    }
+    const body: any = await response.json();
+    const users = (Array.isArray(body) ? body : [])
+      .filter((user: any) => user?.Id && user?.Name)
+      .map((user: any) => ({ id: String(user.Id), name: String(user.Name) }));
+    return users.length ? { ok: true, users } : { ok: false, error: "Jellyfin returned no users." };
+  } catch (e: any) {
+    return { ok: false, error: `Could not reach Jellyfin: ${e?.message ?? e}` };
+  }
+};
 
 /**
  * Signs in to Jellyfin and returns a user token.

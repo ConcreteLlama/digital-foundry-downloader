@@ -4,6 +4,7 @@ import { DfContentDownloadInfo } from "df-downloader-common/models/df-content-do
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AnalysisJump } from "../ai-analysis/analysis-jumps.ts";
 import { rememberPlaybackPosition, rememberedPlaybackPosition } from "./playback-positions.ts";
+import { fetchWatchState } from "../../../api/watch-state.ts";
 import {
   apiIsCrossOrigin,
   getPlaybackInfo,
@@ -17,6 +18,22 @@ import { monoFontFamily } from "../../../themes/build-theme";
 
 /** How much playback has to move before the service is told again. */
 const REPORT_INTERVAL_SECONDS = 10;
+
+/**
+ * Seeks to a remembered position, with the two guards that keep resuming from
+ * being worse than starting at zero: a position in the first few seconds is
+ * not worth restoring, and one near the end drops you on the credits of
+ * something you already finished.
+ */
+const applyResume = (video: HTMLVideoElement, seconds: number) => {
+  if (seconds < 5) {
+    return;
+  }
+  if (Number.isFinite(video.duration) && seconds > video.duration - 15) {
+    return;
+  }
+  video.currentTime = seconds;
+};
 
 export type DownloadPlayerProps = {
   contentEntry: DfContentEntry;
@@ -446,6 +463,41 @@ export const DownloadPlayer = ({
     the first few seconds is not worth restoring, and one near the end would
     drop you on the credits of something you already finished.
   */
+  /*
+    Where the service says you got to.
+
+    Fetched rather than read from the map because the map only lasts as long
+    as the tab: before this, closing the browser lost your place in everything.
+    Held in a ref rather than state because nothing renders from it - it is
+    consulted once, at the moment the file is ready to seek.
+  */
+  const serverPosition = useRef<number | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    serverPosition.current = null;
+    fetchWatchState(contentEntry.key)
+      .then((state) => {
+        if (cancelled || !state) {
+          return;
+        }
+        serverPosition.current = state.positionSeconds;
+        const video = videoRef.current;
+        /*
+          Metadata may already have loaded and found nothing to restore, in
+          which case this answer arrived too late for the effect below. Seek
+          now instead - but only from a standing start, so this can never
+          yank someone who has already started watching or scrubbed.
+        */
+        if (video && video.readyState >= 1 && video.currentTime < 5) {
+          applyResume(video, state.positionSeconds);
+        }
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [contentEntry.key, download.downloadLocation]);
+
   const restoredFor = useRef<string | null>(null);
   useEffect(() => {
     const video = videoRef.current;
@@ -462,14 +514,18 @@ export const DownloadPlayer = ({
         video.currentTime = startSeconds;
         return;
       }
-      const seconds = rememberedPlaybackPosition(download.downloadLocation);
-      if (seconds == null || seconds < 5) {
+      /*
+        The tab's own memory first, then what the service knows.
+
+        The in-memory map is the better answer when it has one - it is this
+        session, to the second - but it dies with the tab, and the service's
+        copy is what survives a reload or a different device.
+      */
+      const seconds = rememberedPlaybackPosition(download.downloadLocation) ?? serverPosition.current;
+      if (seconds == null) {
         return;
       }
-      if (Number.isFinite(video.duration) && seconds > video.duration - 15) {
-        return;
-      }
-      video.currentTime = seconds;
+      applyResume(video, seconds);
     };
     video.addEventListener("loadedmetadata", restore);
     // Already loaded - a remount onto a cached file never fires the event.

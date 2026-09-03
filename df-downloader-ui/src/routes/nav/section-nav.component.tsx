@@ -51,6 +51,25 @@ export const SectionNav = () => {
         borderColor: "divider",
         paddingRight: 2,
         marginRight: 4,
+        /*
+          Scrolls on its own, independently of the form beside it.
+
+          Fourteen settings pages is taller than the viewport, so before this
+          the section list scrolled away with the page - and once you were down
+          inside a long form it was gone entirely.
+
+          Height comes from the row, which the layout constrains to the visible
+          area (see nav.components.tsx). An earlier attempt used sticky with a
+          maxHeight of 100dvh minus the app bar, which was wrong twice over:
+          the form beside it still scrolled the whole page, and the row's own
+          padding meant the list ran past the bottom of the screen and had its
+          last entries cut off.
+        */
+        height: "100%",
+        overflowY: "auto",
+        // The list is the only thing that should scroll here, and its own
+        // scrollbar would otherwise sit on top of the divider.
+        scrollbarWidth: "thin",
         // lg, not md: the column costs 208px plus a gutter, which at md
         // (900px) leaves the page itself cramped. It also matches
         // SettingsElement, which already treats lg as the width where a

@@ -2,6 +2,7 @@ import { DfContentBadgeMap } from "./df-content-badges.js";
 import { z } from "zod";
 import { DfContentAvailability } from "./df-content-status.js";
 import { DfContentEntry } from "./df-content-entry.js";
+import { WatchStateCategory } from "./watch-state.js";
 
 export const DfContentInfoQueryParams = z.object({
   search: z.string().optional(),
@@ -16,6 +17,13 @@ export const DfContentInfoQueryParams = z.object({
    */
   downloadedOnly: z.boolean().optional(),
   tags: z.array(z.string()).optional(),
+  /**
+   * Filter by whether you have seen it.
+   *
+   * Applied in the query rather than after it, because filtering a page after
+   * it has been cut would give a page of the wrong size and a wrong total.
+   */
+  watchState: WatchStateCategory.optional(),
   tagMode: z.enum(["or", "and"]),
   sortBy: z.enum(["date", "name"]),
   sortDirection: z.enum(["asc", "desc"]),

@@ -1,4 +1,5 @@
 import { backfillTranscriptPaths } from "../../media-utils/subtitles/transcript-backfill.js";
+import { WatchStateCategory, watchStateCategory } from "df-downloader-common";
 import {
   ContentMoveFileInfo,
   DeleteDownloadRequest,
@@ -29,6 +30,7 @@ import express, { Request, Response } from "express";
 import { configService } from "../../config/config.js";
 import { DigitalFoundryContentManager } from "../../df-content-manager.js";
 import { DfFetchPriority, getDfRequestQueueStatus } from "../../df-request-queue.js";
+import { serviceLocator } from "../../services/service-locator.js";
 import { sanitizeContentName } from "../../utils/df-utils.js";
 import { extractMediaMeta } from "../../utils/media-metadata.js";
 import { queryParamToInteger, queryParamToString, queryParamToStringArray, queryParamToBoolean } from "../../utils/query-utils.js";
@@ -46,19 +48,26 @@ import { sendError, sendErrorAsResponse, sendResponse, zodParseHttp } from "../u
  */
 const buildBadgeMap = (contentManager: DigitalFoundryContentManager, keys: string[]): DfContentBadgeMap => {
   const articleIndex = contentManager.db.getAllDfArticleIndexEntries();
+  const watchStates = serviceLocator.watchState;
   const badges: DfContentBadgeMap = {};
   for (const key of keys) {
     const analysis = contentManager.db.getAiAnalysisIndexEntry(key);
     const article = articleIndex[key];
+    const watch = watchStates?.get(key);
     // Only rows with something to say - an empty object per row would
     // double the response for nothing.
-    if (analysis || article?.hasArticle) {
+    if (analysis || article?.hasArticle || watch) {
       badges[key] = {
         // A stored failure is not an analysis: the row should read as
         // un-analysed so it can be tried again, not as done.
         analysed: Boolean(analysis && !analysis.hasError),
         analysisEvidence: analysis?.evidence ?? [],
         hasArticle: Boolean(article?.hasArticle),
+        watched: Boolean(watch?.watched),
+        watchedFraction:
+          watch && watch.durationSeconds
+            ? Math.min(1, watch.positionSeconds / watch.durationSeconds)
+            : undefined,
       };
     }
   }
@@ -228,6 +237,7 @@ export const makeContentApiRouter = (contentManager: DigitalFoundryContentManage
     const search = queryParamToString(query.search);
     const tagMode = (queryParamToString(query.tagMode) || "or").toLowerCase() === "and" ? "and" : "or";
     const downloadedOnly = queryParamToBoolean(query.downloadedOnly);
+    const watchState = WatchStateCategory.safeParse(query.watchState).data;
     const result = await contentManager.db.query({
       page,
       limit,
@@ -236,6 +246,7 @@ export const makeContentApiRouter = (contentManager: DigitalFoundryContentManage
       search,
       tagMode,
       downloadedOnly,
+      watchState,
     });
     const badges = buildBadgeMap(contentManager, result.queryResult.map((entry) => entry.contentInfo.key));
     const response: DfContentQueryResponse = {
@@ -254,7 +265,18 @@ export const makeContentApiRouter = (contentManager: DigitalFoundryContentManage
   router.post("/search", async (req: Request, res: Response) => {
     await zodParseHttp(DfContentEntrySearchBody, req, res, async (searchProps) => {
       const allContentEntries = await contentManager.db.getAllContentEntries();
-      const result = DfContentEntrySearchUtils.search(searchProps, allContentEntries);
+      /*
+       * Narrowed before the search rather than inside it, so the totals and
+       * the page it computes are both over the filtered set. The util stays
+       * pure - watch state lives here, the same way badges do.
+       */
+      const watchStates = serviceLocator.watchState;
+      const entries = searchProps.watchState
+        ? allContentEntries.filter(
+            (entry) => watchStateCategory(watchStates?.get(entry.key)) === searchProps.watchState
+          )
+        : allContentEntries;
+      const result = DfContentEntrySearchUtils.search(searchProps, entries);
       return sendResponse(res, {
         ...result,
         badges: buildBadgeMap(contentManager, result.content.map((entry) => entry.contentInfo.key)),

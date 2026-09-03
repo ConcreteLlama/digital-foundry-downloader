@@ -200,6 +200,23 @@ export class DfContentAvailabilityDb {
                 return;
             }
             download.downloadLocation = move.newLocation;
+            /*
+             * Subtitle paths follow the files that were actually moved.
+             *
+             * Without this the record kept pointing at a .srt sitting in the
+             * old directory - accurate, but useless: a sidecar only works
+             * beside its video, so subtitles silently stopped being found and
+             * the old folder could never be tidied away.
+             */
+            if (move.sidecars?.length && download.subtitles?.length) {
+                download.subtitles = download.subtitles.map((subtitle) => {
+                    if (!subtitle.path) {
+                        return subtitle;
+                    }
+                    const moved = move.sidecars!.find((sidecar) => pathIsEqual(sidecar.oldFilename, subtitle.path!));
+                    return moved ? { ...subtitle, path: moved.newFilename } : subtitle;
+                });
+            }
         });
         if (missingFiles.length) {
             logger.log("warn", "Missing files in moveDownloads", missingFiles);

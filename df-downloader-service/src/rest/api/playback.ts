@@ -4,6 +4,7 @@ import {
   PlaybackProgressRequest,
   PlaybackSubtitleTrack,
   PlaybackVideoCodec,
+  isWatchedPosition,
   logger,
 } from "df-downloader-common";
 import express, { Request, Response } from "express";
@@ -327,6 +328,20 @@ export const makePlaybackRouter = (contentManager: DigitalFoundryContentManager)
       return sendError(res, resolved.error, resolved.code);
     }
     await zodParseHttp(PlaybackProgressRequest, req, res, async ({ positionSeconds, durationSeconds }) => {
+      /*
+       * This app's own state first, and unconditionally: it is kept whether or
+       * not a media server exists, and is the thing that makes resume survive
+       * a reload. Merged rather than written, so a position arriving here
+       * cannot un-watch something a server already marked watched.
+       */
+      serviceLocator.watchState?.apply({
+        contentKey: req.params.contentKey,
+        watched: isWatchedPosition(positionSeconds, durationSeconds),
+        positionSeconds,
+        durationSeconds,
+        updatedAt: new Date(),
+        source: "local",
+      });
       await serviceLocator.mediaServers.reportPlayback(resolved.filePath, positionSeconds, durationSeconds);
       return sendResponse(res, { recorded: true });
     });

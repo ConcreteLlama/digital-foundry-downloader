@@ -1,4 +1,4 @@
-import { AiAnalysisResult, DfArticleLookupState, DfContentAvailabilityInfo, DfContentDownloadInfo, DfContentEntry, DfContentEntryUtils, DfContentInfo, DfContentInfoQueryParams, DfContentSubtitleInfo, DfTagInfo, DfUserInfo, UserInfo } from "df-downloader-common";
+import { AiAnalysisResult, DfArticleLookupState, DfContentAvailabilityInfo, DfContentDownloadInfo, DfContentEntry, DfContentEntryUtils, DfContentInfo, DfContentInfoQueryParams, DfContentSubtitleInfo, DfTagInfo, DfUserInfo, UserInfo, watchStateCategory } from "df-downloader-common";
 import { ensureEnvString } from "../utils/env-utils.js";
 import { DfContentStatusEntry } from "./df-db-model.js";
 import { ContentAvailabilityParams, DfDbQueryResult, DfDownloaderOperationalDb, DownloadInfoWithName, MoveDownloadOpts, RemoveDownloadOpts } from "./df-operational-db.js";
@@ -228,12 +228,12 @@ export class DfFileOperationalDb extends DfDownloaderOperationalDb {
     }
 
     async doQuery(params: DfContentInfoQueryParams) {
-        let { page, limit, search, tags, tagMode, availability, downloadedOnly, sortBy, sortDirection } = params;
+        let { page, limit, search, tags, tagMode, availability, downloadedOnly, watchState, sortBy, sortDirection } = params;
         tags = tags?.map((tag) => tag.toLowerCase());
         search = search?.toLowerCase();
         const allContentEntries = await this.getAllContentEntries();
         const filtered =
-            search || tags || availability || downloadedOnly
+            search || tags || availability || downloadedOnly || watchState
                 ? allContentEntries.filter((contentEntry) => {
                     if (search) {
                         if (!contentEntry.contentInfo.title.toLowerCase().includes(search)) {
@@ -269,6 +269,14 @@ export class DfFileOperationalDb extends DfDownloaderOperationalDb {
                     }
                     if (downloadedOnly && !DfContentEntryUtils.hasDownload(contentEntry)) {
                         return false;
+                    }
+                    if (watchState) {
+                        // One shared rule with the badges and the card - see
+                        // watchStateCategory in common.
+                        const category = watchStateCategory(this.watchStateLookup?.get(contentEntry.key));
+                        if (category !== watchState) {
+                            return false;
+                        }
                     }
                     return true;
                 })

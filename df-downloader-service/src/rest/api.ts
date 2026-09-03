@@ -1,6 +1,7 @@
 import express, { Request, Response } from "express";
 import { DigitalFoundryContentManager } from "../df-content-manager.js";
 import { makeContentApiRouter } from "./api/content.js";
+import { makeWatchStateRouter } from "./api/watch-state.js";
 import { makeDownloadsApiRouter as makeTasksApiRouter } from "./api/tasks.js";
 import { makeConfigRouter } from "./api/config.js";
 import { makeDfUserInfoRouter } from "./api/df-user-info.js";
@@ -38,6 +39,7 @@ export const makeApiRouter = (contentManager: DigitalFoundryContentManager, jwtM
   router.use("/logs", authenticateMiddleware(jwtManager), makeLogsRouter());
   router.use("/df-articles", authenticateMiddleware(jwtManager), makeDfArticlesRouter(contentManager));
   router.use("/media-servers", authenticateMiddleware(jwtManager), makeMediaServersRouter());
+  router.use("/watch-state", authenticateMiddleware(jwtManager), makeWatchStateRouter());
   // Serves the bytes of already-downloaded files for in-app playback. Same
   // auth as everything else - a <video src> is a plain GET, so the cookie
   // rides along, including on the range requests the browser makes itself.

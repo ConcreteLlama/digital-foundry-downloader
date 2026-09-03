@@ -42,3 +42,4 @@ export * from './bulk-backfill.js';
 export * from "./logs.js";
 export * from "./playback.js";
 export * from "./scheduled-backfill.js";
+export * from "./watch-state.js";

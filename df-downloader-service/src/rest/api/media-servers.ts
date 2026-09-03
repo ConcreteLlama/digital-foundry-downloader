@@ -1,6 +1,6 @@
-import { JellyfinSignInRequest, TestMediaServerRequest } from "df-downloader-common";
+import { JellyfinListUsersRequest, JellyfinSignInRequest, TestMediaServerRequest } from "df-downloader-common";
 import express, { Request, Response } from "express";
-import { jellyfinSignIn } from "../../media-servers/jellyfin.js";
+import { jellyfinListUsers, jellyfinSignIn } from "../../media-servers/jellyfin.js";
 import { serviceLocator } from "../../services/service-locator.js";
 import { sendResponse, zodParseHttp } from "../utils/utils.js";
 
@@ -24,6 +24,20 @@ export const makeMediaServersRouter = () => {
           ? { ok: true, detail: result.detail, libraries: result.libraries }
           : { ok: false, error: result.error }
       );
+    });
+  });
+
+  /**
+   * The Jellyfin accounts this API key can see, for the user picker.
+   *
+   * Takes the url and key from the form rather than from stored config, so
+   * the picker works before anything has been saved - the same reason the
+   * test endpoint does.
+   */
+  router.post("/jellyfin-users", async (req: Request, res: Response) => {
+    zodParseHttp(JellyfinListUsersRequest, req, res, async ({ url, apiKey }) => {
+      const result = await jellyfinListUsers(url, apiKey);
+      return sendResponse(res, result.ok ? { ok: true, users: result.users } : { ok: false, error: result.error });
     });
   });
 
