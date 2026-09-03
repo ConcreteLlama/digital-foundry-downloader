@@ -24,6 +24,7 @@ import { ZodNumberField } from "../zod-fields/zod-number-field.component";
 import { getZodDescription } from "../zod-fields/zod-schema-utils";
 import { ZodTextField } from "../zod-fields/zod-text-field.component";
 import { DfSettingsSectionForm } from "./df-settings-section-form.component";
+import { ScheduledBackfillLink } from "./scheduled-backfill-settings-form.component";
 
 
 type ProviderTestState =
@@ -214,6 +215,19 @@ const AiAnalysisSettings = () => {
           label="Longest transcript to analyse (characters)"
           zodNumber={AiAnalysisConfig.shape.maxTranscriptChars}
         />
+      </SettingsGroup>
+
+      {/*
+        The pointer to the schedule, which has a page of its own. Without it
+        the feature is only findable by someone who already knows it exists,
+        and the state carried in the link answers the question most people
+        would open it to ask - see mock-up 9.
+      */}
+      <SettingsGroup
+        title="Scheduling"
+        description="Analysis can also work through your back catalogue on its own, during hours you choose."
+      >
+        <ScheduledBackfillLink />
       </SettingsGroup>
 
       <SettingsGroup

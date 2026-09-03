@@ -69,12 +69,20 @@ export const ZodDurationField = ({ name, label, zodNumber, helperText }: ZodDura
     field.onChange(parsed);
   };
 
-  // Number.isFinite, not a null check: an unbounded zod number reports its
-  // limit as Infinity rather than undefined, which rendered as the genuinely
-  // unhelpful "at most Infinity".
+  /*
+   * A bound only counts if someone actually chose it.
+   *
+   * Two ways an unbounded zod number reports a limit anyway: `Infinity`, which
+   * rendered as the unhelpful "at most Infinity"; and, on a `.int()`, a finite
+   * `MAX_SAFE_INTEGER` - which slips past Number.isFinite and formats as
+   * "at most 14892855w 6d 8h 59m 991ms". Both mean "no limit was set".
+   */
+  const isRealBound = (value?: number | null): value is number =>
+    value !== undefined && value !== null && Number.isFinite(value) && Math.abs(value) < Number.MAX_SAFE_INTEGER;
+
   const bounds = [
-    Number.isFinite(schema.minValue) ? `at least ${formatDurationMs(schema.minValue!)}` : undefined,
-    Number.isFinite(schema.maxValue) ? `at most ${formatDurationMs(schema.maxValue!)}` : undefined,
+    isRealBound(schema.minValue) ? `at least ${formatDurationMs(schema.minValue, { coarse: true })}` : undefined,
+    isRealBound(schema.maxValue) ? `at most ${formatDurationMs(schema.maxValue, { coarse: true })}` : undefined,
   ].filter(Boolean);
 
   const description = helperText ?? getZodDescription(zodNumber);

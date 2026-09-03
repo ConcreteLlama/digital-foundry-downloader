@@ -3,6 +3,7 @@ import {
   AnalyseContentRequest,
   AiTagDecisionRequest,
   TestAiProviderRequest,
+  ScheduledBackfillPreviewRequest,
   DfArticleUtils,
   DfContentEntry,
   logger,
@@ -168,6 +169,35 @@ export const makeAiAnalysisRouter = (contentManager: DigitalFoundryContentManage
    * A real request to the token-counting endpoint rather than a local
    * guess - the point of the number is that it is worth trusting.
    */
+  /**
+   * Everything the scheduled backfill panel shows.
+   *
+   * A POST rather than a GET because it answers about the schedule *on
+   * screen*: the eligibility toggles change the eligible count, and a preview
+   * that only updated on save would be a preview of the previous settings.
+   * Omitting the draft asks about what is saved, which is what the AI Analysis
+   * page's summary link needs.
+   *
+   * Deliberately does not go through resolveContext. The state this most has
+   * to describe correctly is the one where no engine is configured at all -
+   * refusing there would leave the panel unable to say what is missing.
+   */
+  router.post("/scheduled-backfill/preview", async (req, res) => {
+    await zodParseHttp(ScheduledBackfillPreviewRequest, req, res, async ({ draft }) => {
+      const backfill = contentManager.scheduledBackfill;
+      if (!backfill) {
+        // Only reachable in the seconds before start() finishes, since the
+        // feeder is created there. Saying so beats an empty panel.
+        return sendError(res, "The scheduler is still starting up", 503);
+      }
+      try {
+        return sendResponse(res, await backfill.status(draft));
+      } catch (e) {
+        return sendErrorAsResponse(res, e);
+      }
+    });
+  });
+
   router.post("/estimate", async (req, res) => {
     await zodParseHttp(AnalyseContentRequest, req, res, async ({ contentKey }) => {
       const context = await resolveContext(contentManager, contentKey);

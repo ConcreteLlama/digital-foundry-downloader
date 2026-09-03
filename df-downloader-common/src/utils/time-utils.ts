@@ -105,6 +105,16 @@ export const formatDurationMs = (
  * rather than throwing or guessing at nonsense, so a caller can leave a
  * half-typed value alone instead of rewriting it under the cursor.
  */
+/** Long spellings mapped onto the canonical suffixes DURATION_UNITS knows. */
+const LONG_UNIT_ALIASES: Record<string, string> = {
+  milliseconds: "ms", millisecond: "ms",
+  weeks: "w", week: "w",
+  days: "d", day: "d",
+  hours: "h", hour: "h",
+  minutes: "m", minute: "m", mins: "m", min: "m",
+  seconds: "s", second: "s", secs: "s", sec: "s",
+};
+
 export const parseDurationMs = (input: string): number | undefined => {
   const trimmed = input.trim().toLowerCase();
   if (!trimmed) {
@@ -113,8 +123,17 @@ export const parseDurationMs = (input: string): number | undefined => {
   if (/^\d+(\.\d+)?$/.test(trimmed)) {
     return Math.round(Number(trimmed));
   }
-  // "ms" before the single-letter units, or "5ms" parses as 5 minutes.
-  const token = /(\d+(?:\.\d+)?)\s*(ms|w|d|h|m|s)/g;
+  /*
+   * Longest alternative first, always. "ms" has to beat "m" or "5ms" parses as
+   * five minutes, and "days" has to beat both "d" and "s" or the trailing "s"
+   * is left over and the whole input is rejected.
+   *
+   * Long forms are accepted because "14 days" is what people type; only the
+   * short forms are ever produced by formatDurationMs, so output is unchanged
+   * and values still round-trip through the settings fields as before.
+   */
+  const token =
+    /(\d+(?:\.\d+)?)\s*(milliseconds|millisecond|ms|weeks|week|w|days|day|d|hours|hour|h|minutes|minute|mins|min|m|seconds|second|secs|sec|s)/g;
   // Rejected outright if anything survives removing the unit tokens: using
   // only the half that parsed would silently turn a typo into a real value.
   if (trimmed.replace(token, "").trim().length > 0) {
@@ -125,7 +144,7 @@ export const parseDurationMs = (input: string): number | undefined => {
   let match: RegExpExecArray | null;
   token.lastIndex = 0;
   while ((match = token.exec(trimmed)) !== null) {
-    const suffix = match[2];
+    const suffix = LONG_UNIT_ALIASES[match[2]] ?? match[2];
     const size = DURATION_UNITS.find(([candidate]) => candidate === suffix)?.[1];
     if (size === undefined) {
       return undefined;

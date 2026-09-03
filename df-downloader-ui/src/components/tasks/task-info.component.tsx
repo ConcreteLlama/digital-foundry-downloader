@@ -1,6 +1,6 @@
 import { DraggableAttributes, useDraggable, useDroppable } from "@dnd-kit/core";
 import { SyntheticListenerMap } from "@dnd-kit/core/dist/hooks/utilities/useSyntheticListeners";
-import { Box, Tooltip } from "@mui/material";
+import { Box, Chip, Tooltip } from "@mui/material";
 import { useState } from "react";
 import { useSelector } from "react-redux";
 import { selectBasicTaskField, selectCurrentStep, selectIsComplete, selectPipelineDetails, selectPipelineField, selectPipelineStatus } from "../../store/df-tasks/tasks.selector.ts";
@@ -129,7 +129,7 @@ type TaskHeaderItemProps = {
   };
 };
 export const TaskHeaderItem = ({ pipelineId, draggableProps, compact }: TaskHeaderItemProps) => {
-  const { dfContent, mediaFormat } = useSelector(selectPipelineDetails(pipelineId));
+  const { dfContent, mediaFormat, scheduled } = useSelector(selectPipelineDetails(pipelineId));
   const taskPipelineType = useSelector(selectPipelineField(pipelineId, "pipelineType"));
   const { ref, listeners, attributes } = draggableProps || {};
   const TaskTypeIcon = getTaskTypeIcon(taskPipelineType);
@@ -165,6 +165,17 @@ export const TaskHeaderItem = ({ pipelineId, draggableProps, compact }: TaskHead
       >
         {dfContent?.title || "UNKNOWN"}
       </EllipsisTooltipText>
+      {/*
+        The only thing that distinguishes a fed run on this page, and all that
+        needs to: it is an ordinary analysis pipeline sitting at background
+        priority, so nothing else about it behaves differently - which is
+        precisely why anything started by hand still jumps it.
+      */}
+      {scheduled && (
+        <Tooltip title="Queued by the scheduled backfill. Anything you start yourself goes ahead of it.">
+          <Chip label="scheduled" size="small" variant="outlined" sx={{ height: 18, fontSize: "0.65rem", flex: "none" }} />
+        </Tooltip>
+      )}
       <EllipsisTooltipText
         text={mediaFormat}
         variant={compact ? "body2" : "subtitle1"}

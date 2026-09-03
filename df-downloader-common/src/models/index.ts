@@ -41,3 +41,4 @@ export * from './platform-comparison.js';
 export * from './bulk-backfill.js';
 export * from "./logs.js";
 export * from "./playback.js";
+export * from "./scheduled-backfill.js";

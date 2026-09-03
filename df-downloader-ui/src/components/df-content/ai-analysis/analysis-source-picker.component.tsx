@@ -120,6 +120,18 @@ export const AnalysisSourcePicker = ({
                     height: 24,
                     fontSize: "0.7rem",
                     ...(on ? {} : { color: "text.secondary" }),
+                    /*
+                     * MUI darkens a clickable chip on :focus as well as :hover,
+                     * and :focus fires for pointer input - so a tap left the
+                     * selection visibly dimmed until something else took focus.
+                     * Neutralised here for :focus only; hover still responds,
+                     * and Mui-focusVisible - the keyboard-only variant - keeps
+                     * its emphasis so the affordance that matters for keyboard
+                     * navigation survives. Doubled ampersand to outrank MUI's
+                     * own rule rather than hope to tie with it.
+                     */
+                    "&&:focus": { backgroundColor: on ? "primary.main" : "transparent" },
+                    "&&.Mui-focusVisible": { backgroundColor: on ? "primary.dark" : "action.hover" },
                   }}
                 />
               </span>

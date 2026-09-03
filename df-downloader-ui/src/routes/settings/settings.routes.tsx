@@ -13,6 +13,7 @@ import SettingsIcon from "@mui/icons-material/Settings";
 import AutoAwesomeIcon from "@mui/icons-material/AutoAwesome";
 import SubtitlesIcon from "@mui/icons-material/Subtitles";
 import VideoSettingsIcon from "@mui/icons-material/VideoSettings";
+import ScheduleIcon from "@mui/icons-material/Schedule";
 import { AppearanceSettingsForm } from "../../components/settings/appearance-settings-form.component.tsx";
 import { AutomaticDownloadsSettingsForm } from "../../components/settings/automatic-download-settings-form.component";
 import { ContentDetectionSettingsForm } from "../../components/settings/content-detection-settings-form.component";
@@ -28,6 +29,7 @@ import { AiAnalysisSettingsForm } from "../../components/settings/ai-analysis-se
 import { DfArticlesSettingsForm } from "../../components/settings/df-articles-settings-form.component";
 import { LoggingSettingsForm } from "../../components/settings/logging-settings-form.component";
 import { LocalModelsSettingsForm } from "../../components/settings/local-models-settings-form.component";
+import { ScheduledBackfillSettingsForm } from "../../components/settings/scheduled-backfill-settings-form.component";
 import { SubtitlesSettingsForm } from "../../components/settings/subtitles-settings-form.component";
 import { DfLogoIcon } from "../../icons/df-logo.component";
 import { NestedRouteElement, NestedSubRoute } from "../nav/nested-routes.ts";
@@ -139,6 +141,16 @@ export const settingsRouteDefinitions: NestedSubRoute = {
           element: <AiAnalysisSettingsForm />,
           name: "AI Analysis",
           icon: AutoAwesomeIcon,
+        },
+        {
+          // Its own route rather than a panel on the AI Analysis page: that
+          // page is already long, and the run history is the part that most
+          // wants the room. The AI Analysis page carries a link to it, so the
+          // page people reach first still points at it - see mock-up 9.
+          path: "/settings/scheduled-backfill",
+          element: <ScheduledBackfillSettingsForm />,
+          name: "Scheduled backfill",
+          icon: ScheduleIcon,
         },
         {
           path: "/settings/metadata",

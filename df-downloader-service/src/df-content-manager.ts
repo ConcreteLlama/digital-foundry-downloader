@@ -53,7 +53,9 @@ import { forEachListingPage, fetchContentInfo, DfFetchOpts } from "./df-fetcher.
 import { DfFetchPriority } from "./df-request-queue.js";
 import { DfTaskManager } from "./df-task-manager.js";
 import { DfUserManager } from "./df-user-manager.js";
+import { ensureEnvString } from "./utils/env-utils.js";
 import { serviceLocator } from "./services/service-locator.js";
+import { ScheduledAnalysisBackfill } from "./services/scheduled-analysis-backfill.js";
 import { findExistingContent } from "./utils/content-finder.js";
 import { sanitizeContentName } from "./utils/df-utils.js";
 import { cleanUpOrphanedTempFiles, deleteFile, ensureDirectory, fileExists, pathIsEqual } from "./utils/file-utils.js";
@@ -109,6 +111,21 @@ export class DigitalFoundryContentManager {
    * on-disk checkpoint file, corrupting the resume offset.
    */
   private archiveScanInProgress = false;
+
+  /**
+   * The overnight AI analysis feeder.
+   *
+   * Created in start() rather than the constructor because it loads its own
+   * run history from disk. Undefined until then, and never recreated - the
+   * schedule is read from config on every tick, so changing it does not need
+   * the feeder rebuilt.
+   */
+  private scheduledAnalysisBackfill?: ScheduledAnalysisBackfill;
+
+  /** The REST layer asks it for the settings panel's preview - undefined before start(). */
+  get scheduledBackfill() {
+    return this.scheduledAnalysisBackfill;
+  }
 
   constructor(readonly db: DfDownloaderOperationalDb) {
     this.dfUserManager = new DfUserManager(db);
@@ -225,6 +242,17 @@ export class DigitalFoundryContentManager {
     this.startContentPollLoop();
     this.startArticleScanLoop();
     this.startArticleArchiveWalkLoop();
+    /*
+     * Armed with the rest of the periodic work, and unlike them it is not
+     * gated on being signed in: everything it feeds on is already downloaded,
+     * so a scheduled backfill is useful whether or not Digital Foundry can be
+     * reached tonight.
+     */
+    this.scheduledAnalysisBackfill = await ScheduledAnalysisBackfill.create(
+      this.taskManager,
+      ensureEnvString("DB_DIR", "db")
+    );
+    this.scheduledAnalysisBackfill.start();
 
     await this.resumePersistedPipelines();
     if (this.dfUserManager.isUserSignedIn()) {

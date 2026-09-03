@@ -1,4 +1,4 @@
-import { AiProviderId } from "df-downloader-common/config/ai-analysis-config";
+import { AiProviderId, ScheduledBackfillConfig } from "df-downloader-common/config/ai-analysis-config";
 import {
   AiAnalysisCostEstimate,
   AiAnalysisIndexEntry,
@@ -13,6 +13,7 @@ import {
   parseResponseBody,
   AiCostLedgerResponse,
   AnalysisCatalogueResponse,
+  ScheduledBackfillStatus,
 } from "df-downloader-common";
 import { z } from "zod";
 import { ZodTypeAny } from "zod";
@@ -157,3 +158,17 @@ export const fetchAiCosts = async (): Promise<AiCostLedgerResponse> => {
   const response = await fetchJson(`${API_URL}/ai-analysis/costs`);
   return unwrap(response, AiCostLedgerResponse);
 };
+
+/**
+ * What the scheduled backfill will do next, and what it has done.
+ *
+ * POSTs the schedule rather than reading the saved one so the preview is of
+ * what is on screen: the eligibility toggles change the eligible count, and a
+ * preview that only refreshed on save would describe the previous settings.
+ * Pass nothing to ask about what is actually saved, which is what the AI
+ * Analysis page's summary link wants.
+ */
+export const previewScheduledBackfill = async (
+  draft?: ScheduledBackfillConfig
+): Promise<ScheduledBackfillStatus> =>
+  unwrap(await postJson(`${API_URL}/ai-analysis/scheduled-backfill/preview`, { draft }), ScheduledBackfillStatus);

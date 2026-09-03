@@ -150,6 +150,17 @@ export class DfTaskManager {
    */
   readonly bulkOperationsTaskManagers: Record<BulkBackfillTarget, TaskManager>;
 
+  /**
+   * The two queues an analysis can land in, held so the scheduled feeder can
+   * ask whether the one it would use is currently held.
+   *
+   * The feeder has to respect "pause all": a held queue means the user wants
+   * nothing new starting, and feeding into it anyway would build a backlog
+   * that all starts at once the moment the hold is lifted.
+   */
+  private readonly localModelsTaskManager: TaskManager;
+  private readonly aiAnalysisTaskManager: TaskManager;
+
   readonly pipelineExecutions = new Map<string, PipelineExecutionTypes>();
   /**
    * Every queue, so "pause everything" can hold all of them.
@@ -259,6 +270,7 @@ export class DfTaskManager {
       concurrentTasks: configService.config.localModels?.maxConcurrent ?? 1,
     });
     this.allTaskManagers.push(localModelsTaskManager);
+    this.localModelsTaskManager = localModelsTaskManager;
     this.subtitleTaskPipeline = createSubtitlesTaskPipeline({
       localModelsTaskManager: localModelsTaskManager,
       mediaProcessingTaskManager: mediaProcessingTaskManager,
@@ -267,6 +279,7 @@ export class DfTaskManager {
     // every analysis in flight rather than being applied twice over.
     const aiAnalysisTaskManager = new AiAnalysisTaskManager({ label: "AI analysis" });
     this.allTaskManagers.push(aiAnalysisTaskManager);
+    this.aiAnalysisTaskManager = aiAnalysisTaskManager;
     this.downloadTaskPipeline = createDownloadTaskPipeline({
       downloadTaskManager: downloadTaskManager,
       localModelsTaskManager: localModelsTaskManager,
@@ -599,7 +612,7 @@ export class DfTaskManager {
    * run with settings that differ from the saved ones - which is what the
    * "analyse with a different model" path in the UI needs.
    */
-  analyseContent(entry: DfContentEntry, config: AiAnalysisConfig, opts: { chapters?: Chapter[]; articleText?: string; articleUrl?: string; articleTitle?: string; backfillJobId?: string; force?: boolean; sources?: AiAnalysisSourceSelection; provider?: AiProviderId } = {}) {
+  analyseContent(entry: DfContentEntry, config: AiAnalysisConfig, opts: { chapters?: Chapter[]; articleText?: string; articleUrl?: string; articleTitle?: string; backfillJobId?: string; force?: boolean; sources?: AiAnalysisSourceSelection; provider?: AiProviderId; scheduled?: boolean } = {}) {
     /*
      * Resolved here rather than at run time so the queue and the engine agree.
      * makeProvider resolves again when the task runs and may fall back, so a
@@ -618,14 +631,27 @@ export class DfTaskManager {
       articleUrl: opts.articleUrl,
       articleTitle: opts.articleTitle,
       backfillJobId: opts.backfillJobId,
+      scheduled: opts.scheduled,
       force: opts.force,
       sources: opts.sources,
       provider: opts.provider,
       // A bulk run always carries a job id, so this is exactly "one item a
       // person asked for". Only those may spend a YouTube request looking for
-      // chapters the file did not have - see resolveChapters.
-      allowRemoteChapters: !opts.backfillJobId,
-    });
+      // chapters the file did not have - see resolveChapters. A scheduled run
+      // is unattended for the same purposes, so it does not spend one either.
+      allowRemoteChapters: !opts.backfillJobId && !opts.scheduled,
+    },
+    /*
+     * Below standalone (2) and pipeline work (1), so a hand-started analysis
+     * at 2am jumps the whole overnight backfill and a download finishing at
+     * 6am is not stuck behind it. This is what makes gating only the feeder
+     * safe: the queue itself never stops running, and fed work simply loses
+     * every race it is in.
+     *
+     * Only set for scheduled runs. Bulk analysis is left at its existing
+     * priority rather than changed in passing - see the findings note.
+     */
+    opts.scheduled ? { priority: BACKGROUND_TASK_PRIORITY } : undefined);
     logger.log(
       "info",
       // The engine that will actually answer, not the configured hosted one -
@@ -639,6 +665,39 @@ export class DfTaskManager {
     );
     this.addTaskPipelineExecution(analysisExecution);
     return analysisExecution;
+  }
+
+  /**
+   * Fed analyses that are queued or still running.
+   *
+   * This is what bounds the feeder to one item at a time, and it counts
+   * *queued* work as well as running work deliberately: the point is to leave
+   * as little as possible in the queue when the window closes, since whatever
+   * is in it at that moment still runs. Counting only running work would let a
+   * second item be queued behind the first and double the overrun.
+   */
+  countScheduledAnalyses(): number {
+    let count = 0;
+    for (const pipeline of this.pipelineExecutions.values()) {
+      if (pipeline.isCompleted) {
+        continue;
+      }
+      if ((pipeline.context as { scheduled?: boolean })?.scheduled) {
+        count++;
+      }
+    }
+    return count;
+  }
+
+  /**
+   * Whether the queue a fed run would land in is held.
+   *
+   * "Pause all" holds every manager, and a held queue means the user wants
+   * nothing new starting - so the feeder stops adding rather than piling up
+   * work that would all be released at once.
+   */
+  isScheduledAnalysisQueueHeld(provider: AiProviderId): boolean {
+    return (provider === "local" ? this.localModelsTaskManager : this.aiAnalysisTaskManager).isQueueHeld();
   }
 
   /**
@@ -1535,6 +1594,10 @@ export const makeTaskPipelineInfo = (
       backfillJobId:
         "backfillJobId" in taskPipelineExecution.context
           ? (taskPipelineExecution.context.backfillJobId as string | undefined)
+          : undefined,
+      scheduled:
+        "scheduled" in taskPipelineExecution.context
+          ? (taskPipelineExecution.context.scheduled as boolean | undefined)
           : undefined,
       dfContent: taskPipelineExecution.context.dfContentInfo,
       mediaFormat: mediaInfo?.formatString || "",

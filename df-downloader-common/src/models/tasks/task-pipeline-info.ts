@@ -58,6 +58,18 @@ export const TaskPipelineDetails = z.object({
      * parse unchanged.
      */
     backfillJobId: z.string().optional(),
+    /**
+     * Whether the overnight scheduled backfill queued this.
+     *
+     * Only so the Activity page can put a "scheduled" chip on it. There is
+     * nothing else different about a fed run - it is an ordinary analysis
+     * pipeline sitting at background priority, which is exactly why a
+     * hand-started one still jumps it.
+     *
+     * Optional and additive, so persisted records written before it existed
+     * parse unchanged.
+     */
+    scheduled: z.boolean().optional(),
     dfContent: DfContentInfo,
     mediaFormat: z.string(),
     destinationPath: z.string().optional(),

@@ -368,6 +368,117 @@ export type AiLocalProviderConfig = z.infer<typeof AiLocalProviderConfig>;
 export const AiProviderId = z.enum(["anthropic", "local"]);
 export type AiProviderId = z.infer<typeof AiProviderId>;
 
+/**
+ * Which items a scheduled backfill is allowed to pick up.
+ *
+ * The article condition is evidence-based rather than taste: withholding the
+ * article measured at 11.6 points of classification accuracy (see
+ * docs/LOCAL_AI_PHASE_AND_PROMPT_FINDINGS.md), so an item analysed before its
+ * article arrives is measurably worse than the same item analysed after.
+ */
+export const ScheduledBackfillEligibilityConfig = z.object({
+  requireSubtitles: z
+    .boolean()
+    .default(true)
+    .describe(
+      "Only analyse items that already have subtitles. Without a transcript there is nothing to summarise, so a run produces tags alone."
+    ),
+  requireArticle: z
+    .boolean()
+    .default(true)
+    .describe(
+      "Only analyse items with a matched Digital Foundry article. The written piece gets product names and figures right where a machine transcript garbles them, and measurably improves what the analysis produces."
+    ),
+  /**
+   * Deliberately optional, and the toggle matters as much as the value.
+   *
+   * Unset means an article is *strictly* required - "only ever analyse things
+   * with an article" is a legitimate thing to want, and a grace period that is
+   * permanently on cannot express it. Set, it stops an item waiting forever
+   * for an article that was never coming.
+   *
+   * Milliseconds, like every other duration in this config - the UI renders it
+   * through ZodDurationField, so it is typed and read as "14d".
+   */
+  articleGrace: z
+    .number()
+    .int()
+    .min(60_000)
+    .optional()
+    .describe(
+      "How long to wait for an article before analysing without one. Leave blank to require an article always, however long it takes."
+    ),
+});
+export type ScheduledBackfillEligibilityConfig = z.infer<typeof ScheduledBackfillEligibilityConfig>;
+
+/** The default window: midnight until 05:00, every day. */
+export const DEFAULT_SCHEDULED_BACKFILL_CRON = "0 0 * * *";
+export const DEFAULT_SCHEDULED_BACKFILL_END_TIME = "05:00";
+
+/**
+ * A nightly window during which the app keeps feeding items into AI analysis.
+ *
+ * Two things shape everything here, and both are easy to undo by accident:
+ *
+ * 1. **The window gates the feeder, not the queue.** The local models queue
+ *    runs normally at all times; outside the window the feeder simply stops
+ *    adding. Holding the queue instead would block a download's subtitle step
+ *    at 6am, which no amount of priority can rescue - nothing would be being
+ *    scheduled at all.
+ * 2. **One item is fed at a time**, because the window controls when work
+ *    *starts*, not when it stops. Whatever is queued at close still runs to
+ *    completion - killing tens of minutes of local inference at a clock
+ *    boundary would waste all of it - so a batch queued at 04:59 overruns by
+ *    the length of the batch, while feeding singly bounds it to one item.
+ *
+ * The feeder waits for the queue to be free rather than pacing against a
+ * clock, which makes it adapt to the machine with nothing to configure.
+ */
+export const ScheduledBackfillConfig = z.object({
+  enabled: z.boolean().default(false).describe("Work through un-analysed content automatically, overnight."),
+  /**
+   * Cron, because a window cannot be one expression - cron describes instants,
+   * not ranges - so this is only the *opening* instant and `endTime` closes it.
+   *
+   * Stored as cron even though the UI is plain start/until/day controls, so
+   * the friendly controls and the advanced field are one setting rather than
+   * two that can disagree.
+   */
+  schedule: z
+    .string()
+    .default(DEFAULT_SCHEDULED_BACKFILL_CRON)
+    .describe("When the window opens, as a cron expression. The controls above write this for you."),
+  /** When the window closes, as HH:mm. Crossing midnight is normal and expected. */
+  endTime: z
+    .string()
+    .regex(/^([01]\d|2[0-3]):[0-5]\d$/, "Must be a time of day like 05:00")
+    .default(DEFAULT_SCHEDULED_BACKFILL_END_TIME)
+    .describe("When the window stops starting new analyses. Earlier than the start time means it ends the next day."),
+  /**
+   * Which engine fed runs use. Unset follows the AI Analysis default.
+   *
+   * Scheduling a hosted run is legitimate rather than a mistake - it decides
+   * when you spend and when results are waiting for you - so this is not
+   * restricted to local.
+   */
+  provider: AiProviderId.optional().describe("Which engine scheduled runs use. Leave unset to follow the default above."),
+  eligibility: ScheduledBackfillEligibilityConfig.prefault({}),
+  /**
+   * A ceiling on how many one window may start.
+   *
+   * Mainly a spend guard for hosted runs, which is why the settings panel only
+   * offers it when the engine is Claude - for local runs the machine is the
+   * only limit that means anything.
+   */
+  maxPerWindow: z
+    .number()
+    .int()
+    .min(1)
+    .optional()
+    .describe("Stop after this many analyses in one window. Leave blank for no limit."),
+});
+export type ScheduledBackfillConfig = z.infer<typeof ScheduledBackfillConfig>;
+
 export const AiAnalysisConfig = z.object({
   enabled: z.boolean().default(false).describe("Turn AI content analysis on."),
   apiKey: z
@@ -425,6 +536,12 @@ export const AiAnalysisConfig = z.object({
   defaultProvider: AiProviderId.default("anthropic").describe(
     "Which engine to analyse with by default. You can still pick per run when both are set up."
   ),
+  /**
+   * The overnight feeder. Optional rather than prefaulted, so an install that
+   * has never seen this key parses unchanged and no config patch is needed -
+   * absent and "present but disabled" mean the same thing here.
+   */
+  scheduledBackfill: ScheduledBackfillConfig.optional(),
 });
 export type AiAnalysisConfig = z.infer<typeof AiAnalysisConfig>;
 export const AiAnalysisConfigKey = "aiAnalysis";
@@ -499,4 +616,30 @@ export const AiAnalysisConfigUtils = {
    */
   resolveEffort: (config: AiAnalysisConfig): AiAnalysisEffort | undefined =>
     AiAnalysisModelCapabilities[config.model].supportsEffort ? config.effort : undefined,
+
+  /**
+   * The engine a scheduled run would actually use, and whether that is the
+   * one that was asked for.
+   *
+   * Shared rather than computed twice because the settings panel has to say
+   * which engine will run before anything runs, and the feeder has to use
+   * the same answer - a panel promising "on this machine" while the feeder
+   * spends money on Claude is the worst version of this feature.
+   *
+   * Falls back the way every other unattended path does (see resolveProvider):
+   * an overnight backfill stopping because the preferred engine was turned off
+   * is worse than it running on the other one. `fellBack` exists so that is
+   * *said* rather than discovered from a bill - the panel shows it and the
+   * feeder logs it.
+   */
+  resolveScheduledProvider: (
+    config: AiAnalysisConfig | undefined
+  ): { provider?: AiProviderId; requested?: AiProviderId; fellBack: boolean } => {
+    if (!config) {
+      return { fellBack: false };
+    }
+    const requested = config.scheduledBackfill?.provider;
+    const provider = AiAnalysisConfigUtils.resolveProvider(config, requested);
+    return { provider, requested, fellBack: Boolean(requested && provider && provider !== requested) };
+  },
 };
