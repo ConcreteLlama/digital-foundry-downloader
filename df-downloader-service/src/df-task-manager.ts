@@ -1479,13 +1479,40 @@ export const makePersistedPipeline = (taskPipelineExecution: PipelineExecutionTy
     }
     stepResults[step.id] = {
       status: result.status === "success" ? "success" : result.status === "cancelled" ? "cancelled" : "failed",
-      result: result.status === "success" ? toPersistableResult(result.result) : undefined,
+      /*
+       * An ephemeral step keeps its status and timings but not its value.
+       *
+       * What it produced is large and re-derivable, and nothing reads it back
+       * - it exists only to hand something to the next step in the same run.
+       * Keeping the envelope means the history still shows the step ran, how
+       * long it took and whether it worked, which is all the record is for.
+       */
+      result:
+        result.status === "success" && !step.ephemeralResult ? toPersistableResult(result.result) : undefined,
       error: result.status === "failed" ? makeErrorMessage(result.error) : undefined,
       startTime: managedTask?.task?.startTime || undefined,
       endTime: managedTask?.task?.endTime || undefined,
     };
   });
-  const currentStepIndex = currentStep ? Math.max(0, stepOrder.indexOf(currentStep.step.id)) : 0;
+  const reachedIndex = currentStep ? Math.max(0, stepOrder.indexOf(currentStep.step.id)) : 0;
+  /*
+   * Rewound to the earliest ephemeral step whose result a resume would need.
+   *
+   * Only while the pipeline is still running. A finished one is never resumed,
+   * and rewinding its record would report a completed job as sitting on an
+   * early step in the history.
+   *
+   * Resuming past one would hand the next step an undefined where it expects
+   * the previous step's output. Since the whole reason a step is ephemeral is
+   * that its result is cheap to rebuild, re-running from there is the honest
+   * answer rather than resuming into a gap.
+   */
+  const firstEphemeralBefore = taskPipelineExecution.isCompleted
+    ? -1
+    : steps.findIndex(
+        ({ step }, index) => index < reachedIndex && step.ephemeralResult && stepResults[step.id]?.status === "success"
+      );
+  const currentStepIndex = firstEphemeralBefore === -1 ? reachedIndex : firstEphemeralBefore;
   return {
     id,
     pipelineType,

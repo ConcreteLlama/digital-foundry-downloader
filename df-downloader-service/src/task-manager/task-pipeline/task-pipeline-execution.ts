@@ -324,6 +324,7 @@ export class TaskPipelineExecution<
         // step itself runs nothing, so without this it would read as an empty
         // row rather than as work happening elsewhere.
         childPipelineId: this.childExecutions[index]?.id,
+        ephemeralResult: step.ephemeralResult,
       },
       managedTask: this.tasks[index],
       positionInfo: task && includePositionInfo ? step.taskManager.getTaskPositionInfo(task.task.id) : undefined,

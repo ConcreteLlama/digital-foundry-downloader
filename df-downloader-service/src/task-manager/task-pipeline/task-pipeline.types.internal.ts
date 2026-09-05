@@ -156,6 +156,21 @@ export type BaseTaskPipelineStep<
    * A flag that indicates if the pipeline should continue if this step fails.
    */
   readonly continueOnCancel?: boolean;
+  /**
+   * Keep this step's result out of the persisted record entirely.
+   *
+   * For a step whose result is large and re-derivable - prompt inputs handed
+   * between the phases of an analysis, say, which carry the whole transcript.
+   * Writing those into the archive is what made the completed-pipelines file
+   * grow to megabytes twice now, and none of it was ever read back.
+   *
+   * The cost is that a restart cannot resume past such a step, because the
+   * result the next one needs is not there. The pipeline rewinds to it
+   * instead and re-derives, which is consistent with resuming position rather
+   * than progress - and cheap, since what these steps produce is exactly the
+   * cheap-to-rebuild part.
+   */
+  readonly ephemeralResult?: boolean;
   /** A hook to update the context once the task has completed */
 };
 export type TaskPipelineStepNonNullable<

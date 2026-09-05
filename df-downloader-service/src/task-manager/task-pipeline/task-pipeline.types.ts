@@ -55,6 +55,8 @@ export type PipelineStepInfo<TASK_PIPELINE_STEP extends TaskPipelineStep<any, an
     continueOnCancel?: boolean;
     /** The pipeline this step is waiting on, when the step is a nested one. */
     childPipelineId?: string;
+    /** Whether this step's result is deliberately not persisted. */
+    ephemeralResult?: boolean;
   };
   managedTask?: ManagedTask<InferTaskType<TASK_PIPELINE_STEP>>;
   positionInfo?: PriorityPositionInfo | null;
