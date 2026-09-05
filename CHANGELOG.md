@@ -4,17 +4,18 @@
 
 ## 2.8.1 (2026-09-05)
 
-Subtitles and local analysis can now use a graphics card. One image covers NVIDIA, AMD and Intel - there is nothing vendor-specific to install - and it falls back to the processor on a machine with no usable card, saying so in the log rather than failing quietly.
+Subtitles and local analysis can now use a graphics card. One image covers NVIDIA, AMD and Intel - there is nothing vendor-specific to install - and it falls back to the processor on a machine with no usable card, saying so in the log rather than failing quietly. It is worth checking the log and comparing: on a low-end integrated GPU subtitles can be slightly slower than the processor, and both have a switch.
 
 The image is also about 1.3GB smaller than 2.8.0 despite gaining all of that, because it no longer ships a compiler toolchain and a thousand megabytes of build-time dependencies that never ran.
 
 ### Features
 - Use your graphics card for subtitles and local AI analysis
-  - Both now run on a GPU when there is one, which mainly matters for local analysis, where a single video can otherwise take tens of minutes
+  - Both now run on a GPU when there is one. Analysis is where it counts, since a single video can otherwise take tens of minutes
+  - Subtitles are worth measuring rather than assuming. The speech model is small and the processor build is well optimised for it, so on a modest integrated GPU transcribing can come out no faster, or slightly slower. A discrete card is a different story, and so is a larger speech model - which is why there is a switch for each rather than one for both
   - One image, any card. It uses Vulkan rather than a vendor toolkit, so NVIDIA, AMD and Intel all work with nothing extra to install - you only have to pass the card through to the container
   - Switches for each under Settings, in Subtitles and in AI Analysis. On by default, and worth turning off for whichever of the two you care less about if the same card is already busy transcoding for a media server, where competing for it can be slower than not using it
   - A machine with no usable card carries on exactly as before, on the processor, and says so in the log instead of failing in a way that looks like the feature is broken
-  - The log says which backend each one actually chose, so "is it using my card" is answerable at a glance rather than by guessing. Subtitles previously said nothing at all either way
+  - The log says outright which one each is running on, and names the card - "is it using my GPU" should not need interpreting. It also distinguishes a card you turned off from one it could not use, and says how many of a model's layers actually fit, since a partial fit is often slower than not using the card at all
   - In Docker this needs the card passed in - `--device=/dev/dri` for Intel and AMD, or the NVIDIA container toolkit with the graphics capability enabled. Without it nothing breaks; it simply stays on the processor
 ### Enhancements
 - Far less noise in the log
@@ -23,6 +24,8 @@ The image is also about 1.3GB smaller than 2.8.0 despite gaining all of that, be
 - The image is around 1.3GB smaller than the previous release
   - It no longer ships the compiler toolchain used to build it, nor the build-time dependencies that were installed and then discarded - about a gigabyte of them were still being carried in an earlier layer despite being removed later
   - Pulls and updates are correspondingly quicker, and it is smaller than 2.8.0 even with the graphics support added
+### Bug Fixes
+- Half of the local model server's output was being discarded, including everything it says while loading a model - which is where it reports the hardware it found and how much of the model fitted on it. The log jumped straight from "loading model" to "model loaded" with nothing in between. It was also a potential stall on a chattier model, since output nobody reads eventually blocks the program producing it
 
 ## 2.8.0 (2026-08-30)
 

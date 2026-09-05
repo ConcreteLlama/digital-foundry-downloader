@@ -7,6 +7,7 @@ import _ from "lodash";
 import { configDir, configService } from "../../config/config.js";
 import { fileToAudioFile } from "../audio.js";
 import { CommandCancelledError, runCommand } from "../../utils/command.js";
+import { BACKEND_LINE, describeComputeBackend } from "../../utils/ggml-backend.js";
 import { localComputeGate } from "../../utils/local-compute-gate.js";
 import { fileExists } from "../../utils/file-utils.js";
 import { probeMediaDurationSeconds } from "../../utils/media-metadata.js";
@@ -62,7 +63,6 @@ const PROGRESS_LINE = /progress\s*=\s*(\d+)\s*%/g;
  * looks identical to one that is. Logged once per run - these lines arrive in
  * the same stderr stream as progress, which is noisy by design.
  */
-const BACKEND_LINE = /^(?:load_backend|whisper_backend_init_gpu|ggml_vulkan):.*$/gm;
 
 /** Seconds into the audio, from a segment line's end timestamp. */
 const segmentEndSeconds = (chunk: string): number | undefined => {
@@ -309,7 +309,11 @@ export class WhisperSubtitleGenerator implements SubtitleGenerator {
           return;
         }
         reportedBackend = true;
-        logger.log("info", `Whisper compute backend: ${backendLines.join("; ")}`);
+        const joined = backendLines.join("; ");
+        logger.log("info", `Whisper is running on the ${describeComputeBackend(joined, this.config.useGpu !== false)}`);
+        // The raw lines are what you want when the verdict is the surprising
+        // one, and noise every other time.
+        logger.log("debug", `Whisper backend detail: ${joined}`);
       };
       const transcribeDetail = `${this.config.model}, ${this.threads} threads`;
       /*

@@ -6,6 +6,7 @@ import os from "os";
 import path from "path";
 import { configDir } from "../../config/config.js";
 import { fileExists } from "../file-utils.js";
+import { BACKEND_LINE, describeComputeBackend } from "../ggml-backend.js";
 
 /**
  * Running the analysis model here, rather than requiring one elsewhere.
@@ -253,9 +254,34 @@ export class LocalLlamaServer {
         this.baseUrl = undefined;
       }
     });
-    // llama.cpp is chatty on stderr; kept at debug so a failure to start is
-    // still recoverable from the log without drowning it in normal running.
-    child.stderr?.on("data", (chunk) => logger.log("debug", `llama-server: ${String(chunk).trim()}`));
+    /*
+     * Both streams, and this matters more than it looks.
+     *
+     * llama-server splits its output: the server's own running commentary
+     * goes to stderr, but everything the model loader prints - the device it
+     * found, how many layers it offloaded, the tensor buffer sizes - goes to
+     * stdout. Reading only stderr threw all of that away, so the log jumped
+     * straight from "loading model" to "model loaded" with nothing in
+     * between, and there was no way to tell what it had run on.
+     *
+     * Leaving stdout piped but unread was also a hang waiting to happen: the
+     * pipe holds 64KB and then blocks the writer, which for a chattier model
+     * would stall the load with no indication why.
+     *
+     * Kept at debug, because it is a lot, and a failure to start is still
+     * recoverable from the log without drowning it in normal running.
+     */
+    const backendLines: string[] = [];
+    const readOutput = (chunk: unknown) => {
+      const text = String(chunk);
+      logger.log("debug", `llama-server: ${text.trim()}`);
+      const matched = text.match(BACKEND_LINE);
+      if (matched?.length) {
+        backendLines.push(...matched.map((line) => line.trim()));
+      }
+    };
+    child.stdout?.on("data", readOutput);
+    child.stderr?.on("data", readOutput);
 
     const baseUrl = `http://127.0.0.1:${this.config.port}`;
     /*
@@ -277,6 +303,13 @@ export class LocalLlamaServer {
     }
     this.baseUrl = baseUrl;
     logger.log("info", `Local analysis server ready on ${baseUrl} (${AiLocalModels[this.config.model].label})`);
+    if (backendLines.length) {
+      logger.log(
+        "info",
+        `Local analysis is running on the ${describeComputeBackend(backendLines.join("; "), this.config.useGpu !== false)}`
+      );
+      logger.log("debug", `Local analysis backend detail: ${backendLines.join("; ")}`);
+    }
     return baseUrl;
   }
 
