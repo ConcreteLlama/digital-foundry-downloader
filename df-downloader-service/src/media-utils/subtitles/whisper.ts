@@ -12,7 +12,7 @@ import { localComputeGate } from "../../utils/local-compute-gate.js";
 import { fileExists } from "../../utils/file-utils.js";
 import { probeMediaDurationSeconds } from "../../utils/media-metadata.js";
 import { parseSrt } from "./srt-utils.js";
-import { GeneratedSubtitleInfo, SubtitleGenerator, SubtitleProgressReporter } from "./subtitles.js";
+import { GeneratedSubtitleInfo, PreparedAudio, SubtitleGenerator, SubtitleProgressReporter } from "./subtitles.js";
 
 /**
  * Where whisper.cpp publishes its GGML model files. Fetched on first use
@@ -147,8 +147,18 @@ const ensureModel = async (config: WhisperConfig): Promise<string> => {
 const EXTRACTION_PERCENT_SPAN = 10;
 
 /** Maps whisper's own 0-100 onto the slice of the bar left after extraction. */
-const toOverallPercent = (transcriptionPercent: number) =>
-  EXTRACTION_PERCENT_SPAN + (transcriptionPercent / 100) * (100 - EXTRACTION_PERCENT_SPAN);
+/**
+ * Where transcription's own 0-100 sits in the task's bar.
+ *
+ * `alreadyExtracted` is the difference between doing both phases in one task
+ * and being handed the audio: with extraction as a step of its own, this task
+ * is transcription and nothing else, so it owns the whole bar. Leaving the
+ * offset in would have every split run start at 10% having done nothing.
+ */
+const toOverallPercent = (transcriptionPercent: number, alreadyExtracted = false) => {
+  const base = alreadyExtracted ? 0 : EXTRACTION_PERCENT_SPAN;
+  return base + (transcriptionPercent / 100) * (100 - base);
+};
 
 /**
  * Local speech-to-text via whisper.cpp.
@@ -219,17 +229,65 @@ export class WhisperSubtitleGenerator implements SubtitleGenerator {
     }
   }
 
+  /**
+   * Pulls the audio out, ready for transcription.
+   *
+   * Its own method so a pipeline can run it as a separate step - on the
+   * filesystem queue, where cheap ffmpeg work belongs, rather than inside the
+   * transcription task holding the one local-models slot for the minutes this
+   * takes on a long video.
+   *
+   * The duration is probed here and handed on, because both phases need it to
+   * report a percentage and probing a multi-gigabyte file twice would be
+   * wasteful.
+   */
+  async prepareAudio(
+    dfContentInfo: DfContentInfo,
+    filename: string,
+    onProgress?: SubtitleProgressReporter,
+    signal?: AbortSignal
+  ): Promise<PreparedAudio> {
+    const workDir = configService.config.contentManagement.workDir;
+    const audioPath = path.join(workDir, `${_.uniqueId("whisper_")}.wav`);
+    const durationSeconds = await probeMediaDurationSeconds(filename).catch(() => null);
+    if (signal?.aborted) {
+      throw new CommandCancelledError("Audio extraction");
+    }
+    logger.log("info", `Extracting audio from ${filename} for transcription`);
+    onProgress?.({ percent: 0, detail: "Extracting audio" });
+    await fileToAudioFile(
+      filename,
+      audioPath,
+      { channels: WHISPER_CHANNELS, sampleRate: WHISPER_SAMPLE_RATE },
+      {
+        durationSeconds,
+        onProgress: (percent) => onProgress?.({ percent: Math.round(percent), detail: "Extracting audio" }),
+      }
+    );
+    return { audioPath, durationSeconds };
+  }
+
   async getSubs(
     dfContentInfo: DfContentInfo,
     filename: string,
     language: LanguageCode | string,
     onProgress?: SubtitleProgressReporter,
-    signal?: AbortSignal
+    signal?: AbortSignal,
+    prepared?: PreparedAudio
   ): Promise<GeneratedSubtitleInfo> {
     const workDir = configService.config.contentManagement.workDir;
     const modelPath = await ensureModel(this.config);
     const jobId = _.uniqueId("whisper_");
-    const audioPath = path.join(workDir, `${jobId}.wav`);
+    /*
+     * Uses audio a preceding step already extracted, and extracts for itself
+     * when there is none.
+     *
+     * Both paths are live on purpose. The pipeline splits extraction out so it
+     * runs on the filesystem queue and shows as its own step, but getSubs is
+     * also called directly - and a generator that only works as half of a
+     * pipeline would be a trap for the next caller.
+     */
+    const audioPath = prepared?.audioPath ?? path.join(workDir, `${jobId}.wav`);
     // whisper.cpp appends its own ".srt" to whatever -of is given.
     const outputPrefix = path.join(workDir, jobId);
     const srtPath = `${outputPrefix}.srt`;
@@ -242,7 +300,8 @@ export class WhisperSubtitleGenerator implements SubtitleGenerator {
        * transcription falls back to whisper's own 5% steps, which is what it
        * always did.
        */
-      const durationSeconds = await probeMediaDurationSeconds(filename).catch(() => null);
+      const durationSeconds =
+        prepared?.durationSeconds ?? (await probeMediaDurationSeconds(filename).catch(() => null));
       let lastPercent = -1;
       let lastDetail: string | undefined;
       /*
@@ -263,23 +322,25 @@ export class WhisperSubtitleGenerator implements SubtitleGenerator {
         onProgress({ percent: lastPercent, detail });
       };
 
-      logger.log("info", `Extracting audio from ${filename} for transcription`);
-      // Published before ffmpeg is even spawned rather than waiting on its
-      // first progress block: opening a multi-gigabyte source is itself part
-      // of the wait, and a fast extraction only emits two blocks anyway.
-      report(0, "Extracting audio");
-      await fileToAudioFile(
-        filename,
-        audioPath,
-        {
-          channels: WHISPER_CHANNELS,
-          sampleRate: WHISPER_SAMPLE_RATE,
-        },
-        {
-          durationSeconds,
-          onProgress: (percent) => report((percent / 100) * EXTRACTION_PERCENT_SPAN, "Extracting audio"),
-        }
-      );
+      if (!prepared) {
+        logger.log("info", `Extracting audio from ${filename} for transcription`);
+        // Published before ffmpeg is even spawned rather than waiting on its
+        // first progress block: opening a multi-gigabyte source is itself part
+        // of the wait, and a fast extraction only emits two blocks anyway.
+        report(0, "Extracting audio");
+        await fileToAudioFile(
+          filename,
+          audioPath,
+          {
+            channels: WHISPER_CHANNELS,
+            sampleRate: WHISPER_SAMPLE_RATE,
+          },
+          {
+            durationSeconds,
+            onProgress: (percent) => report((percent / 100) * EXTRACTION_PERCENT_SPAN, "Extracting audio"),
+          }
+        );
+      }
       const requestedLanguage = this.config.language || language;
       const args = [
         "-m", modelPath,
@@ -316,6 +377,9 @@ export class WhisperSubtitleGenerator implements SubtitleGenerator {
         logger.log("debug", `Whisper backend detail: ${joined}`);
       };
       const transcribeDetail = `${this.config.model}, ${this.threads} threads`;
+      // Where the bar sits once extraction is behind us - zero when another
+      // step did it, since this task then represents transcription alone.
+      const startPercent = prepared ? 0 : EXTRACTION_PERCENT_SPAN;
       /*
        * Every transcription spawns a fresh one-shot process (see destroy()),
        * so the model loads from disk before whisper.cpp prints anything we
@@ -326,7 +390,7 @@ export class WhisperSubtitleGenerator implements SubtitleGenerator {
        * point is that the text is fresh and honest the moment the phase
        * starts, instead of the previous phase's caption sitting there inert.
        */
-      report(EXTRACTION_PERCENT_SPAN, `Loading ${this.config.model} model`);
+      report(startPercent, `Loading ${this.config.model} model`);
       /*
        * Checked at the boundary as well as inside.
        *
@@ -366,7 +430,7 @@ export class WhisperSubtitleGenerator implements SubtitleGenerator {
           }
           if (percent !== undefined) {
             flushBackend();
-            report(toOverallPercent(percent), transcribeDetail);
+            report(toOverallPercent(percent, Boolean(prepared)), transcribeDetail);
           }
         },
         (chunk) => {
@@ -380,7 +444,10 @@ export class WhisperSubtitleGenerator implements SubtitleGenerator {
           // Capped below 100: the run is finished when the process exits and
           // the file exists, not when the last segment happens to land on the
           // end of the audio.
-          report(toOverallPercent(Math.min(99, (seconds / durationSeconds) * 100)), transcribeDetail);
+          report(
+            toOverallPercent(Math.min(99, (seconds / durationSeconds) * 100), Boolean(prepared)),
+            transcribeDetail
+          );
         },
         /*
          * The signal was declared on transcribe and forwarded to runCommand,
@@ -398,7 +465,7 @@ export class WhisperSubtitleGenerator implements SubtitleGenerator {
          */
         (waiting) =>
           report(
-            EXTRACTION_PERCENT_SPAN,
+            startPercent,
             waiting ? "Waiting for the analysis to finish" : `Loading ${this.config.model} model`
           )
       );

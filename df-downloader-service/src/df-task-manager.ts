@@ -274,6 +274,7 @@ export class DfTaskManager {
     this.subtitleTaskPipeline = createSubtitlesTaskPipeline({
       localModelsTaskManager: localModelsTaskManager,
       mediaProcessingTaskManager: mediaProcessingTaskManager,
+      fileTaskManager: fileTaskManager,
     });
     // One manager shared by both pipelines, so the concurrency cap covers
     // every analysis in flight rather than being applied twice over.

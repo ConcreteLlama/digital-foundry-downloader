@@ -7,6 +7,7 @@ import { InjectMetadataTask } from "../tasks/inject-metadata-task.js";
 import { WriteSubtitlesSidecarTask } from "../tasks/write-subtitles-sidecar-task.js";
 import { resolveSubtitlesOutput } from "../media-utils/subtitles/sidecar.js";
 import { configService } from "../config/config.js";
+import { ExtractAudioTaskBuilder } from "../tasks/extract-audio-task.js";
 import { SubtitlesTaskBuilder } from "../tasks/subtitles-task.js";
 import { LocalModelsTaskManager } from "../tasks/local-models-task-manager.js";
 
@@ -14,10 +15,27 @@ type SubtitlesTaskPipelineCreatorOpts = {
   localModelsTaskManager: LocalModelsTaskManager;
   /** Whole-file reads/writes (remux) - serialized, see df-task-manager.ts. */
   mediaProcessingTaskManager: TaskManager;
+  /** Cheap filesystem work - where audio extraction belongs. */
+  fileTaskManager: TaskManager;
 };
 
+/**
+ * Step positions, named.
+ *
+ * The later steps read earlier ones by index, and inserting Extract Audio in
+ * front of what used to be step 0 silently repointed every one of them at the
+ * wrong result. Named so the next insertion is a compile error rather than a
+ * subtitle file written from the wrong thing.
+ */
+const STEP = {
+  extractAudio: 0,
+  generateSubtitles: 1,
+  injectMetadata: 2,
+  writeSubtitles: 3,
+} as const;
+
 export const createSubtitlesTaskPipeline = (opts: SubtitlesTaskPipelineCreatorOpts) => {
-  const { localModelsTaskManager, mediaProcessingTaskManager } = opts;
+  const { localModelsTaskManager, mediaProcessingTaskManager, fileTaskManager } = opts;
   return makeTaskPipeline<
     {
       dfContentInfo: DfContentInfo;
@@ -31,14 +49,43 @@ export const createSubtitlesTaskPipeline = (opts: SubtitlesTaskPipelineCreatorOp
     "subtitles"
   >("subtitles")
     .next({
-      stepName: "Generate Subtitles",
+      /**
+       * ffmpeg, on the filesystem queue rather than the local models one.
+       *
+       * On a long video this is minutes of work that needs no model, and
+       * running it inside the transcription task held the single local-models
+       * slot for all of it - so an analysis queued behind a transcription
+       * waited through the extraction too. It also spent those minutes
+       * displayed as a transcription that had not started.
+       *
+       * Skipped for a service that has nothing to prepare - one that uploads
+       * the file or is handed a URL - and prepared only for the first
+       * generator, since a fallback is a different service that prepares its
+       * own input.
+       */
+      stepName: "Extract Audio",
       taskCreator: ({ context }) => {
+        const { dfContentInfo, fileLocation, subtitleGenerators } = context;
+        const [generator] = Array.isArray(subtitleGenerators) ? subtitleGenerators : [subtitleGenerators];
+        if (!generator?.prepareAudio) {
+          return null;
+        }
+        return ExtractAudioTaskBuilder({ generator, dfContentInfo, filePath: fileLocation });
+      },
+      taskManager: fileTaskManager,
+    })
+    .next({
+      stepName: "Generate Subtitles",
+      taskCreator: ({ context, previousTaskResult }) => {
         const { dfContentInfo: contentInfo, fileLocation, language, subtitleGenerators: subtitleGenerator } = context;
         return SubtitlesTaskBuilder({
           subtitleGenerators: subtitleGenerator,
           dfContentInfo: contentInfo,
           filePath: fileLocation,
           language,
+          // Undefined when the step above was skipped, in which case the
+          // generator extracts for itself exactly as it always did.
+          preparedAudio: previousTaskResult,
         });
       },
       taskManager: localModelsTaskManager,
@@ -60,7 +107,7 @@ export const createSubtitlesTaskPipeline = (opts: SubtitlesTaskPipelineCreatorOp
     .next({
       stepName: "Write Subtitles",
       taskCreator: ({ context, allResults }) => {
-        const [subtitlesTaskResult] = allResults;
+        const subtitlesTaskResult = allResults[STEP.generateSubtitles];
         const subtitles = subtitlesTaskResult?.status === "success" ? subtitlesTaskResult.result : null;
         const subtitlesConfig = configService.config.subtitles;
         if (
@@ -79,7 +126,7 @@ export const createSubtitlesTaskPipeline = (opts: SubtitlesTaskPipelineCreatorOp
         const lastResult = steps[steps.length - 1]?.managedTask?.task?.result;
         if (lastResult) {
           if (lastResult.status === "success") {
-            const task = steps[0].managedTask?.task;
+            const task = steps[STEP.generateSubtitles].managedTask?.task;
             if (task?.result?.status === "success") {
               const subTaskResult = task.result.result;
               // "Generated", not "fetched": whisper transcribes locally and
@@ -93,7 +140,7 @@ export const createSubtitlesTaskPipeline = (opts: SubtitlesTaskPipelineCreatorOp
         }
       },
       reduceResults: ({ results, context }) => {
-        const [subtitlesTaskResult] = results;
+        const subtitlesTaskResult = results[STEP.generateSubtitles];
         const subtitlesResult = subtitlesTaskResult?.status === "success" ? subtitlesTaskResult.result : null;
         // Where the sidecar landed, when one was written - previously discarded.
         const sidecarResult = results[results.length - 1];

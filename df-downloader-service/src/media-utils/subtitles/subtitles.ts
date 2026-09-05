@@ -18,8 +18,41 @@ export type GeneratedSubtitleInfo = SubtitleInfo & {
  */
 export type SubtitleProgressReporter = (progress: TaskProgress) => void;
 
+/**
+ * Audio pulled out of a video ahead of transcription.
+ *
+ * Its own type so the pipeline can hand it between steps without knowing
+ * which generator produced it or what it contains.
+ */
+export type PreparedAudio = {
+  audioPath: string;
+  /** Probed once and reused, so both phases can report a percentage. */
+  durationSeconds?: number | null;
+};
+
 export interface SubtitleGenerator {
   serviceType: SubtitlesService;
+  /**
+   * Pulls the audio out, for generators that work from a local file.
+   *
+   * Optional: only local transcription needs it - a service that uploads the
+   * video or is handed a URL has nothing to prepare. Split out from getSubs so
+   * it can be a pipeline step of its own, which matters for two reasons.
+   * Extracting audio from a multi-gigabyte video is minutes of ffmpeg, and
+   * doing it inside the transcription task meant holding the single local
+   * models slot throughout - blocking an analysis behind work that never
+   * needed a model. And a step that takes minutes should be visible as a step,
+   * rather than as a caption inside a row that looks like it is transcribing.
+   *
+   * Callers that skip it still work: getSubs extracts for itself when it is
+   * not handed anything.
+   */
+  prepareAudio?(
+    dfContentInfo: DfContentInfo,
+    filename: string,
+    onProgress?: SubtitleProgressReporter,
+    signal?: AbortSignal
+  ): Promise<PreparedAudio>;
   getSubs(
     dfContentInfo: DfContentInfo,
     filename: string,
@@ -33,7 +66,9 @@ export interface SubtitleGenerator {
      * runs a subprocess for minutes, and before this there was no way to take
      * one back once it had started.
      */
-    signal?: AbortSignal
+    signal?: AbortSignal,
+    /** Audio already extracted by a preceding step, if there was one. */
+    prepared?: PreparedAudio
   ): Promise<GeneratedSubtitleInfo>;
   destroy(): void;
 }

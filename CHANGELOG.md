@@ -29,6 +29,9 @@ The image is also about 1.3GB smaller than 2.8.0 despite gaining all of that, be
   - Anything whose name looks like a credential is removed whether or not it was declared, and a check refuses to build the app if a new credential-shaped setting is added without someone saying which it is
   - Removed rather than deleted - you still see that a key was set, which is often the actual question. The log is not filtered though, so it is worth a look before posting one publicly
   - The stored data itself can be included, but has to be ticked deliberately and is labelled for what it is. It holds where every file was saved, the text of every article found and what you have watched, none of which can be removed the way a password can - so it is for sending to someone looking into a data problem, not for attaching to a public issue
+- Pulling the audio out is now its own step, before transcribing
+  - On a long video that is minutes of work, and it was happening inside the transcription job - which meant holding the one local-model slot for all of it, so an analysis queued behind a transcription also waited through the audio extraction. It now runs on the general file queue instead
+  - It also shows as its own step with its own progress, rather than as a caption inside a row that claims to be transcribing when it has not started yet
 - Far less noise in the log
   - Confirming what is already available no longer writes a line per item. On a thousand-item library that was a thousand lines in the same millisecond, every time your subscription tier was checked - it buried everything worth reading and made the log tedious to search or send to anyone
   - The per-file detail from scanning your download folder has moved to debug as well. Both are still there if you turn the level up

@@ -34,6 +34,16 @@ export const DfQuickSearch = ({ clear, setClear }: DfQuickSearchProps) => {
       }}
       sx={{
         flexGrow: 3,
+        /*
+         * Takes a whole row on a phone.
+         *
+         * It shares a flex row with seven toggle buttons, none of which will
+         * shrink below their icons - so the only thing left to give was the
+         * input, which collapsed to a couple of pixels and left the toolbar
+         * looking like it had no search at all. Claiming the full width makes
+         * the buttons wrap underneath instead.
+         */
+        minWidth: { xs: "100%", sm: 180 },
       }}
     />
   );

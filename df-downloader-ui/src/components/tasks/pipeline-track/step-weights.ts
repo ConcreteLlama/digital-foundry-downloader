@@ -17,6 +17,12 @@
  */
 const STEP_WEIGHTS: Record<string, number> = {
   Download: 2.4,
+  /*
+   * Minutes of ffmpeg on a long video, but an order less than transcribing
+   * it - and it is now its own step rather than the first tenth of the
+   * transcription bar, so it needs a weight of its own.
+   */
+  "Extract Audio": 0.8,
   "Generate Subtitles": 3.2,
   /*
    * The most lopsided pair in the app, and the reason this needed extending.

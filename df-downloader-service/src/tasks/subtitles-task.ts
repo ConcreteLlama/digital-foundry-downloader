@@ -1,5 +1,5 @@
 import { DfContentInfo, LanguageCode, TaskProgress, asyncGetFirstMatch, logger } from "df-downloader-common";
-import { SubtitleGenerator, GeneratedSubtitleInfo } from "../media-utils/subtitles/subtitles.js";
+import { GeneratedSubtitleInfo, PreparedAudio, SubtitleGenerator } from "../media-utils/subtitles/subtitles.js";
 import { TaskManager, TaskManagerOpts } from "../task-manager/task-manager.js";
 import { configService } from "../config/config.js";
 import { TaskControllerTaskBuilder, TaskControls } from "../task-manager/task/task-controller-task.js";
@@ -62,16 +62,25 @@ type SubtitlesTaskContext = {
   abortController?: AbortController;
   /** Updated by the generator as it works - see SubtitleProgressReporter. */
   progress?: TaskProgress;
+  /**
+   * Audio a preceding pipeline step already pulled out.
+   *
+   * Only meaningful for the generator that asked for it - the fallbacks tried
+   * after it extract for themselves, which is why this is passed rather than
+   * assumed. Absent when this task was started on its own.
+   */
+  preparedAudio?: PreparedAudio;
 };
 
 const subtitlesTaskControls: TaskControls<GeneratedSubtitleInfo, SubtitlesTaskContext> = {
   start: async (context: SubtitlesTaskContext) => {
-    const { subtitleGenerators, dfContentInfo, filePath, language } = context;
+    const { subtitleGenerators, dfContentInfo, filePath, language, preparedAudio } = context;
     const generators = Array.isArray(subtitleGenerators) ? subtitleGenerators : [subtitleGenerators];
     const failures: string[] = [];
     const startedAt = Date.now();
     const abortController = new AbortController();
     context.abortController = abortController;
+    const [firstGenerator] = generators;
     const result = await asyncGetFirstMatch(generators, async (generator) => {
       context.currentSubtitleGenerator = generator;
       logger.log("info", `Generating subs for ${filePath} using ${generator.serviceType}`);
@@ -83,7 +92,11 @@ const subtitlesTaskControls: TaskControls<GeneratedSubtitleInfo, SubtitlesTaskCo
           (progress) => {
             context.progress = progress;
           },
-          abortController.signal
+          abortController.signal,
+          // Only to the generator it was extracted for. The audio is prepared
+          // ahead of the first choice; if that one fails and a fallback runs,
+          // that fallback is a different service and prepares its own input.
+          generator === firstGenerator ? preparedAudio : undefined
         );
       } catch (err) {
         /*

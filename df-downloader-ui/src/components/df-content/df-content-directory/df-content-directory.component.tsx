@@ -207,6 +207,9 @@ const TopBar = ({ density, onDensity, view, onView, compact }: TopBarProps) => {
       sx={{
         display: "flex",
         alignItems: "center",
+        // Wraps so the controls fall onto a second line on a narrow screen
+        // rather than squeezing the search field out of existence.
+        flexWrap: "wrap",
         paddingX: { xs: 1, md: 2 },
         paddingTop: 1,
         gap: 1,
