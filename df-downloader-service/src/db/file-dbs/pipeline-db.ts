@@ -8,7 +8,12 @@ import {
   PersistedPipeline, summariseForArchive } from "../pipeline-db-model.js";
 import { FileDb } from "../file-db.js";
 
-const CURRENT_DB_VERSION = "2.8.0";
+/*
+ * Bumped to re-summarise records written before the archive gained a size
+ * budget: analysis results were going in whole, twice each, and this file had
+ * grown back past 1.5MB. The patch below runs over both shapes.
+ */
+const CURRENT_DB_VERSION = "2.8.1";
 
 /**
  * How many finished pipelines to keep. Enough to answer "why did that fail

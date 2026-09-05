@@ -133,17 +133,60 @@ export type CompletedPipelineDbSchema = z.infer<typeof CompletedPipelineDbSchema
 const ARCHIVE_MAX_ARRAY = 20;
 const ARCHIVE_MAX_STRING = 500;
 
-export const summariseForArchive = (value: unknown): any => {
+/**
+ * The most any single field may cost the archive.
+ *
+ * The item-count cap above is not enough on its own: an analysis result's
+ * structuredData.segments is a dozen entries, so it passed the count check
+ * and went in whole at ten kilobytes - twice per record, since both the
+ * analysing and the saving step carry the same result. That put this file
+ * back over 1.5MB, most of it analyses, after an earlier fix had brought it
+ * down to 52KB.
+ *
+ * Applied to children rather than to the record as a whole, so a large field
+ * is dropped while its siblings survive - the point of keeping any of this is
+ * being able to answer "why did that fail last week", and status, timings and
+ * error messages are all small.
+ */
+const ARCHIVE_MAX_VALUE_CHARS = 1500;
+
+/**
+ * How far in the budget starts applying.
+ *
+ * stepResults is shaped {stepId: {status, result: {...fields}}}, and the outer
+ * two levels carry structure the schema requires - replacing a step entry
+ * wholesale takes its `status` with it, which fails validation and, because
+ * this runs as a startup patch, takes the service down with it. So the budget
+ * applies to the fields inside a result and no higher: a bulky one is dropped
+ * while its siblings and the envelope around it survive.
+ */
+const ARCHIVE_BUDGET_FROM_DEPTH = 3;
+
+/** Replaces a value that is too big to be worth keeping, saying what it was. */
+const withinArchiveBudget = (value: unknown, depth: number): unknown => {
+  if (value === null || typeof value !== "object" || depth < ARCHIVE_BUDGET_FROM_DEPTH) {
+    return value;
+  }
+  const size = JSON.stringify(value)?.length ?? 0;
+  return size > ARCHIVE_MAX_VALUE_CHARS ? { omitted: `${size} characters` } : value;
+};
+
+export const summariseForArchive = (value: unknown, depth = 0): any => {
   if (typeof value === "string") {
     return value.length > ARCHIVE_MAX_STRING ? `${value.slice(0, ARCHIVE_MAX_STRING)}… (${value.length} chars)` : value;
   }
   if (Array.isArray(value)) {
     return value.length > ARCHIVE_MAX_ARRAY
       ? { omitted: `${value.length} items` }
-      : value.map((entry) => summariseForArchive(entry));
+      : value.map((entry) => withinArchiveBudget(summariseForArchive(entry, depth + 1), depth + 1));
   }
   if (value === null || typeof value !== "object" || value instanceof Date) {
     return value;
   }
-  return Object.fromEntries(Object.entries(value).map(([key, entry]) => [key, summariseForArchive(entry)]));
+  return Object.fromEntries(
+    Object.entries(value).map(([key, entry]) => [
+      key,
+      withinArchiveBudget(summariseForArchive(entry, depth + 1), depth + 1),
+    ])
+  );
 };

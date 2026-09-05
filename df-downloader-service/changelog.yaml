@@ -34,6 +34,7 @@ versions:
           - "It no longer ships the compiler toolchain used to build it, nor the build-time dependencies that were installed and then discarded - about a gigabyte of them were still being carried in an earlier layer despite being removed later"
           - "Pulls and updates are correspondingly quicker, and it is smaller than 2.8.0 even with the graphics support added"
       bugfixes:
+        - "The record of finished jobs had grown to over 1.5MB, nearly all of it analyses. Each one archived its full result twice, and the trimming that was supposed to prevent this only dropped lists longer than twenty items - so a dozen large ones went in whole. Big fields are now dropped by size, keeping the status, timings and figures that make the history worth having. Existing history is trimmed on upgrade, with a backup kept"
         - "Half of the local model server's output was being discarded, including everything it says while loading a model - which is where it reports the hardware it found and how much of the model fitted on it. The log jumped straight from \"loading model\" to \"model loaded\" with nothing in between. It was also a potential stall on a chattier model, since output nobody reads eventually blocks the program producing it"
   - version: "2.8.0"
     date: "2026-08-30"
