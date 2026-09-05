@@ -233,9 +233,14 @@ export class LocalLlamaServer {
       "--host", "127.0.0.1",
       "--port", String(this.config.port),
       "-t", String(resolveThreads(this.config)),
-      // Offloads what fits and is simply ignored on a CPU-only build, so the
-      // same arguments work on a GPU box and a microserver alike.
-      "-ngl", String(this.config.gpuLayers ?? 999),
+      /*
+       * Offloads what fits and is simply ignored on a CPU-only build, so the
+       * same arguments work on a GPU box and a microserver alike.
+       *
+       * Zero when the GPU is switched off, which is how llama.cpp is told to
+       * stay on the CPU - there is no separate flag for it.
+       */
+      "-ngl", String(this.config.useGpu === false ? 0 : this.config.gpuLayers ?? 999),
     ];
     logger.log("info", `Starting local analysis server: ${binary} ${args.join(" ")}`);
     const child = spawn(binary, args, { stdio: ["ignore", "pipe", "pipe"] });

@@ -355,6 +355,23 @@ export const AiLocalProviderConfig = z.object({
     .describe(
       "How much text the model can consider at once, prompt and answer together. 32768 is the default and suits everything here: the largest measured prompt - a 77-minute Direct, with transcript positions included - came to roughly 22,000 tokens, leaving room for the answer. Below about 16384 a long transcript gets cut short, and the analysis quietly gets worse rather than failing. Raising it costs memory, since the model's working cache grows with it, so on a card that is already full it is a way to stop a model fitting. There is no benefit in going beyond what your model was trained for - llama-server reports that as n_ctx_train when it loads."
     ),
+  /**
+   * Whether to use a GPU at all.
+   *
+   * Separate from gpuLayers, which answers "how much" rather than "whether".
+   * Setting the layer count to zero has always disabled it, but that is an
+   * expert reading of a number - someone who simply does not want their card
+   * touched should not have to know that. Mirrors the same switch on Whisper.
+   *
+   * On by default and harmless without a GPU: the image's backends are loaded
+   * dynamically and a machine with no usable device just runs on the CPU.
+   */
+  useGpu: z
+    .boolean()
+    .default(true)
+    .describe(
+      "Use a GPU for local analysis when one is available. Turn this off to keep it on the CPU - worth doing if the same GPU is busy transcoding for a media server, where competing for it can be slower than not using it at all."
+    ),
   gpuLayers: z
     .number()
     .int()

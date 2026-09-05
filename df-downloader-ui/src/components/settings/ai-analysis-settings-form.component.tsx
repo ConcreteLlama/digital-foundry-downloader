@@ -331,6 +331,14 @@ const AiAnalysisSettings = () => {
                     label="CPU threads"
                     zodNumber={AiLocalProviderConfig.shape.threads}
                   />
+                  {/* Above the layer count deliberately: this is the question
+                      people actually have ("is it using my card"), and the
+                      count below it is the refinement. */}
+                  <ZodCheckboxField
+                    name="local.useGpu"
+                    label="Use GPU if available"
+                    zodBoolean={AiLocalProviderConfig.shape.useGpu}
+                  />
                   <ZodNumberField
                     name="local.gpuLayers"
                     label="Layers to offload to a GPU"

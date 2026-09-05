@@ -2,6 +2,24 @@
 
 
 
+## 2.8.1 (2026-09-05)
+
+Subtitles and local analysis can now use a graphics card. One image covers NVIDIA, AMD and Intel - there is nothing vendor-specific to install - and it falls back to the processor on a machine with no usable card, saying so in the log rather than failing quietly.
+
+The image is also about 1.3GB smaller than 2.8.0 despite gaining all of that, because it no longer ships a compiler toolchain and a thousand megabytes of build-time dependencies that never ran.
+
+### Features
+- Use your graphics card for subtitles and local AI analysis
+  - Both now run on a GPU when there is one, which mainly matters for local analysis, where a single video can otherwise take tens of minutes
+  - One image, any card. It uses Vulkan rather than a vendor toolkit, so NVIDIA, AMD and Intel all work with nothing extra to install - you only have to pass the card through to the container
+  - Switches for each under Settings, in Subtitles and in AI Analysis. On by default, and worth turning off for whichever of the two you care less about if the same card is already busy transcoding for a media server, where competing for it can be slower than not using it
+  - A machine with no usable card carries on exactly as before, on the processor, and says so in the log instead of failing in a way that looks like the feature is broken
+  - In Docker this needs the card passed in - `--device=/dev/dri` for Intel and AMD, or the NVIDIA container toolkit with the graphics capability enabled. Without it nothing breaks; it simply stays on the processor
+### Enhancements
+- The image is around 1.3GB smaller than the previous release
+  - It no longer ships the compiler toolchain used to build it, nor the build-time dependencies that were installed and then discarded - about a gigabyte of them were still being carried in an earlier layer despite being removed later
+  - Pulls and updates are correspondingly quicker, and it is smaller than 2.8.0 even with the graphics support added
+
 ## 2.8.0 (2026-08-30)
 
 Videos can be analysed now - with Claude using your own API key, or with a model on your own machine for nothing. Each one gets a summary, a verdict, and the hard numbers pulled into a table you can compare: per-platform resolutions and frame rates, or a PC review's settings. Where Digital Foundry published a written article it is found and read alongside the transcript, which fixes the product names and figures speech-to-text mangles.
