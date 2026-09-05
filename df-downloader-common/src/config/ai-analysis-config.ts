@@ -501,6 +501,7 @@ export const AiAnalysisConfig = z.object({
   apiKey: z
     .string()
     .optional()
+    .meta({ secret: true })
     .describe("Your Anthropic API key, created at https://console.anthropic.com/settings/keys."),
   model: AiAnalysisModel.default("claude-haiku-4-5").describe(
     "Which Claude model to analyse with. Haiku is the recommended default - in testing it extracted settings tables and per-platform numbers correctly at around a tenth of the cost of the larger models."

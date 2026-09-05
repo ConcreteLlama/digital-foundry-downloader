@@ -303,12 +303,24 @@ export class LocalLlamaServer {
     }
     this.baseUrl = baseUrl;
     logger.log("info", `Local analysis server ready on ${baseUrl} (${AiLocalModels[this.config.model].label})`);
+    /*
+     * Always says something, including when it has nothing to go on.
+     *
+     * Staying silent when no line matched is indistinguishable from running a
+     * build that never had this in it, which is precisely the question the
+     * line exists to answer.
+     */
     if (backendLines.length) {
       logger.log(
         "info",
         `Local analysis is running on the ${describeComputeBackend(backendLines.join("; "), this.config.useGpu !== false)}`
       );
       logger.log("debug", `Local analysis backend detail: ${backendLines.join("; ")}`);
+    } else {
+      logger.log(
+        "info",
+        "Local analysis started, but the model server said nothing about which backend it chose - turn on debug logging to see its full output"
+      );
     }
     return baseUrl;
   }

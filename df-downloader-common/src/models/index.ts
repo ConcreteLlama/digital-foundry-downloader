@@ -15,6 +15,7 @@ export * from "./filter.js";
 export * from "./df-content-search.js";
 export * from "./notification.js";
 export * from "./service-info.js";
+export * from "./system-info.js";
 export * from "./user-requests.js";
 export * from "./user.js";
 export * from "./auth.js";

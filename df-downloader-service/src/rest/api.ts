@@ -6,6 +6,7 @@ import { makeDownloadsApiRouter as makeTasksApiRouter } from "./api/tasks.js";
 import { makeConfigRouter } from "./api/config.js";
 import { makeDfUserInfoRouter } from "./api/df-user-info.js";
 import { makeServiceInfoRouter } from "./api/service-info.js";
+import { makeSystemRouter } from "./api/system.js";
 import { makeAuthRouter } from "./api/auth.js";
 import { JwtManager } from "./auth/jwt.js";
 import { makePreviewRouter } from "./api/preview.js";
@@ -48,6 +49,7 @@ export const makeApiRouter = (contentManager: DigitalFoundryContentManager, jwtM
   // realtime/stream-broadcaster.ts. Same auth as everything else; an
   // EventSource request is a plain GET, so the cookie rides along.
   router.use("/stream", authenticateMiddleware(jwtManager), makeRealtimeRouter(contentManager));
+  router.use("/system", authenticateMiddleware(jwtManager), makeSystemRouter(contentManager));
   router.use("/service-info", makeServiceInfoRouter());
   router.use("/preview", makePreviewRouter(contentManager));
   router.use("/auth", makeAuthRouter(jwtManager));

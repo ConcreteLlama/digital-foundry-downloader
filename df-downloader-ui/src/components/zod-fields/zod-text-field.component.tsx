@@ -5,6 +5,7 @@ import { SxProps } from "@mui/system";
 import { ChangeEventHandler, CSSProperties, useState } from "react";
 import { TextFieldElement, TextFieldElementProps } from "react-hook-form-mui";
 import { ZodString } from "zod";
+import { isSecretSchema } from "df-downloader-common/config/secrets";
 import { ZodStringLike, getZodDescription, isZodOptionalLike, unwrapZodSchema } from "./zod-schema-utils";
 
 export type ZodStringFieldProps = {
@@ -14,11 +15,13 @@ export type ZodStringFieldProps = {
   helperText?: string;
   zodString: ZodStringLike;
   /**
-   * A secret - an API key, a token, a session cookie.
+   * Force masking on for a field the schema does not mark.
    *
-   * Named for what it looks like rather than what it is, historically. These
-   * are machine credentials, not anyone's password, which is why they are
-   * masked without being real password inputs - see the render below.
+   * Normally unnecessary and better left alone: masking is derived from
+   * `.meta({ secret: true })` on the schema itself, which is the same
+   * declaration the diagnostic bundle redacts on. Keeping a second list here
+   * is how the two drift, and the way they drift is that a new credential
+   * gets masked on screen and shipped in a bundle.
    */
   isPassword?: boolean;
   onChange?: ChangeEventHandler<HTMLInputElement | HTMLTextAreaElement>;
@@ -46,6 +49,7 @@ export const ZodTextField = ({
   sx = {},
 }: ZodStringFieldProps) => {
   const [revealed, setRevealed] = useState(false);
+  const masked = isPassword || isSecretSchema(zodString);
   const isOptional = isZodOptionalLike(zodString);
   const zodStringActual = unwrapZodSchema<ZodString>(zodString);
   const props: TextFieldElementProps = {
@@ -68,7 +72,7 @@ export const ZodTextField = ({
     minRows: multiline ? 2 : undefined,
     maxRows: multiline ? 8 : undefined,
   };
-  if (!isPassword) {
+  if (!masked) {
     return <TextFieldElement {...props} />;
   }
   /*

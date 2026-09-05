@@ -14,7 +14,10 @@ export type NotificationsServiceConfig = z.infer<typeof NotificationsServiceConf
 
 export const PushbulletNotificationsConfig = NotificationsServiceConfig.extend({
   /** The Pushbullet API key */
-  apiKey: z.string().describe("Your Pushbullet access token, found under Settings in your Pushbullet account."),
+  apiKey: z
+    .string()
+    .meta({ secret: true })
+    .describe("Your Pushbullet access token, found under Settings in your Pushbullet account."),
 });
 export type PushbulletNotificationsConfig = z.infer<typeof PushbulletNotificationsConfig>;
 export const PushbulletServiceKey = "pushbullet";

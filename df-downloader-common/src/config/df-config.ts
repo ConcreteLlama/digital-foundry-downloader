@@ -11,6 +11,7 @@ export const DfConfig = z.object({
     .string()
     .optional()
     .nullable()
+    .meta({ secret: true })
     .describe(
       "The 'autologin' cookie from your browser after signing in to digitalfoundry.net. This is what lets the app see and download the members-only videos your account has access to."
     ),

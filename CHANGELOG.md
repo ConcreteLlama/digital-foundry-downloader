@@ -18,6 +18,17 @@ The image is also about 1.3GB smaller than 2.8.0 despite gaining all of that, be
   - The log says outright which one each is running on, and names the card - "is it using my GPU" should not need interpreting. It also distinguishes a card you turned off from one it could not use, and says how many of a model's layers actually fit, since a partial fit is often slower than not using the card at all
   - In Docker this needs the card passed in - `--device=/dev/dri` for Intel and AMD, or the NVIDIA container toolkit with the graphics capability enabled. Without it nothing breaks; it simply stays on the processor
 ### Enhancements
+- A System page saying what this install actually is
+  - Under System, About. Version, branch, the commit it was built from, the machine, how much memory it has, which of the extra tools it found, where its folders are, and how much content you have
+  - Also the size and version of each stored file, which is what answers whether something is in a strange state after an upgrade - a store still on an old version, or one that has grown far past what it should be. Sizes and versions only; nothing of what they contain
+  - The commit is the useful part. A version number only changes at a release, so between two releases there was no way to look at a running install and tell whether a given fix was in it - which has already wasted an afternoon deciding whether a rebuild had worked
+  - Copy all puts the lot on the clipboard, for pasting into an issue
+- A diagnostic report you can attach to a bug report
+  - Under System, Logs. One zip with the log files, the system details above, and your settings - choose which parts go in
+  - Every key, token and cookie is removed from the settings first. Which fields those are is declared on the settings themselves, so the same declaration that hides a field on screen removes it from the report - one list, not two that can drift apart
+  - Anything whose name looks like a credential is removed whether or not it was declared, and a check refuses to build the app if a new credential-shaped setting is added without someone saying which it is
+  - Removed rather than deleted - you still see that a key was set, which is often the actual question. The log is not filtered though, so it is worth a look before posting one publicly
+  - The stored data itself can be included, but has to be ticked deliberately and is labelled for what it is. It holds where every file was saved, the text of every article found and what you have watched, none of which can be removed the way a password can - so it is for sending to someone looking into a data problem, not for attaching to a public issue
 - Far less noise in the log
   - Confirming what is already available no longer writes a line per item. On a thousand-item library that was a thousand lines in the same millisecond, every time your subscription tier was checked - it buried everything worth reading and made the log tedious to search or send to anyone
   - The per-file detail from scanning your download folder has moved to debug as well. Both are still there if you turn the level up

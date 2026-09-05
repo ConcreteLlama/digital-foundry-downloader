@@ -142,6 +142,8 @@ ENV HUSKY=0
 # the app reports it at startup.
 ARG GIT_BRANCH=unknown
 ENV GIT_BRANCH=${GIT_BRANCH}
+ARG GIT_COMMIT=unknown
+ENV GIT_COMMIT=${GIT_COMMIT}
 
 # Install dependencies for all three workspaces in one pass. Copying just the
 # package.json files first means this layer stays cached across source-only
@@ -233,6 +235,8 @@ ENV CONTAINER_ENV=docker
 # Skip husky's git-hook install - there's no .git dir in the build context.
 ARG GIT_BRANCH=unknown
 ENV GIT_BRANCH=${GIT_BRANCH}
+ARG GIT_COMMIT=unknown
+ENV GIT_COMMIT=${GIT_COMMIT}
 
 # The built application, with dev dependencies already pruned away above.
 COPY --from=app-builder /usr/src/app /usr/src/app

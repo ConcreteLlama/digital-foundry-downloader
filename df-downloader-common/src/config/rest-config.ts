@@ -13,6 +13,9 @@ export const HttpsConfig = z
     keyPath: z
       .string()
       .optional()
+      // Where the key is, not the key. Marked explicitly so the check for
+      // credential-shaped names has a recorded answer rather than a gap.
+      .meta({ secret: false })
       .describe("Path to the TLS private key file. Leave blank to have a self-signed certificate generated instead."),
     certPath: z.string().optional().describe("Path to the TLS certificate file that pairs with the private key."),
     caPath: z.string().optional().describe("Path to the CA bundle used to verify client certificates."),

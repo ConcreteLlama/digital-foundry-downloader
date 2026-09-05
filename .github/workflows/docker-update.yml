@@ -58,6 +58,7 @@ jobs:
           version=${{ env.VERSION }}
         build-args: |
           GIT_BRANCH=${{ github.ref_name }}
+          GIT_COMMIT=${{ github.sha }}
         # Without this every build recompiles whisper.cpp and re-runs npm ci
         # from nothing, because runners are ephemeral and no layer cache
         # survives between them.

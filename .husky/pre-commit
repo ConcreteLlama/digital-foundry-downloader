@@ -22,6 +22,8 @@ if git diff --cached --name-only | grep -qE '(^|/)package(-lock)?\.json$'; then
 fi
 
 npm run check-build
+# Guards the diagnostic bundle's redaction - see check-secrets.js.
+npm run check-secrets
 npm run validate-changelog
 npm run build-changelog
 git add CHANGELOG.md

@@ -95,6 +95,7 @@ export const PlexMediaServerConfig = MediaServerConfigBase.extend({
   token: z
     .string()
     .default("")
+    .meta({ secret: true })
     .describe(
       "An X-Plex-Token. Get one by opening any item in Plex Web, choosing Get Info then View XML, and copying the X-Plex-Token from the resulting URL."
     ),
@@ -105,6 +106,7 @@ export const JellyfinMediaServerConfig = MediaServerConfigBase.extend({
   apiKey: z
     .string()
     .default("")
+    .meta({ secret: true })
     .describe("An API key, created under Dashboard then API Keys in Jellyfin."),
   /*
    * Play state needs to know WHOSE it is, which is a user id - not a login.
@@ -126,7 +128,7 @@ export const JellyfinMediaServerConfig = MediaServerConfigBase.extend({
    * Plex needs no equivalent: an X-Plex-Token already identifies a user.
    */
   userId: z.string().optional().describe("Set by signing in - not edited by hand."),
-  userToken: z.string().optional().describe("Set by signing in - not edited by hand."),
+  userToken: z.string().optional().meta({ secret: true }).describe("Set by signing in - not edited by hand."),
 });
 export type JellyfinMediaServerConfig = z.infer<typeof JellyfinMediaServerConfig>;
 

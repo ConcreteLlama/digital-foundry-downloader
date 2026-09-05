@@ -21,6 +21,7 @@ import { API_URL } from "../../config";
 import { monoFontFamily } from "../../themes/build-theme";
 import { fetchJson } from "../../utils/fetch";
 import { Loading } from "../general/loading.component";
+import { DiagnosticReport } from "../system/diagnostic-report.component";
 
 /** How often the live tail asks for anything new. */
 const POLL_INTERVAL_MS = 2000;
@@ -527,6 +528,21 @@ export const LogsView = () => {
     </Paper>
   );
 };
+
+/**
+ * The log, and below it the report that packages the log up with everything
+ * around it.
+ *
+ * Together rather than on separate pages: this is where someone lands when
+ * something has gone wrong, and the report is only useful to someone who has
+ * just discovered the log alone does not carry enough context.
+ */
+export const LogsPage = () => (
+  <>
+    <LogsView />
+    <DiagnosticReport />
+  </>
+);
 
 /**
  * One entry. Multi-line messages (stack traces, mostly) keep their line breaks

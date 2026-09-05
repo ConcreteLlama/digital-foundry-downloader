@@ -2,7 +2,11 @@ import { z } from "zod";
 
 export const DeepgramConfig = z.object({
   /** Deepgram API key */
-  apiKey: z.string().min(30).describe("Your Deepgram API key, created in the Deepgram console."),
+  apiKey: z
+    .string()
+    .min(30)
+    .meta({ secret: true })
+    .describe("Your Deepgram API key, created in the Deepgram console."),
 });
 export type DeepgramConfig = z.infer<typeof DeepgramConfig>;
 
@@ -10,6 +14,7 @@ export const GoogleSttConfig = z.object({
   apiKey: z
     .string()
     .min(30)
+    .meta({ secret: true })
     .describe("Your Google Cloud API key, with the Speech-to-Text API enabled on the project it belongs to."),
 });
 export type GoogleSttConfig = z.infer<typeof GoogleSttConfig>;
