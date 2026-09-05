@@ -53,6 +53,16 @@ const NON_SPEECH_MARKERS = /^\[(?:BLANK_AUDIO|SILENCE|NO SPEECH|INAUDIBLE)\]$/i;
 const SEGMENT_LINE = /\[(\d{2}):(\d{2}):(\d{2})\.\d{3}\s*-->\s*(\d{2}):(\d{2}):(\d{2})\.(\d{3})\]/g;
 
 const PROGRESS_LINE = /progress\s*=\s*(\d+)\s*%/g;
+/*
+ * Which compute backend whisper.cpp actually chose.
+ *
+ * Reported because "is it using my GPU?" is otherwise unanswerable from the
+ * log: llama-server says so plainly on the analysis side, while whisper-cli
+ * simply gets on with it in silence, so an enabled GPU that is not being used
+ * looks identical to one that is. Logged once per run - these lines arrive in
+ * the same stderr stream as progress, which is noisy by design.
+ */
+const BACKEND_LINE = /^(?:load_backend|whisper_backend_init_gpu|ggml_vulkan):.*$/gm;
 
 /** Seconds into the audio, from a segment line's end timestamp. */
 const segmentEndSeconds = (chunk: string): number | undefined => {
@@ -292,6 +302,7 @@ export class WhisperSubtitleGenerator implements SubtitleGenerator {
         `Transcribing ${filename} with Whisper (${this.config.model}, ${this.threads} threads) - this can take a while for long content`
       );
       const startedAt = Date.now();
+      let reportedBackend = false;
       const transcribeDetail = `${this.config.model}, ${this.threads} threads`;
       /*
        * Every transcription spawns a fresh one-shot process (see destroy()),
@@ -318,6 +329,13 @@ export class WhisperSubtitleGenerator implements SubtitleGenerator {
         args,
         modelPath,
         (chunk) => {
+          if (!reportedBackend) {
+            const backends = chunk.match(BACKEND_LINE);
+            if (backends?.length) {
+              reportedBackend = true;
+              logger.log("info", `Whisper compute backend: ${backends.map((line) => line.trim()).join("; ")}`);
+            }
+          }
           // A single chunk can carry several progress lines; only the most
           // recent one is meaningful.
           let percent: number | undefined;

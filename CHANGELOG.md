@@ -14,8 +14,12 @@ The image is also about 1.3GB smaller than 2.8.0 despite gaining all of that, be
   - One image, any card. It uses Vulkan rather than a vendor toolkit, so NVIDIA, AMD and Intel all work with nothing extra to install - you only have to pass the card through to the container
   - Switches for each under Settings, in Subtitles and in AI Analysis. On by default, and worth turning off for whichever of the two you care less about if the same card is already busy transcoding for a media server, where competing for it can be slower than not using it
   - A machine with no usable card carries on exactly as before, on the processor, and says so in the log instead of failing in a way that looks like the feature is broken
+  - The log says which backend each one actually chose, so "is it using my card" is answerable at a glance rather than by guessing. Subtitles previously said nothing at all either way
   - In Docker this needs the card passed in - `--device=/dev/dri` for Intel and AMD, or the NVIDIA container toolkit with the graphics capability enabled. Without it nothing breaks; it simply stays on the processor
 ### Enhancements
+- Far less noise in the log
+  - Confirming what is already available no longer writes a line per item. On a thousand-item library that was a thousand lines in the same millisecond, every time your subscription tier was checked - it buried everything worth reading and made the log tedious to search or send to anyone
+  - The per-file detail from scanning your download folder has moved to debug as well. Both are still there if you turn the level up
 - The image is around 1.3GB smaller than the previous release
   - It no longer ships the compiler toolchain used to build it, nor the build-time dependencies that were installed and then discarded - about a gigabyte of them were still being carried in an earlier layer despite being removed later
   - Pulls and updates are correspondingly quicker, and it is smaller than 2.8.0 even with the graphics support added

@@ -1013,8 +1013,10 @@ export class DigitalFoundryContentManager {
         continue;
       }
       if (closestMatch.percentageDiff > 10) {
+        // debug, not info: this fires per candidate file during a scan of the
+        // whole destination directory, and says nothing anyone acts on.
         logger.log(
-          "info",
+          "debug",
           `Closest match for ${closestMatch.contentEntry.key} is ${closestMatch.mediaInfo.formatString} but size differs by ${closestMatch.percentageDiff.toFixed(2)}% - skipping`
         );
         continue;
@@ -1760,16 +1762,27 @@ export class DigitalFoundryContentManager {
     }
     const allContentStatuses = await this.db.getAllContentStatusInfos();
     const toRefresh: string[] = [];
+    /*
+     * Counted rather than logged per item. This runs over the whole library on
+     * every tier change, so at info it produced one line per entry - on a
+     * thousand-item library that is a thousand lines in the same millisecond,
+     * burying everything anyone actually wanted to read. The per-item detail
+     * is still there at debug for whoever needs it.
+     */
+    let alreadyKnown = 0;
     for (const [contentName, contentStatus] of Object.entries(allContentStatuses)) {
       const existingStatusRecord = contentStatus.availabilityInTiers[newTier];
       if (existingStatusRecord && existingStatusRecord !== DfContentAvailability.UNKNOWN) {
-        logger.log("info", `Existing content availability for ${contentName} - setting to ${existingStatusRecord}`);
+        logger.log("debug", `Existing content availability for ${contentName} - setting to ${existingStatusRecord}`);
+        alreadyKnown++;
         contentStatus.availability = existingStatusRecord;
       } else {
         contentStatus.availability = DfContentAvailability.UNKNOWN;
         toRefresh.push(contentName);
       }
     }
+    alreadyKnown &&
+      logger.log("info", `${alreadyKnown} items already had a known availability for ${newTier} and were carried over`);
     await this.db.setContentStatuses(allContentStatuses);
     if (toRefresh.length === 0) {
       return;
