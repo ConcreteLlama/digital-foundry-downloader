@@ -303,6 +303,14 @@ export class WhisperSubtitleGenerator implements SubtitleGenerator {
       );
       const startedAt = Date.now();
       let reportedBackend = false;
+      const backendLines: string[] = [];
+      const flushBackend = () => {
+        if (reportedBackend || !backendLines.length) {
+          return;
+        }
+        reportedBackend = true;
+        logger.log("info", `Whisper compute backend: ${backendLines.join("; ")}`);
+      };
       const transcribeDetail = `${this.config.model}, ${this.threads} threads`;
       /*
        * Every transcription spawns a fresh one-shot process (see destroy()),
@@ -329,11 +337,21 @@ export class WhisperSubtitleGenerator implements SubtitleGenerator {
         args,
         modelPath,
         (chunk) => {
+          /*
+           * Collected across chunks rather than logged from the first one that
+           * matches. ggml_vulkan announces itself over two lines - a "Found N
+           * Vulkan devices:" header and then the device itself - and stdio
+           * chunk boundaries fall wherever they like, so reporting on first
+           * sight reliably printed the header and dropped the device name,
+           * which is the only part anyone wants.
+           *
+           * Flushed when progress starts, since that means initialisation is
+           * done and nothing further is coming.
+           */
           if (!reportedBackend) {
             const backends = chunk.match(BACKEND_LINE);
             if (backends?.length) {
-              reportedBackend = true;
-              logger.log("info", `Whisper compute backend: ${backends.map((line) => line.trim()).join("; ")}`);
+              backendLines.push(...backends.map((line) => line.trim()));
             }
           }
           // A single chunk can carry several progress lines; only the most
@@ -343,6 +361,7 @@ export class WhisperSubtitleGenerator implements SubtitleGenerator {
             percent = Number(match[1]);
           }
           if (percent !== undefined) {
+            flushBackend();
             report(toOverallPercent(percent), transcribeDetail);
           }
         },
@@ -379,6 +398,9 @@ export class WhisperSubtitleGenerator implements SubtitleGenerator {
             waiting ? "Waiting for the analysis to finish" : `Loading ${this.config.model} model`
           )
       );
+      // A run short enough to emit no progress line at all still gets to say
+      // what it ran on.
+      flushBackend();
       logger.log("info", `Transcribed ${filename} in ${Math.round((Date.now() - startedAt) / 1000)}s`);
       if (!(await fileExists(srtPath))) {
         throw new Error(`Whisper produced no subtitle output for ${filename}`);
