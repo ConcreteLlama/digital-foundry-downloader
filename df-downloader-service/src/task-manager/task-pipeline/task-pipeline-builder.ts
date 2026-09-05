@@ -1,7 +1,9 @@
 import { InferTaskResult, Task } from "../task/task.js";
 import { TaskPipeline } from "./task-pipeline.js";
 import {
+  ChildPipeline,
   InferTaskTaskResultTuple,
+  TaskPipelineChildStep,
   TaskPipelineOpts,
   TaskPipelineStep,
   TaskPipelineStepNonNullable,
@@ -87,6 +89,37 @@ export class TaskPipelineBuilder<
     PIPELINE_TYPE
   > {
     this.tasksPipelineSteps.push(pipelineStep);
+    return this as any;
+  }
+
+  /**
+   * Adds a step that runs another pipeline.
+   *
+   * The child's steps queue in their own managers, so this step names no
+   * manager of its own - there is nothing here to queue. Its result is the
+   * child's reduced pipeline result, and `continueOnFail` / `continueOnCancel`
+   * mean exactly what they mean for a task step.
+   *
+   * `contextCreator` returning null skips the step, matching `taskCreator`.
+   */
+  nest<CHILD_CONTEXT, CHILD_RESULT>(
+    pipelineStep: Omit<
+      TaskPipelineChildStep<
+        LAST_TASK_RESULT,
+        InferTaskTaskResultTuple<TASK_PIPELINE_STEPS>,
+        PIPELINE_CONTEXT,
+        CHILD_CONTEXT,
+        CHILD_RESULT
+      >,
+      "pipeline"
+    > & { pipeline: ChildPipeline<CHILD_CONTEXT, CHILD_RESULT> }
+  ): TaskPipelineBuilder<
+    CHILD_RESULT | undefined,
+    [...TASK_PIPELINE_STEPS, TaskPipelineStep<any, any, any, PIPELINE_CONTEXT>],
+    PIPELINE_CONTEXT,
+    PIPELINE_TYPE
+  > {
+    this.tasksPipelineSteps.push(pipelineStep as any);
     return this as any;
   }
 

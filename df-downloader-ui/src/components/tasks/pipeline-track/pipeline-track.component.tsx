@@ -17,6 +17,7 @@ import {
   PipelineStepView,
   PipelineStepVisualState,
 } from "./pipeline-step-state";
+import CallSplitIcon from "@mui/icons-material/CallSplit";
 import { stepWidthPercents } from "./step-weights";
 
 /**
@@ -41,6 +42,10 @@ export const STEP_SPECS: Record<
   skipped: { colour: "text.disabled", icon: BlockIcon, fill: "transparent" },
   not_applicable: { colour: "text.disabled", icon: RemoveIcon, fill: "transparent" },
   pending: { colour: "text.disabled", icon: RadioButtonUncheckedIcon, fill: "transparent" },
+  // Drawn as running, because it is - the work is simply happening in a
+  // pipeline of its own. The icon differs so the track still says where to
+  // look for it, rather than showing a running step with no task behind it.
+  delegated: { colour: "primary.main", icon: CallSplitIcon, fill: "primary.main" },
 };
 
 export type PipelineTrackProps = {

@@ -379,7 +379,10 @@ export class DfTaskManager {
     return managedTask;
   }
 
-  private addTaskPipelineExecution(pipelineExecution: PipelineExecutionTypes) {
+  private addTaskPipelineExecution(
+    pipelineExecution: PipelineExecutionTypes,
+    { isChild = false }: { isChild?: boolean } = {}
+  ) {
     this.pipelineExecutions.set(pipelineExecution.id, pipelineExecution);
     // Step boundaries and each step task's own coarse state transitions are
     // what actually move a pipeline through its lifecycle, so they're the
@@ -390,11 +393,34 @@ export class DfTaskManager {
     });
     pipelineExecution.on("stepCompleted", () => this.notifyChanged());
     pipelineExecution.on("completed", () => this.notifyChanged());
+    /*
+     * A nested step's pipeline is tracked the same way any other is, so it
+     * appears in the list where an independently started one would - a
+     * transcription is a thing in its own right, whether a download asked for
+     * it or someone did. The parent's step points at it rather than
+     * duplicating it.
+     *
+     * Recursive by construction: registering the child subscribes to its own
+     * children too.
+     */
+    pipelineExecution.on("childPipelineStarted", ({ execution }: any) => {
+      this.addTaskPipelineExecution(execution, { isChild: true });
+    });
     this.notifyChanged();
     // Every pipeline is registered here, so this is the one place persistence
     // needs to hook into - it covers all pipeline types without the generic
     // pipeline machinery needing to know anything about storage.
     const persist = () => {
+      /*
+       * A child is never persisted on its own.
+       *
+       * Its parent's record already resumes at the nested step, which
+       * re-creates the child from scratch - persisting it as well would
+       * resurrect it independently on restart and run the same work twice.
+       */
+      if (isChild) {
+        return;
+      }
       const activeDb = serviceLocator.activePipelineDb;
       if (!activeDb) {
         return;
@@ -418,7 +444,11 @@ export class DfTaskManager {
     pipelineExecution.once("completed", (result: any) => {
       const activeDb = serviceLocator.activePipelineDb;
       const completedDb = serviceLocator.completedPipelineDb;
-      if (activeDb && completedDb) {
+      // Children are not archived either, for the same reason they are not
+      // persisted: the parent's record is the durable one, and archiving both
+      // would list the same work twice in history and grow a file the docs
+      // ask to keep lean.
+      if (activeDb && completedDb && !isChild) {
         const persisted = makePersistedPipeline(pipelineExecution);
         completedDb
           .add({
@@ -1613,6 +1643,7 @@ export const makeTaskPipelineInfo = (
           // it per snapshot means changing the setting mid-download updates
           // what the UI says will happen - which is the truthful answer.
           notApplicableReason: notApplicableReasons[step.name],
+          childPipelineId: step.childPipelineId,
         };
         return acc;
       }, {} as Record<string, StepDetails>),

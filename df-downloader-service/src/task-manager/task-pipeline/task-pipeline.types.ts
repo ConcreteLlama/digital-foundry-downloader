@@ -53,6 +53,8 @@ export type PipelineStepInfo<TASK_PIPELINE_STEP extends TaskPipelineStep<any, an
     name: string;
     continueOnFail?: boolean;
     continueOnCancel?: boolean;
+    /** The pipeline this step is waiting on, when the step is a nested one. */
+    childPipelineId?: string;
   };
   managedTask?: ManagedTask<InferTaskType<TASK_PIPELINE_STEP>>;
   positionInfo?: PriorityPositionInfo | null;

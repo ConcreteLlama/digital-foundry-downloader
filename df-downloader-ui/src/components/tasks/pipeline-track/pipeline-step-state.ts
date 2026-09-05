@@ -23,6 +23,15 @@ export type PipelineStepVisualState =
   | "cancelled"
   | "skipped"
   | "not_applicable"
+  /**
+   * The step is running, but the work is a pipeline of its own.
+   *
+   * It owns no task - that is the point of a nested step - so without its own
+   * state it would read as pending or, once the parent moved past it, as
+   * skipped. Neither is true, and both make a download look stalled while a
+   * transcription it started is busy elsewhere.
+   */
+  | "delegated"
   | "pending";
 
 export type PipelineStepView = {
@@ -32,6 +41,8 @@ export type PipelineStepView = {
   /** Why it will not run, for not_applicable. Shown as a tooltip. */
   reason?: string;
   task?: TaskInfo;
+  /** The pipeline this step handed its work to, if it is a nested one. */
+  childPipelineId?: string;
   isCurrent: boolean;
 };
 
@@ -72,7 +83,8 @@ export const derivePipelineStepViews = (pipeline: TaskPipelineInfo): PipelineSte
     const details = steps[stepId];
     const name = details?.name ?? stepId;
     const reason = details?.notApplicableReason;
-    const base = { stepId, name, task, isCurrent: stepId === pipelineStatus.currentStep };
+    const childPipelineId = details?.childPipelineId;
+    const base = { stepId, name, task, childPipelineId, isCurrent: stepId === pipelineStatus.currentStep };
 
     if (task?.carriedOver) {
       return { ...base, state: "carried_over" as const };
@@ -80,6 +92,12 @@ export const derivePipelineStepViews = (pipeline: TaskPipelineInfo): PipelineSte
     const fromState = task?.status?.state ? fromTaskState(task.status.state) : undefined;
     if (fromState) {
       return { ...base, state: fromState };
+    }
+    // Checked before the positional fallback below: a nested step is only ever
+    // the current one while its child runs, and once the parent has moved past
+    // it the child's own outcome is what happened - not "skipped".
+    if (childPipelineId && stepId === pipelineStatus.currentStep) {
+      return { ...base, state: "delegated" as const };
     }
     // No terminal state of its own. Position decides: a step the pipeline has
     // already moved past did not run, one it has not reached yet still might.

@@ -72,6 +72,7 @@ const STEP_STATE_LABELS: Record<PipelineStepVisualState, string> = {
   skipped: "skipped",
   not_applicable: "not needed",
   pending: "pending",
+  delegated: "running separately",
 };
 
 const STEP_STATE_CHIP_COLOURS: Record<
@@ -81,6 +82,7 @@ const STEP_STATE_CHIP_COLOURS: Record<
   done: "success",
   carried_over: "success",
   running: "info",
+  delegated: "info",
   paused: "warning",
   failed: "error",
   cancelled: "default",

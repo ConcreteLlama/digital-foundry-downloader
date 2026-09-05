@@ -80,6 +80,60 @@ export type TaskPipelineTaskCreator<
   | TaskPipelineTaskCreatorNonNullable<PREVIOUS_TASK_RESULT, PREVIOUS_TASK_RESULTS, TASK, PIPELINE_CONTEXT>
   | TaskPipelineTaskCreatorNullable<PREVIOUS_TASK_RESULT, PREVIOUS_TASK_RESULTS, TASK, PIPELINE_CONTEXT>;
 
+/**
+ * A step that runs another pipeline rather than a single task.
+ *
+ * Exists so the download pipeline can reach the subtitles and analysis
+ * pipelines instead of carrying its own copy of the one task each of them
+ * happens to start with - and so those pipelines are then free to become
+ * several steps, which a single-task step could never accommodate.
+ *
+ * The child is started by the parent execution directly and takes no slot in
+ * any manager. That is the whole point: a task wrapping a pipeline would hold
+ * a running slot for the duration of work happening in other managers, which
+ * is the mistake LocalComputeGate already taught this codebase - see
+ * docs/TASKS_AND_PIPELINES.md.
+ *
+ * `contextCreator` returning null skips the step, exactly as a `taskCreator`
+ * returning null does.
+ */
+export type TaskPipelineChildStep<
+  PREVIOUS_TASK_RESULT,
+  PREVIOUS_TASK_RESULTS extends any[],
+  PIPELINE_CONTEXT,
+  CHILD_CONTEXT,
+  CHILD_RESULT
+> = {
+  readonly stepName: string;
+  readonly continueOnFail?: boolean;
+  readonly continueOnCancel?: boolean;
+  /** The pipeline to run. Reusable, as pipelines already are. */
+  readonly pipeline: ChildPipeline<CHILD_CONTEXT, CHILD_RESULT>;
+  readonly contextCreator: (
+    args: TaskCreatorArgs<PREVIOUS_TASK_RESULT, PREVIOUS_TASK_RESULTS, PIPELINE_CONTEXT>
+  ) => CHILD_CONTEXT | null;
+};
+
+/**
+ * The parts of TaskPipeline a parent needs, named structurally.
+ *
+ * Structural rather than importing TaskPipeline itself, which would be a
+ * circular import - the pipeline module already imports the execution.
+ */
+export type ChildPipeline<CHILD_CONTEXT, CHILD_RESULT> = {
+  readonly pipelineType: string;
+  readonly tasksPipelineSteps: any[];
+  readonly opts: any;
+  __childResult?: CHILD_RESULT;
+  __childContext?: CHILD_CONTEXT;
+};
+
+/** Distinguishes the two kinds of step at runtime. */
+export const isChildPipelineStep = (
+  step: unknown
+): step is TaskPipelineChildStep<any, any, any, any, any> =>
+  Boolean(step && typeof step === "object" && "pipeline" in step && "contextCreator" in step);
+
 export type BaseTaskPipelineStep<
   PREVIOUS_TASK_RESULT,
   PREVIOUS_TASK_RESULTS extends any[],

@@ -37,6 +37,16 @@ const StepDetails = z.object({
      * parse unchanged.
      */
     notApplicableReason: z.string().optional(),
+    /**
+     * The pipeline this step is waiting on, when the step runs one.
+     *
+     * A nested step owns no task, so it would otherwise show as a blank row.
+     * The child is tracked as a pipeline in its own right - it appears in the
+     * list exactly where an independently started one would - and this is the
+     * thread back to it, so the parent can say what it is waiting for rather
+     * than looking stalled.
+     */
+    childPipelineId: z.string().optional(),
 });
 export type StepDetails = z.infer<typeof StepDetails>;
 

@@ -19,6 +19,7 @@ import {
   TaskPipelineExecutionOpts,
   TaskPipelineOpts,
   TaskPipelineStep,
+  isChildPipelineStep,
 } from "./task-pipeline.types.internal.js";
 import { PipelineStepInfo } from "./task-pipeline.types.js";
 
@@ -42,9 +43,30 @@ export class TaskPipelineExecution<
     index: number;
     task: ManagedTask<InferTaskType<TASK_PIPELINE_STEPS[number]>>;
   };
+  /**
+   * A nested step has started a pipeline of its own.
+   *
+   * Announced rather than registered here, because this layer knows nothing
+   * about DfTaskManager and should not: the app layer listens and tracks the
+   * child exactly as it tracks any pipeline, which is what makes a nested
+   * transcription appear on the Activity page in its own right rather than
+   * being hidden inside whatever started it.
+   */
+  childPipelineStarted: {
+    index: number;
+    execution: TaskPipelineExecution<any, any, any, any>;
+  };
 }> {
   readonly results: PartialTuple<InferTaskTaskResultTuple<TASK_PIPELINE_STEPS>>;
   private readonly tasks: PartialTuple<InferManagedTaskTuple<TASK_PIPELINE_STEPS>>;
+  /**
+   * Child pipelines started by nested steps, by step index.
+   *
+   * Held so cancel and force can reach them. A nested step has no entry in
+   * `tasks` - it owns no task of its own - so anything walking steps has to
+   * look here as well.
+   */
+  private readonly childExecutions: (TaskPipelineExecution<any, any, any, any> | undefined)[];
   private _pipelineResult: PipelineExecutionResult<TASK_PIPELINE_STEPS, PIPELINE_SUCCESS_RESULT_TYPE> | undefined;
   private currentStepIndex = 0;
   /**
@@ -56,6 +78,17 @@ export class TaskPipelineExecution<
    * button again at every step.
    */
   private forceRun = false;
+  /**
+   * Someone asked this pipeline to stop, whether or not anything could act on
+   * it yet.
+   *
+   * Needed because cancelling a running task is a per-type capability that
+   * most types do not implement: `cancel()` returns cleanly, the step runs to
+   * completion anyway, and without this the pipeline would then advance to its
+   * next step - so pressing Stop produced a finished pipeline. The work that
+   * was already in flight cannot be unmade, but nothing new starts after it.
+   */
+  private cancelRequested = false;
   private started: boolean = false;
   readonly id: string;
   private _startTime?: Date;
@@ -70,6 +103,7 @@ export class TaskPipelineExecution<
     super();
     this.results = pipelineSteps.map(() => undefined) as any;
     this.tasks = pipelineSteps.map(() => undefined) as any;
+    this.childExecutions = pipelineSteps.map(() => undefined);
     const label = executionOpts.label || `${pipelineType}-pipeline`;
     this.id = makeRunUniqueId(`${label}-`);
     this.log = makeLogger(this.id, executionOpts.logger);
@@ -91,10 +125,129 @@ export class TaskPipelineExecution<
     return this._startTime;
   }
 
+  /**
+   * What a step does when it finishes, whichever kind of step it is.
+   *
+   * Pulled out of the task path so a nested pipeline gets identical treatment:
+   * continueOnFail and continueOnCancel are the parent's policy about a step,
+   * and it would be a trap for them to mean one thing for a task and another
+   * for a child pipeline.
+   */
+  private handleStepResult(index: number, result: any, stepName: string) {
+    this.emit("stepCompleted", { index, result: result as any });
+    this.results[index] = result;
+    const pipelineStep = this.pipelineSteps[index];
+    if (this.cancelRequested) {
+      this.log("info", `Step ${index} ("${stepName}") finished after a stop was requested - not continuing`);
+      this.emit("completed", { status: "cancelled", results: this.results });
+      return;
+    }
+    if (isTaskCancelledResult(result)) {
+      if (pipelineStep.continueOnCancel) {
+        this.log("info", `Task ${index} ("${stepName}") was cancelled but pipeline step is configured to continue on cancel`);
+        this.runNextTask(undefined, ++this.currentStepIndex);
+      } else {
+        this.emit("completed", { status: "cancelled", results: this.results });
+      }
+    } else if (isTaskFailedResult(result)) {
+      if (pipelineStep.continueOnFail) {
+        this.log("info", `Task ${index} ("${stepName}") failed but pipeline step is configured to continue on fail`);
+        this.runNextTask(undefined, ++this.currentStepIndex);
+      } else {
+        this.emit("completed", { status: "failed", results: this.results, error: result.error });
+      }
+    } else if (index === this.pipelineSteps.length - 1) {
+      this.log("info", `Index ${index} ("${stepName}") is last task, emitting completed event`);
+      this.emit("completed", {
+        status: "success",
+        results: this.results,
+        finalResult: result.result,
+        // TODO: Remove the as any here and correctly type
+        pipelineResult: this.reduceResults() as any,
+      });
+    } else {
+      this.runNextTask(result.result, ++this.currentStepIndex);
+    }
+  }
+
+  /** Nothing to run here - move on, or finish if this was the last step. */
+  private skipStep(index: number, stepName: string) {
+    this.log("info", `Task step ${index} ("${stepName}") returned null, skipping`);
+    if (index === this.pipelineSteps.length - 1) {
+      this.emit("completed", {
+        status: "success",
+        results: this.results,
+        finalResult: undefined as any,
+        // TODO: Remove the as any here and correctly type
+        pipelineResult: this.reduceResults() as any,
+      });
+    } else {
+      this.runNextTask(undefined, ++this.currentStepIndex);
+    }
+  }
+
+  /**
+   * Runs a nested pipeline as if it were a task.
+   *
+   * The child is constructed and started here rather than through a manager,
+   * so it holds no running slot anywhere - its own steps queue in their proper
+   * managers exactly as they do when that pipeline is run on its own. Priority
+   * and the forced flag are handed down, or forcing a download would stop dead
+   * at the first nested boundary, which is the bug the sticky forceRun flag
+   * exists to prevent.
+   */
+  private runChildPipeline(previousResult: any, index: number, pipelineStep: any) {
+    const childContext = pipelineStep.contextCreator({
+      context: this.context,
+      previousTaskResult: previousResult,
+      allResults: this.results,
+    });
+    if (childContext === null || childContext === undefined) {
+      this.skipStep(index, pipelineStep.stepName);
+      return;
+    }
+    const child: TaskPipelineExecution<any, any, any, any> = new TaskPipelineExecution(
+      pipelineStep.pipeline.pipelineType,
+      childContext,
+      pipelineStep.pipeline.tasksPipelineSteps,
+      pipelineStep.pipeline.opts,
+      {
+        ...this.executionOpts,
+        priority: this.forceRun ? FORCED_PRIORITY : this.executionOpts.priority,
+        label: `${this.id}-${pipelineStep.pipeline.pipelineType}`,
+      }
+    );
+    this.childExecutions[index] = child;
+    this.emit("childPipelineStarted", { index, execution: child });
+    child.once("completed", (childResult: any) => {
+      /*
+       * A pipeline result and a task result already have the same three
+       * shapes, so this is a rename rather than a translation: the child's
+       * reduced result becomes the step's value, and the parent's existing
+       * handling of failure and cancellation applies unchanged.
+       */
+      const asTaskResult =
+        childResult.status === "success"
+          ? { status: "success", result: childResult.pipelineResult }
+          : childResult.status === "cancelled"
+          ? { status: "cancelled" }
+          : { status: "failed", error: childResult.error };
+      this.handleStepResult(index, asTaskResult, pipelineStep.stepName);
+    });
+    if (this.forceRun) {
+      child.forceRunNow();
+    }
+    child.start();
+  }
+
   private runNextTask(previousResult: any, index: number) {
     this.log("info", "Running next task", { index });
     const pipelineStep = this.pipelineSteps[index];
     if (!pipelineStep) {
+      return;
+    }
+    if (isChildPipelineStep(pipelineStep)) {
+      this.runChildPipeline(previousResult, index, pipelineStep);
       return;
     }
     const task: Task<any, any, any> = pipelineStep.taskCreator({
@@ -103,18 +256,7 @@ export class TaskPipelineExecution<
       allResults: this.results,
     });
     if (!task) {
-      this.log("info", `Task step ${index} ("${pipelineStep.stepName}") returned null, skipping`);
-      if (index === this.pipelineSteps.length - 1) {
-        this.emit("completed", {
-          status: "success",
-          results: this.results,
-          finalResult: undefined as any,
-          // TODO: Remove the as any here and correctly type
-          pipelineResult: this.reduceResults() as any,
-        });
-      } else {
-        this.runNextTask(undefined, ++this.currentStepIndex);
-      }
+      this.skipStep(index, pipelineStep.stepName);
       return;
     }
     /*
@@ -136,47 +278,7 @@ export class TaskPipelineExecution<
     });
     managedTask.once("taskCompleted", ({ result }) => {
       this.log("info", `Got completed event for task ${index} ("${pipelineStep.stepName}")`);
-      this.emit("stepCompleted", { index, result: result as any });
-      this.results[index] = result;
-      if (isTaskCancelledResult(result)) {
-        if (pipelineStep.continueOnCancel) {
-          this.log(
-            "info",
-            `Task ${index} ("${pipelineStep.stepName}") was cancelled but pipeline step is configured to continue on cancel`
-          );
-          this.runNextTask(undefined, ++this.currentStepIndex);
-        } else {
-          this.emit("completed", {
-            status: "cancelled",
-            results: this.results,
-          });
-        }
-      } else if (isTaskFailedResult(result)) {
-        if (pipelineStep.continueOnFail) {
-          this.log(
-            "info",
-            `Task ${index} ("${pipelineStep.stepName}") failed but pipeline step is configured to continue on fail`
-          );
-          this.runNextTask(undefined, ++this.currentStepIndex);
-        } else {
-          this.emit("completed", {
-            status: "failed",
-            results: this.results,
-            error: result.error,
-          });
-        }
-      } else if (index === this.pipelineSteps.length - 1) {
-        this.log("info", `Index ${index} ("${pipelineStep.stepName}") is last task, emitting completed event`);
-        this.emit("completed", {
-          status: "success",
-          results: this.results,
-          finalResult: result.result,
-          // TODO: Remove the as any here and correctly type
-          pipelineResult: this.reduceResults() as any,
-        });
-      } else {
-        this.runNextTask(result.result, ++this.currentStepIndex);
-      }
+      this.handleStepResult(index, result, pipelineStep.stepName);
     });
   }
 
@@ -193,6 +295,12 @@ export class TaskPipelineExecution<
    */
   forceRunNow(): ForceStartOutcome {
     this.forceRun = true;
+    // A child inherits the flag when it is created, but one already running
+    // was created before this call and has to be told.
+    const child = this.childExecutions[this.currentStepIndex];
+    if (child && !child.isCompleted) {
+      return child.forceRunNow();
+    }
     const current = this.tasks[this.currentStepIndex];
     if (!current) {
       // Nothing queued yet - the flag alone is enough, and the step will be
@@ -212,6 +320,10 @@ export class TaskPipelineExecution<
         name: step.stepName,
         continueOnFail: step.continueOnFail,
         continueOnCancel: step.continueOnCancel,
+        // Set only for a nested step, and only once its child exists. The
+        // step itself runs nothing, so without this it would read as an empty
+        // row rather than as work happening elsewhere.
+        childPipelineId: this.childExecutions[index]?.id,
       },
       managedTask: this.tasks[index],
       positionInfo: task && includePositionInfo ? step.taskManager.getTaskPositionInfo(task.task.id) : undefined,
@@ -250,6 +362,18 @@ export class TaskPipelineExecution<
   cancel(): boolean {
     if (this.isCompleted) {
       return false;
+    }
+    this.cancelRequested = true;
+    /*
+     * A nested step owns no task of its own, so the task path below would find
+     * nothing and complete this pipeline while the child carried on running.
+     * Cancelling the child is enough: its completion arrives as a cancelled
+     * step result, and the parent's existing handling takes it from there -
+     * including continueOnCancel, if that is what the step asked for.
+     */
+    const child = this.childExecutions[this.currentStepIndex];
+    if (child && !child.isCompleted) {
+      return child.cancel();
     }
     const managedTask = this.getCurrentStep()?.managedTask as
       | { task?: { id: string; getTaskState(): string; cancel(): unknown }; taskManager?: { dequeueTask(taskId: string): boolean } }
