@@ -1,5 +1,5 @@
 import { Box, SxProps } from "@mui/material";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 export type ThumbProps = {
   src: string;
@@ -25,12 +25,23 @@ export type ThumbProps = {
 export const Thumb = ({ src, alt = "", width, aspectRatio = "16 / 9", onError, sx = {} }: ThumbProps) => {
   const [loaded, setLoaded] = useState(false);
   const [failed, setFailed] = useState(false);
+  const imgRef = useRef<HTMLImageElement | null>(null);
 
-  // A new src (the hqdefault retry, or the row being recycled onto different
-  // content) has to clear both flags or the old image's state sticks.
+  /*
+   * A new src (the hqdefault retry, or the row being recycled onto different
+   * content) has to clear both flags or the old image's state sticks.
+   *
+   * The `complete` check is what stops a cached image staying invisible. The
+   * browser can finish one before React has attached onLoad - which it always
+   * does on a second visit - and then the event never fires, `loaded` never
+   * flips, and the image sits at opacity 0 having downloaded perfectly. It
+   * showed up as a login page with no backdrop on reload, but it applies to
+   * every thumbnail in the app.
+   */
   useEffect(() => {
-    setLoaded(false);
     setFailed(false);
+    const node = imgRef.current;
+    setLoaded(Boolean(node?.complete && node.naturalWidth > 0));
   }, [src]);
 
   return (
@@ -49,6 +60,7 @@ export const Thumb = ({ src, alt = "", width, aspectRatio = "16 / 9", onError, s
       {!failed && src && (
         <Box
           component="img"
+          ref={imgRef}
           src={src}
           alt={alt}
           loading="lazy"
