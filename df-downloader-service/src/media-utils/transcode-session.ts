@@ -183,6 +183,39 @@ export type TranscodeSession = {
 };
 
 /**
+ * Whether this ffmpeg can actually encode with the GPU.
+ *
+ * Asked rather than assumed, because the answer is no for the binary this
+ * app ships. ffmpeg-static is a portable build with no hardware encoders
+ * compiled in, so requesting one produced "Unknown encoder 'h264_vaapi'" and
+ * killed the stream outright - on a machine whose GPU was perfectly capable,
+ * with a setting that said "use it if it is there".
+ *
+ * Probed once and remembered. It is a property of the binary, which does not
+ * change while the process runs.
+ */
+let vaapiSupport: Promise<boolean> | undefined;
+const canEncodeWithVaapi = (): Promise<boolean> => {
+  vaapiSupport ??= new Promise<boolean>((resolve) => {
+    const probe = spawn(ffmpegPath, ["-hide_banner", "-encoders"]);
+    let out = "";
+    probe.stdout?.on("data", (chunk) => (out += String(chunk)));
+    probe.on("error", () => resolve(false));
+    probe.on("close", () => {
+      const available = /\bh264_vaapi\b/.test(out);
+      logger.log(
+        "info",
+        available
+          ? "ffmpeg can encode video with the GPU (h264_vaapi)"
+          : "ffmpeg has no GPU encoder built in, so any video re-encoding will use the processor"
+      );
+      resolve(available);
+    });
+  });
+  return vaapiSupport;
+};
+
+/**
  * Builds the argument list.
  *
  * `-ss` before `-i` on purpose: that seeks by keyframe before decoding, which
@@ -200,7 +233,8 @@ const buildArgs = (
   filePath: string,
   startSeconds: number,
   plan: TranscodePlan,
-  hardwareAcceleration: PlayerConfig["hardwareAcceleration"]
+  hardwareAcceleration: PlayerConfig["hardwareAcceleration"],
+  hardwareAvailable: boolean
 ): string[] => {
   const args: string[] = ["-hide_banner", "-loglevel", "error"];
   if (startSeconds > 0) {
@@ -211,7 +245,7 @@ const buildArgs = (
    * Asking for a VAAPI device on a copy does nothing but risk failing to
    * initialise on a machine that has none.
    */
-  const useHardware = plan.video === "encode" && hardwareAcceleration === "auto";
+  const useHardware = plan.video === "encode" && hardwareAcceleration === "auto" && hardwareAvailable;
   if (useHardware) {
     args.push("-hwaccel", "vaapi", "-hwaccel_device", "/dev/dri/renderD128", "-hwaccel_output_format", "vaapi");
   }
@@ -259,12 +293,12 @@ const buildArgs = (
 const sweep = setInterval(prune, 60_000);
 sweep.unref?.();
 
-export const startTranscode = (
+export const startTranscode = async (
   filePath: string,
   startSeconds: number,
   plan: TranscodePlan,
   config: PlayerConfig
-): TranscodeSession | undefined => {
+): Promise<TranscodeSession | undefined> => {
   /*
    * A viewer seeking is not a second viewer.
    *
@@ -296,7 +330,11 @@ export const startTranscode = (
     );
     return undefined;
   }
-  const args = buildArgs(filePath, startSeconds, plan, config.hardwareAcceleration);
+  // Only asked when it could matter - a copy never touches an encoder, and
+  // probing on every audio-only stream would spawn a process to learn
+  // something irrelevant.
+  const hardwareAvailable = plan.video === "encode" ? await canEncodeWithVaapi() : false;
+  const args = buildArgs(filePath, startSeconds, plan, config.hardwareAcceleration, hardwareAvailable);
   logger.log(
     "info",
     `Transcoding ${filePath} from ${Math.round(startSeconds)}s (video: ${plan.video}, audio: ${plan.audio})`

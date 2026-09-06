@@ -481,7 +481,7 @@ export const makePlaybackRouter = (contentManager: DigitalFoundryContentManager)
     const requested = Number(req.query.t);
     const startSeconds = Number.isFinite(requested) && requested > 0 ? requested : 0;
 
-    const session = startTranscode(filePath, startSeconds, plan, playerConfig);
+    const session = await startTranscode(filePath, startSeconds, plan, playerConfig);
     if (!session) {
       return sendError(
         res,
