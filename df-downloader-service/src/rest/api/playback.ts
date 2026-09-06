@@ -226,10 +226,31 @@ export const makePlaybackRouter = (contentManager: DigitalFoundryContentManager)
     // where they overlap: same text, and serving it is a file read rather
     // than an ffmpeg run per request.
     const sidecarLanguages = new Set(subtitleTracks.map((track) => track.language.toLowerCase()));
-    const convertibleStreams = embeddedStreams.filter(
-      (stream) =>
-        isConvertibleSubtitleCodec(stream.codecName) && !sidecarLanguages.has((stream.language ?? "und").toLowerCase())
-    );
+    /*
+     * An untagged embedded track counts as a duplicate of a sidecar.
+     *
+     * Matching on language alone missed the common case: our own embedding
+     * does not always write a language tag, so the stream came back as "und",
+     * never matched the sidecar's "en", and both were offered. Both then
+     * played at once - the same line rendered twice, stacked, which reads as
+     * the subtitles being broken rather than as there being two of them.
+     *
+     * Safe because of where the pair comes from: generating subtitles writes
+     * a sidecar and embeds the same text in the same pass, so an unlabelled
+     * embedded track sitting beside a sidecar is that pass, not a second
+     * language somebody wanted. A track that names a different language is
+     * still offered.
+     */
+    const convertibleStreams = embeddedStreams.filter((stream) => {
+      if (!isConvertibleSubtitleCodec(stream.codecName)) {
+        return false;
+      }
+      const language = (stream.language ?? "und").toLowerCase();
+      if (sidecarLanguages.has(language)) {
+        return false;
+      }
+      return !(subtitleTracks.length > 0 && language === "und");
+    });
     subtitleTracks.push(
       ...convertibleStreams.map((stream, position) => {
         const language = stream.language ?? "und";

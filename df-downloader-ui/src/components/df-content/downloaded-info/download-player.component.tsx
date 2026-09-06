@@ -434,6 +434,15 @@ export const DownloadPlayer = ({
    * system back gesture and the browser's own chrome all leave fullscreen
    * without going through us.
    */
+  /*
+   * Whether the element is waiting for data rather than playing.
+   *
+   * Needed badly on a slow connection, and needed most on the transcoded
+   * path: that stream is produced as it is sent, so a slow link stalls it
+   * with no partial file to fall back on and nothing on screen to say so -
+   * just a black rectangle that could equally be a broken video.
+   */
+  const [buffering, setBuffering] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
   useEffect(() => {
     const onChange = () => {
@@ -965,6 +974,15 @@ export const DownloadPlayer = ({
       }}
       onPlay={() => setPlaying(true)}
       onPause={() => setPlaying(false)}
+      // waiting/stalled mean it has run out of data; playing/canplay mean it
+      // has some again. Between them they cover a slow link and a stream that
+      // has not started yet.
+      onWaiting={() => setBuffering(true)}
+      onStalled={() => setBuffering(true)}
+      onPlaying={() => setBuffering(false)}
+      onCanPlay={() => setBuffering(false)}
+      onSeeking={() => setBuffering(true)}
+      onSeeked={() => setBuffering(false)}
       /*
         Fills whatever the frame gives it, and decides nothing about layout.
 
@@ -1079,7 +1097,21 @@ export const DownloadPlayer = ({
       <IconButton size="small" aria-label={playing ? "Pause" : "Play"} onClick={togglePlay}>
         {playing ? <PauseIcon fontSize="small" /> : <PlayArrowIcon fontSize="small" />}
       </IconButton>
-      <Typography variant="caption" sx={{ fontFamily: monoFontFamily, whiteSpace: "nowrap" }}>
+      {/*
+        Fixed width and tabular figures, so the slider beside it does not move
+        as the digits change - and enough room that its handle at zero has
+        somewhere to sit rather than landing on top of the time.
+      */}
+      <Typography
+        variant="caption"
+        sx={{
+          fontFamily: monoFontFamily,
+          fontVariantNumeric: "tabular-nums",
+          whiteSpace: "nowrap",
+          minWidth: "4.5rem",
+          textAlign: "right",
+        }}
+      >
         {secondsToHHMMSS(positionSeconds)}
       </Typography>
       <Slider
@@ -1094,9 +1126,19 @@ export const DownloadPlayer = ({
         onChangeCommitted={(_event, value) => seekTo((Array.isArray(value) ? value[0] : value) * 1000)}
         disabled={!info.durationSeconds}
         aria-label="Seek"
-        sx={{ flexGrow: 1, marginX: 1 }}
+        // Margin, not padding: the handle overhangs the track at either end,
+        // and without room for it the handle sat on top of the time.
+        sx={{ flexGrow: 1, marginX: 1.5 }}
       />
-      <Typography variant="caption" sx={{ fontFamily: monoFontFamily, whiteSpace: "nowrap" }}>
+      <Typography
+        variant="caption"
+        sx={{
+          fontFamily: monoFontFamily,
+          fontVariantNumeric: "tabular-nums",
+          whiteSpace: "nowrap",
+          minWidth: "4.5rem",
+        }}
+      >
         {info.durationSeconds ? secondsToHHMMSS(Math.floor(info.durationSeconds)) : "--:--"}
       </Typography>
       <IconButton
@@ -1342,7 +1384,7 @@ export const DownloadPlayer = ({
         }}
       >
         {videoSurface}
-        {!playing && (
+        {(!playing || buffering) && (
           <Box
             sx={{
               position: "absolute",
@@ -1353,7 +1395,16 @@ export const DownloadPlayer = ({
               pointerEvents: "none",
             }}
           >
-            <PlayArrowIcon sx={{ fontSize: 64, color: "common.white", opacity: 0.85 }} />
+            {/*
+              Buffering wins over the play arrow. Both mean "not playing", but
+              only one of them is waiting for you - showing a play button while
+              the video is fetching invites a press that does nothing.
+            */}
+            {buffering ? (
+              <CircularProgress size={48} sx={{ color: "common.white", opacity: 0.85 }} />
+            ) : (
+              <PlayArrowIcon sx={{ fontSize: 64, color: "common.white", opacity: 0.85 }} />
+            )}
           </Box>
         )}
       </Box>
