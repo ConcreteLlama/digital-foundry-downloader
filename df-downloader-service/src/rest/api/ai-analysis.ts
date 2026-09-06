@@ -15,6 +15,7 @@ import { configService } from "../../config/config.js";
 import { DigitalFoundryContentManager } from "../../df-content-manager.js";
 import { estimateAnalysisCost } from "../../utils/ai/analyse.js";
 import { purgeEmptyAnalyses } from "../../utils/ai/purge-empty-analyses.js";
+import { getLocalSetupStatus } from "../../utils/ai/local-server.js";
 import { runLocalAnalysisSelfTest } from "../../utils/ai/self-test.js";
 import { makeProvider } from "../../utils/ai/providers/resolve.js";
 import { buildGameIndex } from "../../utils/ai/game-index.js";
@@ -289,6 +290,23 @@ export const makeAiAnalysisRouter = (contentManager: DigitalFoundryContentManage
    * test - a settings form asked a question, and "it is answering nonsense"
    * is an answer rather than a server error.
    */
+  /**
+   * What the local engine is doing right now, for something that is waiting.
+   *
+   * Exists because the self-test is one blocking request that can legitimately
+   * take minutes - the model is gigabytes, and the first run downloads it -
+   * during which a button that says "Testing..." is indistinguishable from a
+   * button that has hung. The server already tracks this for the analysis
+   * task's progress; this just makes it readable by anything else.
+   *
+   * A plain GET returning whatever is current, rather than anything tied to a
+   * particular test run. There is only ever one local server, so "what is it
+   * doing" has a single answer and no session to key it to.
+   */
+  router.get("/local-status", async (_req, res) => {
+    return sendResponse(res, { status: getLocalSetupStatus() });
+  });
+
   router.post("/self-test", async (req, res) => {
     await zodParseHttp(AiSelfTestRequest, req, res, async ({ config }) => {
       try {

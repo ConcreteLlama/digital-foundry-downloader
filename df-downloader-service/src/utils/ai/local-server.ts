@@ -140,6 +140,10 @@ const resolveThreads = (config: AiLocalProviderConfig) =>
 const VERBOSE_LOG_LEVELS = ["debug", "silly"];
 
 const HEALTH_TIMEOUT_MS = 10 * 60_000;
+/** How much of the server's output to keep for explaining a failed start. */
+const SERVER_OUTPUT_TAIL_LINES = 40;
+/** How much of that to actually quote - the end is the part that explains. */
+const SERVER_OUTPUT_REPORT_LINES = 5;
 const HEALTH_POLL_MS = 1000;
 
 /**
@@ -410,6 +414,17 @@ export class LocalLlamaServer {
      */
     const backendLines: string[] = [];
     /*
+     * A short tail of everything printed, kept whatever happens.
+     *
+     * Separate from backendLines, which stops collecting once the device
+     * verdict is out. A server that dies during startup says why on its way
+     * down - a missing library, a corrupt model, an allocation it could not
+     * make - and that line was being thrown away, leaving the caller to be
+     * told to go and read the log. Somebody looking at a settings page should
+     * not have to.
+     */
+    const recentOutput: string[] = [];
+    /*
      * Collecting stops once the verdict has been logged.
      *
      * Everything worth keeping is printed while the model loads, but the
@@ -420,6 +435,12 @@ export class LocalLlamaServer {
     const readOutput = (chunk: unknown) => {
       const text = String(chunk);
       logger.log("debug", `llama-server: ${text.trim()}`);
+      for (const line of text.split("\n").map((l) => l.trim()).filter(Boolean)) {
+        recentOutput.push(line);
+        if (recentOutput.length > SERVER_OUTPUT_TAIL_LINES) {
+          recentOutput.shift();
+        }
+      }
       if (backendReported) {
         return;
       }
@@ -443,7 +464,7 @@ export class LocalLlamaServer {
      */
     localSetupStatus = `Starting the local model (${AiLocalModels[this.config.model]?.label ?? this.config.model})`;
     try {
-      await this.waitForHealth(baseUrl, child);
+      await this.waitForHealth(baseUrl, child, recentOutput);
     } finally {
       // However that ended. A failed start must not leave a status insisting
       // the model is still on its way.
@@ -487,11 +508,24 @@ export class LocalLlamaServer {
    * process dies, so a bad binary or a corrupt model fails immediately rather
    * than after the full timeout.
    */
-  private async waitForHealth(baseUrl: string, child: ChildProcess) {
+  private async waitForHealth(baseUrl: string, child: ChildProcess, recentOutput: string[]) {
+    /*
+     * The server's own last words, where it left any.
+     *
+     * Trimmed to the last few lines: the useful part of a failed start is the
+     * end of it, and the whole tail would put a screen of loader chatter into
+     * a settings form's error box.
+     */
+    const lastWords = () => {
+      const tail = recentOutput.slice(-SERVER_OUTPUT_REPORT_LINES).join(" / ");
+      return tail ? ` It last said: ${tail}` : " It printed nothing before exiting.";
+    };
     const deadline = Date.now() + HEALTH_TIMEOUT_MS;
     while (Date.now() < deadline) {
       if (child.exitCode !== null || child.killed) {
-        throw new Error("Local analysis server exited before it was ready - see the log for why");
+        throw new Error(
+          `Local analysis server exited before it was ready (code ${child.exitCode ?? "killed"}).${lastWords()}`
+        );
       }
       try {
         const response = await fetch(`${baseUrl}/health`);
@@ -503,7 +537,9 @@ export class LocalLlamaServer {
       }
       await new Promise((resolve) => setTimeout(resolve, HEALTH_POLL_MS));
     }
-    throw new Error(`Local analysis server did not become ready within ${HEALTH_TIMEOUT_MS / 60000} minutes`);
+    throw new Error(
+      `Local analysis server did not become ready within ${HEALTH_TIMEOUT_MS / 60000} minutes.${lastWords()}`
+    );
   }
 
   async stop() {

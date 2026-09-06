@@ -23,7 +23,7 @@ import {
 } from "df-downloader-common";
 import { API_URL } from "../../config";
 import { fetchJson } from "../../utils/fetch";
-import { Fragment, useState } from "react";
+import { Fragment, useEffect, useState } from "react";
 import { useFormContext, useWatch } from "react-hook-form";
 import { SelectField } from "../general/select-field";
 import { ZodCheckboxField } from "../zod-fields/zod-checkbox-field.component";
@@ -125,6 +125,42 @@ const CHECK_MARK: Record<AiSelfTestCheck["state"], string> = {
 const LocalSelfTestPanel = () => {
   const { getValues } = useFormContext();
   const [test, setTest] = useState<SelfTestState>({ status: "idle" });
+  /*
+   * What the engine is doing, polled while the test runs.
+   *
+   * The test is a single request that can legitimately take minutes - loading
+   * gigabytes of weights, or downloading them on a first run - and a button
+   * reading "Testing..." for all of it is indistinguishable from one that has
+   * hung. Not a hypothetical: a server that failed to start got the button
+   * pressed five times in a minute, because nothing on screen said whether
+   * anything was happening.
+   */
+  const [activity, setActivity] = useState<string | undefined>();
+  useEffect(() => {
+    if (test.status !== "running") {
+      setActivity(undefined);
+      return;
+    }
+    let cancelled = false;
+    const poll = async () => {
+      try {
+        const data: any = await fetchJson(`${API_URL}/ai-analysis/local-status`);
+        if (!cancelled) {
+          setActivity(data?.data?.status);
+        }
+      } catch {
+        // Ignored deliberately. This is a progress hint over the top of the
+        // request that matters, so a failed poll leaves the last message
+        // alone rather than blanking it or raising an error of its own.
+      }
+    };
+    void poll();
+    const timer = setInterval(() => void poll(), 2000);
+    return () => {
+      cancelled = true;
+      clearInterval(timer);
+    };
+  }, [test.status]);
   const run = async () => {
     setTest({ status: "running" });
     try {
@@ -157,6 +193,14 @@ const LocalSelfTestPanel = () => {
           {test.status === "running" ? "Testing, this can take a few minutes..." : "Check it actually works"}
         </Button>
       </Box>
+      {test.status === "running" && (
+        <Typography variant="caption" color="text.secondary">
+          {/* Falls back to a general line: the server reports its setup steps,
+              and says nothing at all once it is simply generating - which is
+              most of the wait on a low-power machine. */}
+          {activity ?? "Waiting for the model to answer - this is the slow part on a low-power machine."}
+        </Typography>
+      )}
       {test.status === "error" && <Alert severity="error">{test.message}</Alert>}
       {result && (
         <Alert severity={result.ok ? (result.checks.some((c) => c.state === "warn") ? "warning" : "success") : "error"}>
