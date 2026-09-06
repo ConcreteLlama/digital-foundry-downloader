@@ -21,9 +21,10 @@ const PlayerSettings = () => (
       the useful thing is to say what happened and that the file is fine.
     */}
     <Alert severity="info" variant="outlined">
-      Digital Foundry's downloads use AC-3 audio, which browsers cannot decode - so playing one here gives you picture
-      and no sound, even though the file itself is perfectly good and plays with sound in Plex, Jellyfin or VLC. The
-      settings below let the app re-encode just the parts your browser cannot take, as it plays.
+      Some Digital Foundry downloads use AC-3 audio, which browsers cannot decode - so those play here with picture and
+      no sound, even though the file itself is perfectly good and plays with sound in Plex, Jellyfin or VLC. The
+      settings below let the app re-encode just the parts your browser cannot take, as it plays. Files it can already
+      play are sent straight from disk and are not affected.
     </Alert>
     <SelectField
       name="transcode"

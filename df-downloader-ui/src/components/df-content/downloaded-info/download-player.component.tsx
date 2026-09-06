@@ -926,24 +926,22 @@ export const DownloadPlayer = ({
       }}
       onPlay={() => setPlaying(true)}
       onPause={() => setPlaying(false)}
+      /*
+        Fills whatever the frame gives it, and decides nothing about layout.
+
+        Sizing used to come from the video itself, which meant the page moved
+        whenever the video's intrinsic size was unknown - and on a seek it is
+        unknown for a moment every single time, because the element is torn
+        down and rebuilt. The frame below owns the space instead, so a reload,
+        a different resolution or a file that never loads at all all leave the
+        layout exactly where it was.
+      */
       sx={{
         width: "100%",
-        maxHeight: maxHeight ?? "60vh",
+        height: "100%",
+        objectFit: "contain",
         minHeight: 0,
-        backgroundColor: "common.black",
-        borderRadius: 1,
-        /*
-          Space reserved from the probed dimensions, so the frame does not
-          collapse and re-expand on a seek.
-
-          A seek on the transcoded path replaces the source, and between the
-          old element being torn down and the new one reporting its size the
-          video has no intrinsic dimensions at all - so it shrank to nothing
-          and the dialog resized around it, every time you skipped. The ratio
-          is known before playback starts and does not change, so holding the
-          shape costs nothing and removes the jump.
-        */
-        ...(info.width && info.height ? { aspectRatio: `${info.width} / ${info.height}` } : {}),
+        display: "block",
       }}
     >
       {info.subtitleTracks.map((track, index) => (
@@ -1250,7 +1248,27 @@ export const DownloadPlayer = ({
         stops giving once its controls are off: click anywhere to pause, and
         something to press when it is paused.
       */}
-      <Box sx={{ position: "relative", display: "flex", minWidth: 0 }} onClick={togglePlay}>
+      <Box
+        onClick={togglePlay}
+        /*
+          A fixed shape, held whatever the video is doing.
+
+          16:9 unless the file says otherwise - every video here is 16:9, and
+          a default is needed anyway for the moment before the probe returns.
+          Capped by maxHeight so a tall window does not hand the picture the
+          whole screen.
+        */
+        sx={{
+          position: "relative",
+          width: "100%",
+          minWidth: 0,
+          aspectRatio: info.width && info.height ? `${info.width} / ${info.height}` : "16 / 9",
+          maxHeight: maxHeight ?? "60vh",
+          backgroundColor: "common.black",
+          borderRadius: 1,
+          overflow: "hidden",
+        }}
+      >
         {videoSurface}
         {!playing && (
           <Box
