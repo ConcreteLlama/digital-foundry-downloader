@@ -1,5 +1,7 @@
 import PlayArrowIcon from "@mui/icons-material/PlayArrow";
-import { Box, ToggleButton, ToggleButtonGroup, Typography } from "@mui/material";
+import { Box, Button, ToggleButton, ToggleButtonGroup, Typography } from "@mui/material";
+import OpenInNewIcon from "@mui/icons-material/OpenInNew";
+import { WatchElsewhereDialog } from "../downloaded-info/watch-elsewhere.component.tsx";
 import { DfContentEntry, DfContentInfoUtils } from "df-downloader-common";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { VideoPlayerDialog } from "../downloaded-info/video-player-dialog.component.tsx";
@@ -70,6 +72,16 @@ export const ContentMedia = ({ contentEntry, onPlayFromReady }: ContentMediaProp
   const active = sources.find((source) => sourceKey(source) === selected) ?? sources[0];
 
   const [playerOpen, setPlayerOpen] = useState(false);
+  /*
+   * Plex and Jellyfin are more places this same video can come from, so they
+   * belong beside the source picker rather than buried in a file's actions -
+   * which is where they were, and where nobody looked for them.
+   *
+   * Only for a downloaded source: a YouTube embed is not a file any media
+   * server holds.
+   */
+  const [watchElsewhereOpen, setWatchElsewhereOpen] = useState(false);
+  const activeDownload = active?.kind === "download" ? playable[active.index] : undefined;
   const [startSeconds, setStartSeconds] = useState<number | undefined>(undefined);
 
   const playFrom = useCallback((seconds?: number) => {
@@ -99,7 +111,12 @@ export const ContentMedia = ({ contentEntry, onPlayFromReady }: ContentMediaProp
     return `Download (${formatString})`;
   };
 
-  const switcher = sources.length > 1 && (
+  /*
+   * Rendered even when there is only one source to switch between: the row is
+   * about where this video can be watched, and "elsewhere" is an answer to
+   * that whether or not there is a second source on this machine.
+   */
+  const switcher = (sources.length > 1 || activeDownload) && (
     <Box sx={{ display: "flex", alignItems: "center", gap: 1, marginTop: 1, flexWrap: "wrap" }}>
       <Typography variant="overline" sx={{ color: "text.disabled" }}>
         Watching
@@ -126,6 +143,17 @@ export const ContentMedia = ({ contentEntry, onPlayFromReady }: ContentMediaProp
           </ToggleButton>
         ))}
       </ToggleButtonGroup>
+      {activeDownload && (
+        <Button
+          size="small"
+          variant="text"
+          startIcon={<OpenInNewIcon />}
+          onClick={() => setWatchElsewhereOpen(true)}
+          sx={{ textTransform: "none", fontSize: "0.75rem" }}
+        >
+          Elsewhere
+        </Button>
+      )}
     </Box>
   );
 
@@ -151,6 +179,15 @@ export const ContentMedia = ({ contentEntry, onPlayFromReady }: ContentMediaProp
       open={playerOpen}
       onClose={() => setPlayerOpen(false)}
       startSeconds={startSeconds}
+    />
+  );
+
+  const watchElsewhereDialog = activeDownload && (
+    <WatchElsewhereDialog
+      contentEntry={contentEntry}
+      download={activeDownload}
+      open={watchElsewhereOpen}
+      onClose={() => setWatchElsewhereOpen(false)}
     />
   );
 
@@ -211,6 +248,7 @@ export const ContentMedia = ({ contentEntry, onPlayFromReady }: ContentMediaProp
         </Box>
         {switcher}
         {playerDialog}
+      {watchElsewhereDialog}
       </Box>
     );
   }
@@ -224,6 +262,7 @@ export const ContentMedia = ({ contentEntry, onPlayFromReady }: ContentMediaProp
       )}
       {switcher}
       {playerDialog}
+      {watchElsewhereDialog}
     </Box>
   );
 };

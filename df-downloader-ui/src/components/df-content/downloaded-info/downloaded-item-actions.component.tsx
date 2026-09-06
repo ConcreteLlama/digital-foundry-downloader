@@ -8,9 +8,6 @@ import RefreshIcon from "@mui/icons-material/Refresh";
 import SubtitlesIcon from "@mui/icons-material/Subtitles";
 import {
   Button,
-  Dialog,
-  DialogContent,
-  DialogTitle,
   IconButton,
   ListItemIcon,
   ListItemText,
@@ -21,7 +18,7 @@ import {
   Typography,
 } from "@mui/material";
 import { DfContentEntry, DfContentUpdateDownloadMetaRequest } from "df-downloader-common";
-import { getPlaybackOpenInLinks } from "../../../api/playback.ts";
+import { WatchElsewhereDialog } from "./watch-elsewhere.component.tsx";
 import { DfContentDownloadInfo } from "df-downloader-common/models/df-content-download-info";
 import { useState } from "react";
 import { useSelector } from "react-redux";
@@ -78,7 +75,6 @@ export const DownloadedItemActions = ({
    * lookup.
    */
   const [openInOpen, setOpenInOpen] = useState(false);
-  const [openInLinks, setOpenInLinks] = useState<{ server: string; url: string }[] | undefined>();
   const currentActiveTaskPipelines = useSelector(
     selectQueryPipelineIds({
       filter: {
@@ -129,16 +125,7 @@ export const DownloadedItemActions = ({
       key: "open-in",
       label: "Watch elsewhere",
       icon: OpenInNewIcon,
-      run: () => {
-        setOpenInOpen(true);
-        if (openInLinks === undefined) {
-          void getPlaybackOpenInLinks(contentEntry.key, download.downloadLocation)
-            .then(setOpenInLinks)
-            // An empty list either way: a server that cannot answer and one
-            // with nothing to offer are the same thing to look at.
-            .catch(() => setOpenInLinks([]));
-        }
-      },
+      run: () => setOpenInOpen(true),
       disabled: !downloadIsPlayable,
       reason: !downloadIsPlayable ? "Nothing to play in this kind of file" : undefined,
     },
@@ -205,40 +192,12 @@ export const DownloadedItemActions = ({
         contentEntry={contentEntry}
         download={download}
       />
-      <Dialog open={openInOpen} onClose={() => setOpenInOpen(false)} maxWidth="xs" fullWidth>
-        <DialogTitle>Watch elsewhere</DialogTitle>
-        <DialogContent>
-          <Stack spacing={1.5} sx={{ paddingTop: 1 }}>
-            {openInLinks === undefined && <Typography variant="body2">Looking for it on your media servers...</Typography>}
-            {openInLinks?.length === 0 && (
-              <Typography variant="body2" color="text.secondary">
-                None of your media servers has this file indexed yet. A recent download may not have been scanned, and a
-                server needs to be signed in rather than only holding an API key.
-              </Typography>
-            )}
-            {openInLinks?.map((link) => (
-              <Button
-                key={link.server}
-                variant="outlined"
-                component="a"
-                href={link.url}
-                target="_blank"
-                rel="noreferrer"
-                startIcon={<OpenInNewIcon />}
-                onClick={() => setOpenInOpen(false)}
-              >
-                Open in {link.server}
-              </Button>
-            ))}
-            {openInLinks && openInLinks.length > 0 && (
-              <Typography variant="caption" color="text.disabled">
-                Opens the server's web player rather than the phone app. Plex needs you signed in to plex.tv in that
-                browser; Jellyfin goes straight to your server.
-              </Typography>
-            )}
-          </Stack>
-        </DialogContent>
-      </Dialog>
+      <WatchElsewhereDialog
+        contentEntry={contentEntry}
+        download={download}
+        open={openInOpen}
+        onClose={() => setOpenInOpen(false)}
+      />
       <VideoPlayerDialog
         open={playerOpen}
         onClose={() => {
