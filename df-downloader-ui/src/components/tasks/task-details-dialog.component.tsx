@@ -32,6 +32,7 @@ import {
   PipelineStepVisualState,
 } from "./pipeline-track/pipeline-step-state";
 import { Fragment, useState } from "react";
+import { useTickingClock } from "../../hooks/use-ticking-clock";
 
 /**
  * Renders a span of milliseconds the way someone reading a task list wants to
@@ -209,6 +210,16 @@ export const TaskDetailsDialog = ({
   // Stacked over this dialog rather than replacing it, so closing the content
   // returns you to the run you were looking at.
   const [contentOpen, setContentOpen] = useState(false);
+  /*
+   * Elapsed and active are derived from the current time at render, so they
+   * are only as fresh as the last render. A running analysis can spend ten
+   * minutes inside one model call without emitting a state change, and the
+   * readout sat frozen for all of it - which looks like a stalled job rather
+   * than a quiet one. Ticks only while something is still going.
+   *
+   * Before the early return below: hooks cannot be called conditionally.
+   */
+  useTickingClock(Boolean(pipeline) && !pipeline?.pipelineStatus?.isComplete);
   if (!pipeline) {
     return null;
   }

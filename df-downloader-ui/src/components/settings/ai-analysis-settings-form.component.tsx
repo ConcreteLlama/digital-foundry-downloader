@@ -20,6 +20,8 @@ import { Fragment, useState } from "react";
 import { useFormContext, useWatch } from "react-hook-form";
 import { SelectField } from "../general/select-field";
 import { ZodCheckboxField } from "../zod-fields/zod-checkbox-field.component";
+import { AiLocalLoadMode } from "df-downloader-common/config/ai-analysis-config";
+import { ZodSelectField } from "../zod-fields/zod-select-field.component";
 import { ZodNumberField } from "../zod-fields/zod-number-field.component";
 import { getZodDescription } from "../zod-fields/zod-schema-utils";
 import { ZodTextField } from "../zod-fields/zod-text-field.component";
@@ -343,6 +345,16 @@ const AiAnalysisSettings = () => {
                     name="local.gpuLayers"
                     label="Layers to offload to a GPU"
                     zodNumber={AiLocalProviderConfig.shape.gpuLayers}
+                  />
+                  {/* Rarely touched, and deliberately not guessed at on the
+                      user's behalf: where the model file lives and what else
+                      competes for the page cache are properties of the
+                      machine, not of this app. */}
+                  <ZodSelectField
+                    name="local.loadMode"
+                    label="How the model is loaded"
+                    zodEnum={AiLocalLoadMode}
+                    nullable
                   />
                   <ZodNumberField
                     name="local.idleShutdownSeconds"

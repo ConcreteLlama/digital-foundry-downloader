@@ -273,6 +273,16 @@ export const AiLocalModels: Record<AiLocalModel, AiLocalModelInfo> = {
   },
 };
 
+/**
+ * llama.cpp's own load modes, named as it names them.
+ *
+ * Its vocabulary rather than a boolean of our own, because these are passed
+ * straight through to --load-mode and anyone reaching for this setting is
+ * following llama.cpp's documentation, not ours.
+ */
+export const AiLocalLoadMode = z.enum(["auto", "none", "mmap", "mlock", "mmap+mlock", "dio"]);
+export type AiLocalLoadMode = z.infer<typeof AiLocalLoadMode>;
+
 export const AiLocalProviderConfig = z.object({
   enabled: z
     .boolean()
@@ -371,6 +381,20 @@ export const AiLocalProviderConfig = z.object({
     .default(true)
     .describe(
       "Use a GPU for local analysis when one is available. Turn this off to keep it on the CPU - worth doing if the same GPU is busy transcoding for a media server, where competing for it can be slower than not using it at all."
+    ),
+  /**
+   * How llama.cpp gets the model into memory.
+   *
+   * Left alone by default - "auto" is llama's own choice and is right on
+   * ordinary local storage. It is here because the right answer depends on
+   * the machine rather than on anything this app can work out: weights are
+   * read in full for every token generated, so where they live and whether
+   * they stay resident decides whether that is a memory read or a disk read,
+   * and the difference is two orders of magnitude.
+   */
+  loadMode: AiLocalLoadMode.optional()
+    .describe(
+      "How the model is loaded into memory. Leave unset unless generation is far slower than it should be. 'mmap+mlock' keeps it resident once loaded, which helps if something else on the machine keeps evicting it; 'none' avoids memory-mapping altogether, which is slower to load but can be much faster afterwards on storage where mapping behaves badly, such as a network or fuse-backed share."
     ),
   gpuLayers: z
     .number()

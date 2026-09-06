@@ -281,43 +281,9 @@ export class LocalLlamaServer {
     this.idleTimer.unref?.();
   }
 
-  /**
-   * Whether to read the model into memory instead of mapping it from disk.
-   *
-   * llama.cpp mmaps by default, which is right when the file is on fast local
-   * storage and the page cache can hold it. Neither is a given here. Weights
-   * are read in full for every token generated, so if the pages are not
-   * resident every token becomes a disk read: measured on a real install at
-   * 0.1 tokens a second, an effective 0.6 GB/s, which is storage speed rather
-   * than memory speed. Common causes are the model sitting on a NAS share
-   * (Unraid's /mnt/user is FUSE, where mmap is especially poor) or a
-   * container memory limit capping the cache.
-   *
-   * Reading it in costs one slow load and then never touches the disk again,
-   * which for a server that lives for hours is the better trade - but only
-   * where there is room. Below that, mmap is what makes the model usable at
-   * all, so the default stands.
-   */
-  private shouldLoadIntoMemory(modelPath: string): { load: boolean; why: string } {
-    let modelBytes = 0;
-    try {
-      modelBytes = fs.statSync(modelPath).size;
-    } catch {
-      return { load: false, why: "could not measure the model" };
-    }
-    const totalBytes = os.totalmem();
-    // Room for the model, its KV cache and whatever else the machine is for.
-    const needed = modelBytes * 1.5 + 2 * 1024 ** 3;
-    const gib = (bytes: number) => `${(bytes / 1024 ** 3).toFixed(1)}GiB`;
-    return totalBytes >= needed
-      ? { load: true, why: `${gib(modelBytes)} model, ${gib(totalBytes)} of memory` }
-      : { load: false, why: `only ${gib(totalBytes)} of memory for a ${gib(modelBytes)} model - mapping from disk instead` };
-  }
-
   private async start(): Promise<string> {
     const modelPath = await ensureLocalModel(this.config);
     const binary = resolveBinary(this.config);
-    const intoMemory = this.shouldLoadIntoMemory(modelPath);
     const args = [
       "-m", modelPath,
       "-c", String(this.config.contextSize),
@@ -341,9 +307,15 @@ export class LocalLlamaServer {
        * seconds.
        */
       "-np", "1",
-      // See shouldLoadIntoMemory. Spread rather than a conditional push so the
-      // argument list stays one readable block.
-      ...(intoMemory.load ? ["--no-mmap"] : []),
+      /*
+       * Only when asked for - see AiLocalProviderConfig.loadMode.
+       *
+       * Left to llama's own default otherwise, which is right on ordinary
+       * local storage. This app cannot tell where the model actually lives or
+       * what else is competing for the page cache, so guessing here would be
+       * tuning everyone's install for one machine's symptom.
+       */
+      ...(this.config.loadMode ? ["--load-mode", this.config.loadMode] : []),
       /*
        * Offloads what fits and is simply ignored on a CPU-only build, so the
        * same arguments work on a GPU box and a microserver alike.
@@ -357,12 +329,7 @@ export class LocalLlamaServer {
       "info",
       `Starting local analysis server: ${binary} ${args.join(" ")}`
     );
-    logger.log(
-      "info",
-      intoMemory.load
-        ? `Loading the model into memory rather than mapping it from disk (${intoMemory.why}) - the first load is slower, every token after it is not`
-        : `Mapping the model from disk (${intoMemory.why})`
-    );
+
     const child = spawn(binary, args, { stdio: ["ignore", "pipe", "pipe"] });
     this.process = child;
 
@@ -391,9 +358,20 @@ export class LocalLlamaServer {
      * recoverable from the log without drowning it in normal running.
      */
     const backendLines: string[] = [];
+    /*
+     * Collecting stops once the verdict has been logged.
+     *
+     * Everything worth keeping is printed while the model loads, but the
+     * server then runs for hours - so without this the array grows for the
+     * life of the process, holding lines nothing will ever read again.
+     */
+    let backendReported = false;
     const readOutput = (chunk: unknown) => {
       const text = String(chunk);
       logger.log("debug", `llama-server: ${text.trim()}`);
+      if (backendReported) {
+        return;
+      }
       const matched = text.match(BACKEND_LINE);
       if (matched?.length) {
         backendLines.push(...matched.map((line) => line.trim()));
@@ -435,6 +413,7 @@ export class LocalLlamaServer {
         `Local analysis is running on the ${describeComputeBackend(backendLines.join("; "), this.config.useGpu !== false)}`
       );
       logger.log("debug", `Local analysis backend detail: ${backendLines.join("; ")}`);
+      backendReported = true;
     } else {
       /*
        * Still says something. What was asked for is known regardless of what
@@ -445,6 +424,7 @@ export class LocalLlamaServer {
         "info",
         `Local analysis is running on the ${describeComputeBackend("", this.config.useGpu !== false)}`
       );
+      backendReported = true;
     }
     return baseUrl;
   }

@@ -15,6 +15,7 @@ import {
   selectTaskState,
 } from "../../../store/df-tasks/tasks.selector";
 import { monoFontFamily } from "../../../themes/build-theme";
+import { useTickingClock } from "../../../hooks/use-ticking-clock";
 
 export type Readout = { label: string; value: string };
 
@@ -32,6 +33,10 @@ export const TaskReadout = ({ pipelineId }: { pipelineId: string }) => {
   const currentStep = useSelector(selectCurrentStep(pipelineId)) ?? "";
   const taskState = useSelector(selectTaskState(pipelineId, currentStep));
   const isRunning = taskState === "running";
+  // Elapsed below is computed from the current time at render, so it needs a
+  // reason to re-render on a task that is quietly working - see
+  // useTickingClock.
+  useTickingClock(isRunning);
   const downloadTask = useSelector(selectDownloadTask(pipelineId, currentStep));
   const status = useSelector(selectBasicTaskField<"status", TaskStatus | null>(pipelineId, currentStep, "status"));
   const startTime = useSelector(
