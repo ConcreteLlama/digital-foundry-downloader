@@ -1,5 +1,6 @@
-import { Alert, Box, Button, CircularProgress, IconButton, Menu, MenuItem, Slider, Stack, Tooltip, Typography } from "@mui/material";
+import { Alert, Box, Button, CircularProgress, Divider, IconButton, Menu, MenuItem, Popover, Slider, Stack, Tooltip, Typography } from "@mui/material";
 import ClosedCaptionIcon from "@mui/icons-material/ClosedCaption";
+import InfoOutlinedIcon from "@mui/icons-material/InfoOutlined";
 import FullscreenIcon from "@mui/icons-material/Fullscreen";
 import PauseIcon from "@mui/icons-material/Pause";
 import PlayArrowIcon from "@mui/icons-material/PlayArrow";
@@ -7,7 +8,7 @@ import VolumeOffIcon from "@mui/icons-material/VolumeOff";
 import VolumeUpIcon from "@mui/icons-material/VolumeUp";
 import { Chapter, DfContentEntry, DfContentInfoUtils, PlaybackInfo, secondsToHHMMSS } from "df-downloader-common";
 import { DfContentDownloadInfo } from "df-downloader-common/models/df-content-download-info";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AnalysisJump } from "../ai-analysis/analysis-jumps.ts";
 import { rememberPlaybackPosition, rememberedPlaybackPosition } from "./playback-positions.ts";
 import { fetchWatchState } from "../../../api/watch-state.ts";
@@ -122,6 +123,39 @@ const canBrowserPlay = (info: PlaybackInfo): boolean => {
   // error event catch it than to refuse something that would have played.
   return probe.canPlayType(info.codecProbe ?? info.mimeType) !== "";
 };
+
+/**
+ * One stream's line in the playback details.
+ *
+ * The codec on its own answers nothing - what a viewer wants to know is
+ * whether their browser can take it and what is being done about it if not,
+ * so the verdict sits next to the fact rather than being left to infer.
+ */
+const DetailRow = ({
+  label,
+  value,
+  note,
+  warn,
+}: {
+  label: string;
+  value: string;
+  note: string;
+  warn?: boolean;
+}) => (
+  <Stack direction="row" spacing={1} sx={{ alignItems: "baseline" }}>
+    <Typography variant="caption" color="text.secondary" sx={{ minWidth: "3.5rem" }}>
+      {label}
+    </Typography>
+    <Stack sx={{ minWidth: 0 }}>
+      <Typography variant="body2" sx={{ fontFamily: monoFontFamily }}>
+        {value}
+      </Typography>
+      <Typography variant="caption" color={warn ? "warning.main" : "text.disabled"}>
+        {note}
+      </Typography>
+    </Stack>
+  </Stack>
+);
 
 /**
  * The same question for the sound, which is the one that actually bites.
@@ -389,6 +423,7 @@ export const DownloadPlayer = ({
    * neither the file nor the offset has - only our willingness to try again.
    */
   const [retryNonce, setRetryNonce] = useState(0);
+  const [detailsAnchor, setDetailsAnchor] = useState<HTMLElement | null>(null);
   const [captionsAnchor, setCaptionsAnchor] = useState<HTMLElement | null>(null);
   const [activeTrack, setActiveTrack] = useState(0);
   const transcodingRef = useRef(false);
@@ -1083,13 +1118,64 @@ export const DownloadPlayer = ({
       >
         <FullscreenIcon fontSize="small" />
       </IconButton>
-      {transcoding && (
-        <Tooltip title="This file's audio cannot be played by your browser, so it is being re-encoded as you watch. Skipping restarts it from the new position.">
-          <Typography variant="caption" color="text.secondary" sx={{ cursor: "help", whiteSpace: "nowrap" }}>
-            re-encoding
+      {/*
+        A question with several parts, so a tooltip was the wrong shape for it.
+        What the file is, what this browser will and will not decode, what is
+        therefore being done to it, and what that costs - a viewer wondering
+        why a video sounds wrong, plays oddly or will not skip properly is
+        asking about whichever of those applies, and cannot know which.
+      */}
+      <Tooltip title="Playback details">
+        <IconButton size="small" aria-label="Playback details" onClick={(event) => setDetailsAnchor(event.currentTarget)}>
+          <InfoOutlinedIcon fontSize="small" color={transcoding ? "primary" : "inherit"} />
+        </IconButton>
+      </Tooltip>
+      <Popover
+        open={Boolean(detailsAnchor)}
+        anchorEl={detailsAnchor}
+        onClose={() => setDetailsAnchor(null)}
+        anchorOrigin={{ vertical: "top", horizontal: "right" }}
+        transformOrigin={{ vertical: "bottom", horizontal: "right" }}
+      >
+        <Stack spacing={1} sx={{ padding: 2, maxWidth: 380 }}>
+          <Typography variant="subtitle2">
+            {transcoding ? "Re-encoded for your browser" : "Playing the file directly"}
           </Typography>
-        </Tooltip>
-      )}
+          <Typography variant="body2" color="text.secondary">
+            {transcoding
+              ? "Your browser cannot decode part of this file, so the app is converting it as you watch. The file itself is untouched and unchanged."
+              : "Your browser can decode this file as it stands, so it is being sent straight from disk - nothing is being converted."}
+          </Typography>
+          <Divider />
+          <DetailRow
+            label="Video"
+            value={`${info.videoCodec ?? "unknown"}${info.width && info.height ? ` · ${info.width}x${info.height}` : ""}`}
+            note={videoSupported ? "played as-is" : "re-encoded - your browser cannot decode it"}
+            warn={!videoSupported}
+          />
+          <DetailRow
+            label="Audio"
+            value={info.audioCodec ?? "unknown"}
+            note={audioSupported ? "played as-is" : "re-encoded to AAC - no browser can decode this format"}
+            warn={!audioSupported}
+          />
+          {transcoding && (
+            <Fragment>
+              <Divider />
+              <Typography variant="caption" color="text.secondary">
+                Skipping has to restart the conversion from the new point, so expect a short pause and a small rewind to
+                the nearest keyframe. Video is copied rather than re-encoded wherever possible, which costs almost
+                nothing; re-encoding the picture itself uses the processor, as the bundled ffmpeg has no graphics-card
+                encoder.
+              </Typography>
+            </Fragment>
+          )}
+          <Typography variant="caption" color="text.disabled">
+            This file plays with sound in Plex, Jellyfin or VLC regardless - the limitation is the browser's, not the
+            download's.
+          </Typography>
+        </Stack>
+      </Popover>
     </Stack>
   );
 
