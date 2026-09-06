@@ -151,7 +151,7 @@ export const ContentMedia = ({ contentEntry, onPlayFromReady }: ContentMediaProp
           onClick={() => setWatchElsewhereOpen(true)}
           sx={{ textTransform: "none", fontSize: "0.75rem" }}
         >
-          Elsewhere
+          Watch elsewhere
         </Button>
       )}
     </Box>
