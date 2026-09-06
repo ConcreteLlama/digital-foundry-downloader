@@ -390,9 +390,14 @@ export class LocalLlamaServer {
       );
       logger.log("debug", `Local analysis backend detail: ${backendLines.join("; ")}`);
     } else {
+      /*
+       * Still says something. What was asked for is known regardless of what
+       * the server printed - see describeComputeBackend - and "it said
+       * nothing" was useless to the one person who needed the answer.
+       */
       logger.log(
         "info",
-        "Local analysis started, but the model server said nothing about which backend it chose - turn on debug logging to see its full output"
+        `Local analysis is running on the ${describeComputeBackend("", this.config.useGpu !== false)}`
       );
     }
     return baseUrl;

@@ -74,16 +74,35 @@ export const describeComputeBackend = (output: string, gpuRequested: boolean): s
    * step is inference rather than testimony, and is worded as such.
    */
   const toldNoGpu = LLAMA_NO_GPU.test(output);
-  const onGpu =
-    Boolean(whisperGpu) ||
-    Number(offloaded?.[1] ?? 0) > 0 ||
-    (gpuRequested && !toldNoGpu && Boolean(device) && !offloaded);
+  /*
+   * Not being offered a GPU is decisive on its own.
+   *
+   * Whether one was asked for is something this app knows for certain - it
+   * passes -ngl itself - so a run that did not ask for one is on the CPU
+   * whatever the server does or does not print. Only the other direction
+   * needs evidence.
+   */
+  if (!gpuRequested) {
+    return "CPU - GPU turned off in settings";
+  }
+  const onGpu = Boolean(whisperGpu) || Number(offloaded?.[1] ?? 0) > 0 || !toldNoGpu;
   if (!onGpu) {
-    return gpuRequested ? "CPU - no usable GPU found" : "CPU - GPU turned off in settings";
+    return "CPU - no usable GPU found";
   }
-  const named = device ?? whisperGpu?.[1] ?? "GPU";
+  /*
+   * A name only if one was printed. Requiring one used to sink the whole
+   * verdict: this llama build prints no device line, so a real GPU run fell
+   * through to "said nothing about which backend it chose" - the one outcome
+   * this line exists to prevent. An unnamed GPU is still an answer.
+   */
+  const named = device ?? whisperGpu?.[1];
   if (offloaded) {
-    return `GPU - ${named} (${offloaded[1]}/${offloaded[2]} layers offloaded)`;
+    return `GPU - ${named ?? "device"} (${offloaded[1]}/${offloaded[2]} layers offloaded)`;
   }
-  return whisperGpu ? `GPU - ${named}` : `GPU - ${named} (assumed: it was asked for and not refused)`;
+  if (whisperGpu) {
+    return `GPU - ${named}`;
+  }
+  return named
+    ? `GPU - ${named} (assumed: it was asked for and not refused)`
+    : "GPU (assumed: it was asked for, and the model server did not say it was unusable)";
 };
