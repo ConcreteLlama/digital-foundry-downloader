@@ -1,11 +1,15 @@
 import DeleteIcon from "@mui/icons-material/Delete";
 import EditIcon from "@mui/icons-material/Edit";
 import MoreVertIcon from "@mui/icons-material/MoreVert";
+import OpenInNewIcon from "@mui/icons-material/OpenInNew";
 import PlayArrowIcon from "@mui/icons-material/PlayArrow";
 import RefreshIcon from "@mui/icons-material/Refresh";
 import SubtitlesIcon from "@mui/icons-material/Subtitles";
 import {
   Button,
+  Dialog,
+  DialogContent,
+  DialogTitle,
   IconButton,
   ListItemIcon,
   ListItemText,
@@ -16,6 +20,7 @@ import {
   Typography,
 } from "@mui/material";
 import { DfContentEntry, DfContentUpdateDownloadMetaRequest } from "df-downloader-common";
+import { getPlaybackOpenInLinks } from "../../../api/playback.ts";
 import { DfContentDownloadInfo } from "df-downloader-common/models/df-content-download-info";
 import { useState } from "react";
 import { useSelector } from "react-redux";
@@ -63,6 +68,16 @@ export const DownloadedItemActions = ({
   const [editMetadataDialogOpen, setEditMetadataDialogOpen] = useState(false);
   const [menuAnchor, setMenuAnchor] = useState<HTMLElement | null>(null);
   const [playerOpen, setPlayerOpen] = useState(false);
+  /*
+   * Where else this can be watched, looked up only when asked for.
+   *
+   * Neither Plex nor Jellyfin can find an item by path, so answering means
+   * the server reading back its library - far too much to spend on every row
+   * of a list on the chance somebody wants it. One deliberate click, one
+   * lookup.
+   */
+  const [openInOpen, setOpenInOpen] = useState(false);
+  const [openInLinks, setOpenInLinks] = useState<{ server: string; url: string }[] | undefined>();
   const currentActiveTaskPipelines = useSelector(
     selectQueryPipelineIds({
       filter: {
@@ -97,6 +112,31 @@ export const DownloadedItemActions = ({
       run: () => {
         setPlayerOpen(true);
         onPlayerOpenChange?.(true);
+      },
+      disabled: !downloadIsPlayable,
+      reason: !downloadIsPlayable ? "Nothing to play in this kind of file" : undefined,
+    },
+    {
+      /*
+       * Beside Play rather than inside the player, and deliberately: watching
+       * it in the app it is already in is an alternative to opening our
+       * player, not something to discover once you are in it. On a phone it
+       * is often the better choice - a client built for the job, no
+       * re-encoding - and play state syncs both ways, so it picks up where
+       * you left off.
+       */
+      key: "open-in",
+      label: "Watch elsewhere",
+      icon: OpenInNewIcon,
+      run: () => {
+        setOpenInOpen(true);
+        if (openInLinks === undefined) {
+          void getPlaybackOpenInLinks(contentEntry.key, download.downloadLocation)
+            .then(setOpenInLinks)
+            // An empty list either way: a server that cannot answer and one
+            // with nothing to offer are the same thing to look at.
+            .catch(() => setOpenInLinks([]));
+        }
       },
       disabled: !downloadIsPlayable,
       reason: !downloadIsPlayable ? "Nothing to play in this kind of file" : undefined,
@@ -160,6 +200,40 @@ export const DownloadedItemActions = ({
         contentEntry={contentEntry}
         download={download}
       />
+      <Dialog open={openInOpen} onClose={() => setOpenInOpen(false)} maxWidth="xs" fullWidth>
+        <DialogTitle>Watch elsewhere</DialogTitle>
+        <DialogContent>
+          <Stack spacing={1.5} sx={{ paddingTop: 1 }}>
+            {openInLinks === undefined && <Typography variant="body2">Looking for it on your media servers...</Typography>}
+            {openInLinks?.length === 0 && (
+              <Typography variant="body2" color="text.secondary">
+                None of your media servers has this file indexed yet. A recent download may not have been scanned, and a
+                server needs to be signed in rather than only holding an API key.
+              </Typography>
+            )}
+            {openInLinks?.map((link) => (
+              <Button
+                key={link.server}
+                variant="outlined"
+                component="a"
+                href={link.url}
+                target="_blank"
+                rel="noreferrer"
+                startIcon={<OpenInNewIcon />}
+                onClick={() => setOpenInOpen(false)}
+              >
+                Open in {link.server}
+              </Button>
+            ))}
+            {openInLinks && openInLinks.length > 0 && (
+              <Typography variant="caption" color="text.disabled">
+                Opens the server's web player. It will not launch the phone app - an app can only claim links for
+                addresses known when it was built, which a server on your own network is not.
+              </Typography>
+            )}
+          </Stack>
+        </DialogContent>
+      </Dialog>
       <VideoPlayerDialog
         open={playerOpen}
         onClose={() => {
