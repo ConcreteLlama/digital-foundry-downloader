@@ -10,7 +10,41 @@ import { Download } from "../download/downloader/downloader.js";
 import { DownloadStates } from "../download/downloader/fsm/types.js";
 import { DownloadOptions, DownloadStatus } from "../download/downloader/types.js";
 import { TaskManager, TaskManagerOpts } from "../task-manager/task-manager.js";
+import { TaskOutputField } from "df-downloader-common";
 import { Task, TaskOpts, TaskResult, TaskState } from "../task-manager/task/task.js";
+
+/**
+ * What a finished download amounted to, for the step's detail view.
+ *
+ * Opening a completed download step said "success, 100% complete" - the one
+ * thing the row it was opened from had already said. The figures worth
+ * keeping are the ones that cannot be recovered afterwards: how big it turned
+ * out to be, how fast it actually went, how long it took.
+ *
+ * Only once there is something to report. A download that has not started has
+ * nothing to say, and a row of zeroes reads as a failure rather than as an
+ * absence.
+ */
+const describeDownload = (status: DownloadStatus): TaskOutputField[] | undefined => {
+  if (!status.bytesDownloaded) {
+    return undefined;
+  }
+  const fields: TaskOutputField[] = [{ label: "Downloaded", value: bytesToHumanReadable(status.bytesDownloaded) }];
+  // Only when they disagree - which mid-download is normal, and at the end
+  // means the file was not what the listing promised.
+  if (status.bytesToDownload && status.bytesToDownload !== status.bytesDownloaded) {
+    fields.push({ label: "Expected", value: bytesToHumanReadable(status.bytesToDownload) });
+  }
+  if (status.averageBytesPerSecond) {
+    fields.push({ label: "Average speed", value: `${bytesToHumanReadable(status.averageBytesPerSecond)}/s` });
+  }
+  if (status.runningTime) {
+    const seconds = Math.round(status.runningTime / 1000);
+    const minutes = Math.floor(seconds / 60);
+    fields.push({ label: "Took", value: minutes ? `${minutes}m ${seconds % 60}s` : `${seconds}s` });
+  }
+  return fields;
+};
 
 export class DownloadTask extends Task<SuccessDownloadResult, DownloadStatus, DownloadStates> {
   private download: Download;
@@ -87,8 +121,9 @@ export class DownloadTask extends Task<SuccessDownloadResult, DownloadStatus, Do
   cleanup() {
     return this.download.cleanup();
   }
-  getStatus(): DownloadStatus {
-    return this.download.getStatus();
+  getStatus(): DownloadStatus & { output?: TaskOutputField[] } {
+    const status = this.download.getStatus();
+    return { ...status, output: describeDownload(status) };
   }
   makeResult(result: DownloadResult): TaskResult<SuccessDownloadResult> {
     if (isSuccessDownloadResult(result)) {

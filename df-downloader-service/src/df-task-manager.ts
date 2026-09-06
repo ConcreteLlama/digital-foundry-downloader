@@ -26,7 +26,7 @@ import {
   TaskInfo,
   TaskPipelineInfo,
   TaskPipelineUtils,
-  TaskPhase,
+  TaskPhase, TaskOutputField,
   TaskProgress,
   TaskStatus,
   isChangePositionAction,
@@ -1803,7 +1803,9 @@ const makeCommonTaskStatusInfo = (managedTask: GenericManagedTask): TaskStatus =
    * and silently dropped at this line for exactly that reason, which is worth
    * remembering the next time something opts in and does not appear.
    */
-  const statusDetail = task.getStatus() as { progress?: TaskProgress; phases?: TaskPhase[] } | undefined;
+  const statusDetail = task.getStatus() as
+    | { progress?: TaskProgress; phases?: TaskPhase[]; output?: TaskOutputField[] }
+    | undefined;
   // A held task is idle as far as it knows - the hold lives in the task
   // manager's selection, not in the task - so it is reported as paused here.
   // Otherwise pausing a queued item looked like it had done nothing.
@@ -1819,6 +1821,11 @@ const makeCommonTaskStatusInfo = (managedTask: GenericManagedTask): TaskStatus =
     forceStarted: task.forceRunFlag || undefined,
     progress: statusDetail?.progress,
     phases: statusDetail?.phases,
+    // Carried for the same reason phases are, and it would have been
+    // forgotten for the same reason: this builder names the fields it passes
+    // on, so anything a task reports that is not listed here is dropped
+    // without a word.
+    output: statusDetail?.output,
     accumulatedActiveMs: task.accumulatedActiveMs,
     lastResumedAt: task.lastResumedAt,
   };

@@ -1,6 +1,7 @@
 import { Box, LinearProgress, Stack, Typography } from "@mui/material";
 import { TaskInfo, TaskPhase, formatDurationMs } from "df-downloader-common";
 import { monoFontFamily } from "../../themes/build-theme";
+import { TaskOutputFields } from "./task-output-fields.component";
 
 const phaseDuration = (phase: TaskPhase) => {
   if (!phase.startedAt) {
@@ -35,7 +36,15 @@ export type StepDetailPanelProps = {
 export const StepDetailPanel = ({ task, progress }: StepDetailPanelProps) => {
   const phases = task?.status?.phases;
   const message = task?.status?.message;
-  if (!progress && !phases?.length && !message) {
+  /*
+   * What the step produced, where it has anything to say.
+   *
+   * Shown above the message rather than below: a finished step's figures are
+   * what someone opened this to read, and the running commentary underneath
+   * has usually stopped being true by then.
+   */
+  const output = task?.status?.output;
+  if (!progress && !phases?.length && !message && !output?.length) {
     return null;
   }
   return (
@@ -64,6 +73,8 @@ export const StepDetailPanel = ({ task, progress }: StepDetailPanelProps) => {
           </Stack>
         </Stack>
       )}
+
+      {output?.length ? <TaskOutputFields fields={output} /> : null}
 
       {phases?.length ? (
         <Stack spacing={0.25}>
