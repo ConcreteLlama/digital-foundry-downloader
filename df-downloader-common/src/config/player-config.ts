@@ -56,7 +56,7 @@ export const PlayerConfig = z.object({
   hardwareAcceleration: PlayerHardwareAcceleration.default("auto")
     .catch("auto")
     .describe(
-      "Only applies when the video itself has to be re-encoded, which is rare - the audio never uses it. Turn off if your machine's encoder produces a worse picture than software does."
+      "Only applies when the video itself has to be re-encoded, which is rare - the audio never uses it, and for these files the video is copied untouched. Note the ffmpeg shipped in this image has no hardware encoder built in, so this currently has no effect and video re-encoding uses the processor either way; the log says which was used."
     ),
   /**
    * A ceiling on concurrent ffmpeg processes.
