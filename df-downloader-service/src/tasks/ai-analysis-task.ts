@@ -5,6 +5,7 @@ import { AiAnalysisConfig, AiProviderId } from "df-downloader-common/config/ai-a
 import { configService } from "../config/config.js";
 import { TaskControllerTaskBuilder, TaskControls } from "../task-manager/task/task-controller-task.js";
 import { TaskManager, TaskManagerOpts } from "../task-manager/task-manager.js";
+import { TaskPhaseTracker } from "../task-manager/task-phases.js";
 import { Chapter } from "../utils/chatpers.js";
 import { analyseContent } from "../utils/ai/analyse.js";
 import { serviceLocator } from "../services/service-locator.js";
@@ -26,6 +27,14 @@ type AiAnalysisTaskContext = {
   stage?: string;
   /** How much of the run is behind it, advancing only at call boundaries. */
   fractionComplete?: number;
+  /**
+   * The parts of this run, for the UI to show as separate rows.
+   *
+   * Built from the plan the analysis announces rather than named here: which
+   * calls a run makes depends on the engine, and this task has no business
+   * knowing that.
+   */
+  phases?: TaskPhaseTracker;
   /**
    * Re-analyse even if there is already a result.
    *
@@ -93,8 +102,21 @@ const aiAnalysisTaskControls: TaskControls<AiAnalysisResult, AiAnalysisTaskConte
        * a running number rather than a percentage because the model decides
        * when it stops.
        */
+      onPlan: (phases) => {
+        context.phases = new TaskPhaseTracker(phases);
+      },
       onStage: ({ step, of, label, outputTokens, fractionComplete, waiting }) => {
         context.fractionComplete = fractionComplete;
+        /*
+         * The same information the caption below carries, kept as structure
+         * rather than prose so it can be shown as parts of the run with their
+         * own timings. The caption stays for anywhere that wants one line.
+         */
+        if (waiting) {
+          context.phases?.detail("waiting for transcription to finish");
+        } else {
+          context.phases?.enter(label, outputTokens ? `${outputTokens} tokens written` : undefined);
+        }
         /*
          * A wait replaces the step description rather than decorating it. The
          * run has not started this step, so naming it alongside a frozen token
@@ -111,11 +133,14 @@ const aiAnalysisTaskControls: TaskControls<AiAnalysisResult, AiAnalysisTaskConte
     // than throwing, so the task has to promote it - otherwise a run that
     // failed would be recorded as a successful task holding an error.
     if (result.error) {
+      context.phases?.finish("failed");
       throw new Error(result.error);
     }
+    context.phases?.finish("done");
     context.stage = "Complete";
     return { status: "success", result };
   },
+  getStatus: (context) => ({ phases: context.phases?.snapshot() }),
   getStatusMessage: ({ context, state }) => {
     /*
      * The model that will actually run, not the configured Anthropic one.

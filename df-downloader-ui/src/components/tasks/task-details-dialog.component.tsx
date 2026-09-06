@@ -354,6 +354,39 @@ export const TaskDetailsDialog = ({
                       </TableCell>
                     </TableRow>
                   )}
+                  {/* Parts of one step's work, for a task that reports them.
+                      Indented under their step rather than promoted to steps
+                      of their own, because that is what they are: a pipeline
+                      step is a unit of scheduling, these are units of
+                      reporting inside one. Nothing here knows which task
+                      produced them - see TaskPhase. */}
+                  {task?.status?.phases?.map((phase) => (
+                    <TableRow key={`${stepId}-${phase.name}`} sx={{ opacity: phase.state === "pending" ? 0.5 : 0.85 }}>
+                      <TableCell sx={{ pl: 4, borderBottom: "none", py: 0.25 }}>
+                        <Typography variant="caption" color="text.secondary">
+                          {phase.name}
+                          {phase.detail ? ` - ${phase.detail}` : ""}
+                        </Typography>
+                      </TableCell>
+                      <TableCell sx={{ borderBottom: "none", py: 0.25 }}>
+                        <Typography variant="caption" color="text.secondary">
+                          {phase.state === "done" ? "" : phase.state}
+                        </Typography>
+                      </TableCell>
+                      <TableCell align="right" sx={{ borderBottom: "none", py: 0.25 }}>
+                        <Typography variant="caption" color="text.secondary">
+                          {formatTime(phase.startedAt)}
+                        </Typography>
+                      </TableCell>
+                      <TableCell align="right" colSpan={2} sx={{ borderBottom: "none", py: 0.25 }}>
+                        <Typography variant="caption" color="text.secondary">
+                          {phase.startedAt && phase.endedAt
+                            ? formatDuration(new Date(phase.endedAt).getTime() - new Date(phase.startedAt).getTime())
+                            : ""}
+                        </Typography>
+                      </TableCell>
+                    </TableRow>
+                  ))}
                   </Fragment>
                 );
               })}

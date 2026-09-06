@@ -38,6 +38,7 @@ import {
   TaskManagerStatus,
   LocalComputeStatus,
   makeVideoProps,
+  TaskPhase,
 } from "df-downloader-common";
 
 /**
@@ -133,6 +134,14 @@ type StepFixture = {
   forceStarted?: boolean;
   /** Generic 0-100 progress - what the non-download steps report. */
   progress?: { percent: number; detail?: string };
+  /**
+   * Named parts of one step's work - see TaskPhase.
+   *
+   * Worth a fixture because the only task reporting them today is a local
+   * analysis, which takes tens of minutes and needs a model on disk, so the
+   * layout is otherwise unreachable without a real run.
+   */
+  phases?: TaskPhase[];
   /** Downloads report this instead: bytes, speed, retries. */
   download?: Partial<DownloadProgressInfo>;
   startedSecondsAgo?: number;
@@ -191,6 +200,7 @@ const makeStatus = (fixture: StepFixture): TaskStatus => ({
   pauseTrigger: fixture.pauseTrigger,
   forceStarted: fixture.forceStarted,
   progress: fixture.progress,
+  phases: fixture.phases,
   // The two-scalar stopwatch the real service keeps - see
   // TaskStatus.accumulatedActiveMs. lastResumedAt is set only while running,
   // which is what stops Active ticking on a paused row.
@@ -351,6 +361,7 @@ const makeLanePipeline = ({
           held: step.pauseTrigger === "manual" && step.state === "paused" ? true : undefined,
           pauseTrigger: step.pauseTrigger,
           progress: step.progress,
+          phases: step.phases,
         },
       } as BasicTaskInfo,
     },
@@ -696,6 +707,61 @@ const scenarios: FixtureScenario[] = [
       tasks: [],
       scheduledDownloads: [],
     }),
+  },
+  {
+    id: "analysis-phases",
+    label: "Analysis phases",
+    description:
+      "A local analysis part-way through its three model calls, reported as phases of one step rather than as three steps. They are not steps on purpose: the calls have to hold the machine for the whole run, and steps would let a transcription in between two of them. Open the details dialog to see them under Analyse Content.",
+    animated: true,
+    build: (tick) => {
+      const content = Object.values(CONTENT)[1];
+      const startedAgo = 9 * 60;
+      const phases: TaskPhase[] = [
+        {
+          name: "Working out what kind of video this is",
+          state: "done",
+          weight: 0.037,
+          startedAt: new Date(Date.now() - startedAgo * 1000),
+          endedAt: new Date(Date.now() - (startedAgo - 22) * 1000),
+        },
+        {
+          name: "Writing the summary",
+          state: "done",
+          weight: 0.302,
+          startedAt: new Date(Date.now() - (startedAgo - 22) * 1000),
+          endedAt: new Date(Date.now() - (startedAgo - 190) * 1000),
+        },
+        {
+          name: "Pulling out the details",
+          state: "running",
+          weight: 0.661,
+          startedAt: new Date(Date.now() - (startedAgo - 190) * 1000),
+          detail: `${900 + tick * 37} tokens written`,
+        },
+      ];
+      return fixtureResponse({
+        taskPipelines: [
+          makeLanePipeline({
+            id: "fixture-analysis-phases",
+            pipelineType: "ai_analysis",
+            stepName: "Analyse Content",
+            taskType: "ai_analysis",
+            content,
+            statusMessage: `Analysing "${content.title}" with Qwen3.5 9B`,
+            step: {
+              state: "running",
+              startedSecondsAgo: startedAgo,
+              activeSecondsSoFar: startedAgo,
+              capabilities: ["cancel"],
+              phases,
+            },
+          }),
+        ],
+        tasks: [],
+        scheduledDownloads: [],
+      });
+    },
   },
   {
     id: "mixed-lanes",

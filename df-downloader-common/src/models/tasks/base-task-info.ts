@@ -45,6 +45,43 @@ export const TaskProgress = z.object({
 export type TaskProgress = z.infer<typeof TaskProgress>;
 
 /**
+ * One named part of a single task's work.
+ *
+ * Same bargain as TaskProgress: the lowest common denominator, so a task that
+ * runs through several distinct parts can say so without inventing a
+ * per-task-type shape, and without those parts having to become tasks of
+ * their own. Tasks opt in by returning `phases` from getStatus(); anything
+ * that does not simply omits it and renders as it always did.
+ *
+ * They are deliberately NOT pipeline steps. A pipeline step is a unit of
+ * scheduling - it queues, it takes a slot, another task can be selected
+ * between one step and the next. These are units of *reporting* inside work
+ * that must not be interleaved: local analysis makes three model calls that
+ * have to hold the machine for the whole run, so splitting them into tasks
+ * would let a transcription in between two of them. See
+ * docs/TASKS_AND_PIPELINES.md.
+ *
+ * Nothing rendering these knows what produced them.
+ */
+export const TaskPhase = z.object({
+  name: z.string(),
+  state: z.enum(["pending", "running", "done", "skipped", "failed"]),
+  startedAt: z.coerce.date().optional(),
+  endedAt: z.coerce.date().optional(),
+  /**
+   * Relative size, for laying phases out proportionally. Omitted means equal.
+   *
+   * Supplied by the task because only the task knows: for an analysis the
+   * extraction call is far longer than the classification, and equal segments
+   * would stall the bar in the middle every time.
+   */
+  weight: z.number().optional(),
+  /** Anything worth showing beside the name, e.g. a running token count. */
+  detail: z.string().optional(),
+});
+export type TaskPhase = z.infer<typeof TaskPhase>;
+
+/**
  * Below this, an estimate is not worth showing.
  *
  * At 1%, a couple of seconds of noise moves the projection by minutes, and a
@@ -104,6 +141,8 @@ export const TaskStatus = z.object({
   held: z.boolean().optional(),
   /** See TaskProgress - present only for tasks that can report progress. */
   progress: TaskProgress.optional(),
+  /** See TaskPhase - present only for tasks that work in named parts. */
+  phases: TaskPhase.array().optional(),
   /**
    * Working time, as a two-scalar stopwatch rather than a history of intervals.
    *

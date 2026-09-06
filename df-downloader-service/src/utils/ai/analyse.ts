@@ -142,10 +142,41 @@ export type AnalysisStage = {
  */
 const LOCAL_CALL_WEIGHTS = { classify: 0.037, summarise: 0.302, extract: 0.661 };
 
+/**
+ * What each call is called, in one place.
+ *
+ * Named here rather than at the call sites because the plan announced up
+ * front and the stage reported as each one starts have to agree exactly - the
+ * consumer matches them by name, and two copies of a string is how that stops
+ * working silently.
+ */
+const PHASE_LABELS = {
+  classify: "Working out what kind of video this is",
+  summarise: "Writing the summary",
+  overview: "Reading the video",
+  extract: "Pulling out the details",
+  tagsOnly: "Suggesting tags",
+} as const;
+
 export type AnalysisInputs = {
   entry: DfContentEntry;
   /** Called as the run moves between calls, purely so the UI can say what it is doing. */
   onStage?: (stage: AnalysisStage) => void;
+  /**
+   * The calls this run intends to make, announced once they are known.
+   *
+   * Separate from onStage because the shape of a run is decided by the engine
+   * - a hosted model does classification and summary in one call, a local one
+   * splits them - and that is only settled after the provider is resolved. A
+   * consumer wanting to show the parts of a run needs them all up front, not
+   * one at a time as each begins.
+   *
+   * The last one may not happen: whether a video's type supports extraction
+   * is only known once classification has run. Announced anyway, on the same
+   * reasoning as the step count and the cost estimate - a run that finishes a
+   * step early is a better surprise than one that grows a step.
+   */
+  onPlan?: (phases: { name: string; weight: number }[]) => void;
   /**
    * Which engine to use, overriding the configured default for this run only.
    * Absent means use the default, which is what an unattended run does.
@@ -855,6 +886,10 @@ export const analyseContent = async (config: AiAnalysisConfig, inputs: AnalysisI
 
   try {
     if (prepared.tagsOnly) {
+      // One call, so the plan is one entry - said anyway, so a consumer never
+      // has to special-case "no plan was announced".
+      inputs.onPlan?.([{ name: PHASE_LABELS.tagsOnly, weight: 1 }]);
+      inputs.onStage?.({ step: 1, of: 1, label: PHASE_LABELS.tagsOnly, fractionComplete: 0 });
       const { parsed, usage } = await provider.callStructured(
           WireTagOnly, prepared.system, prepared.content, buildTagOnlyInstruction(config)
       );
@@ -904,6 +939,21 @@ export const analyseContent = async (config: AiAnalysisConfig, inputs: AnalysisI
     const weights = provider.separatesClassification
       ? [LOCAL_CALL_WEIGHTS.classify, LOCAL_CALL_WEIGHTS.summarise, LOCAL_CALL_WEIGHTS.extract]
       : [LOCAL_CALL_WEIGHTS.classify + LOCAL_CALL_WEIGHTS.summarise, LOCAL_CALL_WEIGHTS.extract];
+    /*
+     * Announced before the first call, so a consumer can lay out the whole run
+     * rather than discovering it a call at a time. The names match exactly
+     * what reportStage sends below, which is the contract.
+     */
+    const plannedPhases: { name: string; weight: number }[] = provider.separatesClassification
+      ? [
+          { name: PHASE_LABELS.classify, weight: weights[0] },
+          { name: PHASE_LABELS.summarise, weight: weights[1] },
+        ]
+      : [{ name: PHASE_LABELS.overview, weight: weights[0] }];
+    if (config.features.structuredData) {
+      plannedPhases.push({ name: PHASE_LABELS.extract, weight: weights[weights.length - 1] });
+    }
+    inputs.onPlan?.(plannedPhases);
     let stage: AnalysisStage | undefined;
     const reportStage = (step: number, label: string) => {
       const fractionComplete = weights.slice(0, step - 1).reduce((total, w) => total + w, 0);
@@ -921,7 +971,7 @@ export const analyseContent = async (config: AiAnalysisConfig, inputs: AnalysisI
     };
 
     if (provider.separatesClassification) {
-      reportStage(1, "Working out what kind of video this is");
+      reportStage(1, PHASE_LABELS.classify);
       const forClassify = await prepareAnalysis(config, {
         ...inputs,
         sources: { ...(inputs.sources ?? config.sources), transcript: false },
@@ -937,7 +987,7 @@ export const analyseContent = async (config: AiAnalysisConfig, inputs: AnalysisI
         "info",
         `Analysis ${inputs.entry.key} classified as ${classified.parsed.contentType} (confidence ${classified.parsed.contentTypeConfidence})`
       );
-      reportStage(2, "Writing the summary");
+      reportStage(2, PHASE_LABELS.summarise);
       const summarised = await provider.callStructured(
         WireSummary,
         prepared.system,
@@ -948,7 +998,7 @@ export const analyseContent = async (config: AiAnalysisConfig, inputs: AnalysisI
       overview = { ...classified.parsed, ...summarised.parsed };
       usage = addUsage(classified.usage, summarised.usage);
     } else {
-      reportStage(1, "Reading the video");
+      reportStage(1, PHASE_LABELS.overview);
       const summarised = await provider.callStructured(
         WireOverview,
         prepared.system,
@@ -970,7 +1020,7 @@ export const analyseContent = async (config: AiAnalysisConfig, inputs: AnalysisI
     let structuredData: AiStructuredData | undefined;
 
     if (config.features.structuredData && EXTRACTABLE_TYPES.includes(overview.contentType)) {
-      reportStage(totalSteps, "Pulling out the details");
+      reportStage(totalSteps, PHASE_LABELS.extract);
       const extraction = await extractStructuredData(provider, config, prepared, overview.contentType, reportTokens);
       structuredData = extraction.data ? anchorFindings(extraction.data, prepared.transcript, prepared.articleText) : undefined;
       logger.log(
