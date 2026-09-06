@@ -37,6 +37,16 @@ const PlayerSettings = () => (
       ]}
     />
     <SelectField
+      name="fullscreenRotate"
+      label="Turn the screen in fullscreen"
+      helperText={getZodDescription(PlayerConfig.shape.fullscreenRotate)}
+      opts={[
+        { id: "auto", label: "Only where it gains picture" },
+        { id: "always", label: "Always turn to landscape" },
+        { id: "never", label: "Never turn the screen" },
+      ]}
+    />
+    <SelectField
       name="hardwareAcceleration"
       label="Use the graphics card to re-encode video"
       helperText={getZodDescription(PlayerConfig.shape.hardwareAcceleration)}

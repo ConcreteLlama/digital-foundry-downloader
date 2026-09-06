@@ -49,6 +49,26 @@ export const PlayerHardwareAcceleration = z
   );
 export type PlayerHardwareAcceleration = z.infer<typeof PlayerHardwareAcceleration>;
 
+/**
+ * Whether going fullscreen should turn the screen to landscape.
+ *
+ * Not a simple on/off, because the honest answer depends on the shape of the
+ * screen. On a tall phone, rotating roughly triples the picture and is what
+ * every video app does. On a near-square screen - a foldable opened out - it
+ * gains almost nothing and just moves everything around, which is worse than
+ * leaving it be.
+ *
+ * "auto" therefore rotates only where it pays: when the screen is clearly
+ * taller than it is wide. The other two exist because that is a judgement,
+ * and someone who disagrees with it should be able to say so.
+ */
+export const PlayerFullscreenRotate = z
+  .enum(["auto", "always", "never"])
+  .describe(
+    "Whether fullscreen turns the screen to landscape. Automatic does it only on screens clearly taller than they are wide, where it actually gains picture."
+  );
+export type PlayerFullscreenRotate = z.infer<typeof PlayerFullscreenRotate>;
+
 export const PlayerConfig = z.object({
   transcode: PlayerTranscodeMode.default("unsupported_only").catch("unsupported_only").describe(
     "Digital Foundry's files use AC-3 audio, which browsers cannot decode - so they play with no sound unless this is on. Only the parts the browser rejects are re-encoded; the video is passed through untouched, which costs almost nothing. Always re-encoding is for testing that path, and re-encodes the video too - it is much slower and there is no reason to leave it on."
@@ -57,6 +77,11 @@ export const PlayerConfig = z.object({
     .catch("auto")
     .describe(
       "Only applies when the video itself has to be re-encoded, which is rare - the audio never uses it, and for these files the video is copied untouched. Note the ffmpeg shipped in this image has no hardware encoder built in, so this currently has no effect and video re-encoding uses the processor either way; the log says which was used."
+    ),
+  fullscreenRotate: PlayerFullscreenRotate.default("auto")
+    .catch("auto")
+    .describe(
+      "Only applies on a device that can rotate. Automatic turns the screen only where it gains real picture - a tall phone, not a near-square foldable."
     ),
   /**
    * A ceiling on concurrent ffmpeg processes.

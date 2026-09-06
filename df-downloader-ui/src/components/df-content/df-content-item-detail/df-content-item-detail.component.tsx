@@ -227,7 +227,31 @@ export const DfContentInfoItemDetail = ({ dfContentName, onClose, startAtSeconds
 
   // Below md the grid is one column whatever the stored preference says, so
   // the media has nowhere else to live and needs a tab of its own.
-  const stacked = belowMd || layout === "stacked";
+  /*
+   * Held still while the player is open.
+   *
+   * `media` is rendered in two different places depending on this - inside a
+   * tab panel when stacked, inside a grid column when not - so a flip is not
+   * a restyle, it is an unmount. That takes ContentMedia and the open player
+   * with it, and the player's own state goes too, so the dialog closes.
+   *
+   * Which is exactly what happened on a foldable's front screen: 399px
+   * portrait, 891px landscape, either side of the md breakpoint. Entering
+   * fullscreen turned the screen, the breakpoint flipped, and the player
+   * vanished - measured, after three wrong guesses, by logging the mounts.
+   *
+   * Freezing costs nothing while a full-screen modal is over the top of it:
+   * nobody can see the layout it would otherwise have changed to, and it
+   * settles as soon as the player closes. Same reasoning as `roomAtOpen`
+   * above, which exists so the player does not rearrange mid-watch.
+   */
+  const [playerIsOpen, setPlayerIsOpen] = useState(false);
+  const naturallyStacked = belowMd || layout === "stacked";
+  const frozenStacked = useRef(naturallyStacked);
+  if (!playerIsOpen) {
+    frozenStacked.current = naturallyStacked;
+  }
+  const stacked = playerIsOpen ? frozenStacked.current : naturallyStacked;
 
   /**
    * Starts playback at a moment an analysis finding refers to.
@@ -329,7 +353,11 @@ export const DfContentInfoItemDetail = ({ dfContentName, onClose, startAtSeconds
     <Box sx={{ minWidth: 0 }}>
       {/* A downloaded file leads over the YouTube embed of the same video,
           with a switcher beneath when there is more than one source. */}
-      <ContentMedia contentEntry={dfContentEntry} onPlayFromReady={onPlayFromReady} />
+      <ContentMedia
+        contentEntry={dfContentEntry}
+        onPlayFromReady={onPlayFromReady}
+        onPlayerOpenChange={setPlayerIsOpen}
+      />
       <DfTagList tags={contentInfo.tags || []} sx={{ justifyContent: "flex-start", marginTop: 2 }} />
       {/* Descriptions are prose with real paragraph breaks (YouTube-sourced
           ones especially - blurb, links, then a chapter list). HTML collapses

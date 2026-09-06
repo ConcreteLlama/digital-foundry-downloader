@@ -18,6 +18,8 @@ export type ContentMediaProps = {
    * somebody else's iframe and cannot be driven from here.
    */
   onPlayFromReady?: (playFrom: (seconds: number) => void) => void;
+  /** Fires as the player opens and closes - see the effect that calls it. */
+  onPlayerOpenChange?: (open: boolean) => void;
 };
 
 type MediaSource = { kind: "download"; index: number } | { kind: "youtube" };
@@ -38,7 +40,7 @@ const sourceKey = (source: MediaSource) => (source.kind === "youtube" ? "youtube
  * between. With one download and no YouTube id there is nothing to choose,
  * and a control offering a single option is just noise.
  */
-export const ContentMedia = ({ contentEntry, onPlayFromReady }: ContentMediaProps) => {
+export const ContentMedia = ({ contentEntry, onPlayFromReady, onPlayerOpenChange }: ContentMediaProps) => {
   const { contentInfo, downloads } = contentEntry;
   // Only media worth playing. An archive has nothing to show in a player, and
   // offering it as a source would be a dead end.
@@ -72,6 +74,17 @@ export const ContentMedia = ({ contentEntry, onPlayFromReady }: ContentMediaProp
   const active = sources.find((source) => sourceKey(source) === selected) ?? sources[0];
 
   const [playerOpen, setPlayerOpen] = useState(false);
+  /*
+   * Announced upward so the layout above can hold still while it is open.
+   *
+   * This panel is rendered in two different places depending on the layout,
+   * so a breakpoint flip unmounts it and everything under it - which on a
+   * phone whose landscape width lands just the wrong side of that breakpoint
+   * meant entering fullscreen closed the player. See the note on `stacked`.
+   */
+  useEffect(() => {
+    onPlayerOpenChange?.(playerOpen);
+  }, [playerOpen, onPlayerOpenChange]);
   /*
    * Plex and Jellyfin are more places this same video can come from, so they
    * belong beside the source picker rather than buried in a file's actions -

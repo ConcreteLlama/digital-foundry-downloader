@@ -400,6 +400,9 @@ export const DownloadPlayer = ({
    * to fix.
    */
   const playerShellRef = useRef<HTMLDivElement | null>(null);
+  // Read inside the long-lived fullscreenchange listener, so it must not
+  // depend on that listener being rebuilt when the setting changes.
+  const rotateModeRef = useRef<string>("auto");
   const [muted, setMuted] = useState(false);
   /*
    * Bumped to ask for the stream again after a failure.
@@ -443,10 +446,22 @@ export const DownloadPlayer = ({
        * before this existed.
        */
       const orientation = screen.orientation as ScreenOrientation & { lock?: (to: string) => Promise<void> };
+      /*
+       * Automatic rotates only where it pays.
+       *
+       * A tall phone gains most of the picture by turning; a near-square
+       * screen - a foldable opened out - gains almost nothing and just moves
+       * everything about, which is worse than leaving it alone. The threshold
+       * is deliberately well clear of square, so only genuinely portrait
+       * screens qualify.
+       */
+      const rotate = rotateModeRef.current;
+      const worthRotating = window.innerWidth / window.innerHeight < 0.8;
+      const wantsLock = rotate === "always" || (rotate !== "never" && worthRotating);
       try {
-        if (active) {
+        if (active && wantsLock) {
           void orientation?.lock?.("landscape").catch(() => {});
-        } else {
+        } else if (!active) {
           orientation?.unlock?.();
         }
       } catch {
@@ -478,6 +493,7 @@ export const DownloadPlayer = ({
   }, [download.downloadLocation]);
 
   const playerConfig = useSelector(selectConfigSection("player"));
+  rotateModeRef.current = playerConfig?.fullscreenRotate ?? "auto";
 
   /*
    * Whether the browser can take this file as it stands, and whether we may
@@ -1233,12 +1249,11 @@ export const DownloadPlayer = ({
           // The shell rather than the video, so our controls come with it -
           // fullscreening the element alone would show the picture and leave
           // the transport behind on the page.
-          const shell = playerShellRef.current;
           if (document.fullscreenElement) {
             void document.exitFullscreen().catch(() => {});
-          } else {
-            void shell?.requestFullscreen().catch(() => {});
+            return;
           }
+          void playerShellRef.current?.requestFullscreen().catch(() => {});
         }}
       >
         <FullscreenIcon fontSize="small" />
@@ -1439,6 +1454,7 @@ export const DownloadPlayer = ({
       {playerControls}
     </Stack>
   );
+
 
   const errorBanner = playbackError && (
     <Alert
