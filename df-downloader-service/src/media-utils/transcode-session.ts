@@ -35,12 +35,24 @@ export type TranscodePlan = {
  * a hand-crafted request from asking the machine to encode something for no
  * reason.
  */
-export const planTranscode = (video?: ProbedVideoStream, audio?: ProbedAudioStream): TranscodePlan => ({
+export const planTranscode = (
+  video?: ProbedVideoStream,
+  audio?: ProbedAudioStream,
+  /*
+   * Forces both, for exercising the video path deliberately.
+   *
+   * Worth having because that path is otherwise unreachable on a library of
+   * H.264 files: the plan is decided from what the file contains, so no
+   * amount of clicking will make it encode a video it can copy. Testing it by
+   * editing the passthrough list means a rebuild to try and another to undo.
+   */
+  forceEncode = false
+): TranscodePlan => ({
   // Unknown counts as playable: an unrecognised codec that the browser is in
   // fact happy with should not cost a needless encode, and if it genuinely
   // cannot play it the element's error event still catches it.
-  video: video?.codecName && !PASSTHROUGH_VIDEO.has(video.codecName) ? "encode" : "copy",
-  audio: audio?.codecName && !PASSTHROUGH_AUDIO.has(audio.codecName) ? "encode" : "copy",
+  video: forceEncode || (video?.codecName && !PASSTHROUGH_VIDEO.has(video.codecName)) ? "encode" : "copy",
+  audio: forceEncode || (audio?.codecName && !PASSTHROUGH_AUDIO.has(audio.codecName)) ? "encode" : "copy",
 });
 
 /** Nothing to do - the file can be served directly, which is always better. */

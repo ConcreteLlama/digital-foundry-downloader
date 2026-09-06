@@ -422,7 +422,14 @@ export const DownloadPlayer = ({
   const videoSupported = useMemo(() => (info ? canBrowserPlay(info) : false), [info]);
   const audioSupported = useMemo(() => (info ? canBrowserPlayAudio(info) : true), [info]);
   const transcodingAllowed = playerConfig?.transcode !== "never";
-  const transcoding = Boolean(info) && transcodingAllowed && (!videoSupported || !audioSupported);
+  /*
+   * "always" exists to exercise the re-encoding path deliberately. Without
+   * it that path is unreachable on a library the browser can already play,
+   * which is most of one - so a bug in it would only ever be found by
+   * whoever first owned an unusual file.
+   */
+  const transcoding =
+    Boolean(info) && transcodingAllowed && (playerConfig?.transcode === "always" || !videoSupported || !audioSupported);
   /*
    * "Supported" now means "there is some way to play this", which is what
    * every guard downstream actually wanted. Without transcoding it still

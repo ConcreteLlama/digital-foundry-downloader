@@ -32,6 +32,7 @@ const PlayerSettings = () => (
       opts={[
         { id: "unsupported_only", label: "Re-encode it so it plays here" },
         { id: "never", label: "Leave it alone - I will watch it elsewhere" },
+        { id: "always", label: "Always re-encode, including the video (testing)" },
       ]}
     />
     <SelectField

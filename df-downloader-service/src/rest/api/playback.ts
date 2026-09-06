@@ -472,7 +472,7 @@ export const makePlaybackRouter = (contentManager: DigitalFoundryContentManager)
       // Nothing to serve and nothing to clean up - the slot was never taken.
       return;
     }
-    const plan = planTranscode(meta?.videoStream, meta?.audioStream);
+    const plan = planTranscode(meta?.videoStream, meta?.audioStream, playerConfig.transcode === "always");
     /*
      * Parsed defensively rather than trusted. This lands in an ffmpeg
      * argument, and a NaN or a negative would either fail the spawn or seek

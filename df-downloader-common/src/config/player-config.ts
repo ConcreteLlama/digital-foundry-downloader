@@ -23,7 +23,7 @@ import { z } from "zod";
  * way to play something that already works.
  */
 export const PlayerTranscodeMode = z
-  .enum(["unsupported_only", "never"])
+  .enum(["unsupported_only", "never", "always"])
   .describe(
     "Whether to re-encode a file the browser cannot play. Only what the browser rejects is re-encoded - everything else is passed through untouched."
   );
@@ -51,7 +51,7 @@ export type PlayerHardwareAcceleration = z.infer<typeof PlayerHardwareAccelerati
 
 export const PlayerConfig = z.object({
   transcode: PlayerTranscodeMode.default("unsupported_only").catch("unsupported_only").describe(
-    "Digital Foundry's files use AC-3 audio, which browsers cannot decode - so they play with no sound unless this is on. Only the parts the browser rejects are re-encoded; the video is passed through untouched, which costs almost nothing."
+    "Digital Foundry's files use AC-3 audio, which browsers cannot decode - so they play with no sound unless this is on. Only the parts the browser rejects are re-encoded; the video is passed through untouched, which costs almost nothing. Always re-encoding is for testing that path, and re-encodes the video too - it is much slower and there is no reason to leave it on."
   ),
   hardwareAcceleration: PlayerHardwareAcceleration.default("auto")
     .catch("auto")
