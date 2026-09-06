@@ -4,7 +4,7 @@ import { ChildProcess, spawn } from "child_process";
 import fs from "fs";
 import os from "os";
 import path from "path";
-import { configDir } from "../../config/config.js";
+import { configDir, configService } from "../../config/config.js";
 import { fileExists } from "../file-utils.js";
 import { BACKEND_LINE, describeComputeBackend } from "../ggml-backend.js";
 
@@ -135,6 +135,9 @@ const resolveBinary = (config: AiLocalProviderConfig) =>
 /** Leaves a couple of cores for everything else the machine is doing. */
 const resolveThreads = (config: AiLocalProviderConfig) =>
   config.threads ?? Math.max(1, (os.cpus()?.length ?? 4) - 2);
+
+/** App log levels at which llama is asked to describe itself - see the -lv argument. */
+const VERBOSE_LOG_LEVELS = ["debug", "silly"];
 
 const HEALTH_TIMEOUT_MS = 10 * 60_000;
 const HEALTH_POLL_MS = 1000;
@@ -316,6 +319,21 @@ export class LocalLlamaServer {
        * tuning everyone's install for one machine's symptom.
        */
       ...(this.config.loadMode ? ["--load-mode", this.config.loadMode] : []),
+      /*
+       * Verbosity follows this app's own log level.
+       *
+       * llama's default says almost nothing about the machine it is running
+       * on. One notch up prints system_info - which instruction sets it will
+       * actually use - along with the load mode and the model buffer sizes,
+       * and that is the difference between diagnosing slow generation and
+       * guessing at it. Establishing that a run was CPU-bound on the wrong
+       * instruction set is otherwise impossible from the outside.
+       *
+       * Tied to the app's level rather than always on, because it is roughly
+       * sixteen times the output of a model load, and someone running at info
+       * has said they do not want this. Measured: 232 lines against 14.
+       */
+      ...(VERBOSE_LOG_LEVELS.includes(configService.config.logging?.logLevel as string) ? ["-lv", "4"] : []),
       /*
        * Offloads what fits and is simply ignored on a CPU-only build, so the
        * same arguments work on a GPU box and a microserver alike.
