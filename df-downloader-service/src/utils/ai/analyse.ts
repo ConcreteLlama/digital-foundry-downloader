@@ -117,7 +117,6 @@ export type AnalysisStage = {
    * known. It is not interpolated within a step, because that would need an
    * expected output length and there is no such thing - see outputTokens.
    */
-  fractionComplete: number;
   /**
    * Tokens generated so far in the current call, where the engine reports them.
    *
@@ -889,7 +888,7 @@ export const analyseContent = async (config: AiAnalysisConfig, inputs: AnalysisI
       // One call, so the plan is one entry - said anyway, so a consumer never
       // has to special-case "no plan was announced".
       inputs.onPlan?.([{ name: PHASE_LABELS.tagsOnly, weight: 1 }]);
-      inputs.onStage?.({ step: 1, of: 1, label: PHASE_LABELS.tagsOnly, fractionComplete: 0 });
+      inputs.onStage?.({ step: 1, of: 1, label: PHASE_LABELS.tagsOnly });
       const { parsed, usage } = await provider.callStructured(
           WireTagOnly, prepared.system, prepared.content, buildTagOnlyInstruction(config)
       );
@@ -956,8 +955,13 @@ export const analyseContent = async (config: AiAnalysisConfig, inputs: AnalysisI
     inputs.onPlan?.(plannedPhases);
     let stage: AnalysisStage | undefined;
     const reportStage = (step: number, label: string) => {
-      const fractionComplete = weights.slice(0, step - 1).reduce((total, w) => total + w, 0);
-      stage = { step, of: totalSteps, label, fractionComplete };
+      /*
+       * How far along the run is used to be computed here as well, from these
+       * same weights, and nothing ever read it. The weights now travel with
+       * the plan instead, so whatever shows progress divides by them once
+       * rather than each consumer being handed a number derived twice.
+       */
+      stage = { step, of: totalSteps, label };
       inputs.onStage?.(stage);
     };
     /** Re-reports the current stage with the tokens generated so far. */
@@ -1052,6 +1056,29 @@ export const analyseContent = async (config: AiAnalysisConfig, inputs: AnalysisI
       evidence: prepared.evidence,
       usage,
     };
+    /*
+     * A run that produced nothing is a failure, not a result.
+     *
+     * Recorded as an error specifically so it does not block a retry: a stored
+     * result without an error is treated as "already analysed" and skipped by
+     * every later scheduled or bulk run, so a blank one is not merely useless -
+     * it is permanent until someone forces a re-analysis by hand.
+     *
+     * Seen for real: a night of scheduled runs where every item came back
+     * classified the same and with nothing written, which is what degenerate
+     * model output looks like from the outside. Whatever the cause, storing it
+     * as a success is the part that turned a bad night into a stuck library.
+     *
+     * Deliberately narrow. Only applies when a summary was actually asked for,
+     * and needs BOTH halves empty - a short video legitimately yields no
+     * conclusion, and a tags-only run has neither by design and never reaches
+     * here.
+     */
+    if (config.features.summary && !result.summary?.trim() && !result.conclusion?.trim()) {
+      const message = `${provider.model} returned an empty summary and conclusion - treating as failed rather than storing a blank analysis`;
+      logger.log("error", `AI analysis produced nothing for ${inputs.entry.key}: ${message}`);
+      return { ...base, contentType: "other", evidence: prepared.evidence, error: message };
+    }
     logAnalysisOutcome(inputs.entry.key, result, started);
     return result;
   } catch (e) {

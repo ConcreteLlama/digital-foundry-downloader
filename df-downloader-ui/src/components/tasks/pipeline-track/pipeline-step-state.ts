@@ -1,4 +1,4 @@
-import { TaskInfo, TaskPipelineInfo, TaskState } from "df-downloader-common";
+import { TaskInfo, TaskPhase, TaskPipelineInfo, TaskState } from "df-downloader-common";
 
 /**
  * What a pipeline step is doing, as one derivation shared by every view.
@@ -123,3 +123,39 @@ export const derivePipelineStepViews = (pipeline: TaskPipelineInfo): PipelineSte
  */
 export const isHiddenOnTrack = (view: PipelineStepView) =>
   view.state === "not_applicable" && !view.task;
+
+/**
+ * How full a step's bar should be, and where its parts divide, for a task
+ * that reports phases.
+ *
+ * Advances only at phase boundaries, which is the same rule the analysis
+ * already applied to its own fraction and for the same reason: a boundary is
+ * a point genuinely known, whereas "how far through writing a summary" is not
+ * a number anything can honestly produce. The model decides when it stops.
+ *
+ * A skipped phase counts as complete. It will never run, and leaving its
+ * share unfilled would park the bar short of the end on every run that
+ * decided partway through that a phase did not apply.
+ */
+export const derivePhaseFill = (phases: TaskPhase[] | undefined) => {
+  if (!phases?.length) {
+    return undefined;
+  }
+  const weights = phases.map((phase) => phase.weight ?? 1);
+  const total = weights.reduce((sum, weight) => sum + weight, 0) || 1;
+  const completed = phases.reduce(
+    (sum, phase, index) => (phase.state === "done" || phase.state === "skipped" ? sum + weights[index] : sum),
+    0
+  );
+  const boundaries: number[] = [];
+  let running = 0;
+  weights.slice(0, -1).forEach((weight) => {
+    running += weight;
+    boundaries.push((running / total) * 100);
+  });
+  return {
+    percent: (completed / total) * 100,
+    boundaries,
+    current: phases.find((phase) => phase.state === "running"),
+  };
+};

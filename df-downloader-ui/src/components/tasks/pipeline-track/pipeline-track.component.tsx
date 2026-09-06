@@ -12,6 +12,7 @@ import { useSelector } from "react-redux";
 import { selectPipeline } from "../../../store/df-tasks/tasks.selector";
 import { monoFontFamily } from "../../../themes/build-theme";
 import {
+  derivePhaseFill,
   derivePipelineStepViews,
   isHiddenOnTrack,
   PipelineStepView,
@@ -114,9 +115,19 @@ const TrackSegment = ({ view, widthPercent, activePercent, dense }: TrackSegment
   // Paused counts as in-progress: pausing a download at 60% used to empty its
   // bar completely, which read as "lost everything" rather than "stopped".
   const holdsProgress = state === "running" || state === "paused";
-  const hasPercent = typeof activePercent === "number";
+  /*
+   * A step that reports phases can say how far along it is without reporting a
+   * percentage: the phases carry weights, and the ones behind it are done. So
+   * it takes precedence over an absent progress number, and stops a step like
+   * analysis - three long calls, none of which can honestly report a fraction
+   * of itself - rendering as an indeterminate shimmer for half an hour.
+   */
+  const phaseFill = derivePhaseFill(task?.status?.phases);
+  const hasPercent = typeof activePercent === "number" || Boolean(phaseFill);
   const fillPercent =
-    holdsProgress && hasPercent
+    holdsProgress && phaseFill
+      ? phaseFill.percent
+      : holdsProgress && typeof activePercent === "number"
       ? Math.min(Math.max(activePercent, 0), 100)
       : state === "done" || state === "carried_over" || state === "failed" || state === "cancelled"
       ? 100
@@ -125,8 +136,14 @@ const TrackSegment = ({ view, widthPercent, activePercent, dense }: TrackSegment
   // an empty bar, indistinguishable from pending.
   const indeterminate = state === "running" && !hasPercent;
 
+  const currentPhase = phaseFill?.current;
   const tooltip = view.reason
     ? `${name} - ${view.reason}`
+    : currentPhase
+    ? // The phase is more use than the step's own message here: the step name
+      // is already on the label, and which of its parts is running is the bit
+      // that changes.
+      `${name} - ${currentPhase.name}${currentPhase.detail ? ` (${currentPhase.detail})` : ""}`
     : message
     ? `${name} - ${message}`
     : `${name} - ${state.replace(/_/g, " ")}`;
@@ -189,6 +206,28 @@ const TrackSegment = ({ view, widthPercent, activePercent, dense }: TrackSegment
                   }
             }
           />
+          {/*
+            Where one part of this step's work ends and the next begins.
+            Drawn over the fill rather than by splitting the bar into separate
+            elements, so the fill stays one continuous animated width and the
+            divisions are pure annotation - a segment that was several bars
+            would have to animate each independently and would show seams at
+            every boundary whether or not anything had happened there.
+          */}
+          {phaseFill?.boundaries.map((boundary: number) => (
+            <Box
+              key={boundary}
+              sx={{
+                position: "absolute",
+                top: 0,
+                bottom: 0,
+                left: `${boundary}%`,
+                width: "1px",
+                backgroundColor: "background.default",
+                opacity: 0.9,
+              }}
+            />
+          ))}
           {(state === "skipped" || state === "paused") && (
             <Box
               sx={{

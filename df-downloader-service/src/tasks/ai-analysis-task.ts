@@ -25,8 +25,6 @@ type AiAnalysisTaskContext = {
   transcriptLines?: SrtLine[];
   /** Set as the run progresses, purely so the UI can say what it is doing. */
   stage?: string;
-  /** How much of the run is behind it, advancing only at call boundaries. */
-  fractionComplete?: number;
   /**
    * The parts of this run, for the UI to show as separate rows.
    *
@@ -105,8 +103,7 @@ const aiAnalysisTaskControls: TaskControls<AiAnalysisResult, AiAnalysisTaskConte
       onPlan: (phases) => {
         context.phases = new TaskPhaseTracker(phases);
       },
-      onStage: ({ step, of, label, outputTokens, fractionComplete, waiting }) => {
-        context.fractionComplete = fractionComplete;
+      onStage: ({ step, of, label, outputTokens, waiting }) => {
         /*
          * The same information the caption below carries, kept as structure
          * rather than prose so it can be shown as parts of the run with their
