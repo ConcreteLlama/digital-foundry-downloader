@@ -5,7 +5,7 @@ import { Box, Dialog, DialogContent, DialogTitle, IconButton, Stack, Tooltip, Ty
 import useMediaQuery from "@mui/material/useMediaQuery";
 import { DfContentEntry } from "df-downloader-common";
 import { DfContentDownloadInfo } from "df-downloader-common/models/df-content-download-info";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { monoFontFamily } from "../../../themes/build-theme";
 import { useAnalysisJumps } from "../ai-analysis/analysis-jumps.ts";
 import { DownloadPlayer } from "./download-player.component.tsx";
@@ -62,7 +62,35 @@ export const VideoPlayerDialog = ({ contentEntry, download, open, onClose, start
     sizing and so sat outside that fix. It matters more here than elsewhere:
     the width the video gets is the width the dialog has.
   */
-  const fullScreen = useMediaQuery("(max-width:899.95px)");
+  const compact = useMediaQuery("(max-width:899.95px)");
+  /*
+   * Frozen while the video is in the browser's own fullscreen.
+   *
+   * The player locks the screen to landscape when it goes fullscreen, and on a
+   * phone whose portrait width is under this breakpoint and landscape width is
+   * over it, that rotation flips this prop. MUI then rebuilds the dialog's
+   * Paper, the video element is remounted, and detaching the element that was
+   * fullscreen makes the browser drop straight back out - so fullscreen
+   * entered, rotated, and immediately returned to the dialog with playback
+   * stopped. Reproduced on a foldable's front screen; the inner screen is over
+   * the breakpoint in both orientations, so nothing flipped and it worked.
+   *
+   * Freezing costs nothing: while the video owns the whole screen, how the
+   * dialog underneath would like to be sized is not a question anyone is
+   * asking.
+   */
+  const [nativeFullscreen, setNativeFullscreen] = useState(false);
+  const frozenCompact = useRef(compact);
+  if (!nativeFullscreen) {
+    frozenCompact.current = compact;
+  }
+  const fullScreen = nativeFullscreen ? frozenCompact.current : compact;
+
+  useEffect(() => {
+    const onChange = () => setNativeFullscreen(Boolean(document.fullscreenElement));
+    document.addEventListener("fullscreenchange", onChange);
+    return () => document.removeEventListener("fullscreenchange", onChange);
+  }, []);
   const [theater, setTheater] = useState(true);
 
 
