@@ -1,6 +1,7 @@
 import { Alert, Box, Button, CircularProgress, Divider, IconButton, Menu, MenuItem, Popover, Slider, Stack, Tooltip, Typography } from "@mui/material";
 import ClosedCaptionIcon from "@mui/icons-material/ClosedCaption";
 import InfoOutlinedIcon from "@mui/icons-material/InfoOutlined";
+import OpenInNewIcon from "@mui/icons-material/OpenInNew";
 import FullscreenIcon from "@mui/icons-material/Fullscreen";
 import PauseIcon from "@mui/icons-material/Pause";
 import PlayArrowIcon from "@mui/icons-material/PlayArrow";
@@ -17,6 +18,7 @@ import {
   getPlaybackInfo,
   reportPlaybackProgress,
   playbackEmbeddedSubtitlesUrl,
+  getPlaybackOpenInLinks,
   playbackStreamUrl,
   playbackSubtitlesUrl,
   playbackTranscodeUrl,
@@ -424,6 +426,15 @@ export const DownloadPlayer = ({
    */
   const [retryNonce, setRetryNonce] = useState(0);
   const [detailsAnchor, setDetailsAnchor] = useState<HTMLElement | null>(null);
+  /*
+   * Where else this can be watched, fetched only when asked.
+   *
+   * Answering it can make a media server read back its entire library, since
+   * neither Plex nor Jellyfin looks an item up by path - far too much to
+   * spend on every video opened on the chance somebody wants it. So it is
+   * loaded when the details are opened and kept for the rest of the session.
+   */
+  const [openInLinks, setOpenInLinks] = useState<{ server: string; url: string }[] | undefined>();
   /*
    * Fullscreen changes the layout rules entirely, so it has to be known
    * rather than assumed: the frame's reserved aspect ratio and height cap are
@@ -1114,6 +1125,16 @@ export const DownloadPlayer = ({
       >
         {secondsToHHMMSS(positionSeconds)}
       </Typography>
+      {/*
+        Wrapped, so the room for the handle cannot be overridden.
+
+        The margin lived on the Slider itself and was cancelled by the Stack's
+        own spacing rule - a parent "& > *" selector beats the child's class,
+        whatever the child asks for. Padding inside a wrapper is nobody else's
+        business, so the handle at zero has somewhere to sit that no layout
+        rule can reclaim.
+      */}
+      <Box sx={{ flexGrow: 1, minWidth: 0, paddingX: 1.25, display: "flex" }}>
       <Slider
         size="small"
         min={0}
@@ -1126,10 +1147,9 @@ export const DownloadPlayer = ({
         onChangeCommitted={(_event, value) => seekTo((Array.isArray(value) ? value[0] : value) * 1000)}
         disabled={!info.durationSeconds}
         aria-label="Seek"
-        // Margin, not padding: the handle overhangs the track at either end,
-        // and without room for it the handle sat on top of the time.
-        sx={{ flexGrow: 1, marginX: 1.5 }}
+        sx={{ flexGrow: 1 }}
       />
+      </Box>
       <Typography
         variant="caption"
         sx={{
@@ -1227,7 +1247,21 @@ export const DownloadPlayer = ({
         asking about whichever of those applies, and cannot know which.
       */}
       <Tooltip title="Playback details">
-        <IconButton size="small" aria-label="Playback details" onClick={(event) => setDetailsAnchor(event.currentTarget)}>
+        <IconButton
+          size="small"
+          aria-label="Playback details"
+          onClick={(event) => {
+            setDetailsAnchor(event.currentTarget);
+            if (openInLinks === undefined) {
+              void getPlaybackOpenInLinks(contentEntry.key, download.downloadLocation)
+                .then(setOpenInLinks)
+                // An empty list either way: a server that cannot answer and
+                // one with nothing to offer are the same thing to a viewer,
+                // and neither is worth an error beside a working player.
+                .catch(() => setOpenInLinks([]));
+            }
+          }}
+        >
           <InfoOutlinedIcon fontSize="small" color={transcoding ? "primary" : "inherit"} />
         </IconButton>
       </Tooltip>
@@ -1275,6 +1309,36 @@ export const DownloadPlayer = ({
             This file plays with sound in Plex, Jellyfin or VLC regardless - the limitation is the browser's, not the
             download's.
           </Typography>
+          {/*
+            The offer that follows from the line above. Watching it in the app
+            it is already in avoids all of this - no re-encoding, no held
+            connection - and play state syncs both ways, so picking it up
+            there keeps your position rather than starting a second one.
+          */}
+          {openInLinks && openInLinks.length > 0 && (
+            <Fragment>
+              <Divider />
+              <Typography variant="caption" color="text.secondary">
+                Or watch it where it already is:
+              </Typography>
+              <Stack direction="row" spacing={1} sx={{ flexWrap: "wrap", gap: 1 }}>
+                {openInLinks.map((link) => (
+                  <Button
+                    key={link.server}
+                    size="small"
+                    variant="outlined"
+                    component="a"
+                    href={link.url}
+                    target="_blank"
+                    rel="noreferrer"
+                    startIcon={<OpenInNewIcon />}
+                  >
+                    {link.server}
+                  </Button>
+                ))}
+              </Stack>
+            </Fragment>
+          )}
         </Stack>
       </Popover>
     </Stack>

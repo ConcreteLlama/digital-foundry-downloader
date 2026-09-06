@@ -184,6 +184,45 @@ export class JellyfinMediaServer implements MediaServerClient, PlayStateWriter {
    */
   private itemIdByPath = new Map<string, string>();
 
+  /** Cached: the server's own id, which its web links carry alongside the item. */
+  private serverId?: string | null;
+
+  private async getServerId(): Promise<string | null> {
+    if (this.serverId !== undefined) {
+      return this.serverId;
+    }
+    try {
+      const response = await this.request("/System/Info");
+      const info: any = response.ok ? await response.json() : undefined;
+      this.serverId = info?.Id ?? null;
+    } catch {
+      // A link is a convenience; failing to build one is not worth an error.
+      this.serverId = null;
+    }
+    // ?? null because the field is also the not-yet-fetched marker, so its
+    // type carries an undefined this function has already ruled out.
+    return this.serverId ?? null;
+  }
+
+  /**
+   * A link to this file in Jellyfin's own web client.
+   *
+   * Points at the configured server rather than anywhere central, because
+   * that is the only address a self-hosted Jellyfin has. Whether a phone
+   * opens the app or the browser is the phone's decision: an Android app can
+   * only claim links for hosts it declared when it was built, and nobody
+   * building a Jellyfin client knows what address your server will live at.
+   */
+  async getItemUrl(serverPath: string): Promise<string | null> {
+    const [itemId, serverId] = await Promise.all([this.resolveItemId(serverPath), this.getServerId()]);
+    if (!itemId) {
+      return null;
+    }
+    const base = this.config.url.replace(/\/+$/, "");
+    const query = new URLSearchParams({ id: itemId, ...(serverId ? { serverId } : {}) });
+    return `${base}/web/#/details?${query}`;
+  }
+
   async resolveItemId(serverPath: string): Promise<string | null> {
     const cached = this.itemIdByPath.get(serverPath);
     if (cached) {

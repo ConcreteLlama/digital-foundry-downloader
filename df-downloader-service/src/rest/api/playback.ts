@@ -426,6 +426,27 @@ export const makePlaybackRouter = (contentManager: DigitalFoundryContentManager)
    * is to see everything holding a slot, including a stream for a video you
    * are no longer looking at.
    */
+  /**
+   * Where else this file can be watched.
+   *
+   * Offered because the app on the other end is often the better place for
+   * it - a phone gets a client built for the job, with no re-encoding and no
+   * held connection - and because play state already syncs both ways, so
+   * handing over mid-video keeps the position rather than forking it.
+   *
+   * An empty list is an ordinary answer, not an error: no media servers set
+   * up, or a file none of them has indexed yet, which is the usual case for
+   * something downloaded moments ago.
+   */
+  router.get("/:contentKey/open-in", async (req: Request, res: Response) => {
+    const resolved = await resolveDownload(req);
+    if (!resolved.ok) {
+      return sendError(res, resolved.error, resolved.code);
+    }
+    const links = await serviceLocator.mediaServers.getItemLinks(resolved.filePath);
+    return sendResponse(res, { links });
+  });
+
   router.get("/streams", async (_req: Request, res: Response) => {
     return sendResponse(res, { streams: listTranscodes() });
   });

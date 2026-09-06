@@ -19,6 +19,19 @@ export const getPlaybackInfo = async (contentKey: string, downloadLocation: stri
   return parseResponseBody(result, PlaybackInfo).data;
 };
 
+/**
+ * Links that open this file on a configured media server.
+ *
+ * Fetched on demand rather than with the playback info, because answering it
+ * can mean the server reading back its whole library - neither Plex nor
+ * Jellyfin offers a lookup by path - and that is far too much to spend on
+ * every video opened just in case somebody asks.
+ */
+export const getPlaybackOpenInLinks = async (contentKey: string, downloadLocation: string) => {
+  const body = await fetchJson(playbackUrl(contentKey, downloadLocation, "open-in"), { method: "GET" });
+  return (body?.data?.links ?? []) as { server: string; url: string }[];
+};
+
 export const playbackStreamUrl = (contentKey: string, downloadLocation: string) =>
   playbackUrl(contentKey, downloadLocation, "stream");
 

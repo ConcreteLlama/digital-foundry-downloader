@@ -141,6 +141,48 @@ export class PlexMediaServer implements MediaServerClient, PlayStateWriter {
    */
   private itemIdByPath = new Map<string, string | null>();
 
+  /** Cached: the server's own identifier, which every Plex link is keyed on. */
+  private machineIdentifier?: string | null;
+
+  private async getMachineIdentifier(): Promise<string | null> {
+    if (this.machineIdentifier !== undefined) {
+      return this.machineIdentifier;
+    }
+    try {
+      const response = await this.request("/identity");
+      const body: any = response.ok ? await response.json() : undefined;
+      this.machineIdentifier = body?.MediaContainer?.machineIdentifier ?? null;
+    } catch {
+      // A link is a convenience, so a failure to build one is not an error.
+      this.machineIdentifier = null;
+    }
+    // ?? null because the field is also the not-yet-fetched marker, so its
+    // type carries an undefined this function has already ruled out.
+    return this.machineIdentifier ?? null;
+  }
+
+  /**
+   * A link to this file, through Plex's own web address rather than the
+   * server's.
+   *
+   * app.plex.tv on purpose: it is a host the official apps declare, so a
+   * phone stands a real chance of opening the app rather than a browser -
+   * which a link to a private LAN address cannot do, since no app can claim
+   * a host nobody knew about when it was built. The server is named in the
+   * link by its identifier, so this still resolves to your own machine.
+   */
+  async getItemUrl(serverPath: string): Promise<string | null> {
+    const [ratingKey, machineIdentifier] = await Promise.all([
+      this.resolveItemId(serverPath),
+      this.getMachineIdentifier(),
+    ]);
+    if (!ratingKey || !machineIdentifier) {
+      return null;
+    }
+    const key = encodeURIComponent(`/library/metadata/${ratingKey}`);
+    return `https://app.plex.tv/desktop/#!/server/${machineIdentifier}/details?key=${key}`;
+  }
+
   async resolveItemId(serverPath: string): Promise<string | null> {
     if (this.itemIdByPath.has(serverPath)) {
       return this.itemIdByPath.get(serverPath) ?? null;

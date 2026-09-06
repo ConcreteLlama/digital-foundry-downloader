@@ -115,6 +115,32 @@ export interface PlayStateReader {
   readPlayState(serverPaths: string[]): Promise<Map<string, ServerPlayState>>;
 }
 
+/**
+ * A server that can say where one of its items lives, as a link.
+ *
+ * Worth having because the app it points at is usually the better place to
+ * watch something: a phone on a slow connection gets a client built for it,
+ * with no re-encoding, no held connection and no custom transport. Play state
+ * already syncs both ways, so handing over mid-video keeps the position
+ * rather than forking it.
+ *
+ * A third capability rather than part of MediaServerClient, on the same
+ * reasoning as the other two: a server that cannot do it simply does not
+ * implement it, and nothing has to pretend.
+ */
+export interface ItemLinker {
+  /**
+   * A URL that opens this file on the server, or null if it has no such item.
+   *
+   * Null is an ordinary answer - the same "not indexed yet" case
+   * resolveItemId already has.
+   */
+  getItemUrl(serverPath: string): Promise<string | null>;
+}
+
+export const canLinkToItem = (client: MediaServerClient): client is MediaServerClient & ItemLinker =>
+  typeof (client as Partial<ItemLinker>).getItemUrl === "function";
+
 export const canReadPlayState = (
   client: MediaServerClient
 ): client is MediaServerClient & PlayStateReader =>

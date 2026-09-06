@@ -11,7 +11,7 @@ import {
 } from "df-downloader-common/config/media-servers-config.js";
 import { JellyfinMediaServer } from "./jellyfin.js";
 import { PlexMediaServer } from "./plex.js";
-import {
+import { canLinkToItem,
   MediaServerClient,
   MediaServerTestResult,
   ServerPlayState,
@@ -187,6 +187,45 @@ export class MediaServerManager {
    * Resolving a path to an item is cached per client, because this arrives
    * repeatedly during a single viewing.
    */
+  /**
+   * Where else this file can be watched.
+   *
+   * Offered because the app on the other end is often the better place for
+   * it: a phone gets a client built for the job, with no re-encoding, no held
+   * connection and no custom transport - and play state already syncs both
+   * ways, so handing over mid-video keeps the position rather than forking
+   * it.
+   *
+   * Every configured server is asked, not just the ones syncing play state:
+   * wanting to open something in Plex is unrelated to whether Plex is trusted
+   * to record what you watched.
+   *
+   * A server that has not indexed the file yet simply contributes nothing.
+   * That is the ordinary case for a fresh download, not a failure, and it is
+   * why this returns a list rather than promising an answer.
+   */
+  async getItemLinks(localPath: string): Promise<{ server: string; url: string }[]> {
+    const links: { server: string; url: string }[] = [];
+    for (const { client, mapping } of this.servers) {
+      if (!canLinkToItem(client)) {
+        continue;
+      }
+      const serverPath = applyPathMapping(localPath, mapping);
+      try {
+        const url = await client.getItemUrl(serverPath);
+        if (url) {
+          links.push({ server: client.type, url });
+        }
+      } catch (e: any) {
+        // Never fatal. This is a convenience beside a player that already
+        // works, so one unreachable server must not cost the others their
+        // links or the caller its response.
+        logger.log("debug", `Could not build a ${client.type} link for "${serverPath}": ${e?.message ?? e}`);
+      }
+    }
+    return links;
+  }
+
   async reportPlayback(localPath: string, positionSeconds: number, durationSeconds: number) {
     for (const { client, mapping, syncPlayState } of this.servers) {
       if (!syncPlayState || !canWritePlayState(client)) {
