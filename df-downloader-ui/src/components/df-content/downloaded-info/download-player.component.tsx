@@ -1,6 +1,10 @@
-import { Alert, Box, CircularProgress, IconButton, Slider, Stack, Tooltip, Typography } from "@mui/material";
+import { Alert, Box, CircularProgress, IconButton, Menu, MenuItem, Slider, Stack, Tooltip, Typography } from "@mui/material";
+import ClosedCaptionIcon from "@mui/icons-material/ClosedCaption";
+import FullscreenIcon from "@mui/icons-material/Fullscreen";
 import PauseIcon from "@mui/icons-material/Pause";
 import PlayArrowIcon from "@mui/icons-material/PlayArrow";
+import VolumeOffIcon from "@mui/icons-material/VolumeOff";
+import VolumeUpIcon from "@mui/icons-material/VolumeUp";
 import { Chapter, DfContentEntry, DfContentInfoUtils, PlaybackInfo, secondsToHHMMSS } from "df-downloader-common";
 import { DfContentDownloadInfo } from "df-downloader-common/models/df-content-download-info";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -364,9 +368,22 @@ export const DownloadPlayer = ({
   const [streamOffset, setStreamOffset] = useState(0);
   const streamOffsetRef = useRef(0);
   streamOffsetRef.current = streamOffset;
-  const [transcodedPlaying, setTranscodedPlaying] = useState(false);
+  const [playing, setPlaying] = useState(false);
   // Read from inside long-lived event handlers, which must not be rebuilt
   // whenever these change - see the position and progress effects.
+  /*
+   * State for the replacement transport.
+   *
+   * All of it exists only because switching the native controls off takes
+   * away everything, not just the scrubber - the centre play button, volume,
+   * fullscreen and the captions menu go with it. A bar that removes those
+   * without putting them back is worse than the wrong scrubber it was meant
+   * to fix.
+   */
+  const playerShellRef = useRef<HTMLDivElement | null>(null);
+  const [muted, setMuted] = useState(false);
+  const [captionsAnchor, setCaptionsAnchor] = useState<HTMLElement | null>(null);
+  const [activeTrack, setActiveTrack] = useState(0);
   const transcodingRef = useRef(false);
   const probedDurationRef = useRef<number | undefined>(undefined);
   // Captions are turned on once per file, not on every render - otherwise
@@ -640,17 +657,42 @@ export const DownloadPlayer = ({
     }
   }, [supported, layout, download.downloadLocation]);
 
-  const seekTo = useCallback((startMs: number) => {
-    const video = videoRef.current;
-    if (!video) {
-      return;
-    }
-    video.currentTime = startMs / 1000;
-    void video.play().catch(() => {
-      // Autoplay policy can refuse this if nothing has been played yet. The
-      // seek still happened, so the user can press play themselves.
-    });
-  }, []);
+  /*
+   * The one place the two playback paths genuinely differ.
+   *
+   * A direct file is seekable by byte range, so moving within it is what the
+   * element already does well. A transcoded stream is generated as it is
+   * sent, so the bytes for a later moment do not exist yet and the only way
+   * there is to ask for a new stream starting from that point.
+   *
+   * This is also what chapter and finding jumps call - they predate
+   * transcoding, and without the branch below a jump on a re-encoded file
+   * would move within the fragment instead of the video, landing somewhere
+   * unrelated to the chapter that was clicked.
+   */
+  const seekTo = useCallback(
+    (startMs: number) => {
+      const seconds = Math.max(0, Math.floor(startMs / 1000));
+      setPositionSeconds(seconds);
+      if (transcodingRef.current) {
+        // The reload starts paused; onLoadedMetadata resumes it when it was
+        // playing, and a jump from a chapter list should start playing too.
+        setPlaying(true);
+        setStreamOffset(seconds);
+        return;
+      }
+      const video = videoRef.current;
+      if (!video) {
+        return;
+      }
+      video.currentTime = seconds;
+      void video.play().catch(() => {
+        // Autoplay policy can refuse this if nothing has been played yet. The
+        // seek still happened, so the user can press play themselves.
+      });
+    },
+    []
+  );
 
   // Effect rather than during render: handing a function to a parent is a
   // side effect, and doing it inline would fire on every render.
@@ -723,16 +765,21 @@ export const DownloadPlayer = ({
       key={download.downloadLocation}
       ref={videoRef}
       /*
-        Native controls, except when transcoding.
+        Our transport, not the browser's, for every file.
 
-        The element's own bar is driven by its own timeline, and a transcoded
-        stream's timeline starts wherever it was generated from - so the
-        scrubber would show the remaining video as though it were the whole
-        thing, and rescale itself on every seek. Ours is driven by the probed
-        duration instead. It replaces the native bar rather than sitting on
-        top of it, which is what made a second bar the wrong idea elsewhere.
+        It began as a transcode-only replacement, because the element's own
+        bar is driven by its own timeline and a transcoded stream starts
+        wherever it was generated from - so the scrubber showed the remaining
+        video as though it were the whole thing. But having two different
+        players depending on which file you opened is worse than either one,
+        so the same bar now drives both and only the seek differs underneath.
+
+        What that costs is the things the native bar gave away free: keyboard
+        shortcuts, playback speed and picture-in-picture. Shortcuts are put
+        back below; the other two are not, and would have to be built if they
+        turn out to be missed.
       */
-      controls={!transcoding}
+      controls={false}
       autoPlay={autoPlay}
       /*
         Nothing is fetched until play is pressed, when the player is sitting
@@ -822,12 +869,12 @@ export const DownloadPlayer = ({
       }
       onLoadedMetadata={() => {
         const video = videoRef.current;
-        if (video && transcoding && transcodedPlaying) {
+        if (video && transcoding && playing) {
           void video.play().catch(() => {});
         }
       }}
-      onPlay={() => transcoding && setTranscodedPlaying(true)}
-      onPause={() => transcoding && setTranscodedPlaying(false)}
+      onPlay={() => setPlaying(true)}
+      onPause={() => setPlaying(false)}
       sx={{
         width: "100%",
         maxHeight: maxHeight ?? "60vh",
@@ -878,24 +925,37 @@ export const DownloadPlayer = ({
    * Deliberately plain. It stands in for the browser's own bar rather than
    * competing with it, and a file that plays directly never sees it.
    */
-  const transcodeControls = transcoding && (
-    <Stack direction="row" spacing={1} sx={{ alignItems: "center", paddingX: 1, paddingTop: 0.5 }}>
-      <IconButton
-        size="small"
-        aria-label={transcodedPlaying ? "Pause" : "Play"}
-        onClick={() => {
-          const video = videoRef.current;
-          if (!video) {
-            return;
-          }
-          if (video.paused) {
-            void video.play().catch(() => {});
-          } else {
-            video.pause();
-          }
-        }}
-      >
-        {transcodedPlaying ? <PauseIcon fontSize="small" /> : <PlayArrowIcon fontSize="small" />}
+  const togglePlay = () => {
+    const video = videoRef.current;
+    if (!video) {
+      return;
+    }
+    if (video.paused) {
+      void video.play().catch(() => {});
+    } else {
+      video.pause();
+    }
+  };
+
+  /*
+   * Our own transport, for the transcoded path only.
+   *
+   * Everything here exists because the element's timeline is not the video's:
+   * a transcoded stream starts at whatever second it was generated from, so
+   * the element's currentTime is an offset into the stream and its duration
+   * is the remainder. Position and length therefore come from streamOffset
+   * and the probed duration, and a seek is a new stream rather than a move
+   * within this one.
+   *
+   * It carries volume, captions and fullscreen as well as the bar, because
+   * switching the native controls off takes those away too - a replacement
+   * that only replaces the scrubber leaves the player less usable than the
+   * problem it was solving.
+   */
+  const playerControls = (
+    <Stack direction="row" spacing={0.5} sx={{ alignItems: "center", paddingX: 1, paddingTop: 0.5 }}>
+      <IconButton size="small" aria-label={playing ? "Pause" : "Play"} onClick={togglePlay}>
+        {playing ? <PauseIcon fontSize="small" /> : <PlayArrowIcon fontSize="small" />}
       </IconButton>
       <Typography variant="caption" sx={{ fontFamily: monoFontFamily, whiteSpace: "nowrap" }}>
         {secondsToHHMMSS(positionSeconds)}
@@ -906,35 +966,195 @@ export const DownloadPlayer = ({
         max={Math.max(1, Math.floor(info.durationSeconds ?? 0))}
         value={Math.min(positionSeconds, Math.floor(info.durationSeconds ?? 0))}
         // Committed rather than continuous: every change starts a new encode,
-        // so reacting while the handle is being dragged would spawn one per
-        // pixel and cancel each in turn.
-        onChangeCommitted={(_event, value) => {
-          const target = Array.isArray(value) ? value[0] : value;
-          setPositionSeconds(target);
-          setStreamOffset(target);
-        }}
+        // so reacting while the handle is dragged would spawn one per pixel
+        // and cancel each in turn.
+        // Milliseconds: seekTo is the same entry point chapter jumps use.
+        onChangeCommitted={(_event, value) => seekTo((Array.isArray(value) ? value[0] : value) * 1000)}
         disabled={!info.durationSeconds}
         aria-label="Seek"
-        sx={{ flexGrow: 1 }}
+        sx={{ flexGrow: 1, marginX: 1 }}
       />
       <Typography variant="caption" sx={{ fontFamily: monoFontFamily, whiteSpace: "nowrap" }}>
         {info.durationSeconds ? secondsToHHMMSS(Math.floor(info.durationSeconds)) : "--:--"}
       </Typography>
-      <Tooltip title="This file's audio can't be played by your browser, so it's being re-encoded as you watch. Skipping restarts it from the new position.">
-        <Typography variant="caption" color="text.secondary" sx={{ cursor: "help", whiteSpace: "nowrap" }}>
-          re-encoding
-        </Typography>
-      </Tooltip>
+      <IconButton
+        size="small"
+        aria-label={muted ? "Unmute" : "Mute"}
+        onClick={() => {
+          const video = videoRef.current;
+          if (video) {
+            video.muted = !video.muted;
+            setMuted(video.muted);
+          }
+        }}
+      >
+        {muted ? <VolumeOffIcon fontSize="small" /> : <VolumeUpIcon fontSize="small" />}
+      </IconButton>
+      {info.subtitleTracks.length > 0 && (
+        <IconButton
+          size="small"
+          aria-label="Subtitles"
+          onClick={(event) => setCaptionsAnchor(event.currentTarget)}
+        >
+          <ClosedCaptionIcon fontSize="small" color={activeTrack >= 0 ? "primary" : "inherit"} />
+        </IconButton>
+      )}
+      <Menu anchorEl={captionsAnchor} open={Boolean(captionsAnchor)} onClose={() => setCaptionsAnchor(null)}>
+        {/*
+          Driven straight at the element's text tracks, which is what the
+          browser's own menu was doing before it was switched off.
+        */}
+        <MenuItem
+          selected={activeTrack < 0}
+          onClick={() => {
+            const tracks = videoRef.current?.textTracks;
+            if (tracks) {
+              for (let index = 0; index < tracks.length; index++) {
+                tracks[index].mode = "disabled";
+              }
+            }
+            setActiveTrack(-1);
+            setCaptionsAnchor(null);
+          }}
+        >
+          Off
+        </MenuItem>
+        {info.subtitleTracks.map((track, index) => (
+          <MenuItem
+            key={`cc-${track.source}-${track.index}`}
+            selected={activeTrack === index}
+            onClick={() => {
+              const tracks = videoRef.current?.textTracks;
+              if (tracks) {
+                for (let position = 0; position < tracks.length; position++) {
+                  tracks[position].mode = position === index ? "showing" : "disabled";
+                }
+              }
+              setActiveTrack(index);
+              setCaptionsAnchor(null);
+            }}
+          >
+            {track.label}
+          </MenuItem>
+        ))}
+      </Menu>
+      <IconButton
+        size="small"
+        aria-label="Fullscreen"
+        onClick={() => {
+          // The shell rather than the video, so our controls come with it -
+          // fullscreening the element alone would show the picture and leave
+          // the transport behind on the page.
+          const shell = playerShellRef.current;
+          if (document.fullscreenElement) {
+            void document.exitFullscreen().catch(() => {});
+          } else {
+            void shell?.requestFullscreen().catch(() => {});
+          }
+        }}
+      >
+        <FullscreenIcon fontSize="small" />
+      </IconButton>
+      {transcoding && (
+        <Tooltip title="This file's audio cannot be played by your browser, so it is being re-encoded as you watch. Skipping restarts it from the new position.">
+          <Typography variant="caption" color="text.secondary" sx={{ cursor: "help", whiteSpace: "nowrap" }}>
+            re-encoding
+          </Typography>
+        </Tooltip>
+      )}
     </Stack>
   );
 
-  const videoElement = transcoding ? (
-    <Stack sx={{ width: "100%", minWidth: 0 }}>
-      {videoSurface}
-      {transcodeControls}
+  /*
+   * The shortcuts the browser's own controls used to provide.
+   *
+   * Switching those off took these with them, and losing space-to-pause is
+   * the sort of regression that makes a player feel broken without anyone
+   * being able to say why. Scoped to the player rather than the document:
+   * a global space handler would fight every other control on the page.
+   */
+  const onPlayerKeyDown = (event: React.KeyboardEvent) => {
+    const video = videoRef.current;
+    if (!video) {
+      return;
+    }
+    const handled = () => {
+      event.preventDefault();
+      event.stopPropagation();
+    };
+    switch (event.key) {
+      case " ":
+      case "k":
+        handled();
+        togglePlay();
+        return;
+      case "ArrowLeft":
+        handled();
+        seekTo(Math.max(0, positionSeconds - 10) * 1000);
+        return;
+      case "ArrowRight":
+        handled();
+        seekTo((positionSeconds + 10) * 1000);
+        return;
+      case "m":
+        handled();
+        video.muted = !video.muted;
+        setMuted(video.muted);
+        return;
+      case "f":
+        handled();
+        if (document.fullscreenElement) {
+          void document.exitFullscreen().catch(() => {});
+        } else {
+          void playerShellRef.current?.requestFullscreen().catch(() => {});
+        }
+        return;
+      default:
+        return;
+    }
+  };
+
+  const videoElement = (
+    <Stack
+      ref={playerShellRef}
+      // Focusable so the shortcuts above have somewhere to land. Clicking the
+      // picture focuses it, which is what a viewer does before reaching for
+      // the space bar anyway.
+      tabIndex={0}
+      onKeyDown={onPlayerKeyDown}
+      sx={{
+        width: "100%",
+        minWidth: 0,
+        backgroundColor: "common.black",
+        borderRadius: 1,
+        "&:focus": { outline: "none" },
+        "&:focus-visible": { outline: "2px solid", outlineColor: "primary.main" },
+      }}
+    >
+      {/*
+        The picture, with the two things the browser gave us for free and
+        stops giving once its controls are off: click anywhere to pause, and
+        something to press when it is paused.
+      */}
+      <Box sx={{ position: "relative", display: "flex", minWidth: 0 }} onClick={togglePlay}>
+        {videoSurface}
+        {!playing && (
+          <Box
+            sx={{
+              position: "absolute",
+              inset: 0,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              pointerEvents: "none",
+            }}
+          >
+            <PlayArrowIcon sx={{ fontSize: 64, color: "common.white", opacity: 0.85 }} />
+          </Box>
+        )}
+      </Box>
+      {playerControls}
     </Stack>
-  ) : (
-    videoSurface
   );
 
   const errorBanner = playbackError && (

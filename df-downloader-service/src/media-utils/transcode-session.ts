@@ -68,12 +68,44 @@ export const isPassthrough = (plan: TranscodePlan) => plan.video === "copy" && p
  * that self-correcting: a slot lost by a bug nobody has found yet comes back
  * as soon as the process behind it exits.
  */
-const live = new Set<{ child: ChildProcess }>();
+/**
+ * How long a stream may produce nothing before it is assumed abandoned.
+ *
+ * Generous on purpose. A paused viewer stops reading, ffmpeg fills the pipe
+ * and then blocks on the write, so no bytes flow - which is indistinguishable
+ * from a tab left open in another window. Five minutes is longer than any
+ * pause someone is coming back from quickly, and short enough that a
+ * forgotten tab does not hold a slot all evening.
+ *
+ * Only reclaims a slot; it does not fix a viewer who returns to a dead
+ * stream, who gets an error and can press play again.
+ */
+const IDLE_TIMEOUT_MS = 5 * 60_000;
+
+type LiveSession = { child: ChildProcess; lastActivity: number; stop: () => void; label: string };
+
+const live = new Set<LiveSession>();
 
 const prune = () => {
+  const now = Date.now();
   for (const entry of live) {
     if (entry.child.exitCode !== null || entry.child.signalCode !== null || entry.child.killed) {
       live.delete(entry);
+      continue;
+    }
+    /*
+     * Nothing has been read from this in a long time, so nobody is watching.
+     *
+     * The socket staying open is not evidence of a viewer: a closed tab
+     * usually drops it, but a machine that slept, a proxy holding the
+     * connection, or simply a paused video all leave it open with ffmpeg
+     * blocked on a write nobody drains. Without this those hold a slot until
+     * the service restarts, which is how two of them made every later request
+     * fail.
+     */
+    if (now - entry.lastActivity > IDLE_TIMEOUT_MS) {
+      logger.log("info", `Stopping an abandoned transcode of ${entry.label} - nothing read from it in five minutes`);
+      entry.stop();
     }
   }
 };
@@ -156,6 +188,16 @@ const buildArgs = (
  * disconnects, or a closed tab leaves ffmpeg encoding into a pipe nobody
  * reads until it blocks forever.
  */
+/*
+ * Swept on a timer as well as on each request.
+ *
+ * Checking only when a new request arrives would leave an abandoned stream
+ * running until somebody happened to want one - which on a personal install
+ * could be days. Unref'd so it never holds the process open at shutdown.
+ */
+const sweep = setInterval(prune, 60_000);
+sweep.unref?.();
+
 export const startTranscode = (
   filePath: string,
   startSeconds: number,
@@ -174,9 +216,9 @@ export const startTranscode = (
   );
   logger.log("debug", `ffmpeg transcode args: ${args.join(" ")}`);
   const child = spawn(ffmpegPath, args);
-  const entry = { child };
-  live.add(entry);
   let stopped = false;
+  const entry: LiveSession = { child, lastActivity: Date.now(), label: filePath, stop: () => stop() };
+  live.add(entry);
   const stop = () => {
     if (stopped) {
       return;
@@ -188,6 +230,14 @@ export const startTranscode = (
     // so a polite stop can leave the process alive indefinitely.
     child.kill("SIGKILL");
   };
+  /*
+   * Bytes leaving for the client are the only honest sign a viewer is still
+   * there. `data` fires as the pipe drains, which stops the moment nothing is
+   * reading - see the idle sweep above.
+   */
+  child.stdout?.on("data", () => {
+    entry.lastActivity = Date.now();
+  });
   child.stderr?.on("data", (chunk) => {
     const text = String(chunk).trim();
     if (text) {
