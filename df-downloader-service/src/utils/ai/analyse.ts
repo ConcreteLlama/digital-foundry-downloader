@@ -1065,8 +1065,40 @@ export const analyseContent = async (config: AiAnalysisConfig, inputs: AnalysisI
       stage = { step, of: totalSteps, label };
       inputs.onStage?.(stage);
     };
+    /*
+     * Says what setting the model up came to, once it is known.
+     *
+     * Fired on the first generated token rather than when the phase ends,
+     * because those are different moments: the phase closes as soon as the
+     * first real call begins, and the model is still loading at that point.
+     * The device is only decided once the server has actually started, so
+     * reporting any earlier would mean reporting nothing - which is what the
+     * step drilled into showed, on the one step best placed to answer the
+     * question people have about a local run.
+     *
+     * Only for the local engine. A hosted model runs on someone else's
+     * hardware and "running on" would be an invention.
+     */
+    let modelReadyReported = false;
+    const reportModelReady = () => {
+      if (!preparesModel || modelReadyReported) {
+        return;
+      }
+      modelReadyReported = true;
+      const backend = provider.describeBackend?.();
+      const fields: TaskOutputField[] = [{ label: "Model", value: provider.model }];
+      if (backend) {
+        fields.unshift({ label: "Running on", value: backend });
+      }
+      inputs.onPhaseOutcome?.(PHASE_LABELS.prepare, backend ?? "Loaded", fields);
+    };
+
     /** Re-reports the current stage with the tokens generated so far. */
     const reportTokens = ({ outputTokens, waiting }: { outputTokens: number; waiting?: boolean }) => {
+      // Generation has started, so the server is up and the device is settled.
+      if (outputTokens > 0) {
+        reportModelReady();
+      }
       if (!stage) {
         return;
       }
