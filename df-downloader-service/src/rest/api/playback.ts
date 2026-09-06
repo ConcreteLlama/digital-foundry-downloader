@@ -422,10 +422,29 @@ export const makePlaybackRouter = (contentManager: DigitalFoundryContentManager)
       return sendError(res, "Transcoding for playback is turned off in settings", 409);
     }
     const { filePath } = resolved;
+    /*
+     * Watched from here, before anything is awaited.
+     *
+     * Registering this after the probe leaked a slot every time: the probe
+     * takes a moment on a large file, a viewer skipping again aborts the
+     * request while it runs, and the listener was then attached to a response
+     * that had already closed - so it never fired, the process was never
+     * killed and the count never came back down. Two of those and every
+     * subsequent request was refused, which presents as the file being
+     * unplayable rather than as anything to do with seeking.
+     */
+    let clientGone = false;
+    res.on("close", () => {
+      clientGone = true;
+    });
     const meta = await extractBaseMetadata(filePath, false).catch((e) => {
       logger.log("warn", `Transcode probe failed for ${filePath}: ${e}`);
       return undefined;
     });
+    if (clientGone) {
+      // Nothing to serve and nothing to clean up - the slot was never taken.
+      return;
+    }
     const plan = planTranscode(meta?.videoStream, meta?.audioStream);
     /*
      * Parsed defensively rather than trusted. This lands in an ffmpeg
@@ -442,6 +461,15 @@ export const makePlaybackRouter = (contentManager: DigitalFoundryContentManager)
         `Already re-encoding ${playerConfig.maxConcurrentStreams} video(s) for playback - try again when one finishes`,
         503
       );
+    }
+    /*
+     * Checked again now the slot is held. The gap between the check above and
+     * this line is small but real, and losing a slot here is exactly the
+     * failure this route already had once.
+     */
+    if (clientGone) {
+      session.stop();
+      return;
     }
     res.setHeader("Content-Type", "video/mp4");
     // Explicitly not seekable and not cacheable: see the note above. A cached

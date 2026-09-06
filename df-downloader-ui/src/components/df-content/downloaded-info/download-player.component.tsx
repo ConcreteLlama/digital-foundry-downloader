@@ -796,8 +796,17 @@ export const DownloadPlayer = ({
       onError={() => {
         // The backstop for an optimistic canPlayType: the element only finds
         // out it cannot decode once it has actually read the file.
+        /*
+         * Two very different causes, and the wrong message sent someone
+         * looking at the file. On the transcoded path a failure usually is
+         * not the codec at all - it is the machine already re-encoding as
+         * many videos as it is allowed to, which is temporary and worth
+         * saying so, where "your codec is unsupported" reads as permanent.
+         */
         setPlaybackError(
-          "This file could not be played in the browser. Its codec is probably not supported on this machine."
+          transcoding
+            ? "This video could not be re-encoded for playback just now. The machine may already be busy re-encoding others - wait a moment and try again."
+            : "This file could not be played in the browser. Its codec is probably not supported on this machine."
         );
       }}
       /*

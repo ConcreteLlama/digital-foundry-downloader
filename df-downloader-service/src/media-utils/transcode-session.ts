@@ -54,9 +54,34 @@ export const isPassthrough = (plan: TranscodePlan) => plan.video === "copy" && p
  * ceiling a couple of people scrubbing could bury the machine. Refused rather
  * than queued: a viewer waiting for a video that never starts has no way to
  * tell that from a broken one, where an immediate "busy" is at least true.
+ *
+ * Tracked as live processes rather than as a number.
+ *
+ * A bare counter only stays correct if every path that increments it also
+ * decrements it, and one that did not - a client vanishing during the probe,
+ * so the disconnect handler was attached to an already-closed response - left
+ * the count permanently high. Every later request was refused, and it
+ * presented as the video being unplayable rather than as anything to do with
+ * playback having been stopped.
+ *
+ * Deriving the count from processes that are genuinely still running makes
+ * that self-correcting: a slot lost by a bug nobody has found yet comes back
+ * as soon as the process behind it exits.
  */
-let active = 0;
-export const activeTranscodes = () => active;
+const live = new Set<{ child: ChildProcess }>();
+
+const prune = () => {
+  for (const entry of live) {
+    if (entry.child.exitCode !== null || entry.child.signalCode !== null || entry.child.killed) {
+      live.delete(entry);
+    }
+  }
+};
+
+export const activeTranscodes = () => {
+  prune();
+  return live.size;
+};
 
 export type TranscodeSession = {
   process: ChildProcess;
@@ -137,8 +162,9 @@ export const startTranscode = (
   plan: TranscodePlan,
   config: PlayerConfig
 ): TranscodeSession | undefined => {
-  if (active >= config.maxConcurrentStreams) {
-    logger.log("warn", `Refusing a transcode of ${filePath} - ${active} already running`);
+  const running = activeTranscodes();
+  if (running >= config.maxConcurrentStreams) {
+    logger.log("warn", `Refusing a transcode of ${filePath} - ${running} already running`);
     return undefined;
   }
   const args = buildArgs(filePath, startSeconds, plan, config.hardwareAcceleration);
@@ -148,14 +174,15 @@ export const startTranscode = (
   );
   logger.log("debug", `ffmpeg transcode args: ${args.join(" ")}`);
   const child = spawn(ffmpegPath, args);
-  active++;
+  const entry = { child };
+  live.add(entry);
   let stopped = false;
   const stop = () => {
     if (stopped) {
       return;
     }
     stopped = true;
-    active--;
+    live.delete(entry);
     // SIGKILL rather than SIGTERM: ffmpeg writing into a pipe whose reader
     // has gone blocks in the write rather than reaching its signal handler,
     // so a polite stop can leave the process alive indefinitely.
