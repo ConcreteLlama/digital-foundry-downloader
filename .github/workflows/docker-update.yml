@@ -69,5 +69,17 @@ jobs:
         # the compile - the expensive part. The whisper stage now reduces to
         # ~16MB, so restoring it is close to free, and it is only rebuilt when
         # WHISPER_CPP_REF or the build command itself changes.
-        cache-from: type=gha
+        #
+        # The sibling scopes are not redundant. GitHub Actions isolates the
+        # cache per branch, with one exception: any branch may read the
+        # default branch's. Since experimental is not the default, its freshly
+        # warmed cache was invisible to the main and develop builds that
+        # followed a promotion - so both recompiled whisper.cpp from scratch,
+        # minutes each, immediately after an identical compile had finished.
+        # Naming the scopes explicitly lets each branch read the others'.
+        cache-from: |
+          type=gha
+          type=gha,scope=experimental
+          type=gha,scope=develop
+          type=gha,scope=main
         cache-to: type=gha,mode=max
