@@ -42,18 +42,25 @@ const MAX_BUFFERED_ENTRIES = 1500;
 /** How close to the bottom still counts as "following the tail", in pixels. */
 const STICK_TO_BOTTOM_THRESHOLD_PX = 40;
 
-type LevelStyle = { color: string; label: string };
+type LevelStyle = { color: string; contrastText: string; label: string };
 
 const useLevelStyles = (): Record<LogLevel, LevelStyle> => {
   const theme = useTheme();
   return useMemo(
     () => ({
-      error: { color: theme.palette.error.main, label: "Error" },
-      warn: { color: theme.palette.warning.main, label: "Warn" },
-      info: { color: theme.palette.info.main, label: "Info" },
-      verbose: { color: theme.palette.success.main, label: "Verbose" },
-      debug: { color: theme.palette.text.secondary, label: "Debug" },
-      silly: { color: theme.palette.text.disabled, label: "Silly" },
+      error: { color: theme.palette.error.main, contrastText: theme.palette.error.contrastText, label: "Error" },
+      warn: { color: theme.palette.warning.main, contrastText: theme.palette.warning.contrastText, label: "Warn" },
+      info: { color: theme.palette.info.main, contrastText: theme.palette.info.contrastText, label: "Info" },
+      verbose: {
+        color: theme.palette.success.main,
+        contrastText: theme.palette.success.contrastText,
+        label: "Verbose",
+      },
+      // The two quiet levels borrow the text colours they are drawn in, so a
+      // filled chip needs the page background as its text rather than a
+      // palette contrast that assumes a saturated fill.
+      debug: { color: theme.palette.text.secondary, contrastText: theme.palette.background.paper, label: "Debug" },
+      silly: { color: theme.palette.text.disabled, contrastText: theme.palette.background.paper, label: "Silly" },
     }),
     [theme]
   );
@@ -106,6 +113,17 @@ const fetchLogs = async (
 export const LogsView = () => {
   const levelStyles = useLevelStyles();
   const [entries, setEntries] = useState<LogEntry[]>([]);
+  /*
+   * A time window, applied here rather than at the service.
+   *
+   * The log endpoint takes levels and a search but no time, and adding one
+   * would mean the reader parsing timestamps as it walks the file. It is not
+   * needed for the cases that matter: the view loads newest-first, so the
+   * recent windows people reach for are entirely within what has already been
+   * fetched. A long window on a quiet log can reach the end of what is
+   * loaded, which is what "Load more" is for.
+   */
+  const [sinceMinutes, setSinceMinutes] = useState(0);
   // Empty means every level, matching how filter chips work elsewhere in the
   // app (see the platform filter on the comparison page): you start with
   // everything and select to narrow, rather than starting fully selected and
@@ -313,12 +331,25 @@ export const LogsView = () => {
    * flex line of three spans, so a selection across it copies as a run-on
    * without the separation that makes a log readable.
    */
+  const shownEntries = useMemo(() => {
+    if (!sinceMinutes) {
+      return entries;
+    }
+    const cutoff = Date.now() - sinceMinutes * 60_000;
+    // An unparseable timestamp is kept rather than dropped: losing a line
+    // because its date was odd is worse than showing one line too many.
+    return entries.filter((entry) => {
+      const at = Date.parse(entry.timestamp);
+      return Number.isNaN(at) || at >= cutoff;
+    });
+  }, [entries, sinceMinutes]);
+
   const plainText = useMemo(
     () =>
-      entries
+      shownEntries
         .map((entry) => `${entry.timestamp.replace("T", " ").replace("Z", "")} ${entry.level.toUpperCase()} ${entry.message}`)
         .join("\n"),
-    [entries]
+    [shownEntries]
   );
 
   const copyAll = async () => {
@@ -407,11 +438,21 @@ export const LogsView = () => {
               size="small"
               variant={selected ? "filled" : "outlined"}
               onClick={() => toggleLevel(level)}
+              /*
+                Colour means on, grey means off - which was the wrong way
+                round before: every chip carried its level's colour whether or
+                not it was chosen, so choosing one made it look duller rather
+                than brighter. Filled and coloured now reads as "showing
+                this", outlined and grey as "not".
+              */
               sx={{
-                borderColor: levelStyles[level].color,
-                color: selected ? undefined : levelStyles[level].color,
-                backgroundColor: selected ? levelStyles[level].color : undefined,
+                borderColor: selected ? levelStyles[level].color : "divider",
+                color: selected ? levelStyles[level].contrastText : "text.secondary",
+                backgroundColor: selected ? levelStyles[level].color : "transparent",
                 fontWeight: 600,
+                "&:hover": {
+                  backgroundColor: selected ? levelStyles[level].color : "action.hover",
+                },
               }}
             />
           );
@@ -434,6 +475,26 @@ export const LogsView = () => {
           onChange={(e) => setSearchInput(e.target.value)}
           sx={{ flexGrow: 1, minWidth: 220 }}
         />
+        {/*
+          Narrower than the search box and allowed to shrink: on a phone this
+          row wraps, and a full-width picker for four short options wastes a
+          line that the search field earns.
+        */}
+        <TextField
+          select
+          size="small"
+          label="Since"
+          value={sinceMinutes}
+          onChange={(e) => setSinceMinutes(Number(e.target.value))}
+          sx={{ minWidth: 140 }}
+          SelectProps={{ native: true }}
+        >
+          <option value={0}>Any time</option>
+          <option value={15}>Last 15 minutes</option>
+          <option value={60}>Last hour</option>
+          <option value={360}>Last 6 hours</option>
+          <option value={1440}>Last 24 hours</option>
+        </TextField>
         <FormControlLabel
           control={<Switch checked={live} onChange={(e) => setLive(e.target.checked)} />}
           label="Live"
@@ -445,16 +506,16 @@ export const LogsView = () => {
             </Button>
           </span>
         </Tooltip>
-        <Tooltip title={`Copy all ${entries.length} shown entries`}>
+        <Tooltip title={`Copy all ${shownEntries.length} shown entries`}>
           <span>
-            <Button startIcon={<ContentCopyIcon />} onClick={() => void copyAll()} disabled={!entries.length}>
+            <Button startIcon={<ContentCopyIcon />} onClick={() => void copyAll()} disabled={!shownEntries.length}>
               {copied === "ok" ? "Copied" : copied === "failed" ? "Press Ctrl+C" : "Copy"}
             </Button>
           </span>
         </Tooltip>
         <Tooltip title="Save the shown entries as a text file">
           <span>
-            <Button startIcon={<DownloadIcon />} onClick={downloadAll} disabled={!entries.length}>
+            <Button startIcon={<DownloadIcon />} onClick={downloadAll} disabled={!shownEntries.length}>
               Download
             </Button>
           </span>
@@ -508,10 +569,10 @@ export const LogsView = () => {
           fontSize: "0.8rem",
         }}
       >
-        {loading && !entries.length ? (
+        {loading && !shownEntries.length ? (
           <Loading />
-        ) : entries.length ? (
-          entries.map((entry, index) => (
+        ) : shownEntries.length ? (
+          shownEntries.map((entry, index) => (
             <LogRow key={`${entry.timestamp}-${index}`} entry={entry} style={levelStyles[entry.level]} />
           ))
         ) : (
@@ -522,7 +583,8 @@ export const LogsView = () => {
       </Box>
 
       <Typography variant="caption" color="text.secondary" sx={{ mt: 1 }}>
-        {entries.length} {entries.length === 1 ? "entry" : "entries"}
+        {shownEntries.length} {shownEntries.length === 1 ? "entry" : "entries"}
+        {sinceMinutes ? ` of ${entries.length} loaded` : ""}
         {live ? " - following the log" : ""}
       </Typography>
     </Paper>
@@ -548,24 +610,40 @@ export const LogsPage = () => (
  * One entry. Multi-line messages (stack traces, mostly) keep their line breaks
  * and indentation, which is the entire reason they are worth having in here.
  */
-const LogRow = ({ entry, style }: { entry: LogEntry; style: LevelStyle }) => (
-  <Box
-    sx={{
-      display: "flex",
-      gap: 1,
-      alignItems: "flex-start",
-      paddingY: "1px",
-      "&:hover": { backgroundColor: "action.hover" },
-    }}
-  >
-    <Box component="span" sx={{ color: "text.disabled", whiteSpace: "nowrap" }}>
-      {entry.timestamp.replace("T", " ").replace("Z", "")}
+const LogRow = ({ entry, style }: { entry: LogEntry; style: LevelStyle }) => {
+  const stamp = entry.timestamp.replace("T", " ").replace("Z", "");
+  // Date and time apart, so a narrow screen can drop the date - it is almost
+  // always today, and it is the half that does not earn its width.
+  const [date, time = ""] = stamp.split(" ");
+  return (
+    <Box
+      sx={{
+        // Stacked on a phone, one line on anything wider. Side by side, the
+        // timestamp and level took most of a narrow screen and left the
+        // message a column barely wide enough for one word.
+        display: "flex",
+        flexDirection: { xs: "column", sm: "row" },
+        gap: { xs: 0, sm: 1 },
+        alignItems: "flex-start",
+        paddingY: { xs: "3px", sm: "1px" },
+        "&:hover": { backgroundColor: "action.hover" },
+      }}
+    >
+      <Box
+        component="span"
+        sx={{ display: "flex", gap: 1, alignItems: "baseline", flexShrink: 0, fontSize: { xs: "0.72rem", sm: "inherit" } }}
+      >
+        <Box component="span" sx={{ color: "text.disabled", whiteSpace: "nowrap" }}>
+          <Box component="span" sx={{ display: { xs: "none", sm: "inline" } }}>{date} </Box>
+          {time}
+        </Box>
+        <Box component="span" sx={{ color: style.color, fontWeight: 700, whiteSpace: "nowrap", minWidth: { sm: "4.5em" } }}>
+          {entry.level.toUpperCase()}
+        </Box>
+      </Box>
+      <Box component="span" sx={{ whiteSpace: "pre-wrap", wordBreak: "break-word", flexGrow: 1, minWidth: 0 }}>
+        {entry.message}
+      </Box>
     </Box>
-    <Box component="span" sx={{ color: style.color, fontWeight: 700, whiteSpace: "nowrap", minWidth: "4.5em" }}>
-      {entry.level.toUpperCase()}
-    </Box>
-    <Box component="span" sx={{ whiteSpace: "pre-wrap", wordBreak: "break-word", flexGrow: 1 }}>
-      {entry.message}
-    </Box>
-  </Box>
-);
+  );
+};
