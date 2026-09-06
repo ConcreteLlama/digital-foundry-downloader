@@ -48,9 +48,22 @@ export const isConvertibleSubtitleCodec = (codecName?: string): boolean =>
 export const extractEmbeddedSubtitlesAsVtt = async (
   filePath: string,
   streamIndex: number,
-  timeoutMs = 30000
+  timeoutMs = 30000,
+  /**
+   * Drops the first `offsetSeconds` and re-times the rest from zero.
+   *
+   * For the transcoded playback path, where the stream is generated from a
+   * chosen point so the element's timeline starts at zero while the cues are
+   * timed against the whole file. Handed to ffmpeg rather than done here:
+   * `-ss` before the input already shifts and drops cues correctly, which is
+   * exactly the arithmetic that would otherwise be written out by hand.
+   */
+  offsetSeconds = 0
 ): Promise<string> => {
-  const args = ["-i", filePath, "-map", `0:${streamIndex}`, "-f", "webvtt", "-"];
+  const args = [
+    ...(offsetSeconds > 0 ? ["-ss", String(offsetSeconds)] : []),
+    "-i", filePath, "-map", `0:${streamIndex}`, "-f", "webvtt", "-",
+  ];
   const proc = spawn(ffmpegPath as unknown as string, args);
   const chunks: Buffer[] = [];
   let stderr = "";

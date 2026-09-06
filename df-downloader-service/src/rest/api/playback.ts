@@ -289,6 +289,18 @@ export const makePlaybackRouter = (contentManager: DigitalFoundryContentManager)
    * Addressed by ffmpeg stream index, which the playback info endpoint
    * supplies - so, as with sidecars, no path crosses the wire.
    */
+  /**
+   * How far into the file the player's zero currently sits.
+   *
+   * Non-zero only on the transcoded path, where the stream is generated from
+   * a chosen point - see the transcode route. Parsed defensively: it reaches
+   * an ffmpeg argument and cue arithmetic, neither of which wants a NaN.
+   */
+  const subtitleOffset = (req: Request): number => {
+    const requested = Number(req.query.offset);
+    return Number.isFinite(requested) && requested > 0 ? requested : 0;
+  };
+
   router.get("/:contentKey/embedded-subtitles/:streamIndex", async (req: Request, res: Response) => {
     const resolved = await resolveDownload(req);
     if (!resolved.ok) {
@@ -308,7 +320,7 @@ export const makePlaybackRouter = (contentManager: DigitalFoundryContentManager)
       return sendError(res, "No such subtitle track", 404);
     }
     try {
-      const vtt = await extractEmbeddedSubtitlesAsVtt(filePath, streamIndex);
+      const vtt = await extractEmbeddedSubtitlesAsVtt(filePath, streamIndex, undefined, subtitleOffset(req));
       res.setHeader("Content-Type", "text/vtt; charset=utf-8");
       // Same reasoning as the sidecar route: the file can be replaced in
       // place, so this must not outlive it.
@@ -339,7 +351,7 @@ export const makePlaybackRouter = (contentManager: DigitalFoundryContentManager)
     // The .srt can be regenerated in place, so this must not be cached across
     // a subtitle regeneration.
     res.setHeader("Cache-Control", "no-cache");
-    return res.send(srtToVtt(srt));
+    return res.send(srtToVtt(srt, subtitleOffset(req)));
   });
 
   /**

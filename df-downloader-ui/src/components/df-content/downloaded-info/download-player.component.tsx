@@ -1,4 +1,6 @@
-import { Alert, Box, CircularProgress, Stack, Typography } from "@mui/material";
+import { Alert, Box, CircularProgress, IconButton, Slider, Stack, Tooltip, Typography } from "@mui/material";
+import PauseIcon from "@mui/icons-material/Pause";
+import PlayArrowIcon from "@mui/icons-material/PlayArrow";
 import { Chapter, DfContentEntry, DfContentInfoUtils, PlaybackInfo, secondsToHHMMSS } from "df-downloader-common";
 import { DfContentDownloadInfo } from "df-downloader-common/models/df-content-download-info";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -12,7 +14,10 @@ import {
   playbackEmbeddedSubtitlesUrl,
   playbackStreamUrl,
   playbackSubtitlesUrl,
+  playbackTranscodeUrl,
 } from "../../../api/playback.ts";
+import { useSelector } from "react-redux";
+import { selectConfigSection } from "../../../store/config/config.selector.ts";
 import { useQuery } from "../../../hooks/use-query.ts";
 import { monoFontFamily } from "../../../themes/build-theme";
 
@@ -112,6 +117,27 @@ const canBrowserPlay = (info: PlaybackInfo): boolean => {
   // encoding we have no representative probe for) - better to try and let the
   // error event catch it than to refuse something that would have played.
   return probe.canPlayType(info.codecProbe ?? info.mimeType) !== "";
+};
+
+/**
+ * The same question for the sound, which is the one that actually bites.
+ *
+ * Digital Foundry's downloads carry AC-3, which no browser decodes - so a file
+ * whose video plays perfectly gives picture and silence. That was invisible
+ * until the probe started reporting an audio codec at all: nothing here knew
+ * a file even had one.
+ *
+ * Absent probe means "cannot tell", and cannot-tell is treated as playable on
+ * the same reasoning as the video check - the element's own error event and,
+ * failing that, the viewer's ears are the backstop, and refusing something
+ * that would have played is the worse mistake.
+ */
+const canBrowserPlayAudio = (info: PlaybackInfo): boolean => {
+  if (!info.audioCodecProbe) {
+    return true;
+  }
+  const probe = document.createElement("video");
+  return probe.canPlayType(info.audioCodecProbe) !== "";
 };
 
 /**
@@ -323,6 +349,26 @@ export const DownloadPlayer = ({
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const [positionSeconds, setPositionSeconds] = useState(0);
   const [playbackError, setPlaybackError] = useState<string | null>(null);
+  /*
+   * Where the current transcoded stream begins, in whole seconds of the file.
+   *
+   * A transcoded stream is generated as it is sent, so its timeline starts at
+   * zero wherever it was asked to begin - the element's currentTime is
+   * therefore an offset into the stream, not a position in the video. Seeking
+   * means asking for a new stream and moving this.
+   *
+   * Kept as a ref as well as state: the position and progress effects read it
+   * from inside event handlers that must not be torn down and rebuilt every
+   * time it changes.
+   */
+  const [streamOffset, setStreamOffset] = useState(0);
+  const streamOffsetRef = useRef(0);
+  streamOffsetRef.current = streamOffset;
+  const [transcodedPlaying, setTranscodedPlaying] = useState(false);
+  // Read from inside long-lived event handlers, which must not be rebuilt
+  // whenever these change - see the position and progress effects.
+  const transcodingRef = useRef(false);
+  const probedDurationRef = useRef<number | undefined>(undefined);
   // Captions are turned on once per file, not on every render - otherwise
   // switching them off in the player's own menu would be undone immediately.
   const captionsInitialisedFor = useRef<string | null>(null);
@@ -335,10 +381,34 @@ export const DownloadPlayer = ({
   useEffect(() => {
     setPlaybackError(null);
     setPositionSeconds(0);
+    setStreamOffset(0);
     captionsInitialisedFor.current = null;
   }, [download.downloadLocation]);
 
-  const supported = useMemo(() => (info ? canBrowserPlay(info) : false), [info]);
+  const playerConfig = useSelector(selectConfigSection("player"));
+
+  /*
+   * Whether the browser can take this file as it stands, and whether we may
+   * do anything about it if not.
+   *
+   * Video and audio are asked separately because they fail separately, and
+   * the audio case is both the common one and the one that used to be
+   * invisible: picture with no sound and nothing to explain it.
+   */
+  const videoSupported = useMemo(() => (info ? canBrowserPlay(info) : false), [info]);
+  const audioSupported = useMemo(() => (info ? canBrowserPlayAudio(info) : true), [info]);
+  const transcodingAllowed = playerConfig?.transcode !== "never";
+  const transcoding = Boolean(info) && transcodingAllowed && (!videoSupported || !audioSupported);
+  /*
+   * "Supported" now means "there is some way to play this", which is what
+   * every guard downstream actually wanted. Without transcoding it still
+   * means the file plays directly; with it, a file the browser cannot decode
+   * is playable after all, and the open-externally path is for when even that
+   * is unavailable.
+   */
+  const supported = videoSupported || transcoding;
+  transcodingRef.current = transcoding;
+  probedDurationRef.current = info?.durationSeconds;
 
   /*
     Subtitles on by default.
@@ -392,7 +462,9 @@ export const DownloadPlayer = ({
       if (video.readyState < 1) {
         return;
       }
-      const seconds = Math.floor(video.currentTime);
+      // Offset because a transcoded stream's zero is wherever it was asked to
+      // start - see streamOffset. Zero on the direct path.
+      const seconds = Math.floor(streamOffsetRef.current + video.currentTime);
       setPositionSeconds((current) => (current === seconds ? current : seconds));
       rememberPlaybackPosition(download.downloadLocation, seconds);
     };
@@ -426,15 +498,22 @@ export const DownloadPlayer = ({
     const { downloadLocation } = download;
     let lastReportedSecond = Number.NEGATIVE_INFINITY;
     const send = (force: boolean) => {
-      if (video.readyState < 1 || !Number.isFinite(video.duration) || video.duration <= 0) {
+      /*
+       * The whole video's length, which the element cannot supply on the
+       * transcoded path - a stream generated from halfway through reports the
+       * remainder, and reporting that as the duration would tell a media
+       * server the video is shorter than it is and mark it watched early.
+       */
+      const totalSeconds = transcodingRef.current ? probedDurationRef.current : video.duration;
+      if (video.readyState < 1 || !Number.isFinite(totalSeconds) || !totalSeconds || totalSeconds <= 0) {
         return;
       }
-      const seconds = Math.floor(video.currentTime);
+      const seconds = Math.floor(streamOffsetRef.current + video.currentTime);
       if (!force && Math.abs(seconds - lastReportedSecond) < REPORT_INTERVAL_SECONDS) {
         return;
       }
       lastReportedSecond = seconds;
-      void reportPlaybackProgress(contentKey, downloadLocation, seconds, Math.floor(video.duration)).catch(
+      void reportPlaybackProgress(contentKey, downloadLocation, seconds, Math.floor(totalSeconds)).catch(
         () => {}
       );
     };
@@ -635,7 +714,7 @@ export const DownloadPlayer = ({
     );
   }
 
-  const videoElement = (
+  const videoSurface = (
     <Box
       component="video"
       // Keyed on the file so switching between two downloads rebuilds the
@@ -643,7 +722,17 @@ export const DownloadPlayer = ({
       // text tracks attached to a new source.
       key={download.downloadLocation}
       ref={videoRef}
-      controls
+      /*
+        Native controls, except when transcoding.
+
+        The element's own bar is driven by its own timeline, and a transcoded
+        stream's timeline starts wherever it was generated from - so the
+        scrubber would show the remaining video as though it were the whole
+        thing, and rescale itself on every seek. Ours is driven by the probed
+        duration instead. It replaces the native bar rather than sitting on
+        top of it, which is what made a second bar the wrong idea elsewhere.
+      */
+      controls={!transcoding}
       autoPlay={autoPlay}
       /*
         Nothing is fetched until play is pressed, when the player is sitting
@@ -711,7 +800,25 @@ export const DownloadPlayer = ({
           "This file could not be played in the browser. Its codec is probably not supported on this machine."
         );
       }}
-      src={playbackStreamUrl(contentEntry.key, download.downloadLocation)}
+      /*
+        The transcoded stream carries its starting point in the URL, so
+        changing streamOffset is what performs a seek - the element reloads
+        and begins again from there. onLoadedMetadata resumes playback across
+        that reload, which is what makes a seek feel like a seek.
+      */
+      src={
+        transcoding
+          ? playbackTranscodeUrl(contentEntry.key, download.downloadLocation, streamOffset)
+          : playbackStreamUrl(contentEntry.key, download.downloadLocation)
+      }
+      onLoadedMetadata={() => {
+        const video = videoRef.current;
+        if (video && transcoding && transcodedPlaying) {
+          void video.play().catch(() => {});
+        }
+      }}
+      onPlay={() => transcoding && setTranscodedPlaying(true)}
+      onPause={() => transcoding && setTranscodedPlaying(false)}
       sx={{
         width: "100%",
         maxHeight: maxHeight ?? "60vh",
@@ -724,14 +831,22 @@ export const DownloadPlayer = ({
         <track
           // Source included: a sidecar and an embedded stream can both be
           // index 0, and keying on the number alone collapses them into one.
-          key={`subs-${track.source}-${track.index}`}
+          // Offset in the key so a seek refetches the cues re-timed to the new
+          // stream: React would otherwise keep the element and its old cues,
+          // and the subtitles would be wrong by however far you jumped.
+          key={`subs-${track.source}-${track.index}-${streamOffset}`}
           kind="subtitles"
           // Served as WebVTT either way - browsers parse neither SRT nor a
           // stream inside the container, so both are converted on the way out.
           src={
             track.source === "embedded"
-              ? playbackEmbeddedSubtitlesUrl(contentEntry.key, download.downloadLocation, track.index)
-              : playbackSubtitlesUrl(contentEntry.key, download.downloadLocation, track.index)
+              ? playbackEmbeddedSubtitlesUrl(
+                  contentEntry.key,
+                  download.downloadLocation,
+                  track.index,
+                  streamOffset
+                )
+              : playbackSubtitlesUrl(contentEntry.key, download.downloadLocation, track.index, streamOffset)
           }
           srcLang={track.language}
           label={track.label}
@@ -739,6 +854,78 @@ export const DownloadPlayer = ({
         />
       ))}
     </Box>
+  );
+
+  /*
+   * Our own transport, for the transcoded path only.
+   *
+   * Everything here exists because the element's timeline is not the video's:
+   * a transcoded stream starts at whatever second it was generated from, so
+   * the element's currentTime is an offset into the stream and its duration
+   * is the remainder. Position and length therefore come from streamOffset
+   * and the probed duration, and a seek is a new stream rather than a move
+   * within this one.
+   *
+   * Deliberately plain. It stands in for the browser's own bar rather than
+   * competing with it, and a file that plays directly never sees it.
+   */
+  const transcodeControls = transcoding && (
+    <Stack direction="row" spacing={1} sx={{ alignItems: "center", paddingX: 1, paddingTop: 0.5 }}>
+      <IconButton
+        size="small"
+        aria-label={transcodedPlaying ? "Pause" : "Play"}
+        onClick={() => {
+          const video = videoRef.current;
+          if (!video) {
+            return;
+          }
+          if (video.paused) {
+            void video.play().catch(() => {});
+          } else {
+            video.pause();
+          }
+        }}
+      >
+        {transcodedPlaying ? <PauseIcon fontSize="small" /> : <PlayArrowIcon fontSize="small" />}
+      </IconButton>
+      <Typography variant="caption" sx={{ fontFamily: monoFontFamily, whiteSpace: "nowrap" }}>
+        {secondsToHHMMSS(positionSeconds)}
+      </Typography>
+      <Slider
+        size="small"
+        min={0}
+        max={Math.max(1, Math.floor(info.durationSeconds ?? 0))}
+        value={Math.min(positionSeconds, Math.floor(info.durationSeconds ?? 0))}
+        // Committed rather than continuous: every change starts a new encode,
+        // so reacting while the handle is being dragged would spawn one per
+        // pixel and cancel each in turn.
+        onChangeCommitted={(_event, value) => {
+          const target = Array.isArray(value) ? value[0] : value;
+          setPositionSeconds(target);
+          setStreamOffset(target);
+        }}
+        disabled={!info.durationSeconds}
+        aria-label="Seek"
+        sx={{ flexGrow: 1 }}
+      />
+      <Typography variant="caption" sx={{ fontFamily: monoFontFamily, whiteSpace: "nowrap" }}>
+        {info.durationSeconds ? secondsToHHMMSS(Math.floor(info.durationSeconds)) : "--:--"}
+      </Typography>
+      <Tooltip title="This file's audio can't be played by your browser, so it's being re-encoded as you watch. Skipping restarts it from the new position.">
+        <Typography variant="caption" color="text.secondary" sx={{ cursor: "help", whiteSpace: "nowrap" }}>
+          re-encoding
+        </Typography>
+      </Tooltip>
+    </Stack>
+  );
+
+  const videoElement = transcoding ? (
+    <Stack sx={{ width: "100%", minWidth: 0 }}>
+      {videoSurface}
+      {transcodeControls}
+    </Stack>
+  ) : (
+    videoSurface
   );
 
   const errorBanner = playbackError && (

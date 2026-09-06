@@ -33,8 +33,20 @@ export const playbackStreamUrl = (contentKey: string, downloadLocation: string) 
 export const playbackTranscodeUrl = (contentKey: string, downloadLocation: string, startSeconds = 0) =>
   `${playbackUrl(contentKey, downloadLocation, "transcode")}&${new URLSearchParams({ t: String(Math.max(0, Math.floor(startSeconds))) })}`;
 
-export const playbackSubtitlesUrl = (contentKey: string, downloadLocation: string, trackIndex: number) =>
-  playbackUrl(contentKey, downloadLocation, `subtitles/${trackIndex}`);
+/**
+ * `offsetSeconds` re-times the cues so they line up with a transcoded stream,
+ * whose timeline starts at whatever point it was generated from rather than
+ * at the beginning of the file. Zero on the direct path, which is the norm.
+ */
+export const playbackSubtitlesUrl = (
+  contentKey: string,
+  downloadLocation: string,
+  trackIndex: number,
+  offsetSeconds = 0
+) =>
+  `${playbackUrl(contentKey, downloadLocation, `subtitles/${trackIndex}`)}${
+    offsetSeconds > 0 ? `&offset=${Math.floor(offsetSeconds)}` : ""
+  }`;
 
 /**
  * A subtitle stream inside the video file, extracted to WebVTT on request.
@@ -46,8 +58,12 @@ export const playbackSubtitlesUrl = (contentKey: string, downloadLocation: strin
 export const playbackEmbeddedSubtitlesUrl = (
   contentKey: string,
   downloadLocation: string,
-  streamIndex: number
-) => playbackUrl(contentKey, downloadLocation, `embedded-subtitles/${streamIndex}`);
+  streamIndex: number,
+  offsetSeconds = 0
+) =>
+  `${playbackUrl(contentKey, downloadLocation, `embedded-subtitles/${streamIndex}`)}${
+    offsetSeconds > 0 ? `&offset=${Math.floor(offsetSeconds)}` : ""
+  }`;
 
 /**
  * Whether the API is on a different origin to the page.
