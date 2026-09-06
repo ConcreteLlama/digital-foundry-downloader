@@ -15,7 +15,23 @@ export const TaskInfoCard = styled(Card)({
   padding: "5px 8px",
   gap: "0.3rem",
   width: "100%",
+  // Anchors CardCornerControls. The card's children are a centred column, so
+  // a control added as one would sit under the content in the middle.
+  position: "relative",
 });
+
+/**
+ * A control tucked into the corner of a full card.
+ *
+ * For the actions that belong to the card as a whole rather than to any row
+ * in it - clearing a finished pipeline, in practice. Absolute so the existing
+ * centred column is left exactly as it was.
+ */
+export const CardCornerControls = styled(Box)(({ theme }) => ({
+  position: "absolute",
+  top: theme.spacing(0.5),
+  right: theme.spacing(0.5),
+}));
 
 /**
  * A finished pipeline, at one line. Twenty completed downloads as full cards

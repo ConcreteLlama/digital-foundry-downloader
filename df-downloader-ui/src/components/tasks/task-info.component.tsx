@@ -6,7 +6,7 @@ import { useSelector } from "react-redux";
 import { selectBasicTaskField, selectCurrentStep, selectIsComplete, selectPipelineDetails, selectPipelineField, selectPipelineStatus } from "../../store/df-tasks/tasks.selector.ts";
 import { EllipsisTooltipText } from "../general/ellipsis-tooltip-text.component.tsx";
 import { TaskDetailsDialog } from "./task-details-dialog.component.tsx";
-import { CompletedTaskRow, TaskInfoCard } from "./task-info.styles.tsx";
+import { CardCornerControls, CompletedTaskRow, TaskInfoCard } from "./task-info.styles.tsx";
 import { CompletedTaskControls } from "./task-controls.component.tsx";
 import { TaskStatusDetail } from "./task-status-detail/task-status-detail.component.tsx";
 import { getTaskTypeIcon } from "./task-type-icon.ts";
@@ -35,6 +35,18 @@ export const TaskInfo = ({ pipelineId }: TaskInfoProps) => {
           </CompletedTaskRow>
         ) : (
           <TaskInfoCard onClick={() => setDetailsOpen(true)} sx={{ cursor: "pointer" }}>
+            {/*
+              A failed pipeline is the one card that cannot collapse, and so
+              was the one thing in the list with no way to dismiss it - only
+              "Clear all", which throws away the history you were reading it
+              against. Exactly backwards: a failure is what you most want to
+              acknowledge and be rid of once you have read it.
+            */}
+            {isComplete && (
+              <CardCornerControls>
+                <CompletedTaskControls pipelineId={pipelineId} />
+              </CardCornerControls>
+            )}
             <TaskHeaderItem pipelineId={pipelineId} />
             <TaskStatusDetail pipelineId={pipelineId} />
           </TaskInfoCard>
