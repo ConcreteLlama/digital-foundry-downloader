@@ -18,18 +18,40 @@ import { WireContentType } from "./wire-schemas.js";
  * what makes the grounding check below mean something: a model that echoes the
  * name read what it was handed, and one that names a different game did not.
  *
- * Short on purpose. Someone is waiting at a settings page while this runs, and
- * the question is whether the engine works at all, not how it handles length.
+ * Long on purpose, and that is the whole point of it.
+ *
+ * It was short at first, which made the test worse than useless: it passed
+ * while every real analysis on the same machine failed. On an Intel iGPU over
+ * Vulkan the corruption is prompt-size dependent - measured on an N305, a
+ * 148-token prompt classified correctly and a 584-token one came back as
+ * "interview" with a confidence of "-1111111111111111E-1111111111111111".
+ * A fixture below that threshold reports a broken engine as healthy, which is
+ * the one result a health check must never produce.
+ *
+ * So this sits well above it, at roughly a thousand prompt tokens - still far
+ * shorter than a real transcript, but past the point where a failing engine
+ * actually fails. It costs prompt-processing time on a slow machine, which is
+ * the right trade for an answer that means something.
  */
 const FIXTURE_TRANSCRIPT = [
-  "So we've had Ashenfall on both machines for about a week now, and the picture is a familiar one.",
-  "On the more powerful console, performance mode targets 60 frames per second at a dynamic 1440p, and it holds that",
-  "almost everywhere - we measured a drop to 48fps in the market square during heavy rain, but nowhere else.",
-  "Quality mode locks to 30fps at native 4K with ray traced reflections enabled, and that one is rock solid.",
-  "The weaker console is the more interesting case: it runs the same 60fps target but drops the internal resolution",
-  "to 1080p, and the reflections are screen space only. Frame pacing is noticeably worse in the opening chapter.",
-  "Load times came in at 4 seconds against 7 seconds. Overall, if you want the smoothest experience, performance",
-  "mode on the stronger machine is the one to pick.",
+  "Welcome back. We have had Ashenfall on both consoles for about a week now, and this is the full technical breakdown of how the two versions compare.",
+  "Starting with the stronger machine. Performance mode targets 60 frames per second at a dynamic 1440p, and for the most part it holds that.",
+  "Our capture across the opening six hours shows a locked 60 through the forest regions and the underground sections, with one consistent exception.",
+  "In the market square during heavy rain we measured a sustained drop to 48fps, and it happens every time you walk through it at that time of day.",
+  "That is a weather and alpha effects cost rather than a geometry one, because the same square in clear weather holds its target without trouble.",
+  "Quality mode on the same machine locks to 30fps at native 4K, with ray traced reflections enabled on water and on the polished interior floors.",
+  "That mode is rock solid. Across our entire capture we did not record a single dropped frame, and the frame pacing is even throughout.",
+  "The weaker console is the more interesting case, and the one most people will be asking about, so we spent longer with it.",
+  "It runs the same 60fps target in performance mode, but the internal resolution drops to 1080p and the reconstruction is noticeably softer in motion.",
+  "The reflections are screen space only. Standing at the harbour, the boats and the far buildings simply do not appear in the water at all.",
+  "Frame pacing is the real problem here. In the opening chapter we see a repeating judder that our frame time graph puts at an uneven delivery pattern.",
+  "It settles down once you are out of the tutorial area, which suggests a streaming cost rather than a raw rendering one, but the first hour is rough.",
+  "Load times came in at 4 seconds on the stronger console against 7 seconds on the weaker one, measured from menu selection to player control.",
+  "Both are a substantial improvement on the previous generation, where the same publisher was asking for the better part of a minute.",
+  "Image quality in still shots is closer than the resolution numbers suggest, and if you are playing on a smaller screen you may not notice the gap.",
+  "In motion it is a different story, and the softness on the weaker machine is obvious once you know to look for it.",
+  "So which version should you buy? If you want the smoothest experience, performance mode on the stronger machine is the one to pick.",
+  "If you only own the weaker console, the game is still perfectly playable, but go in knowing the opening hour is the worst it will look.",
 ].join(" ");
 
 /**
