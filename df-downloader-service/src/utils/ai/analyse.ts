@@ -10,8 +10,7 @@ import {
   AiTagSuggestion,
   DfContentEntry,
   logger,
-  SrtLine,
-} from "df-downloader-common";
+  SrtLine, TaskOutputField} from "df-downloader-common";
 import { AiAnalysisConfig, AiAnalysisConfigUtils } from "df-downloader-common/config/ai-analysis-config.js";
 import { Chapter } from "../chatpers.js";
 import { AiProviderId } from "df-downloader-common/config/ai-analysis-config.js";
@@ -177,6 +176,17 @@ const describeOverviewOutcome = (parsed: { summary?: string | null; conclusion?:
   return parts.join(", ");
 };
 
+/** The summary call's result as rows - see TaskOutputField. */
+const overviewOutputFields = (parsed: {
+  summary?: string | null;
+  conclusion?: string | null;
+  tags?: { tag: string }[] | null;
+}): TaskOutputField[] => [
+  ...(parsed.summary ? [{ label: "Summary", value: parsed.summary, long: true }] : []),
+  ...(parsed.conclusion ? [{ label: "Verdict", value: parsed.conclusion, long: true }] : []),
+  ...(parsed.tags?.length ? [{ label: "Tags", value: parsed.tags.map((tag) => tag.tag).join(", ") }] : []),
+];
+
 const logPhaseOutput = (contentKey: string, label: string, parsed: unknown) => {
   const serialised = JSON.stringify(parsed) ?? "";
   const strings = collectStrings(parsed);
@@ -244,7 +254,7 @@ export type AnalysisInputs = {
    * extracted - so a finished part of a run shows its result rather than the
    * progress number it happened to stop on.
    */
-  onPhaseOutcome?: (label: string, outcome: string) => void;
+  onPhaseOutcome?: (label: string, outcome: string, output?: TaskOutputField[]) => void;
   /**
    * Which engine to use, overriding the configured default for this run only.
    * Absent means use the default, which is what an unattended run does.
@@ -1059,7 +1069,11 @@ export const analyseContent = async (config: AiAnalysisConfig, inputs: AnalysisI
       logPhaseOutput(inputs.entry.key, PHASE_LABELS.classify, classified.parsed);
       inputs.onPhaseOutcome?.(
         PHASE_LABELS.classify,
-        `${classified.parsed.contentType} (${Math.round((classified.parsed.contentTypeConfidence ?? 0) * 100)}% sure)`
+        `${classified.parsed.contentType} (${Math.round((classified.parsed.contentTypeConfidence ?? 0) * 100)}% sure)`,
+        [
+          { label: "Content type", value: classified.parsed.contentType },
+          { label: "Confidence", value: `${Math.round((classified.parsed.contentTypeConfidence ?? 0) * 100)}%` },
+        ]
       );
       logger.log(
         "info",
@@ -1074,7 +1088,11 @@ export const analyseContent = async (config: AiAnalysisConfig, inputs: AnalysisI
         reportTokens
       );
       logPhaseOutput(inputs.entry.key, PHASE_LABELS.summarise, summarised.parsed);
-      inputs.onPhaseOutcome?.(PHASE_LABELS.summarise, describeOverviewOutcome(summarised.parsed));
+      inputs.onPhaseOutcome?.(
+        PHASE_LABELS.summarise,
+        describeOverviewOutcome(summarised.parsed),
+        overviewOutputFields(summarised.parsed)
+      );
       overview = { ...classified.parsed, ...summarised.parsed };
       usage = addUsage(classified.usage, summarised.usage);
     } else {
@@ -1089,7 +1107,8 @@ export const analyseContent = async (config: AiAnalysisConfig, inputs: AnalysisI
       logPhaseOutput(inputs.entry.key, PHASE_LABELS.overview, summarised.parsed);
       inputs.onPhaseOutcome?.(
         PHASE_LABELS.overview,
-        `${summarised.parsed.contentType}, ${describeOverviewOutcome(summarised.parsed)}`
+        `${summarised.parsed.contentType}, ${describeOverviewOutcome(summarised.parsed)}`,
+        [{ label: "Content type", value: summarised.parsed.contentType }, ...overviewOutputFields(summarised.parsed)]
       );
       overview = summarised.parsed;
       usage = summarised.usage;
@@ -1110,7 +1129,10 @@ export const analyseContent = async (config: AiAnalysisConfig, inputs: AnalysisI
       logPhaseOutput(inputs.entry.key, PHASE_LABELS.extract, extraction.data);
       inputs.onPhaseOutcome?.(
         PHASE_LABELS.extract,
-        extraction.data ? describeStructuredData(extraction.data) : "nothing extracted"
+        extraction.data ? describeStructuredData(extraction.data) : "nothing extracted",
+        extraction.data
+          ? [{ label: "Extracted", value: JSON.stringify(extraction.data, null, 2), long: true }]
+          : undefined
       );
       structuredData = extraction.data ? anchorFindings(extraction.data, prepared.transcript, prepared.articleText) : undefined;
       logger.log(

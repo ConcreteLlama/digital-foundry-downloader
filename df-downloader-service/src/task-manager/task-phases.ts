@@ -1,4 +1,4 @@
-import { TaskPhase } from "df-downloader-common";
+import { TaskOutputField, TaskPhase } from "df-downloader-common";
 
 /**
  * Bookkeeping for a task that works in named parts.
@@ -66,6 +66,31 @@ export class TaskPhaseTracker {
     if (index !== -1) {
       this.phases[index] = { ...this.phases[index], detail };
     }
+  }
+
+  /**
+   * Records what a phase produced, for anyone drilling into it.
+   *
+   * Truncated here rather than trusting the caller, because this ends up in
+   * every status push - see TaskPhase.output.
+   */
+  setOutput(name: string, output: TaskOutputField[], maxValueChars = 2000) {
+    const index = this.phases.findIndex((phase) => phase.name === name);
+    if (index === -1) {
+      return;
+    }
+    this.phases[index] = {
+      ...this.phases[index],
+      // Truncated here rather than trusting the caller, because every one of
+      // these is pushed to every client on every status change.
+      output: output.map((field) => ({
+        ...field,
+        value:
+          field.value.length > maxValueChars
+            ? `${field.value.slice(0, maxValueChars)}… (${field.value.length} characters in total)`
+            : field.value,
+      })),
+    };
   }
 
   /** Updates the running phase's detail without moving on. */

@@ -724,6 +724,11 @@ const scenarios: FixtureScenario[] = [
           weight: 0.037,
           startedAt: new Date(Date.now() - startedAgo * 1000),
           endedAt: new Date(Date.now() - (startedAgo - 22) * 1000),
+          detail: "platform_tech_review (94% sure)",
+          output: [
+            { label: "Content type", value: "platform_tech_review" },
+            { label: "Confidence", value: "94%" },
+          ],
         },
         {
           name: "Writing the summary",
@@ -731,6 +736,17 @@ const scenarios: FixtureScenario[] = [
           weight: 0.302,
           startedAt: new Date(Date.now() - (startedAgo - 22) * 1000),
           endedAt: new Date(Date.now() - (startedAgo - 190) * 1000),
+          detail: "1203 char summary, 326 char verdict, 5 tags",
+          output: [
+            {
+              label: "Summary",
+              value:
+                "[FIXTURE] The Switch 2 conversion matches the PS4 release in core settings, with a higher and more consistent frame-rate and a resolution that holds its 1080p target more often than the older Sony version managed.",
+              long: true,
+            },
+            { label: "Verdict", value: "[FIXTURE] A robust rendition, though the lack of DLSS is a missed opportunity.", long: true },
+            { label: "Tags", value: "switch 2, elden ring, frame-rate, resolution, from software" },
+          ],
         },
         {
           name: "Pulling out the details",

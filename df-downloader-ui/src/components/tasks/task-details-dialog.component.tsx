@@ -218,7 +218,7 @@ export const TaskDetailsDialog = ({
    * rows behind a toggle made the common case worse to read in order to make
    * room for an uncommon one.
    */
-  const [openStepId, setOpenStepId] = useState<string | undefined>();
+  const [openStep, setOpenStep] = useState<{ stepId: string; phaseName?: string } | undefined>();
   /*
    * Elapsed and active are derived from the current time at render, so they
    * are only as fresh as the last render. A running analysis can spend ten
@@ -338,7 +338,7 @@ export const TaskDetailsDialog = ({
                       does nothing. */}
                   <TableRow
                     hover={hasDetail}
-                    onClick={hasDetail ? () => setOpenStepId(stepId) : undefined}
+                    onClick={hasDetail ? () => setOpenStep({ stepId }) : undefined}
                     sx={{
                       ...(state === "not_applicable" ? { opacity: 0.55 } : {}),
                       ...(hasDetail ? { cursor: "pointer" } : {}),
@@ -371,7 +371,7 @@ export const TaskDetailsDialog = ({
                     <TableRow
                       key={`${stepId}-${phase.name}`}
                       hover
-                      onClick={() => setOpenStepId(stepId)}
+                      onClick={() => setOpenStep({ stepId, phaseName: phase.name })}
                       sx={{ cursor: "pointer", opacity: phase.state === "pending" ? 0.5 : 0.85 }}
                     >
                       <TableCell sx={{ pl: 4, borderBottom: "none", py: 0.25 }}>
@@ -412,11 +412,12 @@ export const TaskDetailsDialog = ({
             that is worth carrying - without the table having to accommodate
             it. */}
         <StepDetailDialog
-          open={Boolean(openStepId)}
-          onClose={() => setOpenStepId(undefined)}
-          stepName={stepViews.find((view) => view.stepId === openStepId)?.name}
-          task={openStepId ? stepTasks[openStepId] : undefined}
-          progress={openStepId ? stepProgress(stepTasks[openStepId]) : undefined}
+          open={Boolean(openStep)}
+          onClose={() => setOpenStep(undefined)}
+          stepName={stepViews.find((view) => view.stepId === openStep?.stepId)?.name}
+          phaseName={openStep?.phaseName}
+          task={openStep ? stepTasks[openStep.stepId] : undefined}
+          progress={openStep ? stepProgress(stepTasks[openStep.stepId]) : undefined}
         />
 
         {/* Messages and errors get their own block rather than a table column -

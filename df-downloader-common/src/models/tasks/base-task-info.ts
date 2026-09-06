@@ -45,6 +45,33 @@ export const TaskProgress = z.object({
 export type TaskProgress = z.infer<typeof TaskProgress>;
 
 /**
+ * One labelled thing a task or a part of one produced.
+ *
+ * Structured rather than a blob of text, so a reader gets rows they can scan
+ * instead of somebody's JSON pasted into a dialog - and so a task can say
+ * what it produced without the thing rendering it knowing what kind of task
+ * it is. Same bargain as TaskProgress and TaskPhase.
+ *
+ * Bounded on the way in by whoever sets it: this travels in the task status,
+ * which is pushed to every open client whenever anything moves. It is a
+ * readable summary, not an archive - anything genuinely large belongs behind
+ * a request made when somebody asks to see it.
+ */
+export const TaskOutputField = z.object({
+  label: z.string(),
+  value: z.string(),
+  /**
+   * Prose or data rather than a short value.
+   *
+   * Rendered as a wrapping block instead of on one line with its label - a
+   * 1,200-character summary and "94% sure" both being "the output" is exactly
+   * the sort of thing that makes a generic renderer look thoughtless.
+   */
+  long: z.boolean().optional(),
+});
+export type TaskOutputField = z.infer<typeof TaskOutputField>;
+
+/**
  * One named part of a single task's work.
  *
  * Same bargain as TaskProgress: the lowest common denominator, so a task that
@@ -78,6 +105,8 @@ export const TaskPhase = z.object({
   weight: z.number().optional(),
   /** Anything worth showing beside the name, e.g. a running token count. */
   detail: z.string().optional(),
+  /** What this part produced - see TaskOutputField. */
+  output: TaskOutputField.array().optional(),
 });
 export type TaskPhase = z.infer<typeof TaskPhase>;
 
@@ -143,6 +172,8 @@ export const TaskStatus = z.object({
   progress: TaskProgress.optional(),
   /** See TaskPhase - present only for tasks that work in named parts. */
   phases: TaskPhase.array().optional(),
+  /** What the task itself produced, for tasks with no phases - see TaskOutputField. */
+  output: TaskOutputField.array().optional(),
   /**
    * Working time, as a two-scalar stopwatch rather than a history of intervals.
    *
