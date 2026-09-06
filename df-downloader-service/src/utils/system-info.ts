@@ -131,13 +131,28 @@ export const getSystemInfo = async (db: DfDownloaderOperationalDb): Promise<Syst
   );
   const databases = await getDatabaseInfo();
 
-  let content = { entries: 0, downloaded: 0, analysed: 0, withArticle: 0, legacy: 0 };
+  let content = { entries: 0, downloaded: 0, analysed: 0, analysesFailed: 0, withArticle: 0, legacy: 0 };
   try {
     const entries = await db.getAllContentEntries();
+    /*
+     * Counted from the analysis index, not from the content entries.
+     *
+     * DfContentEntry has an `aiAnalysis` field and nothing populates it -
+     * results live in their own store, which is the entire reason that store
+     * exists. Counting the field reported zero analyses on an install with
+     * thousands, which is worse than reporting nothing: a diagnostic that is
+     * confidently wrong sends whoever reads it looking in the wrong place.
+     */
+    const analysisIndex = db.getAiAnalysisIndex();
+    const analyses = Object.values(analysisIndex);
     content = {
       entries: entries.length,
       downloaded: entries.filter((entry) => entry.downloads.length > 0).length,
-      analysed: entries.filter((entry) => Boolean(entry.aiAnalysis)).length,
+      analysed: analyses.length,
+      // Separated because a failed analysis still occupies the slot: it counts
+      // as analysed to everything that decides what to run next, and is the
+      // first thing worth knowing when someone says analysis is misbehaving.
+      analysesFailed: analyses.filter((entry) => entry.hasError).length,
       withArticle: Object.values(db.getAllDfArticleIndexEntries()).filter((entry) => entry.hasArticle).length,
       legacy: entries.filter((entry) => Boolean(entry.contentInfo.legacy)).length,
     };

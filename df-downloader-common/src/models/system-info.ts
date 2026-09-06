@@ -80,6 +80,8 @@ export const SystemInfo = z.object({
     entries: z.number(),
     downloaded: z.number(),
     analysed: z.number(),
+    /** Of those, how many hold an error rather than a result. */
+    analysesFailed: z.number(),
     withArticle: z.number(),
     legacy: z.number(),
   }),

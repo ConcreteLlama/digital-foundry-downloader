@@ -226,7 +226,14 @@ export const SystemInfoView = () => {
           <Section title="Library">
             <Row label="Content" value={`${info.content.entries} items`} />
             <Row label="Downloaded" value={info.content.downloaded} />
-            <Row label="Analysed" value={info.content.analysed} />
+            <Row
+              label="Analysed"
+              value={
+                info.content.analysesFailed
+                  ? `${info.content.analysed} (${info.content.analysesFailed} failed)`
+                  : info.content.analysed
+              }
+            />
             <Row label="With an article" value={info.content.withArticle} />
             <Row label="Not yet confirmed" value={info.content.legacy} />
           </Section>
