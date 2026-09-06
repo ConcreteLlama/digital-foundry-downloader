@@ -244,6 +244,17 @@ layout — see `df-downloader-ui/src/dev/README.md`.
 
 ## Things that are currently known-broken or intentionally disabled
 
+- **Local AI analysis on an Intel integrated GPU returns confident nonsense** — every
+  video classified the same, summaries empty or a repeated token, confidence values no
+  decoder could produce. It fails *silently*: grammar-constrained decoding keeps the
+  JSON valid however meaningless the content, so a broken run stores a plausible-looking
+  analysis and the scheduled backfill then skips that video forever. `useGpu` defaults
+  to false for analysis and must stay there on this hardware. Whisper is unaffected and
+  keeps the GPU. **Read `docs/GPU_ACCELERATION_FINDINGS.md` before touching any of
+  this** — it records what was ruled out (Flash Attention, the llama.cpp version, state
+  reuse), the cross-vendor control that isolates it to Intel's driver, and why a short
+  test passes on a broken engine. Settings → AI Analysis → "Check it actually works"
+  is the way to find out on any given machine.
 - `DigitalFoundryContentManager.start_reinstate_when_new_site()` — dead code, the
   pre-relaunch version of `start()`, kept intentionally as a reference for what the
   polling loop used to do; not currently called.
