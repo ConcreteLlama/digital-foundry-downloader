@@ -2,11 +2,9 @@ import {
   Box,
   Chip,
   Dialog,
-  Collapse,
   DialogContent,
   DialogTitle,
   Divider,
-  IconButton,
   Stack,
   Table,
   TableBody,
@@ -34,8 +32,7 @@ import {
 } from "./pipeline-track/pipeline-step-state";
 import { Fragment, useState } from "react";
 import { useTickingClock } from "../../hooks/use-ticking-clock";
-import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
-import { StepDetailPanel } from "./step-detail-panel.component";
+import { StepDetailDialog } from "./step-detail-dialog.component";
 
 /**
  * Renders a span of milliseconds the way someone reading a task list wants to
@@ -214,11 +211,14 @@ export const TaskDetailsDialog = ({
   // returns you to the run you were looking at.
   const [contentOpen, setContentOpen] = useState(false);
   /*
-   * Which steps are drilled into. Nothing is expanded by default except the
-   * one running - the table is meant to be scannable, and a step's detail is
-   * variable in size and mostly interesting for whatever is happening now.
+   * The step whose detail is open, if any.
+   *
+   * A dialog rather than rows that expand in place: the table is a table, and
+   * what a step has to say is variable in size and occasionally large. Hiding
+   * rows behind a toggle made the common case worse to read in order to make
+   * room for an uncommon one.
    */
-  const [expanded, setExpanded] = useState<Record<string, boolean>>({});
+  const [openStepId, setOpenStepId] = useState<string | undefined>();
   /*
    * Elapsed and active are derived from the current time at render, so they
    * are only as fresh as the last render. A running analysis can spend ten
@@ -328,38 +328,23 @@ export const TaskDetailsDialog = ({
                 const stateLabel = STEP_STATE_LABELS[state];
                 const progress = stepProgress(task);
                 const hasDetail = Boolean(progress || task?.status?.phases?.length || task?.status?.message);
-                // Defaults open for the step actually running, so the common
-                // case needs no click, and closed once it is not.
-                const isOpen = expanded[stepId] ?? (view.isCurrent && state === "running");
                 return (
                   <Fragment key={stepId}>
                   {/* Shown rather than hidden here - the dialog is the
                       inventory, the card is the glance - but dimmed, because
                       it is not part of what this run will do. */}
-                  <TableRow sx={state === "not_applicable" ? { opacity: 0.55 } : undefined}>
-                    <TableCell>
-                      <Stack direction="row" spacing={0.5} alignItems="center">
-                        {/* Only where there is something behind it - an
-                            affordance that opens an empty panel is worse than
-                            no affordance. */}
-                        {hasDetail ? (
-                          <IconButton
-                            size="small"
-                            aria-label={isOpen ? `Hide ${view.name} detail` : `Show ${view.name} detail`}
-                            onClick={() => setExpanded((current) => ({ ...current, [stepId]: !isOpen }))}
-                            sx={{ padding: 0.25 }}
-                          >
-                            <ExpandMoreIcon
-                              fontSize="small"
-                              sx={{ transform: isOpen ? "rotate(180deg)" : "none", transition: "transform 150ms" }}
-                            />
-                          </IconButton>
-                        ) : (
-                          <Box sx={{ width: 22 }} />
-                        )}
-                        <span>{view.name}</span>
-                      </Stack>
-                    </TableCell>
+                  {/* Clickable only where there is something behind it - a
+                      row that opens an empty dialog is worse than one that
+                      does nothing. */}
+                  <TableRow
+                    hover={hasDetail}
+                    onClick={hasDetail ? () => setOpenStepId(stepId) : undefined}
+                    sx={{
+                      ...(state === "not_applicable" ? { opacity: 0.55 } : {}),
+                      ...(hasDetail ? { cursor: "pointer" } : {}),
+                    }}
+                  >
+                    <TableCell>{view.name}</TableCell>
                     <TableCell>
                       <Tooltip title={view.reason ?? ""} disableHoverListener={!view.reason}>
                         <Chip
@@ -377,27 +362,62 @@ export const TaskDetailsDialog = ({
                     <TableCell align="right">{stepElapsed(task)}</TableCell>
                     <TableCell align="right">{stepActive(task) ?? "-"}</TableCell>
                   </TableRow>
-                  {/* One collapsible row rather than a column, and rather
-                      than several rows always present. A step's detail varies
-                      in size - a progress bar, a list of phases, a message -
-                      and the table above it has to stay scannable on a phone.
-                      Behind a disclosure it can grow without the row having
-                      to. */}
-                  {hasDetail && (
-                    <TableRow>
-                      <TableCell colSpan={5} sx={{ paddingY: 0, borderBottom: isOpen ? undefined : "none" }}>
-                        <Collapse in={isOpen} timeout="auto" unmountOnExit>
-                          <StepDetailPanel task={task} progress={progress} />
-                        </Collapse>
+                  {/* Parts of one step's work, indented under it. A pipeline
+                      step is a unit of scheduling; these are units of
+                      reporting inside one, so they belong under their step
+                      rather than promoted beside it. Clicking either opens the
+                      same detail. */}
+                  {task?.status?.phases?.map((phase) => (
+                    <TableRow
+                      key={`${stepId}-${phase.name}`}
+                      hover
+                      onClick={() => setOpenStepId(stepId)}
+                      sx={{ cursor: "pointer", opacity: phase.state === "pending" ? 0.5 : 0.85 }}
+                    >
+                      <TableCell sx={{ pl: 4, borderBottom: "none", py: 0.25 }}>
+                        <Typography variant="caption" color="text.secondary">
+                          {phase.name}
+                          {phase.detail ? ` - ${phase.detail}` : ""}
+                        </Typography>
+                      </TableCell>
+                      <TableCell sx={{ borderBottom: "none", py: 0.25 }}>
+                        <Typography variant="caption" color="text.secondary">
+                          {phase.state === "done" ? "" : phase.state}
+                        </Typography>
+                      </TableCell>
+                      <TableCell align="right" sx={{ borderBottom: "none", py: 0.25 }}>
+                        <Typography variant="caption" color="text.secondary">
+                          {formatTime(phase.startedAt)}
+                        </Typography>
+                      </TableCell>
+                      <TableCell align="right" colSpan={2} sx={{ borderBottom: "none", py: 0.25 }}>
+                        <Typography variant="caption" color="text.secondary">
+                          {phase.startedAt && phase.endedAt
+                            ? formatDuration(new Date(phase.endedAt).getTime() - new Date(phase.startedAt).getTime())
+                            : ""}
+                        </Typography>
                       </TableCell>
                     </TableRow>
-                  )}
+                  ))}
                   </Fragment>
                 );
               })}
             </TableBody>
           </Table>
         </Box>
+
+        {/* Opened by clicking a step or one of its parts. A dialog rather
+            than an expanding row: what a step has to say is variable in size,
+            and this is where more of it can go - a phase's full output, when
+            that is worth carrying - without the table having to accommodate
+            it. */}
+        <StepDetailDialog
+          open={Boolean(openStepId)}
+          onClose={() => setOpenStepId(undefined)}
+          stepName={stepViews.find((view) => view.stepId === openStepId)?.name}
+          task={openStepId ? stepTasks[openStepId] : undefined}
+          progress={openStepId ? stepProgress(stepTasks[openStepId]) : undefined}
+        />
 
         {/* Messages and errors get their own block rather than a table column -
             they're long, and an error is the whole reason someone opens this. */}
