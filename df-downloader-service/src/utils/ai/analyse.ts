@@ -267,6 +267,14 @@ export type AnalysisInputs = {
    * run after a download does.
    */
   sources?: AiAnalysisSourceSelection;
+  /**
+   * Stops the run when the task is cancelled.
+   *
+   * Bound to the provider, so it aborts the HTTP call in flight rather than
+   * only being noticed between calls - a local run spends minutes inside a
+   * single generation, which is exactly when someone gives up on it.
+   */
+  signal?: AbortSignal;
   /** See resolveChapters - only the interactive single-item path sets this. */
   allowRemoteChapters?: boolean;
   chapters?: Chapter[];
@@ -628,7 +636,7 @@ export const estimateAnalysisCost = async (
   config: AiAnalysisConfig,
   inputs: AnalysisInputs
 ): Promise<AiAnalysisCostEstimate> => {
-  const provider = makeProvider(config, inputs.provider);
+  const provider = makeProvider(config, inputs.provider, inputs.signal);
   const prepared = await prepareAnalysis(config, inputs);
   const instruction = prepared.tagsOnly ? buildTagOnlyInstruction(config) : buildOverviewInstruction(config);
   // The plain content deliberately: this sizes the overview call, which never
@@ -952,7 +960,7 @@ export const analyseContent = async (config: AiAnalysisConfig, inputs: AnalysisI
 
   let provider: AiProvider;
   try {
-    provider = makeProvider(config, inputs.provider);
+    provider = makeProvider(config, inputs.provider, inputs.signal);
   } catch (e) {
     return { ...base, contentType: "other", error: e instanceof Error ? e.message : String(e) };
   }

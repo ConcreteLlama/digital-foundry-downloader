@@ -18,7 +18,8 @@ import { AiProvider } from "./types.js";
  * Throws AiAnalysisNotConfiguredError when there is no API key, which is
  * what callers already expect from constructing a client.
  */
-export const makeAnthropicProvider = (config: AiAnalysisConfig): AiProvider => {
+/** See makeLocalProvider - `signal` belongs to one run, so it is bound here. */
+export const makeAnthropicProvider = (config: AiAnalysisConfig, signal?: AbortSignal): AiProvider => {
   const client = makeAnthropicClient(config);
   return {
     id: "anthropic",
@@ -30,7 +31,7 @@ export const makeAnthropicProvider = (config: AiAnalysisConfig): AiProvider => {
     // Nothing to reclaim: it does not drop findings for want of a quote.
     usesQuoteCoverageClause: false,
     callStructured: <T extends z.ZodType>(schema: T, system: string, content: string, instruction: string) =>
-      callStructured(client, config, schema, system, content, instruction),
+      callStructured(client, config, schema, system, content, instruction, signal),
     countInputTokens: (system: string, content: string, instruction: string) =>
       countInputTokens(client, config, system, content, instruction),
     estimateCostUsd: (inputTokens: number, outputTokens: number) =>

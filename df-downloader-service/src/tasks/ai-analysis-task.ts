@@ -46,6 +46,15 @@ type AiAnalysisTaskContext = {
   provider?: AiProviderId;
   /** See resolveChapters - true only when a person is waiting on this one item. */
   allowRemoteChapters?: boolean;
+  /**
+   * Set when the run starts, so cancel() has something to abort.
+   *
+   * Worth having for the same reason transcription has one: a local analysis
+   * holds the machine exclusively and can run for many minutes inside a
+   * single call, so "stop this" has to reach the request in flight rather
+   * than waiting for it to finish first.
+   */
+  abortController?: AbortController;
 };
 
 const aiAnalysisTaskControls: TaskControls<AiAnalysisResult, AiAnalysisTaskContext> = {
@@ -77,6 +86,8 @@ const aiAnalysisTaskControls: TaskControls<AiAnalysisResult, AiAnalysisTaskConte
       }
     }
     context.stage = "Analysing";
+    const abortController = new AbortController();
+    context.abortController = abortController;
     logger.log("info", `Analysing ${entry.key} with ${AiAnalysisConfigUtils.resolveModelName(config, provider)}`);
     const result = await analyseContent(config, {
       entry,
@@ -89,6 +100,7 @@ const aiAnalysisTaskControls: TaskControls<AiAnalysisResult, AiAnalysisTaskConte
       sources,
       provider,
       allowRemoteChapters,
+      signal: abortController.signal,
       // Local runs make three calls and can take minutes; without this the
       // status sat on "Analysing" throughout and looked stuck.
       /*
@@ -137,6 +149,19 @@ const aiAnalysisTaskControls: TaskControls<AiAnalysisResult, AiAnalysisTaskConte
     // analyseContent reports an ordinary failure inside the result rather
     // than throwing, so the task has to promote it - otherwise a run that
     // failed would be recorded as a successful task holding an error.
+    /*
+     * A cancel is not a failure, and must not be stored as one.
+     *
+     * analyseContent reports problems inside the result rather than throwing,
+     * so without this an aborted run would be promoted to a failed task -
+     * recording an error against a video that nothing went wrong with, and
+     * one that purge-empty-analyses would later have to clean up.
+     */
+    if (abortController.signal.aborted) {
+      context.phases?.finish("failed");
+      context.stage = "Cancelled";
+      return { status: "cancelled" as const };
+    }
     if (result.error) {
       context.phases?.finish("failed");
       throw new Error(result.error);
@@ -146,6 +171,17 @@ const aiAnalysisTaskControls: TaskControls<AiAnalysisResult, AiAnalysisTaskConte
     return { status: "success", result };
   },
   getStatus: (context) => ({ phases: context.phases?.snapshot() }),
+  /*
+   * Genuinely does something, unlike most task types here. A local run can
+   * hold the one machine slot for half an hour, and until now the only way to
+   * take that back was to restart the service.
+   *
+   * A stop on a task that has not started is still a no-op - the pipeline
+   * dequeues that case before it reaches this.
+   */
+  cancel: async (context: AiAnalysisTaskContext) => {
+    context.abortController?.abort();
+  },
   getStatusMessage: ({ context, state }) => {
     /*
      * The model that will actually run, not the configured Anthropic one.

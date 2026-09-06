@@ -96,6 +96,7 @@ import { DownloadTask, DownloadTaskManager, isDownloadTask } from "./tasks/downl
 import { RemoveEmptyDirsTask, isRemoveEmptyDirsTask } from "./tasks/remove-empty-dirs-task.js";
 import { ScanForExistingContentTask, isScanForExistingContentTask } from "./tasks/scan-for-content-task.js";
 import { isSubtitlesTask } from "./tasks/subtitles-task.js";
+import { isAiAnalysisTask } from "./tasks/ai-analysis-task.js";
 import { LocalModelsTaskManager } from "./tasks/local-models-task-manager.js";
 import { createUpdateDownloadMetadataTaskPipeline, UpdateDownloadMetadataTaskPipeline, UpdateDownloadMetadataTaskPipelineExecution } from "./task-pipelines/update-download-metadata-task-pipeline.js";
 
@@ -1740,6 +1741,8 @@ const makeTaskInfoInner = (
     return makeBulkBackfillTaskInfo(managedTask, positionInfo);
   } else if (isSubtitlesTask(managedTask.task)) {
     return makeSubtitlesTaskInfo(managedTask, positionInfo);
+  } else if (isAiAnalysisTask(managedTask.task)) {
+    return makeAiAnalysisTaskInfo(managedTask, positionInfo);
   } else {
     return makeBasicTaskInfo(managedTask, positionInfo);
   }
@@ -1916,6 +1919,26 @@ const makeBulkBackfillTaskInfo = (
  * one-at-a-time queue for an hour.
  */
 const makeSubtitlesTaskInfo = (
+  managedTask: GenericManagedTask,
+  positionInfo: PriorityPositionInfo | null
+): BasicTaskInfo => {
+  return {
+    ...makeCommonTaskInfo(managedTask, positionInfo),
+    capabilities: ["cancel"],
+  };
+};
+
+/**
+ * Analysis can be taken back, and now says so.
+ *
+ * `capabilities` is the honest signal the UI reads, and this fell through to
+ * the basic info with an empty list - so the one task type that can hold the
+ * machine to itself for half an hour was also the one you could not stop.
+ * No pause: the run is a sequence of model calls with no resumable point
+ * between them, so a pause could only ever be a stop wearing a friendlier
+ * label.
+ */
+const makeAiAnalysisTaskInfo = (
   managedTask: GenericManagedTask,
   positionInfo: PriorityPositionInfo | null
 ): BasicTaskInfo => {

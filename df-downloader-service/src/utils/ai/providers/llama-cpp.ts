@@ -70,6 +70,12 @@ const localDispatcher = new Agent({ headersTimeout: 0, bodyTimeout: 0 });
 const describeLocalFailure = (e: any, url: string, elapsedMs: number): string => {
   const code = e?.cause?.code ?? e?.code;
   const seconds = Math.round(elapsedMs / 1000);
+  // A cancel arrives here as a transport error. Left alone it reported as
+  // "the connection closed unexpectedly", which reads as a fault rather than
+  // as the thing the person just asked for.
+  if (e?.name === "AbortError" || code === "ABORT_ERR") {
+    throw e;
+  }
   switch (code) {
     case "UND_ERR_HEADERS_TIMEOUT":
     case "UND_ERR_BODY_TIMEOUT":
@@ -87,7 +93,7 @@ const describeLocalFailure = (e: any, url: string, elapsedMs: number): string =>
   return `Local model request to ${url} failed after ${seconds}s: ${detail}${code ? ` (${code})` : ""}`;
 };
 
-const postJson = async (baseUrl: string, path: string, body: unknown): Promise<any> => {
+const postJson = async (baseUrl: string, path: string, body: unknown, signal?: AbortSignal): Promise<any> => {
   const startedAt = Date.now();
   let response: Response;
   try {
@@ -95,6 +101,7 @@ const postJson = async (baseUrl: string, path: string, body: unknown): Promise<a
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
+      signal,
       // Not in the DOM RequestInit types, but Node's fetch honours it - the
       // probe above was run against this exact mechanism.
       dispatcher: localDispatcher,
@@ -147,7 +154,8 @@ const postStream = async (
   baseUrl: string,
   path: string,
   body: unknown,
-  onTokens?: (generated: number) => void
+  onTokens?: (generated: number) => void,
+  signal?: AbortSignal
 ): Promise<StreamedCompletion> => {
   const startedAt = Date.now();
   let response: Response;
@@ -156,6 +164,7 @@ const postStream = async (
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
+      signal,
       dispatcher: localDispatcher,
     } as RequestInit);
   } catch (e: any) {
@@ -176,6 +185,15 @@ const postStream = async (
   let timings: StreamedCompletion["timings"];
 
   for await (const chunk of response.body as any) {
+    /*
+     * Checked per chunk as well as handed to fetch.
+     *
+     * Aborting the request does tear the body stream down, but a local
+     * generation emits a chunk per token and can run for minutes - so this is
+     * what makes a cancel take effect at the next token rather than whenever
+     * the transport happens to notice.
+     */
+    signal?.throwIfAborted();
     buffered += decoder.decode(chunk, { stream: true });
     // Server-sent events are newline delimited, and a read can end mid-line -
     // the trailing fragment is kept for the next one rather than parsed.
@@ -218,7 +236,19 @@ const postStream = async (
  * LocalLlamaServer. Construction stays synchronous, which keeps provider
  * resolution simple everywhere else.
  */
-export const makeLocalProvider = (config: AiLocalProviderConfig, server: LocalLlamaServer): AiProvider => ({
+/**
+ * `signal` belongs to one analysis run, not to the engine.
+ *
+ * Bound at construction rather than passed per call because a provider is
+ * built per run and every call in that run shares its fate - threading it
+ * through nine call sites in analyse.ts would say the same thing nine times
+ * and leave room to miss one.
+ */
+export const makeLocalProvider = (
+  config: AiLocalProviderConfig,
+  server: LocalLlamaServer,
+  signal?: AbortSignal
+): AiProvider => ({
   id: "local",
   model: config.model,
   contextTokens: config.contextSize,
@@ -300,7 +330,8 @@ export const makeLocalProvider = (config: AiLocalProviderConfig, server: LocalLl
               // reporting; the grammar constraint survives streaming intact.
               stream: true,
             },
-            onProgress ? (outputTokens) => onProgress({ outputTokens }) : undefined
+            onProgress ? (outputTokens) => onProgress({ outputTokens }) : undefined,
+            signal
           );
         } finally {
           inferenceMs = Date.now() - inferenceStartedAt;
@@ -348,7 +379,7 @@ export const makeLocalProvider = (config: AiLocalProviderConfig, server: LocalLl
     try {
       const result = await postJson(baseUrl, "/tokenize", {
         content: `${system}\n\n${content}\n\n${instruction}`,
-      });
+      }, signal);
       return Array.isArray(result?.tokens) ? result.tokens.length : 0;
     } finally {
       server.release();

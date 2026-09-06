@@ -48,7 +48,17 @@ export const stopLocalAnalysisServer = async () => {
  * actually asked for, since "no API key" is a more useful thing to be told
  * than "no provider available".
  */
-export const makeProvider = (config: AiAnalysisConfig, requested?: AiProviderId): AiProvider => {
+export const makeProvider = (
+  config: AiAnalysisConfig,
+  requested?: AiProviderId,
+  /**
+   * Aborts every call this provider makes - see makeLocalProvider.
+   *
+   * Bound to the provider rather than passed per call because a provider is
+   * built once per run and every call in that run shares its fate.
+   */
+  signal?: AbortSignal
+): AiProvider => {
   const resolved = AiAnalysisConfigUtils.resolveProvider(config, requested);
   if (!resolved) {
     const reason =
@@ -57,7 +67,7 @@ export const makeProvider = (config: AiAnalysisConfig, requested?: AiProviderId)
     throw new AiAnalysisNotConfiguredError(reason);
   }
   if (resolved === "local") {
-    return makeLocalProvider(config.local, getLocalServer(config));
+    return makeLocalProvider(config.local, getLocalServer(config), signal);
   }
-  return makeAnthropicProvider(config);
+  return makeAnthropicProvider(config, signal);
 };

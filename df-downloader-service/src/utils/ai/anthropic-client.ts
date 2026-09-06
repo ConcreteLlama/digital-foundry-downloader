@@ -146,7 +146,8 @@ export const callStructured = async <T extends z.ZodType>(
   schema: T,
   system: string,
   content: string,
-  instruction: string
+  instruction: string,
+  signal?: AbortSignal
 ): Promise<AiCallResult<z.infer<T>>> => {
   // Two blocks, not one concatenated string: the content is identical
   // across both calls of a run and the instruction is not, so marking the
@@ -168,7 +169,10 @@ export const callStructured = async <T extends z.ZodType>(
     ],
     output_config: { format: zodOutputFormat(schema) },
     ...buildModelParams(config),
-  } as any);
+    // Request options, not body: the SDK takes an AbortSignal here, which is
+    // what lets a cancelled analysis stop paying for a call already in
+    // flight rather than waiting politely for the answer.
+  } as any, signal ? { signal } : undefined);
 
   const usage = summariseUsage(config, response.usage);
 
