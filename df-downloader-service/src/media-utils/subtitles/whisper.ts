@@ -65,6 +65,46 @@ const PROGRESS_LINE = /progress\s*=\s*(\d+)\s*%/g;
  */
 
 /** Seconds into the audio, from a segment line's end timestamp. */
+/**
+ * Says what came out, so a bad transcription is visible without opening the
+ * file.
+ *
+ * A run that finished is not a run that worked. Whisper's characteristic
+ * failures produce a well-formed subtitle file full of nothing useful - a
+ * handful of cues for an hour of speech, or the same phrase repeated for
+ * pages, which is what a decode loop looks like from outside. Both were
+ * indistinguishable from success in a log that said only how long it took,
+ * and "the GPU run produced good subtitles" was asserted here on exactly that
+ * much evidence.
+ *
+ * The repetition ratio is the useful number: real speech barely repeats whole
+ * lines, and a loop collapses it towards zero.
+ */
+const describeTranscript = (filename: string, lines: SrtLine[]) => {
+  const characters = lines.reduce((total, line) => total + line.transcript.length, 0);
+  const unique = new Set(lines.map((line) => line.transcript.trim().toLowerCase())).size;
+  const uniqueRatio = lines.length ? unique / lines.length : 0;
+  const summary = `${lines.length} cues, ${characters} characters, ${Math.round(uniqueRatio * 100)}% of lines distinct`;
+  // Generous on purpose: this is meant to catch a transcript that is
+  // obviously broken, not to second-guess a quiet video.
+  const suspicious = lines.length === 0 || (lines.length > 20 && uniqueRatio < 0.3);
+  logger.log(
+    suspicious ? "warn" : "info",
+    suspicious
+      ? `Transcript for ${filename} looks wrong: ${summary}. That is what a repetition loop or a failed decode produces - the file will exist and be useless.`
+      : `Transcript for ${filename}: ${summary}`
+  );
+  logger.log(
+    "silly",
+    `Transcript for ${filename} begins: ${
+      lines
+        .slice(0, 5)
+        .map((line) => line.transcript.trim())
+        .join(" / ") || "(nothing)"
+    }`
+  );
+};
+
 const segmentEndSeconds = (chunk: string): number | undefined => {
   let seconds: number | undefined;
   for (const match of chunk.matchAll(SEGMENT_LINE)) {
