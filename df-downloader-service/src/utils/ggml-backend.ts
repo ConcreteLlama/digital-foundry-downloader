@@ -19,7 +19,7 @@
  * from the line start finds the first and silently misses the second.
  */
 export const BACKEND_LINE =
-  /^.*(?:(?:load_backend|whisper_backend_init_gpu|ggml_vulkan):|offload(?:ed|ing) .*(?:layers|layer) to GPU|no usable GPU found).*$/gm;
+  /^.*(?:(?:load_backend|whisper_backend_init_gpu|ggml_vulkan):|offload(?:ed|ing) .*(?:layers|layer) to GPU|no usable GPU found|model buffer size).*$/gm;
 
 /** whisper.cpp's verdict. Absent entirely when it stays on the CPU. */
 const WHISPER_USING_GPU = /whisper_backend_init_gpu: using (\S+) backend/;
@@ -51,6 +51,30 @@ const LLAMA_NO_GPU = /no usable GPU found/;
 
 /** The device's real name, rather than the "Vulkan0" slot it occupies. */
 const VULKAN_DEVICE = /ggml_vulkan: \d+ = ([^|]+?)\s*\|/;
+
+/**
+ * Where the weights went, and how much of them.
+ *
+ * llama prints one of these per buffer - "Vulkan0 model buffer size = 5133.63
+ * MiB" - which names the device it actually used and says how much it holds.
+ * Less pretty than the marketing name from ggml_vulkan, but printed in cases
+ * where that is not, and it carries the size, which is the thing that says
+ * whether the model really went where it was meant to.
+ *
+ * The host buffer is excluded: it is the part that stayed behind.
+ */
+const MODEL_BUFFER = /^.*?([A-Za-z0-9_]+) model buffer size\s*=\s*([\d.]+)\s*(\w+)/gm;
+
+const describeDeviceBuffers = (output: string): string | undefined => {
+  const found = [...output.matchAll(MODEL_BUFFER)]
+    .map(([, device, size, unit]) => ({ device, size: Number(size), unit }))
+    .filter(({ device }) => !/host/i.test(device) && !/^CPU/i.test(device));
+  if (!found.length) {
+    return undefined;
+  }
+  const biggest = found.sort((a, b) => b.size - a.size)[0];
+  return `${biggest.device}, ${biggest.size.toFixed(0)} ${biggest.unit}`;
+};
 
 /**
  * A phrase to drop into "X is running on the ...".
@@ -94,7 +118,7 @@ export const describeComputeBackend = (output: string, gpuRequested: boolean): s
    * through to "said nothing about which backend it chose" - the one outcome
    * this line exists to prevent. An unnamed GPU is still an answer.
    */
-  const named = device ?? whisperGpu?.[1];
+  const named = device ?? describeDeviceBuffers(output) ?? whisperGpu?.[1];
   if (offloaded) {
     // No name where none was printed. "GPU - device (33/33 layers offloaded)"
     // is a placeholder wearing the clothes of an answer.
