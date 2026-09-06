@@ -187,6 +187,15 @@ WORKDIR /usr/src/app
 # loading shared libraries: libgomp.so.1" - before printing anything of their
 # own, so it reads as the feature being broken rather than a missing package.
 #
+# libssl3 is named for the same reason, and learned the hard way. llama-server
+# links libssl.so.3 and libcrypto.so.3 through libcurl. Neither the slim base
+# nor anything else here installs it - bookworm's mesa-vulkan-drivers happened
+# to pull it in transitively, so it worked by accident until Mesa moved to
+# backports and stopped depending on it. llama-server then died with exit 127
+# and "error while loading shared libraries: libssl.so.3" before printing a
+# line of its own. A dependency of ours belongs in this list, not in another
+# package's.
+#
 # GPU acceleration for both whisper.cpp and llama.cpp, via Vulkan.
 #
 # Vulkan rather than CUDA, ROCm or SYCL because one backend covers NVIDIA, AMD
@@ -226,7 +235,7 @@ WORKDIR /usr/src/app
 # Backports rather than a newer base image, so the change stays confined to
 # Mesa. Named for bookworm, so it has to move when the base above does.
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends libgomp1 libvulkan1 \
+    && apt-get install -y --no-install-recommends libgomp1 libvulkan1 libssl3 \
     && echo "deb http://deb.debian.org/debian bookworm-backports main" > /etc/apt/sources.list.d/backports.list \
     && apt-get update \
     && apt-get install -y --no-install-recommends -t bookworm-backports mesa-vulkan-drivers \
