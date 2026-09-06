@@ -13,7 +13,14 @@ import {
   AiTaggingConfig,
   AutomaticAiAnalysisMode,
 } from "df-downloader-common/config/ai-analysis-config";
-import { TestAiProviderRequest, TestAiProviderResponse, parseResponseBody } from "df-downloader-common";
+import {
+  AiSelfTestCheck,
+  AiSelfTestRequest,
+  AiSelfTestResponse,
+  TestAiProviderRequest,
+  TestAiProviderResponse,
+  parseResponseBody,
+} from "df-downloader-common";
 import { API_URL } from "../../config";
 import { fetchJson } from "../../utils/fetch";
 import { Fragment, useState } from "react";
@@ -76,6 +83,118 @@ const ProviderTestButton = ({ provider, label }: { provider: "anthropic" | "loca
       </Box>
       {test.status === "success" && <Alert severity="success">{test.message}</Alert>}
       {test.status === "error" && <Alert severity="error">{test.message}</Alert>}
+    </Stack>
+  );
+};
+
+type SelfTestState =
+  | { status: "idle" }
+  | { status: "running" }
+  | { status: "done"; result: AiSelfTestResponse }
+  | { status: "error"; message: string };
+
+const CHECK_COLOUR: Record<AiSelfTestCheck["state"], string> = {
+  pass: "success.main",
+  warn: "warning.main",
+  fail: "error.main",
+  info: "text.secondary",
+};
+
+const CHECK_MARK: Record<AiSelfTestCheck["state"], string> = {
+  pass: "✓",
+  warn: "!",
+  fail: "✗",
+  info: "•",
+};
+
+/**
+ * Runs a real analysis and says whether the answer made sense.
+ *
+ * Separate from the connection test above, because the two answer different
+ * questions and the difference has already cost real data. A reachable server
+ * running a broken compute backend passes every check that does not read what
+ * it wrote: grammar-constrained decoding keeps the JSON valid, so an engine
+ * producing nonsense reports success, stores a blank analysis against a video,
+ * and the scheduled backfill then skips that video forever because it has a
+ * record.
+ *
+ * So this one costs a minute of the machine and is worth it. It is also the
+ * only place that says which device the model actually ran on, which
+ * previously meant reading the log.
+ */
+const LocalSelfTestPanel = () => {
+  const { getValues } = useFormContext();
+  const [test, setTest] = useState<SelfTestState>({ status: "idle" });
+  const run = async () => {
+    setTest({ status: "running" });
+    try {
+      const requestBody: AiSelfTestRequest = { config: getValues() as AiAnalysisConfig };
+      const data = await fetchJson(`${API_URL}/ai-analysis/self-test`, {
+        method: "POST",
+        body: JSON.stringify(requestBody),
+        headers: { "Content-Type": "application/json" },
+      });
+      const parsed = parseResponseBody(data, AiSelfTestResponse);
+      if (parsed.data) {
+        setTest({ status: "done", result: parsed.data });
+      } else {
+        setTest({ status: "error", message: parsed.error?.message || "The test did not return a result." });
+      }
+    } catch (e: any) {
+      setTest({ status: "error", message: e?.message || "The test could not be run." });
+    }
+  };
+  const result = test.status === "done" ? test.result : undefined;
+  return (
+    <Stack spacing={1}>
+      <FormHelperText sx={{ mx: 0 }}>
+        Analyses a short built-in transcript and checks the answer is right, not just that one came back. Loads the
+        model if it is not already loaded, takes the machine to itself while it runs, and can take a few minutes on a
+        slow box. Save your settings first - this tests what is on screen.
+      </FormHelperText>
+      <Box>
+        <Button variant="outlined" disabled={test.status === "running"} onClick={run}>
+          {test.status === "running" ? "Testing, this can take a few minutes..." : "Check it actually works"}
+        </Button>
+      </Box>
+      {test.status === "error" && <Alert severity="error">{test.message}</Alert>}
+      {result && (
+        <Alert severity={result.ok ? (result.checks.some((c) => c.state === "warn") ? "warning" : "success") : "error"}>
+          <Stack spacing={1}>
+            <Typography variant="body2" sx={{ fontWeight: 600 }}>
+              {result.summary}
+            </Typography>
+            <Stack spacing={0.5}>
+              {result.checks.map((c) => (
+                <Stack key={c.name} direction="row" spacing={1} sx={{ alignItems: "baseline" }}>
+                  <Typography variant="body2" sx={{ color: CHECK_COLOUR[c.state], minWidth: "1em" }}>
+                    {CHECK_MARK[c.state]}
+                  </Typography>
+                  <Typography variant="body2">
+                    <Typography component="span" variant="body2" sx={{ fontWeight: 600 }}>
+                      {c.name}:
+                    </Typography>{" "}
+                    {c.detail}
+                  </Typography>
+                </Stack>
+              ))}
+            </Stack>
+            {/* Shown on a pass too - see AiSelfTestResponse.output. The failure
+                this catches reads perfectly well until you compare it to what
+                the transcript said. */}
+            {result.output && (
+              <Box>
+                <Typography variant="caption" color="text.secondary">
+                  What it wrote:
+                </Typography>
+                <Typography variant="body2" sx={{ fontStyle: "italic" }}>
+                  {result.output}
+                </Typography>
+              </Box>
+            )}
+          </Stack>
+        </Alert>
+      )}
     </Stack>
   );
 };
@@ -321,6 +440,13 @@ const AiAnalysisSettings = () => {
                 which is a download, not a check.
               */}
               {!usingOwnServer && <ProviderTestButton provider="local" label="Test server connection" />}
+              {/*
+                Offered either way, unlike the connection test above. Whether
+                this app or someone else runs the server, the question "does
+                analysis actually produce sensible answers here" has the same
+                answer and the same way of finding it out.
+              */}
+              <LocalSelfTestPanel />
               {usingOwnServer && (
                 <Fragment>
                   <ZodNumberField

@@ -2,6 +2,7 @@ import {
   AiAnalysisResult,
   AnalyseContentRequest,
   AiTagDecisionRequest,
+  AiSelfTestRequest,
   TestAiProviderRequest,
   ScheduledBackfillPreviewRequest,
   DfArticleUtils,
@@ -14,6 +15,7 @@ import { configService } from "../../config/config.js";
 import { DigitalFoundryContentManager } from "../../df-content-manager.js";
 import { estimateAnalysisCost } from "../../utils/ai/analyse.js";
 import { purgeEmptyAnalyses } from "../../utils/ai/purge-empty-analyses.js";
+import { runLocalAnalysisSelfTest } from "../../utils/ai/self-test.js";
 import { makeProvider } from "../../utils/ai/providers/resolve.js";
 import { buildGameIndex } from "../../utils/ai/game-index.js";
 import { buildHardwareIndex } from "../../utils/ai/hardware-index.js";
@@ -270,6 +272,29 @@ export const makeAiAnalysisRouter = (contentManager: DigitalFoundryContentManage
               ? `${message} - the API key looks wrong or expired.`
               : message,
         });
+      }
+    });
+  });
+
+  /**
+   * Checks that local analysis actually works, rather than merely answering.
+   *
+   * A separate endpoint from /test-provider on purpose: that one counts
+   * tokens, which is free and instant and proves the server is reachable.
+   * This runs a real grammar-constrained generation against a fixture with a
+   * known answer, which costs a minute of the machine and is the only thing
+   * that catches an engine returning well-formed nonsense.
+   *
+   * Reports a broken engine as {ok:false} with HTTP 200, like the provider
+   * test - a settings form asked a question, and "it is answering nonsense"
+   * is an answer rather than a server error.
+   */
+  router.post("/self-test", async (req, res) => {
+    await zodParseHttp(AiSelfTestRequest, req, res, async ({ config }) => {
+      try {
+        return sendResponse(res, await runLocalAnalysisSelfTest(config));
+      } catch (e) {
+        return sendErrorAsResponse(res, e);
       }
     });
   });

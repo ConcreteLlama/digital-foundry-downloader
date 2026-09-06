@@ -174,6 +174,21 @@ export class LocalLlamaServer {
   private idleTimer?: NodeJS.Timeout;
   /** Set when settings changed mid-run - see update(). */
   private restartWhenIdle = false;
+  /**
+   * What the last start worked out about the device, kept rather than only
+   * logged.
+   *
+   * The verdict is decided once, while the model loads, and then the server
+   * runs for hours - so anything asking later (the self-test, the system
+   * page) has no way to recompute it and would otherwise be reduced to
+   * telling the user to go and read the log.
+   */
+  private backend?: { verdict: string; detail?: string };
+
+  /** The device the running server landed on, or undefined if none is up. */
+  getBackend() {
+    return this.process ? this.backend : undefined;
+  }
 
   constructor(private config: AiLocalProviderConfig) {}
 
@@ -444,11 +459,12 @@ export class LocalLlamaServer {
      * line exists to answer.
      */
     if (backendLines.length) {
-      logger.log(
-        "info",
-        `Local analysis is running on the ${describeComputeBackend(backendLines.join("; "), this.config.useGpu !== false)}`
-      );
-      logger.log("debug", `Local analysis backend detail: ${backendLines.join("; ")}`);
+      this.backend = {
+        verdict: describeComputeBackend(backendLines.join("; "), this.config.useGpu !== false),
+        detail: backendLines.join("; "),
+      };
+      logger.log("info", `Local analysis is running on the ${this.backend.verdict}`);
+      logger.log("debug", `Local analysis backend detail: ${this.backend.detail}`);
       backendReported = true;
     } else {
       /*
@@ -456,10 +472,8 @@ export class LocalLlamaServer {
        * the server printed - see describeComputeBackend - and "it said
        * nothing" was useless to the one person who needed the answer.
        */
-      logger.log(
-        "info",
-        `Local analysis is running on the ${describeComputeBackend("", this.config.useGpu !== false)}`
-      );
+      this.backend = { verdict: describeComputeBackend("", this.config.useGpu !== false) };
+      logger.log("info", `Local analysis is running on the ${this.backend.verdict}`);
       backendReported = true;
     }
     return baseUrl;
@@ -499,6 +513,7 @@ export class LocalLlamaServer {
     }
     this.process = undefined;
     this.baseUrl = undefined;
+    this.backend = undefined;
     logger.log("info", "Stopping local analysis server (idle)");
     child.kill();
   }

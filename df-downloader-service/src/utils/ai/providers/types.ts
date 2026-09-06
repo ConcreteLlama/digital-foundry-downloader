@@ -97,6 +97,16 @@ export type AiProvider = {
    */
   readonly usesQuoteCoverageClause: boolean;
 
+  /**
+   * The device this engine is actually running on, where it knows.
+   *
+   * Optional because it is only a real question for a local engine - a hosted
+   * one runs on someone else's hardware and the answer would be a fiction.
+   * Undefined also when nothing is loaded yet, since the answer is decided as
+   * the model loads and cannot be recomputed afterwards.
+   */
+  describeBackend?(): string | undefined;
+
   /** One structured-output call: prompt in, schema-validated object out. */
   callStructured<T extends z.ZodType>(
     schema: T,

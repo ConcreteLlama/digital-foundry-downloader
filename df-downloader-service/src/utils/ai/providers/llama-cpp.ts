@@ -233,6 +233,14 @@ export const makeLocalProvider = (config: AiLocalProviderConfig, server: LocalLl
    */
   usesQuoteCoverageClause: AiLocalModels[config.model].needsQuoteCoverageClause,
 
+  /*
+   * Passed straight through from the server, which worked it out while the
+   * model loaded. Undefined when nothing is loaded, and undefined for a
+   * server someone else runs - this app never saw that one start, so it has
+   * no evidence about the device and should not guess at one.
+   */
+  describeBackend: () => server.getBackend()?.verdict,
+
   callStructured: async <T extends z.ZodType>(
     schema: T,
     system: string,
