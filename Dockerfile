@@ -215,25 +215,32 @@ WORKDIR /usr/src/app
 # given the "graphics" driver capability - the default of "compute,utility"
 # leaves Vulkan seeing no device at all on an otherwise working card.
 #
-# Mesa comes from backports, and this is not a general "keep it current"
-# impulse - it is the fix for a measured, reproduced bug.
+# Mesa comes from backports because bookworm's is three years old, not
+# because it fixes the bug below. It does not.
 #
 # Bookworm ships Mesa 22.3.6 (February 2023), the same month Intel's Alder
-# Lake-N launched. On an N305 that driver returns corrupt output from
-# llama.cpp's grammar-constrained sampling: an obvious console comparison
-# classified as an interview, empty summaries, and a confidence value of
-# "1111111111111111E1111111111111111". It is not a crash - the grammar keeps
-# the JSON structurally valid, so a broken run stores a blank analysis against
-# a video and reports success.
+# Lake-N launched. On an N305, llama.cpp's Vulkan backend returns corrupt
+# output above a small prompt size: measured with Mesa 25.0.7, a 148-token
+# prompt classified correctly and a 584-token one came back as "interview"
+# with a confidence of "-1111111111111111E-1111111111111111". It is not a
+# crash - grammar-constrained decoding keeps the JSON structurally valid, so a
+# broken run stores a confident, meaningless analysis and reports success.
 #
-# Isolated to the driver rather than guessed at. The same llama.cpp build
-# (b10733), the same model file and the same grammar produce a correct answer
-# on an NVIDIA card over Vulkan, and correct answers on the same Intel iGPU
-# with no grammar. That rules out the llama.cpp version and the Vulkan backend
-# itself, leaving the vendor's driver.
+# What the update did was move that threshold, not remove it: on 22.3.6 a
+# ~250-token prompt was already corrupt. Any real transcript is thousands of
+# tokens, so local analysis on an Intel iGPU is not viable either way, and
+# useGpu defaults to false for it. Whisper is unaffected - no grammar, and a
+# separate binary.
 #
-# Backports rather than a newer base image, so the change stays confined to
-# Mesa. Named for bookworm, so it has to move when the base above does.
+# Not the llama.cpp version and not Vulkan as such: the same build (b10733),
+# model file and grammar produce correct answers on an NVIDIA card over
+# Vulkan. It is Intel's driver, and it is worth reporting upstream.
+#
+# So this is kept on its own merits rather than as a fix - it costs nothing
+# (the package set is marginally smaller than bookworm's), it is the driver
+# AMD users get too, and shipping a 2023 driver was never a decision anyone
+# made. Backports rather than a newer base image, so the change stays confined
+# to Mesa. Named for bookworm, so it has to move when the base above does.
 RUN apt-get update \
     && apt-get install -y --no-install-recommends libgomp1 libvulkan1 libssl3 \
     && echo "deb http://deb.debian.org/debian bookworm-backports main" > /etc/apt/sources.list.d/backports.list \
