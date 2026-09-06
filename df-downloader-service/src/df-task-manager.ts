@@ -26,6 +26,7 @@ import {
   TaskInfo,
   TaskPipelineInfo,
   TaskPipelineUtils,
+  TaskPhase,
   TaskProgress,
   TaskStatus,
   isChangePositionAction,
@@ -1790,9 +1791,16 @@ const makeCommonTaskStatusInfo = (managedTask: GenericManagedTask): TaskStatus =
   const taskState = task.getTaskState();
   const taskResult = task.result;
   const taskError = taskResult?.status === "failed" ? taskResult.error : undefined;
-  // Tasks opt into progress reporting by returning it from getStatus() - see
-  // TaskProgress. Most don't, in which case this is simply absent.
-  const statusDetail = task.getStatus() as { progress?: TaskProgress } | undefined;
+  /*
+   * What a task opts into by returning it from getStatus().
+   *
+   * Copied field by field rather than spread, so a task cannot put arbitrary
+   * shapes into a typed status - but that means anything new has to be added
+   * here as well as to TaskStatus. Phases were reported by the analysis task
+   * and silently dropped at this line for exactly that reason, which is worth
+   * remembering the next time something opts in and does not appear.
+   */
+  const statusDetail = task.getStatus() as { progress?: TaskProgress; phases?: TaskPhase[] } | undefined;
   // A held task is idle as far as it knows - the hold lives in the task
   // manager's selection, not in the task - so it is reported as paused here.
   // Otherwise pausing a queued item looked like it had done nothing.
@@ -1807,6 +1815,7 @@ const makeCommonTaskStatusInfo = (managedTask: GenericManagedTask): TaskStatus =
     error: taskError ? makeErrorMessage(taskError) : undefined,
     forceStarted: task.forceRunFlag || undefined,
     progress: statusDetail?.progress,
+    phases: statusDetail?.phases,
     accumulatedActiveMs: task.accumulatedActiveMs,
     lastResumedAt: task.lastResumedAt,
   };
