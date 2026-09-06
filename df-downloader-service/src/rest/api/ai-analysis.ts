@@ -14,7 +14,7 @@ import express from "express";
 import { configService } from "../../config/config.js";
 import { DigitalFoundryContentManager } from "../../df-content-manager.js";
 import { estimateAnalysisCost } from "../../utils/ai/analyse.js";
-import { purgeEmptyAnalyses } from "../../utils/ai/purge-empty-analyses.js";
+import { findSuspectAnalyses, purgeAnalyses, purgeEmptyAnalyses } from "../../utils/ai/purge-empty-analyses.js";
 import { getLocalSetupStatus } from "../../utils/ai/local-server.js";
 import { runLocalAnalysisSelfTest } from "../../utils/ai/self-test.js";
 import { makeProvider } from "../../utils/ai/providers/resolve.js";
@@ -315,6 +315,63 @@ export const makeAiAnalysisRouter = (contentManager: DigitalFoundryContentManage
         return sendErrorAsResponse(res, e);
       }
     });
+  });
+
+  /**
+   * Analyses that may have come from a broken engine, rather than empty ones.
+   *
+   * Separate from purge-empty because the problem is different: a corrupt
+   * compute backend returns a confident classification and a plausible
+   * summary, which passes every check the app has - see
+   * docs/GPU_ACCELERATION_FINDINGS.md. There is no reliable test for "wrong
+   * but plausible", so this reports what it can detect and otherwise lets the
+   * caller pick a time window, which is the honest lever when you know when a
+   * run was broken but not which items it spoiled.
+   *
+   * Never deletes. The caller looks first and then names what to remove.
+   */
+  router.post("/suspect", async (req, res) => {
+    const body = (req.body ?? {}) as { from?: string; to?: string; model?: string };
+    const parseDate = (value?: string) => {
+      if (!value) {
+        return undefined;
+      }
+      const date = new Date(value);
+      return Number.isNaN(date.getTime()) ? undefined : date;
+    };
+    try {
+      const analyses = await findSuspectAnalyses(contentManager.db, {
+        from: parseDate(body.from),
+        to: parseDate(body.to),
+        model: body.model,
+      });
+      return sendResponse(res, { analyses });
+    } catch (e) {
+      return sendErrorAsResponse(res, e);
+    }
+  });
+
+  /**
+   * Removes named analyses, putting those videos back in the queue.
+   *
+   * By explicit key rather than by filter, deliberately: this throws away
+   * results, and the caller having listed them first is what makes that a
+   * decision rather than an accident.
+   */
+  router.post("/purge", async (req, res) => {
+    const keys = (req.body?.contentKeys ?? []) as unknown;
+    if (!Array.isArray(keys) || keys.some((key) => typeof key !== "string")) {
+      return sendError(res, "contentKeys must be a list of content keys", 400);
+    }
+    if (!keys.length) {
+      return sendError(res, "No analyses were named", 400);
+    }
+    try {
+      const removed = await purgeAnalyses(contentManager.db, keys as string[]);
+      return sendResponse(res, { removed });
+    } catch (e) {
+      return sendErrorAsResponse(res, e);
+    }
   });
 
   router.post("/analyse", async (req, res) => {
