@@ -205,8 +205,31 @@ WORKDIR /usr/src/app
 # at runtime by the NVIDIA container toolkit, and only when the container is
 # given the "graphics" driver capability - the default of "compute,utility"
 # leaves Vulkan seeing no device at all on an otherwise working card.
+#
+# Mesa comes from backports, and this is not a general "keep it current"
+# impulse - it is the fix for a measured, reproduced bug.
+#
+# Bookworm ships Mesa 22.3.6 (February 2023), the same month Intel's Alder
+# Lake-N launched. On an N305 that driver returns corrupt output from
+# llama.cpp's grammar-constrained sampling: an obvious console comparison
+# classified as an interview, empty summaries, and a confidence value of
+# "1111111111111111E1111111111111111". It is not a crash - the grammar keeps
+# the JSON structurally valid, so a broken run stores a blank analysis against
+# a video and reports success.
+#
+# Isolated to the driver rather than guessed at. The same llama.cpp build
+# (b10733), the same model file and the same grammar produce a correct answer
+# on an NVIDIA card over Vulkan, and correct answers on the same Intel iGPU
+# with no grammar. That rules out the llama.cpp version and the Vulkan backend
+# itself, leaving the vendor's driver.
+#
+# Backports rather than a newer base image, so the change stays confined to
+# Mesa. Named for bookworm, so it has to move when the base above does.
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends libgomp1 libvulkan1 mesa-vulkan-drivers \
+    && apt-get install -y --no-install-recommends libgomp1 libvulkan1 \
+    && echo "deb http://deb.debian.org/debian bookworm-backports main" > /etc/apt/sources.list.d/backports.list \
+    && apt-get update \
+    && apt-get install -y --no-install-recommends -t bookworm-backports mesa-vulkan-drivers \
     && rm -rf /var/lib/apt/lists/*
 
 COPY --from=whisper-builder /opt/whisper/whisper-cli /usr/local/bin/whisper-cli
