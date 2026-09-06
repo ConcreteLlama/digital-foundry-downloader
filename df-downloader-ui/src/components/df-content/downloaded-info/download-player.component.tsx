@@ -31,21 +31,6 @@ import { monoFontFamily } from "../../../themes/build-theme";
 /** How much playback has to move before the service is told again. */
 const REPORT_INTERVAL_SECONDS = 10;
 
-/**
- * Seeks to a remembered position, with the two guards that keep resuming from
- * being worse than starting at zero: a position in the first few seconds is
- * not worth restoring, and one near the end drops you on the credits of
- * something you already finished.
- */
-const applyResume = (video: HTMLVideoElement, seconds: number) => {
-  if (seconds < 5) {
-    return;
-  }
-  if (Number.isFinite(video.duration) && seconds > video.duration - 15) {
-    return;
-  }
-  video.currentTime = seconds;
-};
 
 export type DownloadPlayerProps = {
   contentEntry: DfContentEntry;
@@ -693,7 +678,7 @@ export const DownloadPlayer = ({
           yank someone who has already started watching or scrubbed.
         */
         if (video && video.readyState >= 1 && video.currentTime < 5) {
-          applyResume(video, state.positionSeconds);
+          resumeTo(state.positionSeconds);
         }
       })
       .catch(() => {});
@@ -701,6 +686,7 @@ export const DownloadPlayer = ({
       cancelled = true;
     };
   }, [contentEntry.key, download.downloadLocation]);
+
 
   const restoredFor = useRef<string | null>(null);
   useEffect(() => {
@@ -715,7 +701,7 @@ export const DownloadPlayer = ({
       restoredFor.current = download.downloadLocation;
       // An explicitly requested moment wins: someone clicked a timestamp.
       if (startSeconds != null) {
-        video.currentTime = startSeconds;
+        seekTo(startSeconds * 1000);
         return;
       }
       /*
@@ -729,7 +715,7 @@ export const DownloadPlayer = ({
       if (seconds == null) {
         return;
       }
-      applyResume(video, seconds);
+      resumeTo(seconds);
     };
     video.addEventListener("loadedmetadata", restore);
     // Already loaded - a remount onto a cached file never fires the event.
@@ -807,6 +793,35 @@ export const DownloadPlayer = ({
   useEffect(() => {
     onSeekReady?.(seekTo);
   }, [onSeekReady, seekTo]);
+
+  /*
+   * Resuming, for either kind of stream.
+   *
+   * The guards are the old ones - a position in the first few seconds is not
+   * worth restoring, and one near the end drops you on the credits - but the
+   * seek itself can no longer be a currentTime assignment. A transcoded
+   * stream is produced as it is sent and has no seekable range at all, so
+   * setting currentTime left the element waiting to reach a position it could
+   * never reach, and autoplay waited behind it: the dialog opened and nothing
+   * ever started.
+   *
+   * The length also has to come from the probe when transcoding, since the
+   * element only knows about the part of the video it has been given.
+   */
+  const resumeTo = useCallback(
+    (seconds: number) => {
+      const video = videoRef.current;
+      if (!video || seconds < 5) {
+        return;
+      }
+      const total = transcodingRef.current ? probedDurationRef.current : video.duration;
+      if (total && Number.isFinite(total) && seconds > total - 15) {
+        return;
+      }
+      seekTo(seconds * 1000);
+    },
+    [seekTo]
+  );
 
 
   const timelineRows = useMemo(
