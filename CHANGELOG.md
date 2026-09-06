@@ -39,6 +39,10 @@ The image is also about 1.3GB smaller than 2.8.0 despite gaining all of that, be
   - It no longer ships the compiler toolchain used to build it, nor the build-time dependencies that were installed and then discarded - about a gigabyte of them were still being carried in an earlier layer despite being removed later
   - Pulls and updates are correspondingly quicker, and it is smaller than 2.8.0 even with the graphics support added
 ### Bug Fixes
+- An analysis that produces nothing is now reported as a failure instead of being saved as a blank result
+  - A model can return perfectly well-formed output that says nothing - the reply is checked against a schema, so it is always valid, and an empty summary passes that check as readily as a real one. Saved as a success it then counted as done, and every later run skipped it, so one bad night quietly became permanent
+  - Each stage of a run now says what came back as it arrives, and warns when a stage returns nothing usable - so a run that has gone wrong is visible in the first minutes rather than at the end
+  - Tools then Maintenance has Clear Empty Analyses for anything already saved that way. Removing them puts those videos back in the queue, so a scheduled run redoes them overnight
 - The login page has its collage of thumbnails back
   - The tiles slide into place from random directions again, at slightly different speeds, which is what it did before the interface was rebuilt - the effect belonged to an image library that was swapped out, and went with it
   - A phone gets the collage too. It used to get a single thumbnail across the top and nothing below, which read as a broken header rather than a background

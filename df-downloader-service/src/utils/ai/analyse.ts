@@ -149,6 +149,54 @@ const LOCAL_CALL_WEIGHTS = { classify: 0.037, summarise: 0.302, extract: 0.661 }
  * consumer matches them by name, and two copies of a string is how that stops
  * working silently.
  */
+/** How much of a phase's output to write to the log. */
+const PHASE_OUTPUT_LOG_CHARS = 2000;
+
+/**
+ * What a call actually returned, as it returns it.
+ *
+ * Written per phase rather than only at the end, because the end is too late:
+ * a run whose first call comes back empty goes on to spend twenty more
+ * minutes producing nothing, and the only sign used to be a finished analysis
+ * with blank fields. Seeing the first phase's output land empty is the moment
+ * to stop and look.
+ *
+ * The shape goes to warn when nothing usable came back - that is the case
+ * worth interrupting someone for - and the content to debug, where it can be
+ * read when the shape alone is not enough.
+ */
+const logPhaseOutput = (contentKey: string, label: string, parsed: unknown) => {
+  const serialised = JSON.stringify(parsed) ?? "";
+  const strings = collectStrings(parsed);
+  const empty = strings.length > 0 && strings.every((value) => !value.trim());
+  logger.log(
+    empty ? "warn" : "debug",
+    empty
+      ? `Analysis ${contentKey} - "${label}" returned nothing usable: every text field came back empty. This is what a model producing garbage looks like from here; the run will keep going and produce a blank result.`
+      : `Analysis ${contentKey} - "${label}" returned ${serialised.length} chars`
+  );
+  logger.log(
+    "debug",
+    `Analysis ${contentKey} - "${label}" output: ${
+      serialised.length > PHASE_OUTPUT_LOG_CHARS ? `${serialised.slice(0, PHASE_OUTPUT_LOG_CHARS)}… (truncated)` : serialised
+    }`
+  );
+};
+
+/** Every string in a parsed result, however deeply nested. */
+const collectStrings = (value: unknown): string[] => {
+  if (typeof value === "string") {
+    return [value];
+  }
+  if (Array.isArray(value)) {
+    return value.flatMap(collectStrings);
+  }
+  if (value && typeof value === "object") {
+    return Object.values(value).flatMap(collectStrings);
+  }
+  return [];
+};
+
 const PHASE_LABELS = {
   classify: "Working out what kind of video this is",
   summarise: "Writing the summary",
@@ -987,6 +1035,7 @@ export const analyseContent = async (config: AiAnalysisConfig, inputs: AnalysisI
         buildClassificationInstruction(),
         reportTokens
       );
+      logPhaseOutput(inputs.entry.key, PHASE_LABELS.classify, classified.parsed);
       logger.log(
         "info",
         `Analysis ${inputs.entry.key} classified as ${classified.parsed.contentType} (confidence ${classified.parsed.contentTypeConfidence})`
@@ -999,6 +1048,7 @@ export const analyseContent = async (config: AiAnalysisConfig, inputs: AnalysisI
         buildSummaryInstruction(config),
         reportTokens
       );
+      logPhaseOutput(inputs.entry.key, PHASE_LABELS.summarise, summarised.parsed);
       overview = { ...classified.parsed, ...summarised.parsed };
       usage = addUsage(classified.usage, summarised.usage);
     } else {
@@ -1010,6 +1060,7 @@ export const analyseContent = async (config: AiAnalysisConfig, inputs: AnalysisI
         buildOverviewInstruction(config),
         reportTokens
       );
+      logPhaseOutput(inputs.entry.key, PHASE_LABELS.overview, summarised.parsed);
       overview = summarised.parsed;
       usage = summarised.usage;
     }
@@ -1026,6 +1077,7 @@ export const analyseContent = async (config: AiAnalysisConfig, inputs: AnalysisI
     if (config.features.structuredData && EXTRACTABLE_TYPES.includes(overview.contentType)) {
       reportStage(totalSteps, PHASE_LABELS.extract);
       const extraction = await extractStructuredData(provider, config, prepared, overview.contentType, reportTokens);
+      logPhaseOutput(inputs.entry.key, PHASE_LABELS.extract, extraction.data);
       structuredData = extraction.data ? anchorFindings(extraction.data, prepared.transcript, prepared.articleText) : undefined;
       logger.log(
         "info",
