@@ -13,6 +13,7 @@ import express from "express";
 import { configService } from "../../config/config.js";
 import { DigitalFoundryContentManager } from "../../df-content-manager.js";
 import { estimateAnalysisCost } from "../../utils/ai/analyse.js";
+import { purgeEmptyAnalyses } from "../../utils/ai/purge-empty-analyses.js";
 import { makeProvider } from "../../utils/ai/providers/resolve.js";
 import { buildGameIndex } from "../../utils/ai/game-index.js";
 import { buildHardwareIndex } from "../../utils/ai/hardware-index.js";
@@ -95,6 +96,25 @@ export const makeAiAnalysisRouter = (contentManager: DigitalFoundryContentManage
    * client has no business reading them all to draw a list.
    */
   /** Every analysed item, flat and filterable - see buildAnalysisCatalogue. */
+  /**
+   * Finds analyses that hold nothing, and removes them when asked to.
+   *
+   * Removal is what makes them eligible again - the scheduled window picks up
+   * anything with no analysis at all - so this is how a library full of blank
+   * results gets redone overnight rather than by running a bulk job in the
+   * middle of the day.
+   *
+   * A dry run unless `confirm` is set, because this deletes results.
+   */
+  router.post("/purge-empty", async (req, res) => {
+    try {
+      const confirm = req.body?.confirm === true;
+      return sendResponse(res, await purgeEmptyAnalyses(contentManager.db, { dryRun: !confirm }));
+    } catch (e) {
+      return sendErrorAsResponse(res, e);
+    }
+  });
+
   router.get("/catalogue", async (_req, res) => {
     try {
       return sendResponse(res, await buildAnalysisCatalogue(contentManager.db));

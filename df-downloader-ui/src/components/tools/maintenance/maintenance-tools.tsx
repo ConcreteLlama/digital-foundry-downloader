@@ -1,3 +1,4 @@
+import { ClearEmptyAnalysesButton, ClearEmptyAnalysesView } from "./clear-empty-analyses.tsx";
 import { ClearMissingFilesButton, ClearMissingFilesInfoView } from "./clear-missing-files.tsx"
 import { RemoveEmptyDirsButton, RemoveEmptyDirsToolView } from "./remove-empty-dirs.tsx";
 import { ScanForExistingContentButton, ScanForExsitingContentToolView } from "./scan-for-existing-content.tsx";
@@ -15,6 +16,10 @@ export const MaintenanceTools: Record<string, MaintenanceTool> = {
     "Scan For Existing Content": {
         button: <ScanForExistingContentButton />,
         view: <ScanForExsitingContentToolView />,
+    },
+    "Clear Empty Analyses": {
+        button: <ClearEmptyAnalysesButton />,
+        view: <ClearEmptyAnalysesView />,
     },
     "Remove Empty Directories": {
         button: <RemoveEmptyDirsButton />,
