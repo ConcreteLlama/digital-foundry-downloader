@@ -342,6 +342,24 @@ export class LocalLlamaServer {
        * stay on the CPU - there is no separate flag for it.
        */
       "-ngl", String(this.config.useGpu === false ? 0 : this.config.gpuLayers ?? 999),
+      /*
+       * With the GPU off, exclude the device rather than merely offloading
+       * nothing to it.
+       *
+       * -ngl 0 stops layers being offloaded; it does not stop the device
+       * being registered, and ggml's scheduler can still place buffers and
+       * operations on a registered device. On an integrated GPU sharing
+       * system memory that means traffic across a boundary for work that
+       * should never have left the CPU.
+       *
+       * This is why local analysis regressed between 2.8.0 and 2.8.1 on a
+       * machine with an iGPU: nothing about the CPU path changed, but 2.8.1
+       * is the first build compiled with Vulkan, so it is the first build
+       * with a device to register at all. Same arguments, same model, same
+       * hardware - a first phase that took under two minutes took six to
+       * produce its first token.
+       */
+      ...(this.config.useGpu === false ? ["-dev", "none"] : []),
     ];
     logger.log(
       "info",
