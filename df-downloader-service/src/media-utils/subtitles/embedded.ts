@@ -1,5 +1,5 @@
 import { spawn } from "child_process";
-import ffmpegPath from "ffmpeg-static";
+import { ffmpegPath } from "../../utils/ffmpeg-binary.js";
 import { describeExit } from "../../utils/command.js";
 
 /**
@@ -64,7 +64,7 @@ export const extractEmbeddedSubtitlesAsVtt = async (
     ...(offsetSeconds > 0 ? ["-ss", String(offsetSeconds)] : []),
     "-i", filePath, "-map", `0:${streamIndex}`, "-f", "webvtt", "-",
   ];
-  const proc = spawn(ffmpegPath as unknown as string, args);
+  const proc = spawn(ffmpegPath, args);
   const chunks: Buffer[] = [];
   let stderr = "";
 

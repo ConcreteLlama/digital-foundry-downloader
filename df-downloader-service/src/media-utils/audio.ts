@@ -1,4 +1,4 @@
-import ffmpegPath from "ffmpeg-static";
+import { ffmpegPath } from "../utils/ffmpeg-binary.js";
 import { spawn } from "child_process";
 import { describeExit, runCommand } from "../utils/command.js";
 import { FFMPEG_DURATION_LINE, FFMPEG_OUT_TIME_LINE } from "../utils/media-metadata.js";

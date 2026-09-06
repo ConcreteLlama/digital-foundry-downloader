@@ -1,26 +1,16 @@
 import { logger, MediaFileMeta, SrtLine, SubtitleInfo, TaskProgress } from "df-downloader-common";
-import ffmpegPathImport from "ffmpeg-static";
-import ffprobePathImport from "ffprobe-static";
 import fs from "fs";
 import _ from "lodash";
 import { configService } from "../config/config.js";
 import { generateSrt, languageToSubsLanguage, parseSrt } from "../media-utils/subtitles/srt-utils.js";
 import { Chapter, makeChapterContent } from "./chatpers.js";
 import { runCommand } from "./command.js";
+import { ffmpegPath, ffprobePath } from "./ffmpeg-binary.js";
 import { fileExists, moveFile, pathIsEqual, setDateOnFile, TEMP_FILE_PREFIX } from "./file-utils.js";
 import path from "path";
 import { mediaSanitise, mediaSanitiseMultiline } from "./string-utils.js";
 import { setMp4TagsInPlace } from "./mp4-tags.js";
 
-if (!ffmpegPathImport) {
-  throw new Error("FFmpeg path not found");
-}
-const ffmpegPath = ffmpegPathImport;
-
-if (!ffprobePathImport) {
-  throw new Error("FFprobe path not found");
-}
-const ffprobePath = ffprobePathImport.path;
 
 // type PipeEntry = {
 //   pipeIndex: number;

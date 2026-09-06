@@ -19,6 +19,7 @@ import { closeAllQueues, forceCloseAllQueues } from "./utils/queue-utils.js";
 import { ActivePipelineDb, CompletedPipelineDb } from "./db/file-dbs/pipeline-db.js";
 import { ensureEnvString } from "./utils/env-utils.js";
 import { initFileLogging } from "./utils/logging/file-logging.js";
+import { logFfmpegChoice } from "./utils/ffmpeg-binary.js";
 
 let closeAttempts = 0;
 
@@ -55,6 +56,9 @@ async function start() {
   // is captured rather than being the one part that never reaches the file.
   initFileLogging();
   logger.log("info", `Starting DF Downloader ${serviceInfo.version} (${serviceInfo.branch})`);
+  // Not awaited: it spawns a process, and nothing in startup depends on
+  // the answer. It only has to reach the log.
+  void logFfmpegChoice();
   const db = await DfFileOperationalDb.create();
   await db.init();
   serviceLocator.setDb(db);

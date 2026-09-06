@@ -182,19 +182,55 @@ The degeneracy check counts letters before words, for the same reason: the obser
 corruption was `( ( ( (` repeated, which contains no words at all, so a word-ratio
 measure found nothing to judge and reported it fine.
 
-## Hardware video encoding is not available
+## Hardware video encoding: not available, then fixed
 
 Unrelated to the above but discovered alongside it. The bundled `ffmpeg-static` on Linux
-has no hardware encoder compiled in — `libx264`, `libx264rgb`, `h264_v4l2m2m` and `aac`,
+has no hardware encoder compiled in - `libx264`, `libx264rgb`, `h264_v4l2m2m` and `aac`,
 and v4l2m2m is the embedded-SoC wrapper, nothing an x86 integrated GPU offers. Asking
 for `h264_vaapi` produced `Unknown encoder` and killed the stream.
 
-The playback transcoder now probes `ffmpeg -encoders` once and falls back to software,
-saying which in the log. Making hardware encoding real means replacing `ffmpeg-static`
-with a VAAPI or QSV-capable build, which is an image-size and maintenance decision
-rather than a flag.
+That mattered more than it first appeared. Browser playback only re-encodes video when
+the file is not H.264, which sounds rare until you count: of the formats Digital
+Foundry offers, 856 entries are 4K HEVC against 869 4K H.264, plus 40 at 1080p. No
+browser plays HEVC, and `mediaFormats.priorities` selects on resolution alone - both 4K
+entries score identically, so which codec you get is whatever order the listing
+happened to be in. So a large share of the library needs a full 4K re-encode to play in
+a browser, and `libx264 veryfast` does not hold realtime for that on a low-power box.
 
-Worth noting the silicon distinction: Quick Sync is fixed-function media hardware,
-entirely separate from the Vulkan compute path that causes the corruption above. A
-machine where local analysis on the GPU is unusable could still encode video on it
-perfectly well.
+**The image now ships `jellyfin-ffmpeg7` instead.** Measured growth of `/usr` on the
+runtime base, 2026-09-06:
+
+| Build | Version | Added to /usr |
+| --- | --- | --- |
+| Debian bookworm `ffmpeg` | 5.1.9 | +440MB, +455MB with `intel-media-va-driver` |
+| `jellyfin-ffmpeg7` | 7.1.4 | +277MB, drivers included |
+| BtbN static, gpl | master | ~280MB for ffmpeg+ffprobe, driver package on top |
+
+All three carry `h264_vaapi`, `hevc_vaapi` and the QSV equivalents. Jellyfin's wins on
+size, is three major versions newer than Debian's, and is the only self-contained one -
+it bundles its own iHD/i965 drivers and oneVPL rather than sharing the system's, so it
+does not share a fate with the Mesa packages that already broke `llama-server` once.
+
+`utils/ffmpeg-binary.ts` chooses the binary: `FFMPEG_BINARY` / `FFPROBE_BINARY` if set,
+otherwise the bundled static build. The image sets both. Deliberately *not* "whatever
+ffmpeg is on PATH" - silently preferring an unknown build over the pinned one changes
+behaviour across an upgrade for a reason nobody can see.
+
+**Licensing is unchanged**: `ffmpeg-static` is already configured `--enable-gpl
+--enable-version3` and carries libx264, so the image has always contained a GPLv3
+binary. jellyfin-ffmpeg is the same. It is spawned as a separate process rather than
+linked, so the project's own ISC licence is unaffected; the standing obligation is to
+offer corresponding source for the binary that is redistributed. An LGPL build would be
+worse, not better - FFmpeg has no native H.264 encoder, so dropping libx264 would take
+the software fallback with it.
+
+**What is not verified.** Nobody has yet played a 4K HEVC file through `h264_vaapi` on
+the i3-N305. The argument path in `buildArgs` was written against a binary that could
+not run it, so its first real execution is still ahead. `canEncodeWithVaapi()` only
+proves the encoder was compiled in; whether it initialises depends on the driver and on
+`/dev/dri` being passed through, and that failure surfaces when a stream starts.
+
+Worth keeping the silicon distinction in mind: Quick Sync is fixed-function media
+hardware, entirely separate from the Vulkan compute path that causes the corruption
+above. A machine where local analysis on the GPU is unusable can still encode video on
+it perfectly well - which is exactly the case here.

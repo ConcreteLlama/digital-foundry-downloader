@@ -26,6 +26,12 @@ versions:
           - "The app now re-encodes only the part your browser rejects, as you watch. For these files that is the audio alone; the video is passed through untouched, so it costs almost nothing and starts playing immediately"
           - "Skipping ahead restarts it from the new point, which is unavoidable when the video is being made as you watch it - expect a brief pause and a small rewind to the nearest keyframe. Files your browser can already play are untouched and seek normally"
           - "Settings under Application, Player, including turning it off if you would rather watch elsewhere, and a limit on how many can be re-encoded at once"
+        - "Play 4K HEVC downloads in the browser, at full speed":
+          - "About half of Digital Foundry's 4K releases are HEVC, which no browser can play. Those needed the video itself converting as you watched, and converting 4K in software does not keep up with playback on a small machine - so the picture stalled every few seconds"
+          - "The app now ships an ffmpeg that can hand that work to your graphics card, which does it easily. Pass the card through to the container the same way as for subtitles, and it is used automatically; without one it falls back to the processor as before, and the log says which"
+          - "This is separate hardware from the part used for AI analysis, so it is unaffected by the problems described there - a machine where analysis on the GPU is unusable can still convert video on it perfectly well"
+          - "Worth knowing when choosing what to download: the app picks a format by resolution alone, so when a video is offered in both HEVC and H.264 at the same resolution, which one you get is arbitrary. H.264 plays here with no conversion at all"
+          - "The image grows by about 270MB for this. It replaces a build that could only use the processor, and was chosen partly for being the smallest of the options that can do the job"
 
       enhancements:
         - "A System page saying what this install actually is":

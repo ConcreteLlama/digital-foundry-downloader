@@ -1,10 +1,9 @@
 import { ChildProcess, spawn } from "child_process";
-import ffmpegPathImport from "ffmpeg-static";
+import { ffmpegPath } from "../utils/ffmpeg-binary.js";
 import { logger } from "df-downloader-common";
 import { PlayerConfig } from "df-downloader-common/config/player-config.js";
 import { ProbedAudioStream, ProbedVideoStream } from "../utils/media-metadata.js";
 
-const ffmpegPath = ffmpegPathImport as unknown as string;
 
 /**
  * Codecs a browser can be relied on to play, so they are passed through.
@@ -185,11 +184,16 @@ export type TranscodeSession = {
 /**
  * Whether this ffmpeg can actually encode with the GPU.
  *
- * Asked rather than assumed, because the answer is no for the binary this
- * app ships. ffmpeg-static is a portable build with no hardware encoders
- * compiled in, so requesting one produced "Unknown encoder 'h264_vaapi'" and
- * killed the stream outright - on a machine whose GPU was perfectly capable,
- * with a setting that said "use it if it is there".
+ * Asked rather than assumed, because which ffmpeg is running is not fixed -
+ * see utils/ffmpeg-binary.ts. The Docker image carries a build with the VAAPI
+ * encoders in it; a bare checkout falls back to a portable one that has none,
+ * where requesting a hardware encoder produced "Unknown encoder 'h264_vaapi'"
+ * and killed the stream outright, on a machine whose GPU was perfectly
+ * capable, with a setting that said "use it if it is there".
+ *
+ * Note this only reports that the encoder was compiled in. Whether it
+ * initialises depends on the driver and on /dev/dri being passed through, and
+ * that failure appears when the stream starts rather than here.
  *
  * Probed once and remembered. It is a property of the binary, which does not
  * change while the process runs.
@@ -206,8 +210,8 @@ const canEncodeWithVaapi = (): Promise<boolean> => {
       logger.log(
         "info",
         available
-          ? "ffmpeg can encode video with the GPU (h264_vaapi)"
-          : "ffmpeg has no GPU encoder built in, so any video re-encoding will use the processor"
+          ? `ffmpeg at ${ffmpegPath} can encode video with the GPU (h264_vaapi)`
+          : `ffmpeg at ${ffmpegPath} has no GPU encoder built in, so any video re-encoding will use the processor`
       );
       resolve(available);
     });
@@ -337,7 +341,9 @@ export const startTranscode = async (
   const args = buildArgs(filePath, startSeconds, plan, config.hardwareAcceleration, hardwareAvailable);
   logger.log(
     "info",
-    `Transcoding ${filePath} from ${Math.round(startSeconds)}s (video: ${plan.video}, audio: ${plan.audio})`
+    `Transcoding ${filePath} from ${Math.round(startSeconds)}s (video: ${plan.video}, audio: ${plan.audio}${
+      plan.video === "encode" ? `, ${hardwareAvailable ? "attempting the GPU" : "on the processor"}` : ""
+    })`
   );
   logger.log("debug", `ffmpeg transcode args: ${args.join(" ")}`);
   const child = spawn(ffmpegPath, args);
@@ -378,6 +384,19 @@ export const startTranscode = async (
       // loglevel is already error-only, so anything arriving here is worth
       // seeing - a failed hardware init, an unreadable file.
       logger.log("warn", `ffmpeg (transcode): ${text}`);
+      /*
+       * Naming this case explicitly because it is the one that reads as a
+       * broken video. The encoder being compiled in is all the probe can
+       * tell you; whether it initialises depends on the driver and on
+       * /dev/dri reaching the container, and when it does not, ffmpeg says
+       * so in its own vocabulary and the stream simply dies.
+       */
+      if (/vaapi|drm|render|hwaccel|hwupload/i.test(text)) {
+        logger.log(
+          "warn",
+          `That looks like the GPU failing to initialise rather than a problem with the file. Check /dev/dri is passed into the container, or set hardwareAcceleration to off under Player to use the processor instead`
+        );
+      }
     }
   });
   child.on("close", (code) => {

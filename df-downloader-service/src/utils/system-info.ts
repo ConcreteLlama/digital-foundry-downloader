@@ -10,6 +10,7 @@ import { ensureEnvString } from "./env-utils.js";
 import { DfDownloaderOperationalDb } from "../db/df-operational-db.js";
 import { getLogFilePath } from "./logging/file-logging.js";
 import { BUILT_AT, CURRENT_BRANCH, CURRENT_COMMIT, CURRENT_VERSION } from "../version.js";
+import { ffmpegPath } from "./ffmpeg-binary.js";
 
 const execFileAsync = promisify(execFile);
 
@@ -57,6 +58,11 @@ const resolveToolPaths = () => {
       path: config.aiAnalysis?.local?.binaryPath || process.env.LLAMA_SERVER_BINARY || "llama-server",
       args: ["--version"],
     },
+    // Worth reporting even though it is always present: which ffmpeg is in
+    // use decides whether playback can re-encode on the GPU, and the version
+    // line names the build, so "why is transcoding slow" is answerable from
+    // this page rather than from a shell inside the container.
+    { name: "ffmpeg", path: ffmpegPath, args: ["-hide_banner", "-version"] },
   ];
 };
 

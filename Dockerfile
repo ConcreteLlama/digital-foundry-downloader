@@ -248,6 +248,48 @@ RUN apt-get update \
     && apt-get install -y --no-install-recommends -t bookworm-backports mesa-vulkan-drivers \
     && rm -rf /var/lib/apt/lists/*
 
+# ffmpeg, from Jellyfin rather than from Debian or from npm.
+#
+# The bundled ffmpeg-static has no hardware encoders compiled in, which makes
+# browser playback of an HEVC file a software 4K re-encode - and that does not
+# hold realtime on the low-power machines this usually runs on. Roughly half
+# of Digital Foundry's 4K catalogue is HEVC and no browser can play any of it,
+# so this is the common case rather than an edge one.
+#
+# jellyfin-ffmpeg over the alternatives, measured on 2026-09-06 as the growth
+# of /usr on this base image:
+#
+#   Debian bookworm ffmpeg (5.1.9)   +440MB, +455MB with intel-media-va-driver
+#   jellyfin-ffmpeg7 (7.1.4)         +277MB, drivers included
+#   BtbN static build (master)       ~280MB for ffmpeg+ffprobe, driver on top
+#
+# It is also the only one that is self-contained: it carries its own iHD/i965
+# drivers and oneVPL rather than depending on the system's, so it does not
+# share a fate with the Mesa packages above. That independence is worth having
+# here specifically - the Mesa change already broke llama-server once, through
+# a library that had only ever been installed by accident.
+#
+# Deliberately not pinned beyond the major version in the package name: the
+# repo drops old point releases, so a tighter pin becomes a build failure on
+# somebody else's schedule.
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends curl gnupg ca-certificates \
+    && mkdir -p /etc/apt/keyrings \
+    && curl -fsSL https://repo.jellyfin.org/jellyfin_team.gpg.key | gpg --dearmor -o /etc/apt/keyrings/jellyfin.gpg \
+    && echo "deb [signed-by=/etc/apt/keyrings/jellyfin.gpg] https://repo.jellyfin.org/debian bookworm main" > /etc/apt/sources.list.d/jellyfin.list \
+    && apt-get update \
+    && apt-get install -y --no-install-recommends jellyfin-ffmpeg7 \
+    && apt-get purge -y curl gnupg \
+    && apt-get autoremove -y \
+    && rm -rf /var/lib/apt/lists/* \
+    && ln -s /usr/lib/jellyfin-ffmpeg/ffmpeg /usr/local/bin/ffmpeg \
+    && ln -s /usr/lib/jellyfin-ffmpeg/ffprobe /usr/local/bin/ffprobe
+
+# Read by utils/ffmpeg-binary.ts. The symlinks above mean a bare "ffmpeg" also
+# resolves to this build, so anything that ignores these still finds it.
+ENV FFMPEG_BINARY=/usr/lib/jellyfin-ffmpeg/ffmpeg
+ENV FFPROBE_BINARY=/usr/lib/jellyfin-ffmpeg/ffprobe
+
 COPY --from=whisper-builder /opt/whisper/whisper-cli /usr/local/bin/whisper-cli
 # The backend variants and the whisper/ggml shared libraries. GGML_BACKEND_DIR
 # above compiles this path in, so the binary finds the variants wherever it is
