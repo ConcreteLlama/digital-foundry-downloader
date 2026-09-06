@@ -14,6 +14,7 @@ import { AuthenticationConfig, AuthenticationConfigKey, DefaultAuthenticationCon
 import { DevConfig, DevConfigKey } from "./dev-config.js";
 import { MediaFormatsConfigKey, MediaFormatsConfig } from "./media-formats-config.js";
 import { UiConfig, UiConfigKey } from "./ui-config.js";
+import { PlayerConfig, PlayerConfigKey } from "./player-config.js";
 import { AiAnalysisConfig, AiAnalysisConfigKey } from "./ai-analysis-config.js";
 import { LocalModelsConfig, LocalModelsConfigKey } from "./local-models-config.js";
 import { DfArticlesConfig, DfArticlesConfigKey } from "./df-articles-config.js";
@@ -45,6 +46,7 @@ export const DfDownloaderConfig = z.object({
   // prefault, not default - `theme` has its own default, so {} is valid input
   // but not an output-shaped value (see the note above).
   [UiConfigKey]: UiConfig.prefault({}),
+  [PlayerConfigKey]: PlayerConfig.prefault({}),
   [DevConfigKey]: DevConfig.optional(),
 });
 export type DfDownloaderConfig = z.infer<typeof DfDownloaderConfig>;

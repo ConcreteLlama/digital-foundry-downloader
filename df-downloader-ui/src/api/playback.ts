@@ -22,6 +22,17 @@ export const getPlaybackInfo = async (contentKey: string, downloadLocation: stri
 export const playbackStreamUrl = (contentKey: string, downloadLocation: string) =>
   playbackUrl(contentKey, downloadLocation, "stream");
 
+/**
+ * The re-encoded stream, for a file the browser cannot play as it stands.
+ *
+ * `t` is where playback should begin. There is no seeking within this stream -
+ * it is generated as it is sent, so the bytes for a later moment do not exist
+ * yet - which is why a seek means asking for a new one from the new position.
+ * See the transcode route.
+ */
+export const playbackTranscodeUrl = (contentKey: string, downloadLocation: string, startSeconds = 0) =>
+  `${playbackUrl(contentKey, downloadLocation, "transcode")}&${new URLSearchParams({ t: String(Math.max(0, Math.floor(startSeconds))) })}`;
+
 export const playbackSubtitlesUrl = (contentKey: string, downloadLocation: string, trackIndex: number) =>
   playbackUrl(contentKey, downloadLocation, `subtitles/${trackIndex}`);
 

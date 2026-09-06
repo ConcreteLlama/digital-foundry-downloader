@@ -77,6 +77,17 @@ export const PlaybackInfo = z.object({
    * decodes `hvc1.1.6.L93.B0` perfectly well.
    */
   codecProbe: z.string().optional(),
+  /**
+   * The audio codec, and a probe string for it, on the same terms as above.
+   *
+   * Added because a file can be perfectly playable except for its sound, and
+   * nothing here could see that. Digital Foundry's downloads carry AC-3,
+   * which no browser decodes - so the video played and the audio was simply
+   * silent, with nothing in the app able to explain why. The video codec was
+   * probed from the first version of this; the audio was never looked at.
+   */
+  audioCodec: z.string().optional(),
+  audioCodecProbe: z.string().optional(),
   sizeBytes: z.number(),
   /** Measured from the file, so it excludes anything trimmed from the YouTube cut. */
   durationSeconds: z.number().optional(),

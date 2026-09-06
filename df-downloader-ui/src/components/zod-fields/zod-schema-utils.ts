@@ -1,4 +1,4 @@
-import { ZodBoolean, ZodDefault, ZodEnum, ZodNullable, ZodNumber, ZodOptional, ZodString, ZodType } from "zod";
+import { ZodBoolean, ZodCatch, ZodDefault, ZodEnum, ZodNullable, ZodNumber, ZodOptional, ZodString, ZodType } from "zod";
 
 /**
  * Helper text for the settings forms comes from the schema's own
@@ -19,8 +19,22 @@ import { ZodBoolean, ZodDefault, ZodEnum, ZodNullable, ZodNumber, ZodOptional, Z
  * wrapper chain and the components take whichever form is convenient.
  */
 
-/** A base schema, or one wrapped in any combination of default/optional/nullable. */
-export type Wrapped<T extends ZodType> = T | ZodDefault<Wrapped<T>> | ZodOptional<Wrapped<T>> | ZodNullable<Wrapped<T>>;
+/**
+ * A base schema, or one wrapped in any combination of
+ * default/optional/nullable/catch.
+ *
+ * `catch` is included because the config schemas use it wherever a bad value
+ * in a hand-edited config.yaml should not stop the service booting - see the
+ * note on the UI theme. The runtime unwrap below already handled it, since
+ * ZodCatch carries the same `_def.innerType`; only the type said otherwise,
+ * so a field written that way failed to compile for no real reason.
+ */
+export type Wrapped<T extends ZodType> =
+  | T
+  | ZodDefault<Wrapped<T>>
+  | ZodOptional<Wrapped<T>>
+  | ZodNullable<Wrapped<T>>
+  | ZodCatch<Wrapped<T>>;
 
 export type ZodNumberLike = Wrapped<ZodNumber>;
 export type ZodStringLike = Wrapped<ZodString>;

@@ -2,6 +2,7 @@ import MemoryIcon from "@mui/icons-material/Memory";
 import CodeIcon from "@mui/icons-material/Code";
 import SubjectIcon from "@mui/icons-material/Subject";
 import PaletteIcon from "@mui/icons-material/Palette";
+import PlayCircleOutlineIcon from "@mui/icons-material/PlayCircleOutline";
 import DataObjectIcon from "@mui/icons-material/DataObject";
 import DownloadIcon from "@mui/icons-material/Download";
 import DownloadingIcon from "@mui/icons-material/Downloading";
@@ -15,6 +16,7 @@ import SubtitlesIcon from "@mui/icons-material/Subtitles";
 import VideoSettingsIcon from "@mui/icons-material/VideoSettings";
 import ScheduleIcon from "@mui/icons-material/Schedule";
 import { AppearanceSettingsForm } from "../../components/settings/appearance-settings-form.component.tsx";
+import { PlayerSettingsForm } from "../../components/settings/player-settings-form.component.tsx";
 import { AutomaticDownloadsSettingsForm } from "../../components/settings/automatic-download-settings-form.component";
 import { ContentDetectionSettingsForm } from "../../components/settings/content-detection-settings-form.component";
 import { ContentManagementSettingsForm } from "../../components/settings/content-management-settings.component";
@@ -183,6 +185,14 @@ export const settingsRouteDefinitions: NestedSubRoute = {
           element: <AppearanceSettingsForm />,
           name: "Appearance",
           icon: PaletteIcon,
+        },
+        {
+          // Beside Appearance: both are about this app's own interface rather
+          // than about downloading or processing anything.
+          path: "/settings/player",
+          element: <PlayerSettingsForm />,
+          name: "Player",
+          icon: PlayCircleOutlineIcon,
         },
         {
           path: "/settings/logging",

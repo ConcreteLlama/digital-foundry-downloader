@@ -18,6 +18,8 @@ import {
 } from "../../media-utils/subtitles/embedded.js";
 import { sanitizeContentName } from "../../utils/df-utils.js";
 import { extractBaseMetadata } from "../../utils/media-metadata.js";
+import { planTranscode, startTranscode } from "../../media-utils/transcode-session.js";
+import { configService } from "../../config/config.js";
 import { ServiceContentUtils } from "../../utils/service-content-utils.js";
 import { serviceLocator } from "../../services/service-locator.js";
 import { sendError, sendResponse, zodParseHttp } from "../utils/utils.js";
@@ -101,6 +103,35 @@ const codecProbeFor = (codec: PlaybackVideoCodec, mimeType: string): string | un
       return `${mimeType}; codecs="avc1.640028"`;
     case "hevc":
       return `${mimeType}; codecs="hvc1.1.6.L93.B0"`;
+    default:
+      return undefined;
+  }
+};
+
+/**
+ * A probe string for an audio codec, on the same terms as codecProbeFor.
+ *
+ * Only the codecs worth distinguishing are listed. AAC and Opus are the ones
+ * browsers reliably play; AC-3 and E-AC-3 are the ones that motivated this,
+ * since Digital Foundry's downloads carry AC-3 and no browser decodes it. A
+ * codec with no entry returns undefined, which the client reads as "cannot
+ * tell" and treats optimistically - the same way an unknown video codec is
+ * already handled.
+ */
+const audioCodecProbeFor = (codecName: string | undefined, mimeType: string): string | undefined => {
+  switch (codecName) {
+    case "aac":
+      return `${mimeType}; codecs="mp4a.40.2"`;
+    case "ac3":
+      return `${mimeType}; codecs="ac-3"`;
+    case "eac3":
+      return `${mimeType}; codecs="ec-3"`;
+    case "opus":
+      return `${mimeType}; codecs="opus"`;
+    case "mp3":
+      return `${mimeType}; codecs="mp4a.40.34"`;
+    case "flac":
+      return `${mimeType}; codecs="flac"`;
     default:
       return undefined;
   }
@@ -222,6 +253,8 @@ export const makePlaybackRouter = (contentManager: DigitalFoundryContentManager)
       mimeType,
       videoCodec,
       codecProbe: codecProbeFor(videoCodec, mimeType),
+      audioCodec: meta?.audioStream?.codecName,
+      audioCodecProbe: audioCodecProbeFor(meta?.audioStream?.codecName, mimeType),
       sizeBytes: stat.size,
       durationSeconds: meta?.durationSeconds,
       width: meta?.videoStream?.width,
@@ -345,6 +378,75 @@ export const makePlaybackRouter = (contentManager: DigitalFoundryContentManager)
       await serviceLocator.mediaServers.reportPlayback(resolved.filePath, positionSeconds, durationSeconds);
       return sendResponse(res, { recorded: true });
     });
+  });
+
+  /**
+   * The same video, re-encoded on the fly for a browser that cannot play it.
+   *
+   * Separate from /stream rather than folded into it, because the two have
+   * opposite properties and both are wanted. /stream serves the file itself:
+   * byte-range seeking, zero cost, bit-for-bit what was downloaded, and the
+   * right answer whenever the browser can decode it. This one produces a
+   * fragmented MP4 from a running ffmpeg, which cannot support ranges at all
+   * - the bytes do not exist until they are generated.
+   *
+   * Seeking is therefore by restart: the client asks again with ?t=, and gets
+   * a new stream beginning there. That is why the response is deliberately
+   * uncacheable and unrangeable - a browser that thought it could seek within
+   * this would seek into bytes that mean something else entirely.
+   *
+   * Only what the browser rejects is re-encoded; see planTranscode. For the
+   * case this exists for - AC-3 audio in an H.264 file - the video is copied
+   * untouched and the cost is one audio track, which is a few percent of one
+   * core.
+   */
+  router.get("/:contentKey/transcode", async (req: Request, res: Response) => {
+    const resolved = await resolveDownload(req);
+    if (!resolved.ok) {
+      return sendError(res, resolved.error, resolved.code);
+    }
+    const playerConfig = configService.config.player;
+    if (playerConfig.transcode === "never") {
+      return sendError(res, "Transcoding for playback is turned off in settings", 409);
+    }
+    const { filePath } = resolved;
+    const meta = await extractBaseMetadata(filePath, false).catch((e) => {
+      logger.log("warn", `Transcode probe failed for ${filePath}: ${e}`);
+      return undefined;
+    });
+    const plan = planTranscode(meta?.videoStream, meta?.audioStream);
+    /*
+     * Parsed defensively rather than trusted. This lands in an ffmpeg
+     * argument, and a NaN or a negative would either fail the spawn or seek
+     * somewhere meaningless.
+     */
+    const requested = Number(req.query.t);
+    const startSeconds = Number.isFinite(requested) && requested > 0 ? requested : 0;
+
+    const session = startTranscode(filePath, startSeconds, plan, playerConfig);
+    if (!session) {
+      return sendError(
+        res,
+        `Already re-encoding ${playerConfig.maxConcurrentStreams} video(s) for playback - try again when one finishes`,
+        503
+      );
+    }
+    res.setHeader("Content-Type", "video/mp4");
+    // Explicitly not seekable and not cacheable: see the note above. A cached
+    // fragment would be replayed at the wrong offset after a seek.
+    res.setHeader("Accept-Ranges", "none");
+    res.setHeader("Cache-Control", "no-store");
+    /*
+     * Both directions of teardown.
+     *
+     * The client going away has to kill ffmpeg - a closed tab otherwise
+     * leaves it encoding into a pipe nobody drains, which blocks rather than
+     * ends. And ffmpeg going away has to end the response, or the browser
+     * waits out a request that will never produce another byte.
+     */
+    res.on("close", session.stop);
+    session.process.stdout?.pipe(res);
+    session.process.stdout?.on("error", () => session.stop());
   });
 
   router.get("/:contentKey/stream", async (req: Request, res: Response) => {

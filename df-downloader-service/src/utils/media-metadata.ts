@@ -293,6 +293,20 @@ export type ProbedVideoStream = {
   height?: number;
 };
 
+/**
+ * The audio track, as ffprobe sees it.
+ *
+ * Probed for the same reason the video stream is: something downstream has to
+ * decide whether a browser can play it. Nothing captured this before, so a
+ * file whose audio no browser decodes was indistinguishable from one with
+ * perfectly ordinary sound.
+ */
+export type ProbedAudioStream = {
+  codecName?: string;
+  channels?: number;
+  sampleRate?: number;
+};
+
 /** One embedded subtitle stream, as ffprobe sees it. */
 export type ProbedSubtitleStream = {
   /** ffmpeg's own stream index, which is what extraction addresses. */
@@ -314,6 +328,8 @@ type MediaFileMetaNoSubs = Omit<MediaFileMeta, 'subtitles'> & {
   subsLang?: string;
   /** See ProbedVideoStream. Stripped by extractMediaMeta - not part of MediaFileMeta. */
   videoStream?: ProbedVideoStream;
+  /** See ProbedAudioStream. Stripped by extractMediaMeta, as above. */
+  audioStream?: ProbedAudioStream;
   /** Measured container duration in seconds. Stripped by extractMediaMeta, as above. */
   durationSeconds?: number;
 };
@@ -371,6 +387,17 @@ export const extractBaseMetadata = async (mediaFilePath: string, includeChapters
       level: typeof videoStream.level === "number" ? videoStream.level : undefined,
       width: videoStream.width,
       height: videoStream.height,
+    };
+  }
+  // The first audio track only: a browser plays one, and every file this app
+  // produces has exactly one. A file with several would need a track picker,
+  // which is a different feature entirely.
+  const audioStream = parsed.streams?.find((stream: any) => stream.codec_type === "audio");
+  if (audioStream) {
+    meta.audioStream = {
+      codecName: audioStream.codec_name,
+      channels: typeof audioStream.channels === "number" ? audioStream.channels : undefined,
+      sampleRate: audioStream.sample_rate ? Number(audioStream.sample_rate) : undefined,
     };
   }
   const duration = parseFloat(parsed.format?.duration);
