@@ -214,6 +214,43 @@ const TrackSegment = ({ view, widthPercent, activePercent, dense }: TrackSegment
             would have to animate each independently and would show seams at
             every boundary whether or not anything had happened there.
           */}
+          {/*
+            What became of each part of this step.
+            
+            Only the parts that are not simply "done" are drawn: a completed
+            phase is already described by the fill behind it, and shading it
+            again would turn a bar that reads at a glance into a stripe chart.
+            A skipped one is hatched the way a skipped step is, a failed one
+            takes the error colour, and the running one gets a faint lift so
+            the eye lands on where the work actually is.
+
+            Nothing here knows what kind of task it is looking at - a phase
+            reports a name and a state, and this renders whatever arrives.
+          */}
+          {phaseFill?.spans
+            .filter((span) => span.state === "skipped" || span.state === "failed" || span.state === "running")
+            .map((span) => (
+              <Box
+                key={`${span.name}-${span.startPercent}`}
+                sx={{
+                  position: "absolute",
+                  top: 0,
+                  bottom: 0,
+                  left: `${span.startPercent}%`,
+                  width: `${span.widthPercent}%`,
+                  ...(span.state === "skipped"
+                    ? {
+                        backgroundImage:
+                          "repeating-linear-gradient(45deg, currentColor 0 2px, transparent 2px 5px)",
+                        color: "text.disabled",
+                        opacity: 0.6,
+                      }
+                    : span.state === "failed"
+                    ? { backgroundColor: "error.main", opacity: 0.85 }
+                    : { backgroundColor: "common.white", opacity: 0.18 }),
+                }}
+              />
+            ))}
           {phaseFill?.boundaries.map((boundary: number) => (
             <Box
               key={boundary}

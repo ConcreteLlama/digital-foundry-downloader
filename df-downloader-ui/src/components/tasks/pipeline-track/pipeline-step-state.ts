@@ -153,9 +153,36 @@ export const derivePhaseFill = (phases: TaskPhase[] | undefined) => {
     running += weight;
     boundaries.push((running / total) * 100);
   });
+  /*
+   * Where each part sits, so the track can say what became of it.
+   *
+   * The boundaries above show that a step has parts; they cannot show that
+   * one of them was skipped, or which one failed. Every division looked the
+   * same, so a run that quietly dropped a phase was indistinguishable from
+   * one that completed it - which is precisely the thing worth seeing at a
+   * glance, and previously needed the dialog.
+   *
+   * Offsets rather than widths that get laid out in sequence: these are drawn
+   * as absolutely positioned annotation over one continuous fill, for the
+   * reason the boundaries already are - a bar built from several elements
+   * would animate each separately and seam at every join.
+   */
+  let offset = 0;
+  const spans = phases.map((phase, index) => {
+    const startPercent = (offset / total) * 100;
+    offset += weights[index];
+    return {
+      name: phase.name,
+      state: phase.state,
+      detail: phase.detail,
+      startPercent,
+      widthPercent: (weights[index] / total) * 100,
+    };
+  });
   return {
     percent: (completed / total) * 100,
     boundaries,
+    spans,
     current: phases.find((phase) => phase.state === "running"),
   };
 };
