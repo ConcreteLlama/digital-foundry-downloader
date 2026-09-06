@@ -169,12 +169,60 @@ export class LocalLlamaServer {
   private baseUrl?: string;
   private inFlight = 0;
   private idleTimer?: NodeJS.Timeout;
+  /** Set when settings changed mid-run - see update(). */
+  private restartWhenIdle = false;
 
   constructor(private config: AiLocalProviderConfig) {}
 
   /** Replaces the config without disturbing a running server. */
+  /**
+   * Everything that is baked into the spawned process.
+   *
+   * Changing one of these means the running server no longer matches the
+   * settings, so it has to be replaced rather than left to pick them up
+   * whenever it next happens to start. Idle shutdown is deliberately absent:
+   * it is read when the timer is set, so a running server honours a new value
+   * without being disturbed.
+   */
+  private argsSignature(config: AiLocalProviderConfig) {
+    return JSON.stringify([
+      config.model,
+      config.useGpu,
+      config.gpuLayers,
+      config.contextSize,
+      config.threads,
+      config.port,
+      config.binaryPath,
+      config.serverUrl,
+    ]);
+  }
+
   update(config: AiLocalProviderConfig) {
+    /*
+     * A changed setting takes effect, rather than waiting for an idle timeout.
+     *
+     * This used to keep the new config for the next start and leave a running
+     * server alone, which is fine for a thread count and actively misleading
+     * for the GPU switch: turning it off while analyses keep arriving left
+     * every one of them running on the old server, on the GPU, with nothing
+     * to say so. A setting that silently does not apply is worse than one
+     * that is missing.
+     *
+     * Deferred to release() when work is in flight - killing a server
+     * mid-analysis would fail a run that was going to succeed.
+     */
+    const changed = this.argsSignature(config) !== this.argsSignature(this.config);
     this.config = config;
+    if (!changed || !this.process) {
+      return;
+    }
+    if (this.inFlight > 0) {
+      logger.log("info", "Local analysis settings changed - restarting the model server once the current run finishes");
+      this.restartWhenIdle = true;
+      return;
+    }
+    logger.log("info", "Local analysis settings changed - restarting the model server");
+    void this.stop();
   }
 
   /**
@@ -214,6 +262,14 @@ export class LocalLlamaServer {
     if (this.inFlight > 0 || this.config.serverUrl?.trim() || !this.process) {
       return;
     }
+    // Settings changed while this was working - see update(). Stopped now
+    // rather than after an idle wait, so the next run picks them up.
+    if (this.restartWhenIdle) {
+      this.restartWhenIdle = false;
+      logger.log("info", "Local analysis settings changed - stopping the model server so the next run uses them");
+      void this.stop();
+      return;
+    }
     const seconds = Math.max(this.config.idleShutdownSeconds, MIN_IDLE_SECONDS);
     this.idleTimer = setTimeout(() => {
       this.idleTimer = undefined;
@@ -234,6 +290,23 @@ export class LocalLlamaServer {
       "--host", "127.0.0.1",
       "--port", String(this.config.port),
       "-t", String(resolveThreads(this.config)),
+      /*
+       * One slot, because one request at a time is all this ever makes.
+       *
+       * llama-server defaults to four, and the context given by -c is
+       * allocated PER SLOT - observed as "n_slots = 4, n_ctx_slot = 32768",
+       * so four times the KV cache we asked for. On a 9B model that is
+       * gigabytes of allocation for three slots that never receive a request:
+       * analysis is serialised on the local models queue, one run at a time,
+       * by design.
+       *
+       * The cost of getting this wrong is not merely wasted memory. Weights
+       * are mmapped, so once the KV cache has pushed them out of the page
+       * cache every token walks the model off disk again - on a microserver
+       * with the model on spinning storage that turns a token into tens of
+       * seconds.
+       */
+      "-np", "1",
       /*
        * Offloads what fits and is simply ignored on a CPU-only build, so the
        * same arguments work on a GPU box and a microserver alike.
