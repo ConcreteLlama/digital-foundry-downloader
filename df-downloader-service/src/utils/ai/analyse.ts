@@ -220,6 +220,7 @@ const collectStrings = (value: unknown): string[] => {
 };
 
 const PHASE_LABELS = {
+  prepare: "Getting the model ready",
   classify: "Working out what kind of video this is",
   summarise: "Writing the summary",
   overview: "Reading the video",
@@ -1022,6 +1023,19 @@ export const analyseContent = async (config: AiAnalysisConfig, inputs: AnalysisI
      * rather than discovering it a call at a time. The names match exactly
      * what reportStage sends below, which is the contract.
      */
+    /*
+     * Loading the model is its own part of the run, for local engines.
+     *
+     * It happens inside the first call - the server is started and six
+     * gigabytes are read before a single token exists - so without this it was
+     * charged to whichever phase happened to be first, which then reported
+     * minutes for work that took seconds. A cold start is the difference
+     * between "classification took 1m 36s" and the truth.
+     *
+     * Only for local: a hosted call has nothing to load, and a phase that is
+     * always instant is a row that only ever says nothing.
+     */
+    const preparesModel = provider.id === "local";
     const plannedPhases: { name: string; weight: number }[] = provider.separatesClassification
       ? [
           { name: PHASE_LABELS.classify, weight: weights[0] },
@@ -1031,7 +1045,15 @@ export const analyseContent = async (config: AiAnalysisConfig, inputs: AnalysisI
     if (config.features.structuredData) {
       plannedPhases.push({ name: PHASE_LABELS.extract, weight: weights[weights.length - 1] });
     }
+    if (preparesModel) {
+      // Small, because it is usually zero: the server stays up between runs,
+      // so only the first analysis after a restart actually waits here.
+      plannedPhases.unshift({ name: PHASE_LABELS.prepare, weight: 0.05 });
+    }
     inputs.onPlan?.(plannedPhases);
+    if (preparesModel) {
+      inputs.onStage?.({ step: 0, of: totalSteps, label: PHASE_LABELS.prepare });
+    }
     let stage: AnalysisStage | undefined;
     const reportStage = (step: number, label: string) => {
       /*

@@ -31,12 +31,11 @@ const WHISPER_USING_GPU = /whisper_backend_init_gpu: using (\S+) backend/;
  * precedes it, because that prefix is llama.cpp's __func__ and has been
  * renamed across versions.
  *
- * NOT reliably present. The build shipped here (b10733) prints no loader
- * detail whatsoever at default verbosity - checked by capturing both streams
- * of a real server start to a file - so a verdict resting on this alone
- * reported CPU for every run regardless of the truth. Kept because builds
- * that do print it give the best answer available; the warning below is what
- * carries the common case.
+ * Present only when there is a GPU to offload to. Measured absent on a
+ * machine with none - which is exactly when llama has nothing to report - and
+ * wrongly generalised at the time to "this build never prints it". It does,
+ * and it is the best evidence available; the warning below carries the case
+ * where there is no device at all.
  */
 const LLAMA_OFFLOADED = /offloaded (\d+)\/(\d+) layers to GPU/;
 
@@ -97,7 +96,11 @@ export const describeComputeBackend = (output: string, gpuRequested: boolean): s
    */
   const named = device ?? whisperGpu?.[1];
   if (offloaded) {
-    return `GPU - ${named ?? "device"} (${offloaded[1]}/${offloaded[2]} layers offloaded)`;
+    // No name where none was printed. "GPU - device (33/33 layers offloaded)"
+    // is a placeholder wearing the clothes of an answer.
+    return named
+      ? `GPU - ${named} (${offloaded[1]}/${offloaded[2]} layers offloaded)`
+      : `GPU (${offloaded[1]}/${offloaded[2]} layers offloaded)`;
   }
   if (whisperGpu) {
     return `GPU - ${named}`;
