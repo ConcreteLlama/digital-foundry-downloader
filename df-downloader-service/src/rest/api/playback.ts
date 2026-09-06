@@ -18,7 +18,7 @@ import {
 } from "../../media-utils/subtitles/embedded.js";
 import { sanitizeContentName } from "../../utils/df-utils.js";
 import { extractBaseMetadata } from "../../utils/media-metadata.js";
-import { planTranscode, startTranscode } from "../../media-utils/transcode-session.js";
+import { listTranscodes, planTranscode, startTranscode, stopTranscode } from "../../media-utils/transcode-session.js";
 import { configService } from "../../config/config.js";
 import { ServiceContentUtils } from "../../utils/service-content-utils.js";
 import { serviceLocator } from "../../services/service-locator.js";
@@ -390,6 +390,33 @@ export const makePlaybackRouter = (contentManager: DigitalFoundryContentManager)
       await serviceLocator.mediaServers.reportPlayback(resolved.filePath, positionSeconds, durationSeconds);
       return sendResponse(res, { recorded: true });
     });
+  });
+
+  /**
+   * What is being re-encoded right now, and a way to stop it.
+   *
+   * Exists because "the machine is busy" is a useless thing to be told when
+   * you have no players open and no way to see what it thinks is running.
+   * These streams are invisible otherwise - they are processes, not tasks, so
+   * they never appear on the Activity page - and the only recourse when one
+   * was stuck was restarting the service.
+   *
+   * Note this is deliberately not scoped to one piece of content: the point
+   * is to see everything holding a slot, including a stream for a video you
+   * are no longer looking at.
+   */
+  router.get("/streams", async (_req: Request, res: Response) => {
+    return sendResponse(res, { streams: listTranscodes() });
+  });
+
+  router.post("/streams/:id/stop", async (req: Request, res: Response) => {
+    const stopped = stopTranscode(req.params.id);
+    if (!stopped) {
+      // Gone already is the desired end state, so this is not an error - but
+      // saying which happened lets a view refresh rather than guess.
+      return sendResponse(res, { stopped: false, reason: "That stream had already finished" });
+    }
+    return sendResponse(res, { stopped: true });
   });
 
   /**

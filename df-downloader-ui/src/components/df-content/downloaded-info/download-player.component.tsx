@@ -1,4 +1,4 @@
-import { Alert, Box, CircularProgress, IconButton, Menu, MenuItem, Slider, Stack, Tooltip, Typography } from "@mui/material";
+import { Alert, Box, Button, CircularProgress, IconButton, Menu, MenuItem, Slider, Stack, Tooltip, Typography } from "@mui/material";
 import ClosedCaptionIcon from "@mui/icons-material/ClosedCaption";
 import FullscreenIcon from "@mui/icons-material/Fullscreen";
 import PauseIcon from "@mui/icons-material/Pause";
@@ -382,6 +382,13 @@ export const DownloadPlayer = ({
    */
   const playerShellRef = useRef<HTMLDivElement | null>(null);
   const [muted, setMuted] = useState(false);
+  /*
+   * Bumped to ask for the stream again after a failure.
+   *
+   * The URL has to actually change or the element will not re-request it, and
+   * neither the file nor the offset has - only our willingness to try again.
+   */
+  const [retryNonce, setRetryNonce] = useState(0);
   const [captionsAnchor, setCaptionsAnchor] = useState<HTMLElement | null>(null);
   const [activeTrack, setActiveTrack] = useState(0);
   const transcodingRef = useRef(false);
@@ -864,7 +871,9 @@ export const DownloadPlayer = ({
       */
       src={
         transcoding
-          ? playbackTranscodeUrl(contentEntry.key, download.downloadLocation, streamOffset)
+          ? `${playbackTranscodeUrl(contentEntry.key, download.downloadLocation, streamOffset)}${
+              retryNonce ? `&r=${retryNonce}` : ""
+            }`
           : playbackStreamUrl(contentEntry.key, download.downloadLocation)
       }
       onLoadedMetadata={() => {
@@ -1158,7 +1167,33 @@ export const DownloadPlayer = ({
   );
 
   const errorBanner = playbackError && (
-    <Alert severity="error">
+    <Alert
+      severity="error"
+      /*
+        A way out, not just a description of the dead end.
+        
+        Once the element has errored its controls do nothing, so being told to
+        wait and try again left no way to actually try again short of closing
+        the whole thing and opening it afresh. Only offered on the transcoded
+        path, where retrying is genuinely likely to work - an unsupported
+        codec will still be unsupported a second later.
+      */
+      action={
+        transcoding && (
+          <Button
+            color="inherit"
+            size="small"
+            onClick={() => {
+              setPlaybackError(null);
+              setRetryNonce((nonce) => nonce + 1);
+              setPlaying(true);
+            }}
+          >
+            Try again
+          </Button>
+        )
+      }
+    >
       <Typography variant="body2">{playbackError}</Typography>
       <Typography sx={{ fontFamily: monoFontFamily, fontSize: "0.6875rem", wordBreak: "break-all", marginTop: 0.5 }}>
         {download.downloadLocation}

@@ -82,7 +82,56 @@ export const isPassthrough = (plan: TranscodePlan) => plan.video === "copy" && p
  */
 const IDLE_TIMEOUT_MS = 5 * 60_000;
 
-type LiveSession = { child: ChildProcess; lastActivity: number; stop: () => void; label: string };
+type LiveSession = {
+  id: string;
+  child: ChildProcess;
+  lastActivity: number;
+  startedAt: number;
+  stop: () => void;
+  /** The file being streamed, which is also how a viewer's own stream is found. */
+  label: string;
+  startSeconds: number;
+  plan: TranscodePlan;
+};
+
+let nextId = 1;
+
+/** What is running, for the streams view and for answering "why is it busy". */
+export type TranscodeStreamInfo = {
+  id: string;
+  file: string;
+  startedAtIso: string;
+  startSeconds: number;
+  idleSeconds: number;
+  video: "copy" | "encode";
+  audio: "copy" | "encode";
+};
+
+export const listTranscodes = (): TranscodeStreamInfo[] => {
+  prune();
+  const now = Date.now();
+  return [...live].map((entry) => ({
+    id: entry.id,
+    file: entry.label,
+    startedAtIso: new Date(entry.startedAt).toISOString(),
+    startSeconds: entry.startSeconds,
+    idleSeconds: Math.round((now - entry.lastActivity) / 1000),
+    video: entry.plan.video,
+    audio: entry.plan.audio,
+  }));
+};
+
+/** Stops one by id. False when it had already gone. */
+export const stopTranscode = (id: string): boolean => {
+  for (const entry of live) {
+    if (entry.id === id) {
+      logger.log("info", `Stopping transcode ${id} of ${entry.label} by request`);
+      entry.stop();
+      return true;
+    }
+  }
+  return false;
+};
 
 const live = new Set<LiveSession>();
 
@@ -204,9 +253,35 @@ export const startTranscode = (
   plan: TranscodePlan,
   config: PlayerConfig
 ): TranscodeSession | undefined => {
+  /*
+   * A viewer seeking is not a second viewer.
+   *
+   * Every skip asks for a new stream, and the old one only goes away when its
+   * socket closes - which can lag, or not happen at all if something went
+   * wrong. So a single person scrubbing could reach the limit against nobody
+   * but themselves, and then be told the machine was busy re-encoding videos
+   * for other people who did not exist.
+   *
+   * An older stream of the same file is therefore replaced rather than
+   * counted. One file, one viewer is not strictly true, but it is true on a
+   * personal install, and the failure it prevents - being locked out of a
+   * video by your own abandoned streams - is far more likely than two people
+   * watching the same file at the same moment.
+   */
+  for (const entry of [...live]) {
+    if (entry.label === filePath) {
+      logger.log("debug", `Replacing an existing transcode of ${filePath} - the same file is being restarted`);
+      entry.stop();
+    }
+  }
   const running = activeTranscodes();
   if (running >= config.maxConcurrentStreams) {
-    logger.log("warn", `Refusing a transcode of ${filePath} - ${running} already running`);
+    logger.log(
+      "warn",
+      `Refusing a transcode of ${filePath} - ${running} already running: ${listTranscodes()
+        .map((stream) => `${stream.file} (idle ${stream.idleSeconds}s)`)
+        .join(", ")}`
+    );
     return undefined;
   }
   const args = buildArgs(filePath, startSeconds, plan, config.hardwareAcceleration);
@@ -217,7 +292,16 @@ export const startTranscode = (
   logger.log("debug", `ffmpeg transcode args: ${args.join(" ")}`);
   const child = spawn(ffmpegPath, args);
   let stopped = false;
-  const entry: LiveSession = { child, lastActivity: Date.now(), label: filePath, stop: () => stop() };
+  const entry: LiveSession = {
+    id: `stream-${nextId++}`,
+    child,
+    lastActivity: Date.now(),
+    startedAt: Date.now(),
+    label: filePath,
+    startSeconds,
+    plan,
+    stop: () => stop(),
+  };
   live.add(entry);
   const stop = () => {
     if (stopped) {
