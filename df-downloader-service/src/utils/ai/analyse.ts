@@ -165,6 +165,18 @@ const PHASE_OUTPUT_LOG_CHARS = 2000;
  * worth interrupting someone for - and the content to debug, where it can be
  * read when the shape alone is not enough.
  */
+/** A summary call's outcome in a few words - see AnalysisInputs.onPhaseOutcome. */
+const describeOverviewOutcome = (parsed: { summary?: string | null; conclusion?: string | null; tags?: unknown[] }) => {
+  const parts = [`${parsed.summary?.length ?? 0} char summary`];
+  if (parsed.conclusion?.length) {
+    parts.push(`${parsed.conclusion.length} char verdict`);
+  }
+  if (parsed.tags?.length) {
+    parts.push(`${parsed.tags.length} tags`);
+  }
+  return parts.join(", ");
+};
+
 const logPhaseOutput = (contentKey: string, label: string, parsed: unknown) => {
   const serialised = JSON.stringify(parsed) ?? "";
   const strings = collectStrings(parsed);
@@ -224,6 +236,15 @@ export type AnalysisInputs = {
    * step early is a better surprise than one that grows a step.
    */
   onPlan?: (phases: { name: string; weight: number }[]) => void;
+  /**
+   * What a call decided, once it has decided it.
+   *
+   * Distinct from onStage, which says what is happening now. This says what
+   * came of it - the content type, how much prose was written, what was
+   * extracted - so a finished part of a run shows its result rather than the
+   * progress number it happened to stop on.
+   */
+  onPhaseOutcome?: (label: string, outcome: string) => void;
   /**
    * Which engine to use, overriding the configured default for this run only.
    * Absent means use the default, which is what an unattended run does.
@@ -1036,6 +1057,10 @@ export const analyseContent = async (config: AiAnalysisConfig, inputs: AnalysisI
         reportTokens
       );
       logPhaseOutput(inputs.entry.key, PHASE_LABELS.classify, classified.parsed);
+      inputs.onPhaseOutcome?.(
+        PHASE_LABELS.classify,
+        `${classified.parsed.contentType} (${Math.round((classified.parsed.contentTypeConfidence ?? 0) * 100)}% sure)`
+      );
       logger.log(
         "info",
         `Analysis ${inputs.entry.key} classified as ${classified.parsed.contentType} (confidence ${classified.parsed.contentTypeConfidence})`
@@ -1049,6 +1074,7 @@ export const analyseContent = async (config: AiAnalysisConfig, inputs: AnalysisI
         reportTokens
       );
       logPhaseOutput(inputs.entry.key, PHASE_LABELS.summarise, summarised.parsed);
+      inputs.onPhaseOutcome?.(PHASE_LABELS.summarise, describeOverviewOutcome(summarised.parsed));
       overview = { ...classified.parsed, ...summarised.parsed };
       usage = addUsage(classified.usage, summarised.usage);
     } else {
@@ -1061,6 +1087,10 @@ export const analyseContent = async (config: AiAnalysisConfig, inputs: AnalysisI
         reportTokens
       );
       logPhaseOutput(inputs.entry.key, PHASE_LABELS.overview, summarised.parsed);
+      inputs.onPhaseOutcome?.(
+        PHASE_LABELS.overview,
+        `${summarised.parsed.contentType}, ${describeOverviewOutcome(summarised.parsed)}`
+      );
       overview = summarised.parsed;
       usage = summarised.usage;
     }
@@ -1078,6 +1108,10 @@ export const analyseContent = async (config: AiAnalysisConfig, inputs: AnalysisI
       reportStage(totalSteps, PHASE_LABELS.extract);
       const extraction = await extractStructuredData(provider, config, prepared, overview.contentType, reportTokens);
       logPhaseOutput(inputs.entry.key, PHASE_LABELS.extract, extraction.data);
+      inputs.onPhaseOutcome?.(
+        PHASE_LABELS.extract,
+        extraction.data ? describeStructuredData(extraction.data) : "nothing extracted"
+      );
       structuredData = extraction.data ? anchorFindings(extraction.data, prepared.transcript, prepared.articleText) : undefined;
       logger.log(
         "info",

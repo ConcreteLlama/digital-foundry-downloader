@@ -50,6 +50,24 @@ export class TaskPhaseTracker {
     this.currentIndex = index;
   }
 
+  /**
+   * Replaces one phase's detail, running or finished.
+   *
+   * What a phase produced is worth more than what it was doing: while it runs
+   * the detail is progress ("29 tokens written"), and once it is done that
+   * number is spent, where the outcome - what it decided - is the thing
+   * anyone actually wants to see next to it.
+   *
+   * Named by phase rather than assuming the current one, since an outcome is
+   * usually reported just after moving on.
+   */
+  setDetail(name: string, detail: string) {
+    const index = this.phases.findIndex((phase) => phase.name === name);
+    if (index !== -1) {
+      this.phases[index] = { ...this.phases[index], detail };
+    }
+  }
+
   /** Updates the running phase's detail without moving on. */
   detail(detail: string) {
     if (this.currentIndex >= 0) {

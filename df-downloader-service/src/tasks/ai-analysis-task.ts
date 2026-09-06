@@ -103,6 +103,9 @@ const aiAnalysisTaskControls: TaskControls<AiAnalysisResult, AiAnalysisTaskConte
       onPlan: (phases) => {
         context.phases = new TaskPhaseTracker(phases);
       },
+      // What each call decided, replacing the progress number it stopped on -
+      // the analysis names its own phases, this only relays them.
+      onPhaseOutcome: (label, outcome) => context.phases?.setDetail(label, outcome),
       onStage: ({ step, of, label, outputTokens, waiting }) => {
         /*
          * The same information the caption below carries, kept as structure
