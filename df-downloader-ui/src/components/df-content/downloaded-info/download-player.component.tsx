@@ -424,6 +424,45 @@ export const DownloadPlayer = ({
    */
   const [retryNonce, setRetryNonce] = useState(0);
   const [detailsAnchor, setDetailsAnchor] = useState<HTMLElement | null>(null);
+  /*
+   * Fullscreen changes the layout rules entirely, so it has to be known
+   * rather than assumed: the frame's reserved aspect ratio and height cap are
+   * exactly right in a page and exactly wrong on a screen the video should
+   * fill, where they leave it boxed in the middle of a lot of black.
+   *
+   * Tracked from the event rather than from our own button, since Escape, the
+   * system back gesture and the browser's own chrome all leave fullscreen
+   * without going through us.
+   */
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  useEffect(() => {
+    const onChange = () => {
+      const active = Boolean(document.fullscreenElement);
+      setIsFullscreen(active);
+      /*
+       * Rotate to match the video, which is what a native player does and
+       * what makes fullscreen worth using on a phone at all.
+       *
+       * Only possible while fullscreen, only supported on mobile, and it
+       * rejects on desktop - so every call is guarded and a failure is
+       * silent. The screen simply stays as it was, which is the behaviour
+       * before this existed.
+       */
+      const orientation = screen.orientation as ScreenOrientation & { lock?: (to: string) => Promise<void> };
+      try {
+        if (active) {
+          void orientation?.lock?.("landscape").catch(() => {});
+        } else {
+          orientation?.unlock?.();
+        }
+      } catch {
+        // Unsupported, or refused because nothing is fullscreen. Neither is
+        // worth telling anyone about.
+      }
+    };
+    document.addEventListener("fullscreenchange", onChange);
+    return () => document.removeEventListener("fullscreenchange", onChange);
+  }, []);
   const [captionsAnchor, setCaptionsAnchor] = useState<HTMLElement | null>(null);
   const [activeTrack, setActiveTrack] = useState(0);
   const transcodingRef = useRef(false);
@@ -1014,7 +1053,29 @@ export const DownloadPlayer = ({
    * problem it was solving.
    */
   const playerControls = (
-    <Stack direction="row" spacing={0.5} sx={{ alignItems: "center", paddingX: 1, paddingTop: 0.5 }}>
+    <Stack
+      direction="row"
+      spacing={0.5}
+      sx={{
+        alignItems: "center",
+        paddingX: 1,
+        paddingTop: 0.5,
+        // Over the picture in fullscreen, under it in a page. A bar taking a
+        // strip of a phone screen is a strip of video nobody gets to see, and
+        // the scrim is what keeps white controls readable over a bright frame.
+        ...(isFullscreen
+          ? {
+              position: "absolute",
+              left: 0,
+              right: 0,
+              bottom: 0,
+              zIndex: 2,
+              paddingBottom: 1,
+              background: "linear-gradient(to top, rgba(0,0,0,0.75) 0%, rgba(0,0,0,0) 100%)",
+            }
+          : {}),
+      }}
+    >
       <IconButton size="small" aria-label={playing ? "Pause" : "Play"} onClick={togglePlay}>
         {playing ? <PauseIcon fontSize="small" /> : <PlayArrowIcon fontSize="small" />}
       </IconButton>
@@ -1241,6 +1302,10 @@ export const DownloadPlayer = ({
         borderRadius: 1,
         "&:focus": { outline: "none" },
         "&:focus-visible": { outline: "2px solid", outlineColor: "primary.main" },
+        // Fills the screen, with the transport laid over the picture rather
+        // than stacked under it - a bar taking a strip of a phone screen is a
+        // strip of video nobody gets to see.
+        ...(isFullscreen ? { height: "100%", justifyContent: "center", position: "relative" } : {}),
       }}
     >
       {/*
@@ -1262,11 +1327,18 @@ export const DownloadPlayer = ({
           position: "relative",
           width: "100%",
           minWidth: 0,
-          aspectRatio: info.width && info.height ? `${info.width} / ${info.height}` : "16 / 9",
-          maxHeight: maxHeight ?? "60vh",
           backgroundColor: "common.black",
-          borderRadius: 1,
           overflow: "hidden",
+          // In a page the frame reserves its shape so nothing moves when the
+          // video reloads. Fullscreen wants the opposite: take all of it, and
+          // let object-fit letterbox whatever is left over.
+          ...(isFullscreen
+            ? { flexGrow: 1, minHeight: 0, borderRadius: 0 }
+            : {
+                aspectRatio: info.width && info.height ? `${info.width} / ${info.height}` : "16 / 9",
+                maxHeight: maxHeight ?? "60vh",
+                borderRadius: 1,
+              }),
         }}
       >
         {videoSurface}
