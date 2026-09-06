@@ -890,6 +890,18 @@ export const DownloadPlayer = ({
         minHeight: 0,
         backgroundColor: "common.black",
         borderRadius: 1,
+        /*
+          Space reserved from the probed dimensions, so the frame does not
+          collapse and re-expand on a seek.
+
+          A seek on the transcoded path replaces the source, and between the
+          old element being torn down and the new one reporting its size the
+          video has no intrinsic dimensions at all - so it shrank to nothing
+          and the dialog resized around it, every time you skipped. The ratio
+          is known before playback starts and does not change, so holding the
+          shape costs nothing and removes the jump.
+        */
+        ...(info.width && info.height ? { aspectRatio: `${info.width} / ${info.height}` } : {}),
       }}
     >
       {info.subtitleTracks.map((track, index) => (
