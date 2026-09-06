@@ -280,7 +280,19 @@ export const AiLocalModels: Record<AiLocalModel, AiLocalModelInfo> = {
  * straight through to --load-mode and anyone reaching for this setting is
  * following llama.cpp's documentation, not ours.
  */
-export const AiLocalLoadMode = z.enum(["auto", "none", "mmap", "mlock", "mmap+mlock", "dio"]);
+export const AiLocalLoadMode = z
+  .enum(["auto", "none", "mmap", "mlock", "mmap+mlock", "dio"])
+  /*
+   * Described on the enum rather than on the field that uses it.
+   *
+   * The settings form reads the description from whatever schema it is handed,
+   * and it is handed this - the optional wrapper around it defeats type
+   * inference - so a description on the field alone rendered no help text at
+   * all.
+   */
+  .describe(
+    "Only worth changing if generation is far slower than it should be. 'auto' lets llama.cpp decide and is right on ordinary local storage. 'mmap+mlock' keeps the model in memory once loaded, which helps when something else on the machine keeps evicting it. 'none' avoids memory-mapping altogether - slower to load, but much faster afterwards on storage where mapping behaves badly, such as a network or fuse-backed share."
+  );
 export type AiLocalLoadMode = z.infer<typeof AiLocalLoadMode>;
 
 export const AiLocalProviderConfig = z.object({
@@ -378,9 +390,9 @@ export const AiLocalProviderConfig = z.object({
    */
   useGpu: z
     .boolean()
-    .default(true)
+    .default(false)
     .describe(
-      "Use a GPU for local analysis when one is available. Turn this off to keep it on the CPU - worth doing if the same GPU is busy transcoding for a media server, where competing for it can be slower than not using it at all."
+      "Use a GPU for local analysis when one is available. Off by default, and worth testing before trusting: on an integrated Intel GPU this produced valid-looking but meaningless results - every video classified the same, every summary empty - which is not something you would notice without reading one. Check an analysis after turning it on. Subtitles are a separate switch and are not affected."
     ),
   /**
    * How llama.cpp gets the model into memory.
@@ -392,10 +404,7 @@ export const AiLocalProviderConfig = z.object({
    * they stay resident decides whether that is a memory read or a disk read,
    * and the difference is two orders of magnitude.
    */
-  loadMode: AiLocalLoadMode.optional()
-    .describe(
-      "How the model is loaded into memory. Leave unset unless generation is far slower than it should be. 'mmap+mlock' keeps it resident once loaded, which helps if something else on the machine keeps evicting it; 'none' avoids memory-mapping altogether, which is slower to load but can be much faster afterwards on storage where mapping behaves badly, such as a network or fuse-backed share."
-    ),
+  loadMode: AiLocalLoadMode.optional(),
   gpuLayers: z
     .number()
     .int()

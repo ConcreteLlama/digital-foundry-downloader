@@ -5,6 +5,7 @@ versions:
     changes:
       features:
         - "Use your graphics card for subtitles and local AI analysis":
+          - "For analysis this is off by default and worth testing before trusting. On an integrated Intel GPU it produced valid-looking but meaningless results - every video classified the same, every summary empty - which is not something you notice without reading one. Read an analysis after turning it on. Subtitles are a separate switch and were not affected"
           - "Both now run on a GPU when there is one. Analysis is where it counts, since a single video can otherwise take tens of minutes"
           - "Subtitles are worth measuring rather than assuming. The speech model is small and the processor build is well optimised for it, so on a modest integrated GPU transcribing can come out no faster, or slightly slower. A discrete card is a different story, and so is a larger speech model - which is why there is a switch for each rather than one for both"
           - "One image, any card. It uses Vulkan rather than a vendor toolkit, so NVIDIA, AMD and Intel all work with nothing extra to install - you only have to pass the card through to the container"

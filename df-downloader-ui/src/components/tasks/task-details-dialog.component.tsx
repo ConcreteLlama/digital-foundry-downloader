@@ -2,9 +2,11 @@ import {
   Box,
   Chip,
   Dialog,
+  Collapse,
   DialogContent,
   DialogTitle,
   Divider,
+  IconButton,
   Stack,
   Table,
   TableBody,
@@ -23,7 +25,6 @@ import {
 } from "df-downloader-common";
 import { useSelector } from "react-redux";
 import { selectPipeline } from "../../store/df-tasks/tasks.selector.ts";
-import { LinearProgressWithLabel } from "../general/linear-progress-with-label.component.tsx";
 import { MiddleModal } from "../general/middle-modal.component.tsx";
 import { DfContentInfoItemDetail } from "../df-content/df-content-item-detail/df-content-item-detail.component.tsx";
 import { activeMsSoFar } from "df-downloader-common";
@@ -33,6 +34,8 @@ import {
 } from "./pipeline-track/pipeline-step-state";
 import { Fragment, useState } from "react";
 import { useTickingClock } from "../../hooks/use-ticking-clock";
+import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
+import { StepDetailPanel } from "./step-detail-panel.component";
 
 /**
  * Renders a span of milliseconds the way someone reading a task list wants to
@@ -211,6 +214,12 @@ export const TaskDetailsDialog = ({
   // returns you to the run you were looking at.
   const [contentOpen, setContentOpen] = useState(false);
   /*
+   * Which steps are drilled into. Nothing is expanded by default except the
+   * one running - the table is meant to be scannable, and a step's detail is
+   * variable in size and mostly interesting for whatever is happening now.
+   */
+  const [expanded, setExpanded] = useState<Record<string, boolean>>({});
+  /*
    * Elapsed and active are derived from the current time at render, so they
    * are only as fresh as the last render. A running analysis can spend ten
    * minutes inside one model call without emitting a state change, and the
@@ -318,13 +327,39 @@ export const TaskDetailsDialog = ({
                 // download report that it had skipped downloading.
                 const stateLabel = STEP_STATE_LABELS[state];
                 const progress = stepProgress(task);
+                const hasDetail = Boolean(progress || task?.status?.phases?.length || task?.status?.message);
+                // Defaults open for the step actually running, so the common
+                // case needs no click, and closed once it is not.
+                const isOpen = expanded[stepId] ?? (view.isCurrent && state === "running");
                 return (
                   <Fragment key={stepId}>
                   {/* Shown rather than hidden here - the dialog is the
                       inventory, the card is the glance - but dimmed, because
                       it is not part of what this run will do. */}
                   <TableRow sx={state === "not_applicable" ? { opacity: 0.55 } : undefined}>
-                    <TableCell>{view.name}</TableCell>
+                    <TableCell>
+                      <Stack direction="row" spacing={0.5} alignItems="center">
+                        {/* Only where there is something behind it - an
+                            affordance that opens an empty panel is worse than
+                            no affordance. */}
+                        {hasDetail ? (
+                          <IconButton
+                            size="small"
+                            aria-label={isOpen ? `Hide ${view.name} detail` : `Show ${view.name} detail`}
+                            onClick={() => setExpanded((current) => ({ ...current, [stepId]: !isOpen }))}
+                            sx={{ padding: 0.25 }}
+                          >
+                            <ExpandMoreIcon
+                              fontSize="small"
+                              sx={{ transform: isOpen ? "rotate(180deg)" : "none", transition: "transform 150ms" }}
+                            />
+                          </IconButton>
+                        ) : (
+                          <Box sx={{ width: 22 }} />
+                        )}
+                        <span>{view.name}</span>
+                      </Stack>
+                    </TableCell>
                     <TableCell>
                       <Tooltip title={view.reason ?? ""} disableHoverListener={!view.reason}>
                         <Chip
@@ -342,62 +377,21 @@ export const TaskDetailsDialog = ({
                     <TableCell align="right">{stepElapsed(task)}</TableCell>
                     <TableCell align="right">{stepActive(task) ?? "-"}</TableCell>
                   </TableRow>
-                  {/* A second row rather than a column: the bar needs the full
-                      width to be readable, and only ever one step has one. */}
-                  {progress && (
+                  {/* One collapsible row rather than a column, and rather
+                      than several rows always present. A step's detail varies
+                      in size - a progress bar, a list of phases, a message -
+                      and the table above it has to stay scannable on a phone.
+                      Behind a disclosure it can grow without the row having
+                      to. */}
+                  {hasDetail && (
                     <TableRow>
-                      <TableCell colSpan={5} sx={{ pt: 0 }}>
-                        <Stack direction="row" spacing={1} alignItems="center">
-                          <Box sx={{ flexGrow: 1 }}>
-                            <LinearProgressWithLabel value={progress.percent} />
-                          </Box>
-                          {progress.detail && (
-                            <Typography variant="caption" color="text.secondary" sx={{ whiteSpace: "nowrap" }}>
-                              {progress.detail}
-                            </Typography>
-                          )}
-                          {progress.remainingMs !== undefined && (
-                            <Typography variant="caption" color="text.secondary" sx={{ whiteSpace: "nowrap" }}>
-                              ~{formatDuration(progress.remainingMs)} left
-                            </Typography>
-                          )}
-                        </Stack>
+                      <TableCell colSpan={5} sx={{ paddingY: 0, borderBottom: isOpen ? undefined : "none" }}>
+                        <Collapse in={isOpen} timeout="auto" unmountOnExit>
+                          <StepDetailPanel task={task} progress={progress} />
+                        </Collapse>
                       </TableCell>
                     </TableRow>
                   )}
-                  {/* Parts of one step's work, for a task that reports them.
-                      Indented under their step rather than promoted to steps
-                      of their own, because that is what they are: a pipeline
-                      step is a unit of scheduling, these are units of
-                      reporting inside one. Nothing here knows which task
-                      produced them - see TaskPhase. */}
-                  {task?.status?.phases?.map((phase) => (
-                    <TableRow key={`${stepId}-${phase.name}`} sx={{ opacity: phase.state === "pending" ? 0.5 : 0.85 }}>
-                      <TableCell sx={{ pl: 4, borderBottom: "none", py: 0.25 }}>
-                        <Typography variant="caption" color="text.secondary">
-                          {phase.name}
-                          {phase.detail ? ` - ${phase.detail}` : ""}
-                        </Typography>
-                      </TableCell>
-                      <TableCell sx={{ borderBottom: "none", py: 0.25 }}>
-                        <Typography variant="caption" color="text.secondary">
-                          {phase.state === "done" ? "" : phase.state}
-                        </Typography>
-                      </TableCell>
-                      <TableCell align="right" sx={{ borderBottom: "none", py: 0.25 }}>
-                        <Typography variant="caption" color="text.secondary">
-                          {formatTime(phase.startedAt)}
-                        </Typography>
-                      </TableCell>
-                      <TableCell align="right" colSpan={2} sx={{ borderBottom: "none", py: 0.25 }}>
-                        <Typography variant="caption" color="text.secondary">
-                          {phase.startedAt && phase.endedAt
-                            ? formatDuration(new Date(phase.endedAt).getTime() - new Date(phase.startedAt).getTime())
-                            : ""}
-                        </Typography>
-                      </TableCell>
-                    </TableRow>
-                  ))}
                   </Fragment>
                 );
               })}
