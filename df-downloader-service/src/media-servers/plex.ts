@@ -162,14 +162,19 @@ export class PlexMediaServer implements MediaServerClient, PlayStateWriter {
   }
 
   /**
-   * A link to this file, through Plex's own web address rather than the
-   * server's.
+   * A link to this file in the server's own web client.
    *
-   * app.plex.tv on purpose: it is a host the official apps declare, so a
-   * phone stands a real chance of opening the app rather than a browser -
-   * which a link to a private LAN address cannot do, since no app can claim
-   * a host nobody knew about when it was built. The server is named in the
-   * link by its identifier, so this still resolves to your own machine.
+   * This first went through app.plex.tv, on the theory that it is a host the
+   * official apps declare and might therefore open the app. Tried: it did not
+   * open the app, and it could not find the content either - that address
+   * reaches a server through your Plex account, which a local server is not
+   * necessarily reachable through. Two ways of being wrong, and no upside
+   * left once the app never opened.
+   *
+   * So it points at the configured server, like the Jellyfin link that works.
+   * It will open a browser rather than the app - no Android app can claim a
+   * private address nobody knew about when it was built - but it lands on the
+   * right item, which is the part that matters.
    */
   async getItemUrl(serverPath: string): Promise<string | null> {
     const [ratingKey, machineIdentifier] = await Promise.all([
@@ -180,7 +185,8 @@ export class PlexMediaServer implements MediaServerClient, PlayStateWriter {
       return null;
     }
     const key = encodeURIComponent(`/library/metadata/${ratingKey}`);
-    return `https://app.plex.tv/desktop/#!/server/${machineIdentifier}/details?key=${key}`;
+    const base = this.config.url.replace(/\/+$/, "");
+    return `${base}/web/index.html#!/server/${machineIdentifier}/details?key=${key}`;
   }
 
   async resolveItemId(serverPath: string): Promise<string | null> {
