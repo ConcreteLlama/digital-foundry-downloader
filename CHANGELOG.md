@@ -6,11 +6,14 @@
 
 Subtitles and local analysis can now use a graphics card. One image covers NVIDIA, AMD and Intel - there is nothing vendor-specific to install - and it falls back to the processor on a machine with no usable card, saying so in the log rather than failing quietly. It is worth checking the log and comparing: on a low-end integrated GPU subtitles can be slightly slower than the processor, and both have a switch.
 
+Downloads also play with sound now. These files use an audio format no browser can decode, so playing one here gave you picture and silence even though the file was fine - the app re-encodes just that part as you watch, and leaves everything else alone.
+
 The image is also about 1.3GB smaller than 2.8.0 despite gaining all of that, because it no longer ships a compiler toolchain and a thousand megabytes of build-time dependencies that never ran.
 
 ### Features
 - Use your graphics card for subtitles and local AI analysis
-  - For analysis this is off by default and worth testing before trusting. On an integrated Intel GPU it produced valid-looking but meaningless results - every video classified the same, every summary empty - which is not something you notice without reading one. Read an analysis after turning it on. Subtitles are a separate switch and were not affected
+  - For analysis this is off by default, and on an integrated Intel GPU it should stay off. That combination returns valid-looking but meaningless results - every video classified the same, every summary empty - and it is now understood rather than merely observed: the fault is in Intel's graphics driver, and it appears once the text being analysed passes a few hundred words. Anything real is far longer than that, so the setting cannot be used on such a machine. Subtitles are a separate switch and are not affected, since they never take the path that breaks
+  - The same model, the same settings and the same text are correct on an NVIDIA card and correct on the processor, which is how the driver was identified. Use Check it actually works below before trusting any local analysis on a graphics card
   - Both now run on a GPU when there is one. Analysis is where it counts, since a single video can otherwise take tens of minutes
   - Subtitles are worth measuring rather than assuming. The speech model is small and the processor build is well optimised for it, so on a modest integrated GPU transcribing can come out no faster, or slightly slower. A discrete card is a different story, and so is a larger speech model - which is why there is a switch for each rather than one for both
   - One image, any card. It uses Vulkan rather than a vendor toolkit, so NVIDIA, AMD and Intel all work with nothing extra to install - you only have to pass the card through to the container
@@ -18,6 +21,18 @@ The image is also about 1.3GB smaller than 2.8.0 despite gaining all of that, be
   - A machine with no usable card carries on exactly as before, on the processor, and says so in the log instead of failing in a way that looks like the feature is broken
   - The log says outright which one each is running on, and names the card - "is it using my GPU" should not need interpreting. It also distinguishes a card you turned off from one it could not use, and says how many of a model's layers actually fit, since a partial fit is often slower than not using the card at all
   - In Docker this needs the card passed in - `--device=/dev/dri` for Intel and AMD, or the NVIDIA container toolkit with the graphics capability enabled. Without it nothing breaks; it simply stays on the processor
+- Check that local analysis actually works, in one click
+  - Under Settings, AI Analysis, on the local engine. It analyses a short built-in transcript and reads the answer, rather than only checking that one came back
+  - That distinction is the whole point. A model that has gone wrong still returns a perfectly well-formed reply, because the reply is checked against a schema - so a connection test passes, an analysis is saved, and nothing looks wrong until you read one. This asks something with a known answer and tells you whether the answer is right
+  - It also says which device it ran on and how fast it was, so how it is set up no longer has to be worked out from the log
+- Stop an analysis that is taking too long
+  - Analysis was the one job that could hold the machine to itself for half an hour and could not be taken back - the only way out was restarting the app
+  - It stops within a second or so rather than at the end of whatever it was doing, and stopping is recorded as stopping, so nothing is saved against the video and it stays eligible for a later run
+- Play videos whose audio your browser cannot handle
+  - Digital Foundry's downloads use AC-3 audio, which no browser decodes. Played here they gave picture and silence - the file is perfectly good, and the same file plays with sound in Plex, Jellyfin or VLC, which made it look like the download was broken when it was not
+  - The app now re-encodes only the part your browser rejects, as you watch. For these files that is the audio alone; the video is passed through untouched, so it costs almost nothing and starts playing immediately
+  - Skipping ahead restarts it from the new point, which is unavoidable when the video is being made as you watch it - expect a brief pause and a small rewind to the nearest keyframe. Files your browser can already play are untouched and seek normally
+  - Settings under Application, Player, including turning it off if you would rather watch elsewhere, and a limit on how many can be re-encoded at once
 ### Enhancements
 - A System page saying what this install actually is
   - Under System, About. Version, branch, the commit it was built from, the machine, how much memory it has, which of the extra tools it found, where its folders are, and how much content you have
@@ -33,6 +48,9 @@ The image is also about 1.3GB smaller than 2.8.0 despite gaining all of that, be
 - Pulling the audio out is now its own step, before transcribing
   - On a long video that is minutes of work, and it was happening inside the transcription job - which meant holding the one local-model slot for all of it, so an analysis queued behind a transcription also waited through the audio extraction. It now runs on the general file queue instead
   - It also shows as its own step with its own progress, rather than as a caption inside a row that claims to be transcribing when it has not started yet
+- The activity track shows what became of each part of a step
+  - A step made of several parts - an analysis is three model calls - already showed its divisions, but every division looked the same, so a part that was skipped and one that finished were indistinguishable without opening the details
+  - A skipped part is now hatched and a failed one is red, so a run that quietly dropped something is visible at a glance
 - Far less noise in the log
   - Confirming what is already available no longer writes a line per item. On a thousand-item library that was a thousand lines in the same millisecond, every time your subscription tier was checked - it buried everything worth reading and made the log tedious to search or send to anyone
   - The per-file detail from scanning your download folder has moved to debug as well. Both are still there if you turn the level up
@@ -51,6 +69,8 @@ The image is also about 1.3GB smaller than 2.8.0 despite gaining all of that, be
 - Thumbnails no longer come up blank when they are already in your browser cache. The image finished loading before the page was ready to notice, so it was never faded in - most visible as a login page with no backdrop on a reload, but it applied anywhere thumbnails are shown
 - The search box on the content page could be squeezed to nothing on a narrow screen, sharing a row with seven buttons that would not shrink. The row wraps now
 - The record of finished jobs had grown to over 1.5MB, nearly all of it analyses. Each one archived its full result twice, and the trimming that was supposed to prevent this only dropped lists longer than twenty items - so a dozen large ones went in whole. Big fields are now dropped by size, keeping the status, timings and figures that make the history worth having. Existing history is trimmed on upgrade, with a backup kept
+- A job that failed could not be cleared from the activity list on its own. A finished one collapsed to a line with a clear button; a failed one kept its full card, and that card never had one - so the only way to remove the thing you most wanted rid of was Clear all, which threw away the history you were reading it against
+- When the local model server failed to start, the error said to go and look at the log for the reason - while the reason was thrown away. It now quotes what the server actually said, so a missing library or an unreadable model is answered where the question was asked. The test above also says what it is doing while it runs, rather than sitting silent for minutes on a slow machine
 - Half of the local model server's output was being discarded, including everything it says while loading a model - which is where it reports the hardware it found and how much of the model fitted on it. The log jumped straight from "loading model" to "model loaded" with nothing in between. It was also a potential stall on a chattier model, since output nobody reads eventually blocks the program producing it
 
 ## 2.8.0 (2026-08-30)
