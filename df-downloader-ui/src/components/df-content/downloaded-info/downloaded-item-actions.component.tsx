@@ -227,8 +227,8 @@ export const DownloadedItemActions = ({
             ))}
             {openInLinks && openInLinks.length > 0 && (
               <Typography variant="caption" color="text.disabled">
-                Opens the server's web player. It will not launch the phone app - an app can only claim links for
-                addresses known when it was built, which a server on your own network is not.
+                Opens the server's web player rather than the phone app. Plex needs you signed in to plex.tv in that
+                browser; Jellyfin goes straight to your server.
               </Typography>
             )}
           </Stack>

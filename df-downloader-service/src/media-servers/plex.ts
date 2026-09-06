@@ -162,19 +162,18 @@ export class PlexMediaServer implements MediaServerClient, PlayStateWriter {
   }
 
   /**
-   * A link to this file in the server's own web client.
+   * A link to this file, through Plex's own web address rather than the
+   * server's.
    *
-   * This first went through app.plex.tv, on the theory that it is a host the
-   * official apps declare and might therefore open the app. Tried: it did not
-   * open the app, and it could not find the content either - that address
-   * reaches a server through your Plex account, which a local server is not
-   * necessarily reachable through. Two ways of being wrong, and no upside
-   * left once the app never opened.
+   * app.plex.tv rather than the configured URL, and this survived being
+   * wrongly "fixed" once: it was reported as not found, which looked like the
+   * cloud address failing to reach a local server, and it was actually just a
+   * browser that was not signed in to Plex. Signed in, it works.
    *
-   * So it points at the configured server, like the Jellyfin link that works.
-   * It will open a browser rather than the app - no Android app can claim a
-   * private address nobody knew about when it was built - but it lands on the
-   * right item, which is the part that matters.
+   * Worth keeping over a link to the server itself because it is not tied to
+   * being on the same network - Plex resolves the server by the identifier in
+   * the link, wherever you happen to be. It does not open the phone app, but
+   * neither does anything else we can construct.
    */
   async getItemUrl(serverPath: string): Promise<string | null> {
     const [ratingKey, machineIdentifier] = await Promise.all([
@@ -185,8 +184,7 @@ export class PlexMediaServer implements MediaServerClient, PlayStateWriter {
       return null;
     }
     const key = encodeURIComponent(`/library/metadata/${ratingKey}`);
-    const base = this.config.url.replace(/\/+$/, "");
-    return `${base}/web/index.html#!/server/${machineIdentifier}/details?key=${key}`;
+    return `https://app.plex.tv/desktop/#!/server/${machineIdentifier}/details?key=${key}`;
   }
 
   async resolveItemId(serverPath: string): Promise<string | null> {
