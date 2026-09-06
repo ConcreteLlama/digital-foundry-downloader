@@ -1,5 +1,6 @@
 import DeleteIcon from "@mui/icons-material/Delete";
 import EditIcon from "@mui/icons-material/Edit";
+import ArrowDropDownIcon from "@mui/icons-material/ArrowDropDown";
 import MoreVertIcon from "@mui/icons-material/MoreVert";
 import OpenInNewIcon from "@mui/icons-material/OpenInNew";
 import PlayArrowIcon from "@mui/icons-material/PlayArrow";
@@ -180,6 +181,10 @@ export const DownloadedItemActions = ({
     },
   ];
 
+  // The arrow beside Play and the menu entry are the same action, so it is
+  // named once rather than having two copies drift apart.
+  const openInAction = actions.find((action) => action.key === "open-in")!;
+
   const dialogs = (
     <>
       <DeleteDownloadDialog
@@ -250,9 +255,16 @@ export const DownloadedItemActions = ({
     return (
       <>
         <Stack direction="row" spacing={1} sx={{ flexWrap: "wrap" }} useFlexGap>
-          {actions.map(({ key, label, icon: Icon, run, disabled, reason, destructive }) => (
+          {actions.map(({ key, label, icon: Icon, run, disabled, reason, destructive }) =>
+            /*
+              Play and "watch elsewhere" are one control, because they answer
+              one question - where do I watch this - with a default and an
+              alternative. The rest of these do things to the file, which is a
+              different kind of choice, so they stay as they were.
+            */
+            key === "open-in" ? null : (
             <Tooltip key={key} title={reason ?? ""} disableHoverListener={!reason}>
-              <span>
+              <span style={{ display: "inline-flex" }}>
                 <Button
                   size="small"
                   variant="outlined"
@@ -260,12 +272,34 @@ export const DownloadedItemActions = ({
                   disabled={disabled}
                   startIcon={<Icon />}
                   onClick={run}
+                  sx={key === "play" ? { borderTopRightRadius: 0, borderBottomRightRadius: 0 } : undefined}
                 >
                   {label}
                 </Button>
+                {key === "play" && (
+                  <Button
+                    size="small"
+                    variant="outlined"
+                    color="inherit"
+                    disabled={disabled}
+                    aria-label="Watch elsewhere"
+                    onClick={openInAction.run}
+                    sx={{
+                      minWidth: 32,
+                      paddingX: 0,
+                      borderTopLeftRadius: 0,
+                      borderBottomLeftRadius: 0,
+                      // Against a doubled hairline where the two meet.
+                      marginLeft: "-1px",
+                    }}
+                  >
+                    <ArrowDropDownIcon fontSize="small" />
+                  </Button>
+                )}
               </span>
             </Tooltip>
-          ))}
+            )
+          )}
         </Stack>
         {dialogs}
       </>
