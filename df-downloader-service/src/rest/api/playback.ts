@@ -514,7 +514,33 @@ export const makePlaybackRouter = (contentManager: DigitalFoundryContentManager)
       // Nothing to serve and nothing to clean up - the slot was never taken.
       return;
     }
-    const plan = planTranscode(meta?.videoStream, meta?.audioStream, playerConfig.transcode === "always");
+    /*
+     * What the browser says it can decode, as a comma-separated list.
+     *
+     * The player has already asked its own `<video>` element, so this is an
+     * answer about the machine watching rather than a guess made here. It
+     * matters most for the case it was added for: an HEVC file with AC-3
+     * audio has to be transcoded for its sound, and without this its video
+     * was re-encoded alongside - on a device that plays HEVC perfectly well.
+     *
+     * Sanitised rather than trusted: these names are compared against
+     * ffprobe's codec names, and anything unrecognised simply fails to match
+     * and is treated as unplayable, which is the safe direction.
+     */
+    const codecList = (value: unknown) =>
+      typeof value === "string" && value.length
+        ? value
+            .split(",")
+            .map((name) => name.trim().toLowerCase())
+            .filter((name) => /^[a-z0-9_]{1,20}$/.test(name))
+        : undefined;
+    const client = { video: codecList(req.query.vcodecs), audio: codecList(req.query.acodecs) };
+    const plan = planTranscode(
+      meta?.videoStream,
+      meta?.audioStream,
+      playerConfig.transcode === "always",
+      client.video || client.audio ? client : undefined
+    );
     /*
      * Parsed defensively rather than trusted. This lands in an ffmpeg
      * argument, and a NaN or a negative would either fail the spawn or seek
@@ -523,7 +549,23 @@ export const makePlaybackRouter = (contentManager: DigitalFoundryContentManager)
     const requested = Number(req.query.t);
     const startSeconds = Number.isFinite(requested) && requested > 0 ? requested : 0;
 
-    const session = await startTranscode(filePath, startSeconds, plan, playerConfig, meta?.videoStream);
+    /*
+     * An explicit picture size from the player's quality menu. Bounded rather
+     * than trusted - it reaches an ffmpeg filter, and a huge or negative
+     * value would either fail the spawn or ask the GPU for something absurd.
+     */
+    const requestedHeight = Number(req.query.height);
+    const maxHeight =
+      Number.isFinite(requestedHeight) && requestedHeight >= 144 && requestedHeight <= 4320
+        ? Math.floor(requestedHeight)
+        : undefined;
+    const session = await startTranscode(filePath, startSeconds, plan, playerConfig, meta?.videoStream, {
+      maxHeight,
+      // Only worth targeting HEVC for a client that says it can decode it,
+      // and only when it is not already getting the file's own video copied
+      // through untouched.
+      preferHevc: Boolean(client.video?.includes("hevc")),
+    });
     if (!session) {
       return sendError(
         res,

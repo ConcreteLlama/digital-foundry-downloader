@@ -1,5 +1,8 @@
 import { Alert, Box, Button, CircularProgress, Divider, IconButton, Menu, MenuItem, Popover, Slider, Stack, Tooltip, Typography } from "@mui/material";
 import ClosedCaptionIcon from "@mui/icons-material/ClosedCaption";
+import FourKIcon from "@mui/icons-material/FourK";
+import HdIcon from "@mui/icons-material/Hd";
+import SdIcon from "@mui/icons-material/Sd";
 import InfoOutlinedIcon from "@mui/icons-material/InfoOutlined";
 import FullscreenIcon from "@mui/icons-material/Fullscreen";
 import PauseIcon from "@mui/icons-material/Pause";
@@ -155,6 +158,82 @@ const DetailRow = ({
  * failing that, the viewer's ears are the backstop, and refusing something
  * that would have played is the worse mistake.
  */
+/**
+ * Every video codec this browser will admit to decoding.
+ *
+ * Asked of a real `<video>` element rather than assumed from the user agent,
+ * because the answer is a property of the machine and not of the browser:
+ * HEVC in particular depends on the operating system supplying a decoder, so
+ * two copies of the same Chrome give different answers.
+ *
+ * Sent with a transcode request so the server re-encodes only what this
+ * device genuinely cannot take. The names are ffprobe's, since that is what
+ * they are compared against at the other end.
+ */
+const DECODE_PROBES: { name: string; type: string }[] = [
+  { name: "h264", type: 'video/mp4; codecs="avc1.640028"' },
+  { name: "hevc", type: 'video/mp4; codecs="hvc1.1.6.L93.B0"' },
+  { name: "av1", type: 'video/mp4; codecs="av01.0.05M.08"' },
+  { name: "vp9", type: 'video/mp4; codecs="vp09.00.10.08"' },
+];
+
+const AUDIO_DECODE_PROBES: { name: string; type: string }[] = [
+  { name: "aac", type: 'video/mp4; codecs="mp4a.40.2"' },
+  { name: "mp3", type: 'video/mp4; codecs="mp4a.40.34"' },
+  { name: "opus", type: 'video/mp4; codecs="opus"' },
+  { name: "flac", type: 'video/mp4; codecs="flac"' },
+  { name: "ac3", type: 'video/mp4; codecs="ac-3"' },
+  { name: "eac3", type: 'video/mp4; codecs="ec-3"' },
+];
+
+const decodableCodecs = () => {
+  const probe = document.createElement("video");
+  // "maybe" counts, on the same reasoning as the checks above: it is what a
+  // browser says when it will not commit without reading the file, and
+  // refusing something that would have played is the worse mistake.
+  const supported = (list: { name: string; type: string }[]) =>
+    list.filter((entry) => probe.canPlayType(entry.type) !== "").map((entry) => entry.name);
+  return { video: supported(DECODE_PROBES), audio: supported(AUDIO_DECODE_PROBES) };
+};
+
+/**
+ * The picture sizes offered in the quality menu.
+ *
+ * Only rungs below the source appear - offering to "upscale" a 1080p file to
+ * 4K would cost the machine a great deal to produce something no better.
+ */
+const QUALITY_RUNGS = [1440, 1080, 720, 480];
+
+/**
+ * The button's icon, which says what is playing without a word of text.
+ *
+ * All three are the same 24px box, so the icon changing never moves the
+ * buttons either side of it - a toolbar that reflows as you use it is worse
+ * than one that says less.
+ */
+const qualityIcon = (height: number | undefined) => {
+  if (height && height >= 2160) {
+    return FourKIcon;
+  }
+  // 1080 and 1440 are both "HD" here. The distinction exists but there is no
+  // icon for it, and inventing one would say less clearly than repeating this.
+  return height && height >= 1080 ? HdIcon : SdIcon;
+};
+
+/** Remembered per browser rather than in settings - it is a choice about this screen and this connection. */
+const QUALITY_STORAGE_KEY = "df-player-quality";
+
+const readStoredQuality = (): number | undefined => {
+  try {
+    const stored = Number(window.localStorage.getItem(QUALITY_STORAGE_KEY));
+    return Number.isFinite(stored) && stored > 0 ? stored : undefined;
+  } catch {
+    // Private windows and blocked site data both throw here rather than
+    // returning nothing, and a remembered menu choice is not worth an error.
+    return undefined;
+  }
+};
+
 const canBrowserPlayAudio = (info: PlaybackInfo): boolean => {
   if (!info.audioCodecProbe) {
     return true;
@@ -385,6 +464,15 @@ export const DownloadPlayer = ({
    * time it changes.
    */
   const [streamOffset, setStreamOffset] = useState(0);
+  /*
+   * Where to pick up after the element is rebuilt around a different source.
+   *
+   * Changing quality swaps between the file itself and a generated stream,
+   * which are two different timelines - so the position has to be carried
+   * across by hand. The transcoded side gets it in the URL; the direct side
+   * needs it assigned once the metadata is there, which is what this is for.
+   */
+  const pendingResumeRef = useRef<number | undefined>(undefined);
   const streamOffsetRef = useRef(0);
   streamOffsetRef.current = streamOffset;
   const [playing, setPlaying] = useState(false);
@@ -507,13 +595,47 @@ export const DownloadPlayer = ({
   const audioSupported = useMemo(() => (info ? canBrowserPlayAudio(info) : true), [info]);
   const transcodingAllowed = playerConfig?.transcode !== "never";
   /*
+   * Asked once. It creates an element and interrogates it, and the answer
+   * cannot change while the page is open.
+   */
+  const clientCodecs = useMemo(() => decodableCodecs(), []);
+  /*
+   * The chosen picture size, or undefined for the file as it is.
+   *
+   * Undefined is the default and the honest one: the file already exists at
+   * its own size, and sending it untouched is both free and better than
+   * anything that could be made from it. A smaller rung is a deliberate trade
+   * for a thinner connection or a device that struggles, so it is a choice
+   * someone makes rather than one made for them.
+   */
+  const [quality, setQuality] = useState<number | undefined>(readStoredQuality);
+  const [qualityAnchor, setQualityAnchor] = useState<HTMLElement | null>(null);
+  /*
+   * A rung below the source is only meaningful if the source is bigger than
+   * it. Anything else would be an offer to spend the machine's time making
+   * the picture no better.
+   */
+  const qualityOptions = useMemo(
+    () => QUALITY_RUNGS.filter((rung) => !info?.height || info.height > rung),
+    [info?.height]
+  );
+  /*
+   * Choosing a size forces a re-encode even for a file that would play
+   * directly, because scaling is something only the transcoder can do. That
+   * costs exact seeking - see the transport bar - which is why it is never
+   * the default.
+   */
+  const qualityForced = Boolean(quality) && transcodingAllowed;
+  /*
    * "always" exists to exercise the re-encoding path deliberately. Without
    * it that path is unreachable on a library the browser can already play,
    * which is most of one - so a bug in it would only ever be found by
    * whoever first owned an unusual file.
    */
   const transcoding =
-    Boolean(info) && transcodingAllowed && (playerConfig?.transcode === "always" || !videoSupported || !audioSupported);
+    Boolean(info) &&
+    transcodingAllowed &&
+    (playerConfig?.transcode === "always" || qualityForced || !videoSupported || !audioSupported);
   /*
    * "Supported" now means "there is some way to play this", which is what
    * every guard downstream actually wanted. Without transcoding it still
@@ -828,6 +950,36 @@ export const DownloadPlayer = ({
     [seekTo]
   );
 
+  /**
+   * Switching picture size, which means switching where the video comes from.
+   *
+   * Deliberately not a live change: scaling can only be done by the
+   * transcoder, so choosing a size moves playback onto a generated stream
+   * (and choosing Original may move it back), and either way the element is
+   * reloaded around a different timeline. The position is carried across so
+   * that reads as a quality change rather than as losing your place.
+   */
+  const chooseQuality = useCallback(
+    (height: number | undefined) => {
+      setQualityAnchor(null);
+      setQuality(height);
+      try {
+        if (height) {
+          window.localStorage.setItem(QUALITY_STORAGE_KEY, String(height));
+        } else {
+          window.localStorage.removeItem(QUALITY_STORAGE_KEY);
+        }
+      } catch {
+        // Not being able to remember the choice is no reason not to make it.
+      }
+      const resumeAt = positionSeconds;
+      pendingResumeRef.current = resumeAt;
+      setStreamOffset(resumeAt);
+      setPlaying(true);
+    },
+    [positionSeconds]
+  );
+
 
   const timelineRows = useMemo(
     () => buildTimeline(info?.chapters ?? [], analysisJumps ?? []),
@@ -992,14 +1144,29 @@ export const DownloadPlayer = ({
       */
       src={
         transcoding
-          ? `${playbackTranscodeUrl(contentEntry.key, download.downloadLocation, streamOffset)}${
-              retryNonce ? `&r=${retryNonce}` : ""
-            }`
+          ? `${playbackTranscodeUrl(contentEntry.key, download.downloadLocation, streamOffset, {
+              videoCodecs: clientCodecs.video,
+              audioCodecs: clientCodecs.audio,
+              height: quality,
+            })}${retryNonce ? `&r=${retryNonce}` : ""}`
           : playbackStreamUrl(contentEntry.key, download.downloadLocation)
       }
       onLoadedMetadata={() => {
         const video = videoRef.current;
-        if (video && transcoding && playing) {
+        if (!video) {
+          return;
+        }
+        /*
+         * A quality change that landed on the file itself rather than on a
+         * generated stream. The transcoded side carries its start in the URL
+         * and needs nothing here; this side starts at zero unless told.
+         */
+        const pending = pendingResumeRef.current;
+        pendingResumeRef.current = undefined;
+        if (!transcoding && pending) {
+          video.currentTime = pending;
+        }
+        if ((transcoding || pending) && playing) {
           void video.play().catch(() => {});
         }
       }}
@@ -1241,6 +1408,48 @@ export const DownloadPlayer = ({
             {track.label}
           </MenuItem>
         ))}
+      </Menu>
+      {/*
+        Quality, offered whenever there is a smaller size to offer - not only
+        when something has to be re-encoded. Original is the default and the
+        right answer nearly always: the file already exists at its own size,
+        and sending it untouched costs nothing and cannot be bettered.
+      */}
+      {transcodingAllowed && qualityOptions.length > 0 && (
+        <Tooltip title={quality ? `Playing at ${quality}p` : `Playing the original${info.height ? ` (${info.height}p)` : ""}`}>
+          <IconButton size="small" aria-label="Quality" onClick={(event) => setQualityAnchor(event.currentTarget)}>
+            {/*
+              Reflects what is actually playing - the chosen size, or the
+              file's own when nothing has been chosen. Coloured only when it
+              is not the original, so "something has been changed here" reads
+              at a glance.
+            */}
+            {(() => {
+              const QualityIcon = qualityIcon(quality ?? info.height);
+              return <QualityIcon fontSize="small" color={quality ? "primary" : "inherit"} />;
+            })()}
+          </IconButton>
+        </Tooltip>
+      )}
+      <Menu anchorEl={qualityAnchor} open={Boolean(qualityAnchor)} onClose={() => setQualityAnchor(null)}>
+        <MenuItem selected={!quality} onClick={() => chooseQuality(undefined)}>
+          Original{info.height ? ` (${info.height}p)` : ""}
+        </MenuItem>
+        {qualityOptions.map((rung) => (
+          <MenuItem key={`quality-${rung}`} selected={quality === rung} onClick={() => chooseQuality(rung)}>
+            {rung}p
+          </MenuItem>
+        ))}
+        <Divider />
+        {/*
+          Said plainly rather than discovered. Anything below Original is
+          generated as it is sent, which is why seeking stops being exact -
+          that is a surprise worth spending a line on.
+        */}
+        <Typography variant="caption" color="text.secondary" sx={{ display: "block", paddingX: 2, paddingY: 0.5, maxWidth: 260 }}>
+          Smaller sizes are converted as you watch, so seeking jumps to the nearest keyframe. Original plays the file
+          itself.
+        </Typography>
       </Menu>
       <IconButton
         size="small"

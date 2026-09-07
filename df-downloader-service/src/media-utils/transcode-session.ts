@@ -26,6 +26,34 @@ export type TranscodePlan = {
 };
 
 /**
+ * What the browser asking for this stream says it can decode.
+ *
+ * Sent by the player, which has already asked the question of the actual
+ * `<video>` element it is going to use - so it is an answer about that
+ * machine, not a guess from a list here. Absent for a client that does not
+ * say (an older UI, or a direct request), and the conservative defaults above
+ * are then used.
+ *
+ * Worth having because the alternative was re-encoding video nobody needed
+ * re-encoded: an HEVC file with AC-3 audio has to be transcoded for its
+ * sound, and without this the video was rebuilt alongside it even on a device
+ * that plays HEVC natively - expensive, slower, and a generation of quality
+ * lost to fix an audio track.
+ */
+export type ClientCodecs = {
+  video?: string[];
+  audio?: string[];
+};
+
+/*
+ * An empty list from a client is not the same as no list at all. "I can play
+ * nothing" is a real answer and has to mean it; only the absence of the field
+ * falls back to the defaults.
+ */
+const playableVideo = (client?: ClientCodecs) => (client?.video ? new Set(client.video) : PASSTHROUGH_VIDEO);
+const playableAudio = (client?: ClientCodecs) => (client?.audio ? new Set(client.audio) : PASSTHROUGH_AUDIO);
+
+/**
  * What, if anything, has to be re-encoded for a browser.
  *
  * Decided from the file rather than from anything the client claims. The
@@ -45,13 +73,14 @@ export const planTranscode = (
    * amount of clicking will make it encode a video it can copy. Testing it by
    * editing the passthrough list means a rebuild to try and another to undo.
    */
-  forceEncode = false
+  forceEncode = false,
+  client?: ClientCodecs
 ): TranscodePlan => ({
   // Unknown counts as playable: an unrecognised codec that the browser is in
   // fact happy with should not cost a needless encode, and if it genuinely
   // cannot play it the element's error event still catches it.
-  video: forceEncode || (video?.codecName && !PASSTHROUGH_VIDEO.has(video.codecName)) ? "encode" : "copy",
-  audio: forceEncode || (audio?.codecName && !PASSTHROUGH_AUDIO.has(audio.codecName)) ? "encode" : "copy",
+  video: forceEncode || (video?.codecName && !playableVideo(client).has(video.codecName)) ? "encode" : "copy",
+  audio: forceEncode || (audio?.codecName && !playableAudio(client).has(audio.codecName)) ? "encode" : "copy",
 });
 
 /** Nothing to do - the file can be served directly, which is always better. */
@@ -210,22 +239,22 @@ export type TranscodeSession = {
  * Probed once and remembered. It is a property of the binary, which does not
  * change while the process runs.
  */
-let vaapiSupport: Promise<boolean> | undefined;
-const canEncodeWithVaapi = (): Promise<boolean> => {
-  vaapiSupport ??= new Promise<boolean>((resolve) => {
+let vaapiSupport: Promise<Set<string>> | undefined;
+const hardwareEncoders = (): Promise<Set<string>> => {
+  vaapiSupport ??= new Promise<Set<string>>((resolve) => {
     const probe = spawn(ffmpegPath, ["-hide_banner", "-encoders"]);
     let out = "";
     probe.stdout?.on("data", (chunk) => (out += String(chunk)));
-    probe.on("error", () => resolve(false));
+    probe.on("error", () => resolve(new Set()));
     probe.on("close", () => {
-      const available = /\bh264_vaapi\b/.test(out);
+      const found = new Set(["h264_vaapi", "hevc_vaapi"].filter((name) => new RegExp(`\\b${name}\\b`).test(out)));
       logger.log(
         "info",
-        available
-          ? `ffmpeg at ${ffmpegPath} can encode video with the GPU (h264_vaapi)`
+        found.size
+          ? `ffmpeg at ${ffmpegPath} can encode video with the GPU (${[...found].join(", ")})`
           : `ffmpeg at ${ffmpegPath} has no GPU encoder built in, so any video re-encoding will use the processor`
       );
-      resolve(available);
+      resolve(found);
     });
   });
   return vaapiSupport;
@@ -263,8 +292,15 @@ const MAX_HEIGHTS: Record<PlayerConfig["maxHeight"], number | undefined> = {
   "720p": 720,
 };
 
-const targetSize = (video: ProbedVideoStream | undefined, maxHeight: PlayerConfig["maxHeight"]) => {
-  const ceiling = MAX_HEIGHTS[maxHeight];
+const targetSize = (
+  video: ProbedVideoStream | undefined,
+  maxHeight: PlayerConfig["maxHeight"],
+  requested?: number
+) => {
+  // An explicit choice from the player wins outright, in both directions: it
+  // is a person looking at the picture, which beats a default written by
+  // somebody who was not.
+  const ceiling = requested ?? MAX_HEIGHTS[maxHeight];
   if (!ceiling || !video?.width || !video?.height || video.height <= ceiling) {
     return undefined;
   }
@@ -275,13 +311,54 @@ const targetSize = (video: ProbedVideoStream | undefined, maxHeight: PlayerConfi
   return { width, height };
 };
 
+/**
+ * What a re-encoded stream may spend, by picture size and codec.
+ *
+ * Rough figures picked to look right rather than to be optimal - this is a
+ * stream nobody keeps, made once per viewing, and a number that is a little
+ * generous costs bandwidth where one that is mean costs the picture.
+ *
+ * HEVC is given about 60% of H.264's for the same size, which is the usual
+ * rule of thumb and the entire reason to prefer it when the device can decode
+ * it: the same picture over a much thinner connection.
+ */
+const BITRATES: Record<string, { h264: string; hevc: string }> = {
+  "2160": { h264: "16M", hevc: "10M" },
+  "1440": { h264: "10M", hevc: "6M" },
+  "1080": { h264: "8M", hevc: "5M" },
+  "720": { h264: "4M", hevc: "2500k" },
+};
+
+const bitrateFor = (height: number | undefined, codec: "h264" | "hevc") => {
+  const rungs = [2160, 1440, 1080, 720];
+  // The smallest rung the picture still fits inside, so an odd size (an
+  // ultrawide crop, a 1600-tall source) is funded like the rung above it
+  // rather than falling off the table.
+  const rung = rungs.reverse().find((value) => (height ?? 1080) <= value) ?? 2160;
+  return BITRATES[String(rung)][codec];
+};
+
+/**
+ * Per-request overrides, as opposed to the standing settings.
+ *
+ * A viewer choosing a smaller picture from the player is not changing what
+ * the app does by default, so it arrives here rather than through config.
+ */
+export type TranscodeOptions = {
+  /** An explicit ceiling from the player, which beats the configured one. */
+  maxHeight?: number;
+  /** Set when the client said it can decode HEVC, so it is worth targeting. */
+  preferHevc?: boolean;
+};
+
 const buildArgs = (
   filePath: string,
   startSeconds: number,
   plan: TranscodePlan,
   config: PlayerConfig,
-  hardwareAvailable: boolean,
-  video: ProbedVideoStream | undefined
+  encoders: Set<string>,
+  video: ProbedVideoStream | undefined,
+  options: TranscodeOptions
 ): string[] => {
   const args: string[] = ["-hide_banner", "-loglevel", "error"];
   if (startSeconds > 0) {
@@ -292,12 +369,21 @@ const buildArgs = (
    * Asking for a VAAPI device on a copy does nothing but risk failing to
    * initialise on a machine that has none.
    */
-  const useHardware = plan.video === "encode" && config.hardwareAcceleration === "auto" && hardwareAvailable;
+    /*
+   * HEVC only when the client asked for it and the GPU can do it. There is no
+   * software fallback: libx265 cannot encode anything like realtime on this
+   * class of machine, so without the hardware encoder H.264 is the only
+   * honest answer.
+   */
+  const codec: "h264" | "hevc" =
+    options.preferHevc && encoders.has("hevc_vaapi") && config.hardwareAcceleration === "auto" ? "hevc" : "h264";
+  const useHardware =
+    plan.video === "encode" && config.hardwareAcceleration === "auto" && encoders.has(`${codec}_vaapi`);
   if (useHardware) {
     args.push("-hwaccel", "vaapi", "-hwaccel_device", "/dev/dri/renderD128", "-hwaccel_output_format", "vaapi");
   }
   args.push("-i", filePath);
-  const size = plan.video === "encode" ? targetSize(video, config.maxHeight) : undefined;
+  const size = plan.video === "encode" ? targetSize(video, config.maxHeight, options.maxHeight) : undefined;
   if (plan.video === "copy") {
     args.push("-c:v", "copy");
   } else if (useHardware) {
@@ -305,7 +391,12 @@ const buildArgs = (
     // format conversion has to happen regardless, so resizing in the same
     // filter is close to free and saves the encoder most of its work.
     const scale = size ? `scale_vaapi=w=${size.width}:h=${size.height}:format=nv12` : "scale_vaapi=format=nv12";
-    args.push("-vf", scale, "-c:v", "h264_vaapi", "-b:v", "8M");
+    args.push("-vf", scale, "-c:v", `${codec}_vaapi`, "-b:v", bitrateFor(size?.height ?? video?.height, codec));
+    if (codec === "hevc") {
+      // hvc1 rather than ffmpeg's default hev1: Safari plays the first and
+      // silently refuses the second, and every other browser accepts both.
+      args.push("-tag:v", "hvc1");
+    }
   } else {
     if (size) {
       args.push("-vf", `scale=${size.width}:${size.height}`);
@@ -361,7 +452,8 @@ export const startTranscode = async (
   startSeconds: number,
   plan: TranscodePlan,
   config: PlayerConfig,
-  video?: ProbedVideoStream
+  video?: ProbedVideoStream,
+  options: TranscodeOptions = {}
 ): Promise<TranscodeSession | undefined> => {
   /*
    * A viewer seeking is not a second viewer.
@@ -397,12 +489,12 @@ export const startTranscode = async (
   // Only asked when it could matter - a copy never touches an encoder, and
   // probing on every audio-only stream would spawn a process to learn
   // something irrelevant.
-  const hardwareAvailable = plan.video === "encode" ? await canEncodeWithVaapi() : false;
-  const args = buildArgs(filePath, startSeconds, plan, config, hardwareAvailable, video);
+  const encoders = plan.video === "encode" ? await hardwareEncoders() : new Set<string>();
+  const args = buildArgs(filePath, startSeconds, plan, config, encoders, video, options);
   logger.log(
     "info",
     `Transcoding ${filePath} from ${Math.round(startSeconds)}s (video: ${plan.video}, audio: ${plan.audio}${
-      plan.video === "encode" ? `, ${hardwareAvailable ? "attempting the GPU" : "on the processor"}` : ""
+      plan.video === "encode" ? `, ${encoders.size ? "attempting the GPU" : "on the processor"}` : ""
     })`
   );
   logger.log("debug", `ffmpeg transcode args: ${args.join(" ")}`);

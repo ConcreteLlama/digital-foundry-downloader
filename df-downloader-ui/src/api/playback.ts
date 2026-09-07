@@ -43,8 +43,38 @@ export const playbackStreamUrl = (contentKey: string, downloadLocation: string) 
  * yet - which is why a seek means asking for a new one from the new position.
  * See the transcode route.
  */
-export const playbackTranscodeUrl = (contentKey: string, downloadLocation: string, startSeconds = 0) =>
-  `${playbackUrl(contentKey, downloadLocation, "transcode")}&${new URLSearchParams({ t: String(Math.max(0, Math.floor(startSeconds))) })}`;
+export type TranscodeRequest = {
+  /**
+   * What this browser can decode, from its own `<video>` element.
+   *
+   * Sent so the server re-encodes only what this machine actually needs
+   * re-encoded. Without it an HEVC file with AC-3 audio had its video rebuilt
+   * to fix its sound, even where HEVC would have played untouched.
+   */
+  videoCodecs?: string[];
+  audioCodecs?: string[];
+  /** An explicit picture height from the quality menu; absent means the default. */
+  height?: number;
+};
+
+export const playbackTranscodeUrl = (
+  contentKey: string,
+  downloadLocation: string,
+  startSeconds = 0,
+  request: TranscodeRequest = {}
+) => {
+  const params = new URLSearchParams({ t: String(Math.max(0, Math.floor(startSeconds))) });
+  if (request.videoCodecs?.length) {
+    params.set("vcodecs", request.videoCodecs.join(","));
+  }
+  if (request.audioCodecs?.length) {
+    params.set("acodecs", request.audioCodecs.join(","));
+  }
+  if (request.height) {
+    params.set("height", String(Math.floor(request.height)));
+  }
+  return `${playbackUrl(contentKey, downloadLocation, "transcode")}&${params}`;
+};
 
 /**
  * `offsetSeconds` re-times the cues so they line up with a transcoded stream,
