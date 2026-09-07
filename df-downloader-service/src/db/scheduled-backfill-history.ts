@@ -4,12 +4,32 @@ import { z } from "zod";
 import { ensureDirectory } from "../utils/file-utils.js";
 import { FileDb } from "./file-db.js";
 
-const CURRENT_DB_VERSION = "1.0.0";
+const CURRENT_DB_VERSION = "1.1.0";
+
+/**
+ * What happened the last time a scheduled run tried this content, and how
+ * often.
+ *
+ * Kept because a failure otherwise left no trace at all: the picker asks
+ * which content has no analysis, an item that failed still has none, and so
+ * it was chosen again on the very next tick - the same video, the same
+ * failure, all night, while everything behind it waited. One analysis can
+ * take an hour and a half, so this is not a small waste.
+ */
+const BackfillFailureRecord = z.object({
+  attempts: z.number().int().min(1),
+  lastAttempt: z.coerce.date(),
+  /** The last error, kept so the log can say why something is being skipped. */
+  lastError: z.string().optional(),
+});
+type BackfillFailureRecord = z.infer<typeof BackfillFailureRecord>;
 
 const ScheduledBackfillHistorySchema = z.object({
   version: z.string(),
   lastUpdated: z.coerce.date(),
   windows: ScheduledBackfillWindowRecord.array().default([]),
+  /** Keyed by content key. Defaulted, so a store written before this parses. */
+  failures: z.record(z.string(), BackfillFailureRecord).default({}),
 });
 type ScheduledBackfillHistorySchema = z.infer<typeof ScheduledBackfillHistorySchema>;
 
@@ -46,6 +66,7 @@ export class ScheduledBackfillHistory {
         version: CURRENT_DB_VERSION,
         lastUpdated: new Date(),
         windows: [],
+        failures: {},
       },
       backupDestination: async (data) => {
         const version = data?.version || "NO_VERSION";
@@ -54,8 +75,8 @@ export class ScheduledBackfillHistory {
         return path.join(backupDir, `scheduled-backfill-history-${version}-${Date.now()}.json`);
       },
       patchRoutine: async (data) => {
-        // Nothing to patch yet - this is version 1. The chain lives here so
-        // the next shape change adds a step rather than a migration script.
+        // 1.0.0 -> 1.1.0 added `failures`, which the schema defaults, so
+        // there is nothing to move - only the version to advance.
         if (data.version !== CURRENT_DB_VERSION) {
           data.version = CURRENT_DB_VERSION;
           return { data, patched: true };
@@ -136,6 +157,66 @@ export class ScheduledBackfillHistory {
       window.items.push({ key, title });
     }
     this.save();
+  }
+
+  /**
+   * How long a failure keeps something out of the queue.
+   *
+   * Escalating rather than flat, because the two kinds of failure want
+   * different treatment and cannot be told apart at the time: a transient one
+   * - the model was busy, the machine restarted - deserves another go by
+   * tomorrow, while something inherent to the content will fail identically
+   * however many times it is tried. Trying tomorrow, then next week, then
+   * stopping, costs one wasted run of each kind rather than a night of them.
+   */
+  private static readonly RETRY_AFTER_MS = [24 * 60 * 60_000, 7 * 24 * 60 * 60_000];
+
+  recordFailure(key: string, error?: string) {
+    const existing = this.data.failures[key];
+    this.data.failures[key] = {
+      attempts: (existing?.attempts ?? 0) + 1,
+      lastAttempt: new Date(),
+      lastError: error?.slice(0, 300),
+    };
+    this.save();
+  }
+
+  /** Forgotten on success, so a run that fixes itself leaves nothing behind. */
+  clearFailure(key: string) {
+    if (this.data.failures[key]) {
+      delete this.data.failures[key];
+      this.save();
+    }
+  }
+
+  /**
+   * Whether a scheduled run should leave this content alone for now.
+   *
+   * Only ever consulted by the scheduled picker. Analysing something by hand
+   * goes nowhere near this - a person asking for a specific video has already
+   * decided it is worth a try, and being told "no, it failed on Tuesday"
+   * would be obstructive rather than helpful.
+   */
+  skipReason(key: string, now: Date = new Date()): string | undefined {
+    const failure = this.data.failures[key];
+    if (!failure) {
+      return undefined;
+    }
+    const wait = ScheduledBackfillHistory.RETRY_AFTER_MS[failure.attempts - 1];
+    if (wait === undefined) {
+      return `failed ${failure.attempts} times, the last with: ${failure.lastError ?? "no message"}`;
+    }
+    const readyAt = failure.lastAttempt.getTime() + wait;
+    return now.getTime() < readyAt
+      ? `failed ${failure.attempts === 1 ? "once" : `${failure.attempts} times`}, not retrying until ${new Date(
+          readyAt
+        ).toLocaleString()}`
+      : undefined;
+  }
+
+  /** For the log line at window open - how much is being held back and why. */
+  get skippedKeys() {
+    return Object.keys(this.data.failures);
   }
 
   recordOutcome(succeeded: boolean) {

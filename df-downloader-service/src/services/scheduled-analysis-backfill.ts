@@ -195,7 +195,27 @@ export class ScheduledAnalysisBackfill {
     }
 
     const survey = await surveyEligibleContent(serviceLocator.db, backfill.eligibility, now);
-    const next = survey.items[0];
+    /*
+     * Skipping what has already failed, rather than taking the first item and
+     * hoping.
+     *
+     * Eligibility is "downloaded, and has no analysis" - which a failed item
+     * still satisfies, so before this the same video was picked again on the
+     * very next tick and failed the same way, all night. The one that
+     * prompted this took ninety minutes per attempt.
+     */
+    let next: (typeof survey.items)[number] | undefined;
+    for (const item of survey.items) {
+      const reason = this.history.skipReason(item.key, now);
+      if (!reason) {
+        next = item;
+        break;
+      }
+      // Debug, not info: on a library where several have failed this would
+      // otherwise print a paragraph every tick, for something that is working
+      // as intended.
+      logger.log("debug", `Scheduled AI backfill skipping ${item.key} - ${reason}`);
+    }
     if (!next) {
       this.endReason = "ran_dry";
       return;
@@ -245,12 +265,22 @@ export class ScheduledAnalysisBackfill {
      * pipeline may already have finished is safe - executions replay their
      * event cache to new listeners.
      */
-    execution.on("completed", (result: { status?: string } | undefined) => {
+    execution.on("completed", (result: { status?: string; error?: unknown } | undefined) => {
       const succeeded = result?.status === "success";
       if (succeeded) {
         this.analysedThisWindow++;
+        this.history.clearFailure(contentKey);
       } else {
         this.failedThisWindow++;
+        const error = result?.error;
+        const message = error instanceof Error ? error.message : error ? String(error) : undefined;
+        this.history.recordFailure(contentKey, message);
+        logger.log(
+          "warn",
+          `Scheduled AI backfill failed on "${entry.contentInfo.title}"${
+            message ? `: ${message}` : ""
+          }. It will not be tried again straight away - see the log for when`
+        );
       }
       this.history.recordOutcome(succeeded);
     });
