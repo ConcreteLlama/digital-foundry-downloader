@@ -26,6 +26,14 @@ versions:
           - "The app now re-encodes only the part your browser rejects, as you watch. For these files that is the audio alone; the video is passed through untouched, so it costs almost nothing and starts playing immediately"
           - "Skipping ahead restarts it from the new point, which is unavoidable when the video is being made as you watch it - expect a brief pause and a small rewind to the nearest keyframe. Files your browser can already play are untouched and seek normally"
           - "Settings under Application, Player, including turning it off if you would rather watch elsewhere, and a limit on how many can be re-encoded at once"
+        - "Choose the picture size while you watch":
+          - "A quality button in the player, set to Original by default - the file exactly as it is, which is free to send and cannot be bettered. Smaller sizes are there for a thin connection or a device that struggles"
+          - "Only sizes below the original are offered, and the menu says what you give up: a smaller size is converted as you watch, so seeking jumps to the nearest keyframe instead of landing exactly. Original plays the file itself and seeks precisely"
+          - "Your choice is remembered in the browser you made it in, so a phone on mobile data and a desktop on the same network do not have to agree"
+        - "Only convert what your device actually cannot play":
+          - "The player now tells the server what your browser can decode, having asked the browser itself rather than guessing from a list. Many devices play HEVC perfectly well, and those now get the original video untouched even when the sound has to be converted - which for these files is the common case"
+          - "Before this, a file with HEVC video and AC-3 audio had its video rebuilt to fix its audio, costing a great deal of time and a generation of quality for no reason on a device that could play it"
+          - "When something genuinely does need converting and your device supports HEVC, it is converted to HEVC rather than H.264 - about the same picture in half the bandwidth"
         - "Play 4K HEVC downloads in the browser, at full speed":
           - "About half of Digital Foundry's 4K releases are HEVC, which no browser can play. Those needed the video itself converting as you watched, and converting 4K in software does not keep up with playback on a small machine - so the picture stalled every few seconds"
           - "The app now ships an ffmpeg that can hand that work to your graphics card, which does it easily. Pass the card through to the container the same way as for subtitles, and it is used automatically; without one it falls back to the processor as before, and the log says which"
@@ -60,6 +68,12 @@ versions:
           - "It no longer ships the compiler toolchain used to build it, nor the build-time dependencies that were installed and then discarded - about a gigabyte of them were still being carried in an earlier layer despite being removed later"
           - "Pulls and updates are correspondingly quicker, and it is smaller than 2.8.0 even with the graphics support added"
       bugfixes:
+        - "A scheduled run no longer retries the same video over and over":
+          - "Scheduled analysis picks whatever has no analysis yet - and something that failed still has none, so it was picked again immediately, failed the same way, and did it all night while everything behind it waited. On a slow machine a single attempt can take an hour and a half"
+          - "A failure is now remembered: the same video is left alone for a day, then a week, then dropped from scheduled runs altogether. Analysing it by hand still works at any point - if you have decided it is worth another go, nothing here argues"
+        - "Say when a local model has run away rather than blaming its punctuation":
+          - "A model that repeats itself until it hits its output limit produces an answer cut off mid-word, and the only thing reported was a JSON parser complaining about an unterminated string at some character position - a symptom several steps below the cause"
+          - "That case is now named plainly, with how many tokens it generated and what usually fixes it. An analysis needs a few hundred; the run that prompted this spent sixteen thousand over ninety minutes before failing"
         - "An analysis that produces nothing is now reported as a failure instead of being saved as a blank result":
           - "A model can return perfectly well-formed output that says nothing - the reply is checked against a schema, so it is always valid, and an empty summary passes that check as readily as a real one. Saved as a success it then counted as done, and every later run skipped it, so one bad night quietly became permanent"
           - "Each stage of a run now says what came back as it arrives, and warns when a stage returns nothing usable - so a run that has gone wrong is visible in the first minutes rather than at the end"

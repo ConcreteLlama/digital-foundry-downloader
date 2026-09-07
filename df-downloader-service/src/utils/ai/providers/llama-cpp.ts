@@ -1,4 +1,5 @@
 import { Agent } from "undici";
+import { logger } from "df-downloader-common";
 import { AiLocalModels, AiLocalProviderConfig } from "df-downloader-common/config/ai-analysis-config.js";
 import { z } from "zod";
 import { stripJsonFence } from "../anthropic-client.js";
@@ -28,6 +29,44 @@ import { AiProvider } from "./types.js";
  */
 
 const MAX_OUTPUT_TOKENS = 16000;
+
+/**
+ * Everything a run produced when it could not be read.
+ *
+ * Written because of 2026-09-07: the same analysis failed three times
+ * overnight, ninety minutes a go, and all anyone had afterwards was
+ * "Unterminated string in JSON at position 42597" - a parser naming the
+ * character it stopped on, which says nothing about what the model spent an
+ * hour and a half doing.
+ *
+ * Logged in full rather than sampled. The whole point is to read what it was
+ * building, and a head-and-tail excerpt answers the easy version of that
+ * question while hiding where a loop began. It is a large entry - sixteen
+ * thousand tokens is tens of thousands of characters - but it is written only
+ * when a run has already failed, which is rare and is exactly when the
+ * evidence is worth more than the tidiness.
+ *
+ * The one thing that is summarised is the repetition measure, since a person
+ * scrolling a wall of text should not have to work out for themselves whether
+ * it repeats.
+ */
+const describeUnreadableOutput = (model: string, text: string, reason: string, generated?: number) => {
+  /*
+   * Crude but honest, and the same reasoning as the transcript check in
+   * whisper.ts: a model stuck in a loop reuses a handful of words, one still
+   * writing does not. Words rather than lines, because this is prose inside a
+   * JSON string and has no lines to count.
+   */
+  const words = text.split(/\s+/).filter(Boolean);
+  const distinct = new Set(words.map((word) => word.toLowerCase())).size;
+  const ratio = words.length ? Math.round((100 * distinct) / words.length) : 100;
+  logger.log(
+    "error",
+    `Local model ${model} ${reason}: ${generated ? `${generated} tokens, ` : ""}${text.length} characters, ` +
+      `${ratio}% of ${words.length} words distinct${ratio < 40 ? " - it was repeating itself" : ""}. Full output follows`
+  );
+  logger.log("error", `Unreadable output from ${model} in full:${String.fromCharCode(10)}${text}`);
+};
 
 /**
  * Thinking is suppressed explicitly, and this is not optional.
@@ -342,17 +381,46 @@ export const makeLocalProvider = (
 
       const text = streamed.text;
       if (!text) {
-        // Distinguished explicitly because the two causes need different
-        // fixes: a truncation wants a smaller input or a bigger cap, an empty
-        // answer usually means thinking was not suppressed.
-        const reason =
-          streamed.finishReason === "length"
-            ? "ran out of output tokens - the input may be too long for the context size"
-            : "returned nothing";
-        throw new Error(`Local model ${config.model} ${reason}`);
+        throw new Error(`Local model ${config.model} returned nothing - check that thinking is suppressed`);
+      }
+      /*
+       * Truncation is checked before parsing, and whether or not text came
+       * back.
+       *
+       * It used to be reported only for an empty answer, which meant the
+       * common case said nothing: a model that rambles until it hits the cap
+       * returns plenty of text, ending mid-string, and the only thing anyone
+       * saw was "Unterminated string in JSON at position 42597" - a parser
+       * complaining about the symptom, three levels below the cause.
+       *
+       * The cause is worth naming exactly, because the fixes differ. An
+       * analysis needs a few hundred tokens; one that spends sixteen thousand
+       * has looped, which is a model or a prompt problem, not a cap that
+       * wants raising.
+       */
+      if (streamed.finishReason === "length") {
+        const generated = streamed.timings?.predicted_n ?? MAX_OUTPUT_TOKENS;
+        describeUnreadableOutput(config.model, text, "ran to its output limit", generated);
+        throw new Error(
+          `Local model ${config.model} hit its ${MAX_OUTPUT_TOKENS} token output limit after generating ${generated}, ` +
+            `so its answer was cut off mid-way and could not be read. An analysis needs a few hundred tokens - this ` +
+            `many means the model repeated itself rather than finishing. The log has the start and end of what it ` +
+            `produced`
+        );
       }
 
-      const parsed = schema.parse(JSON.parse(stripJsonFence(text)));
+      let raw: unknown;
+      try {
+        raw = JSON.parse(stripJsonFence(text));
+      } catch (e) {
+        describeUnreadableOutput(config.model, text, "returned something that is not JSON");
+        throw new Error(
+          `Local model ${config.model} returned something that is not valid JSON: ${
+            e instanceof Error ? e.message : String(e)
+          }`
+        );
+      }
+      const parsed = schema.parse(raw);
       return {
         parsed,
         usage: {
