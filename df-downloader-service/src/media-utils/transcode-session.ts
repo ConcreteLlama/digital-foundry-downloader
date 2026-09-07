@@ -93,6 +93,16 @@ export const isPassthrough = (plan: TranscodePlan) => plan.video === "copy" && p
  */
 const IDLE_TIMEOUT_MS = 5 * 60_000;
 
+/**
+ * How long a stream gets before its speed is believed.
+ *
+ * ffmpeg's first progress blocks cover the startup - opening the file,
+ * initialising the encoder, seeking - so they read far below realtime on a
+ * stream that then runs fine. Warning on those would mean warning on
+ * everything.
+ */
+const SLOW_GRACE_MS = 8000;
+
 type LiveSession = {
   id: string;
   child: ChildProcess;
@@ -103,6 +113,8 @@ type LiveSession = {
   label: string;
   startSeconds: number;
   plan: TranscodePlan;
+  /** Encoded seconds per second, as ffmpeg last reported it. */
+  speed?: number;
 };
 
 let nextId = 1;
@@ -233,12 +245,43 @@ const canEncodeWithVaapi = (): Promise<boolean> => {
  * index at the end, which cannot be written when the length is not known in
  * advance and the bytes are already going down the wire.
  */
+/**
+ * The picture to send, given the source and the ceiling in settings.
+ *
+ * Computed from the probed dimensions rather than left to a filter
+ * expression: the numbers are already known here, and a concrete `w=1920:h=1080`
+ * behaves the same on every ffmpeg build, where support for `-2` and for
+ * expressions in the VAAPI scaler has varied between versions.
+ *
+ * Returns nothing when there is nothing to do - no probe, or a source already
+ * within the ceiling - and the stream is then encoded at its own size.
+ */
+const MAX_HEIGHTS: Record<PlayerConfig["maxHeight"], number | undefined> = {
+  source: undefined,
+  "1440p": 1440,
+  "1080p": 1080,
+  "720p": 720,
+};
+
+const targetSize = (video: ProbedVideoStream | undefined, maxHeight: PlayerConfig["maxHeight"]) => {
+  const ceiling = MAX_HEIGHTS[maxHeight];
+  if (!ceiling || !video?.width || !video?.height || video.height <= ceiling) {
+    return undefined;
+  }
+  // Even numbers on both axes: H.264 chroma is subsampled, and an odd
+  // dimension is rejected outright by some encoders rather than rounded.
+  const height = ceiling % 2 === 0 ? ceiling : ceiling - 1;
+  const width = Math.round((video.width * height) / video.height / 2) * 2;
+  return { width, height };
+};
+
 const buildArgs = (
   filePath: string,
   startSeconds: number,
   plan: TranscodePlan,
-  hardwareAcceleration: PlayerConfig["hardwareAcceleration"],
-  hardwareAvailable: boolean
+  config: PlayerConfig,
+  hardwareAvailable: boolean,
+  video: ProbedVideoStream | undefined
 ): string[] => {
   const args: string[] = ["-hide_banner", "-loglevel", "error"];
   if (startSeconds > 0) {
@@ -249,16 +292,24 @@ const buildArgs = (
    * Asking for a VAAPI device on a copy does nothing but risk failing to
    * initialise on a machine that has none.
    */
-  const useHardware = plan.video === "encode" && hardwareAcceleration === "auto" && hardwareAvailable;
+  const useHardware = plan.video === "encode" && config.hardwareAcceleration === "auto" && hardwareAvailable;
   if (useHardware) {
     args.push("-hwaccel", "vaapi", "-hwaccel_device", "/dev/dri/renderD128", "-hwaccel_output_format", "vaapi");
   }
   args.push("-i", filePath);
+  const size = plan.video === "encode" ? targetSize(video, config.maxHeight) : undefined;
   if (plan.video === "copy") {
     args.push("-c:v", "copy");
   } else if (useHardware) {
-    args.push("-vf", "scale_vaapi=format=nv12", "-c:v", "h264_vaapi", "-b:v", "8M");
+    // The scaler runs on the GPU, on frames that are already there - the
+    // format conversion has to happen regardless, so resizing in the same
+    // filter is close to free and saves the encoder most of its work.
+    const scale = size ? `scale_vaapi=w=${size.width}:h=${size.height}:format=nv12` : "scale_vaapi=format=nv12";
+    args.push("-vf", scale, "-c:v", "h264_vaapi", "-b:v", "8M");
   } else {
+    if (size) {
+      args.push("-vf", `scale=${size.width}:${size.height}`);
+    }
     // veryfast rather than a better preset: this has to keep ahead of
     // playback on a low-power machine, and a stream that falls behind stalls
     // the viewer where a slightly larger one does not.
@@ -274,6 +325,14 @@ const buildArgs = (
   args.push(
     "-movflags", "frag_keyframe+empty_moov+default_base_moof",
     "-f", "mp4",
+    /*
+     * Machine-readable progress on stderr, which is the only channel free -
+     * stdout is the video. It is what turns "it was a bit stuttery" into a
+     * number: ffmpeg reports the ratio of encoded time to elapsed time, and
+     * anything under 1x cannot keep up with someone watching, however healthy
+     * the log otherwise looks.
+     */
+    "-progress", "pipe:2",
     "pipe:1"
   );
   return args;
@@ -301,7 +360,8 @@ export const startTranscode = async (
   filePath: string,
   startSeconds: number,
   plan: TranscodePlan,
-  config: PlayerConfig
+  config: PlayerConfig,
+  video?: ProbedVideoStream
 ): Promise<TranscodeSession | undefined> => {
   /*
    * A viewer seeking is not a second viewer.
@@ -338,7 +398,7 @@ export const startTranscode = async (
   // probing on every audio-only stream would spawn a process to learn
   // something irrelevant.
   const hardwareAvailable = plan.video === "encode" ? await canEncodeWithVaapi() : false;
-  const args = buildArgs(filePath, startSeconds, plan, config.hardwareAcceleration, hardwareAvailable);
+  const args = buildArgs(filePath, startSeconds, plan, config, hardwareAvailable, video);
   logger.log(
     "info",
     `Transcoding ${filePath} from ${Math.round(startSeconds)}s (video: ${plan.video}, audio: ${plan.audio}${
@@ -378,8 +438,41 @@ export const startTranscode = async (
   child.stdout?.on("data", () => {
     entry.lastActivity = Date.now();
   });
+  /*
+   * Warn once, not every second. A stream that cannot keep up says so on
+   * every progress block, and a warning per second for the length of a video
+   * buries everything else in the log.
+   */
+  let warnedSlow = false;
   child.stderr?.on("data", (chunk) => {
-    const text = String(chunk).trim();
+    const raw = String(chunk);
+    // Progress arrives as key=value blocks on the same channel as errors, so
+    // it has to be taken out before the rest is treated as a problem.
+    const lines = raw.split("\n");
+    const isProgress = (line: string) => /^[a-z_]+=/.test(line.trim());
+    const progress = lines.filter(isProgress);
+    const speed = progress
+      .map((line) => line.trim().match(/^speed=\s*([\d.]+)x$/))
+      .filter((match): match is RegExpMatchArray => Boolean(match))
+      .pop();
+    if (speed) {
+      const rate = Number(speed[1]);
+      entry.speed = rate;
+      if (rate < 1 && !warnedSlow && Date.now() - entry.startedAt > SLOW_GRACE_MS) {
+        warnedSlow = true;
+        logger.log(
+          "warn",
+          `Re-encoding ${filePath} is running at ${rate}x, slower than playback - expect stuttering. ` +
+            `A lower Max height under Player, or passing a graphics card into the container, is what fixes this`
+        );
+      }
+    }
+    /*
+     * Only the progress lines are dropped, not the whole chunk. ffmpeg can
+     * emit a real error in the same read as a progress block, and discarding
+     * both would hide exactly the failures this handler exists to report.
+     */
+    const text = lines.filter((line) => !isProgress(line)).join("\n").trim();
     if (text) {
       // loglevel is already error-only, so anything arriving here is worth
       // seeing - a failed hardware init, an unreadable file.

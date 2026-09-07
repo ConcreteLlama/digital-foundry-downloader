@@ -69,6 +69,25 @@ export const PlayerFullscreenRotate = z
   );
 export type PlayerFullscreenRotate = z.infer<typeof PlayerFullscreenRotate>;
 
+/**
+ * How large a picture to send when the video has to be re-encoded.
+ *
+ * Matters more than it sounds. Re-encoding only happens for video a browser
+ * cannot play, which here means HEVC, which here means the 4K releases - so
+ * the default path was 4K in and 4K out. That is the hardest thing the
+ * encoder in an integrated GPU can be asked to do, and it hands the browser a
+ * 4K H.264 stream to decode, which is heavier than the HEVC it turned down in
+ * the first place. Both ends struggle and the picture stutters.
+ *
+ * 1080p by default because it removes about three quarters of the work at
+ * both ends for a picture nobody watching in a browser tab is likely to miss.
+ * The original file is untouched and still what you get everywhere else.
+ */
+export const PlayerMaxHeight = z
+  .enum(["source", "1440p", "1080p", "720p"])
+  .describe("The largest picture to send when a video has to be re-encoded. Does not affect files played directly.");
+export type PlayerMaxHeight = z.infer<typeof PlayerMaxHeight>;
+
 export const PlayerConfig = z.object({
   transcode: PlayerTranscodeMode.default("unsupported_only").catch("unsupported_only").describe(
     "Digital Foundry's files use AC-3 audio, which browsers cannot decode - so they play with no sound unless this is on. Only the parts the browser rejects are re-encoded; the video is passed through untouched, which costs almost nothing. Always re-encoding is for testing that path, and re-encodes the video too - it is much slower and there is no reason to leave it on."
@@ -76,7 +95,12 @@ export const PlayerConfig = z.object({
   hardwareAcceleration: PlayerHardwareAcceleration.default("auto")
     .catch("auto")
     .describe(
-      "Only applies when the video itself has to be re-encoded, which is rare - the audio never uses it, and for these files the video is copied untouched. Note the ffmpeg shipped in this image has no hardware encoder built in, so this currently has no effect and video re-encoding uses the processor either way; the log says which was used."
+      "Only applies when the video itself has to be re-encoded - the audio never uses it. The Docker image ships an ffmpeg that can use the graphics card, so this works if the card is passed into the container; without one it falls back to the processor, which will not keep up with a large picture. The log says which was used."
+    ),
+  maxHeight: PlayerMaxHeight.default("1080p")
+    .catch("1080p")
+    .describe(
+      "Only applies to video that has to be re-encoded. Sending 4K means encoding 4K and then asking the browser to decode it, which stutters on modest hardware at both ends - and the file itself is untouched, so this costs nothing you keep. Raise it if your machine and your screen are both up to it."
     ),
   fullscreenRotate: PlayerFullscreenRotate.default("auto")
     .catch("auto")

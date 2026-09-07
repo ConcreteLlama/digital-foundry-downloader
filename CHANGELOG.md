@@ -38,6 +38,8 @@ The image is also about 1.3GB smaller than 2.8.0 despite gaining all of that, be
   - The app now ships an ffmpeg that can hand that work to your graphics card, which does it easily. Pass the card through to the container the same way as for subtitles, and it is used automatically; without one it falls back to the processor as before, and the log says which
   - This is separate hardware from the part used for AI analysis, so it is unaffected by the problems described there - a machine where analysis on the GPU is unusable can still convert video on it perfectly well
   - Worth knowing when choosing what to download: the app picks a format by resolution alone, so when a video is offered in both HEVC and H.264 at the same resolution, which one you get is arbitrary. H.264 plays here with no conversion at all
+  - Re-encoded video is sent at 1080p by default rather than at the original 4K. Sending 4K means encoding 4K and then asking the browser to decode it, which stutters at both ends on modest hardware for a picture few people are watching a browser tab at. Under Settings, Application, Player if you want it larger - and your file is untouched either way
+  - If it still cannot keep up, the log now says so outright, with the speed it is managing, rather than leaving you to work it out from a stuttering picture
   - The image grows by about 270MB for this. It replaces a build that could only use the processor, and was chosen partly for being the smallest of the options that can do the job
 ### Enhancements
 - A System page saying what this install actually is
