@@ -631,14 +631,50 @@ export const BulkBackfillPage = () => {
         </Alert>
       ) : (
         <>
-          <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap" useFlexGap>
-            <TextField
-              size="small"
-              label="Filter"
-              value={filterText}
-              onChange={(event) => setFilterText(event.target.value)}
-              sx={{ maxWidth: 260, flex: "1 1 180px" }}
-            />
+          {/*
+            Three groups on their own rows, rather than one row of nine
+            controls left to wrap wherever it lands.
+
+            As a single wrapping row the breaks fell between unrelated things -
+            a source chip could end up beside "Run", and on a phone the whole
+            lot became an undifferentiated block. Even the person who wrote it
+            missed that "With transcript" and "With article" were filters.
+            Grouping them means a narrow screen reflows each group as a unit
+            and the rows keep their meaning: what to look at, which states,
+            what to do about it.
+          */}
+          <Stack spacing={1}>
+            <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap" useFlexGap>
+              <TextField
+                size="small"
+                label="Filter"
+                value={filterText}
+                onChange={(event) => setFilterText(event.target.value)}
+                sx={{ maxWidth: 260, flex: "1 1 180px" }}
+              />
+              {/* Chips rather than switches, and beside the text filter because
+                  that is what they are - another way to narrow the list, not
+                  another thing to press. A row of identical switches gave no
+                  hint which were related to which. */}
+              {target === "ai_analysis" && (
+                <>
+                  <Chip
+                    size="small"
+                    label="With transcript"
+                    variant={onlyWithSubs ? "filled" : "outlined"}
+                    color={onlyWithSubs ? "primary" : "default"}
+                    onClick={() => setOnlyWithSubs((on) => !on)}
+                  />
+                  <Chip
+                    size="small"
+                    label="With article"
+                    variant={onlyWithArticle ? "filled" : "outlined"}
+                    color={onlyWithArticle ? "primary" : "default"}
+                    onClick={() => setOnlyWithArticle((on) => !on)}
+                  />
+                </>
+              )}
+            </Stack>
             {/* One control, one question. Each option carries how many are in
                 that state, so the shape of the library reads before anything
                 is filtered - which is the thing people actually came to find
@@ -646,6 +682,9 @@ export const BulkBackfillPage = () => {
                 in front of you rather than an abstract total. */}
             <ToggleButtonGroup
               size="small"
+              // Wraps within itself, so four buttons with counts break onto a
+              // second line on a phone rather than running off the side.
+              sx={{ flexWrap: "wrap" }}
               value={statusFilter.size === 0 ? ["all"] : [...statusFilter]}
               onChange={(_, next: string[]) => {
                 /*
@@ -667,79 +706,76 @@ export const BulkBackfillPage = () => {
                 </ToggleButton>
               ))}
             </ToggleButtonGroup>
-            {/* Chips rather than switches: these combine with the status above
-                and with each other, where a row of identical switches gave no
-                hint which were related to which. */}
-            {target === "ai_analysis" && (
-              <>
-                <Chip
-                  size="small"
-                  label="With transcript"
-                  variant={onlyWithSubs ? "filled" : "outlined"}
-                  color={onlyWithSubs ? "primary" : "default"}
-                  onClick={() => setOnlyWithSubs((on) => !on)}
-                />
-                <Chip
-                  size="small"
-                  label="With article"
-                  variant={onlyWithArticle ? "filled" : "outlined"}
-                  color={onlyWithArticle ? "primary" : "default"}
-                  onClick={() => setOnlyWithArticle((on) => !on)}
-                />
-              </>
-            )}
-            {/* Two buttons, not three: the same pair means different things
-                depending on re-run, so they say which. With it off they can
-                only take what is missing, because that is all the run would
-                act on; with it on they take everything they are offered. */}
-            <Button
-              size="small"
-              variant="outlined"
-              disabled={selectable.length === 0}
-              onClick={() => setSelected(new Set(selectable.map((candidate) => candidate.contentKey)))}
+            {/*
+              Choosing on the left, doing on the right - they wrap as two
+              groups rather than as six buttons. "Estimate cost" sits with the
+              actions because that is what it is: it spends nothing, but it is
+              a thing you press about the run, not a way to narrow the list.
+            */}
+            <Stack
+              direction="row"
+              spacing={1}
+              flexWrap="wrap"
+              useFlexGap
+              sx={{ justifyContent: "space-between", rowGap: 1 }}
             >
-              {force ? "Select all" : "Select all missing"} ({selectable.length})
-            </Button>
-            <Button
-              size="small"
-              disabled={visibleSelectable.length === 0}
-              // Adds rather than replaces: selection deliberately accumulates
-              // across pages, so this is for building one up a page at a time
-              // where the button beside it acts on the whole filtered set.
-              onClick={() =>
-                setSelected((previous) => {
-                  const next = new Set(previous);
-                  for (const candidate of visibleSelectable) {
-                    next.add(candidate.contentKey);
+              {/* Two buttons, not three: the same pair means different things
+                  depending on re-run, so they say which. With it off they can
+                  only take what is missing, because that is all the run would
+                  act on; with it on they take everything they are offered. */}
+              <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
+                <Button
+                  size="small"
+                  variant="outlined"
+                  disabled={selectable.length === 0}
+                  onClick={() => setSelected(new Set(selectable.map((candidate) => candidate.contentKey)))}
+                >
+                  {force ? "Select all" : "Select all missing"} ({selectable.length})
+                </Button>
+                <Button
+                  size="small"
+                  disabled={visibleSelectable.length === 0}
+                  // Adds rather than replaces: selection deliberately accumulates
+                  // across pages, so this is for building one up a page at a time
+                  // where the button beside it acts on the whole filtered set.
+                  onClick={() =>
+                    setSelected((previous) => {
+                      const next = new Set(previous);
+                      for (const candidate of visibleSelectable) {
+                        next.add(candidate.contentKey);
+                      }
+                      return next;
+                    })
                   }
-                  return next;
-                })
-              }
-            >
-              {force ? "Select all on page" : "Select missing on page"} ({visibleSelectable.length})
-            </Button>
-            {/* Only where there is money at stake. The other targets cost
-                time and requests, which the confirmation already states. */}
-            {target === "ai_analysis" && (
-              <Button
-                size="small"
-                disabled={runKeys.length === 0 || inlineEstimating}
-                onClick={() => void runInlineEstimate()}
-              >
-                {inlineEstimating ? "Estimating…" : "Estimate cost"}
-              </Button>
-            )}
-            <Button size="small" disabled={selected.size === 0} onClick={() => setSelected(new Set())}>
-              Clear
-            </Button>
-            <Button
-              variant="contained"
-              size="small"
-              disabled={runKeys.length === 0 || Boolean(notConfigured)}
-              onClick={openConfirm}
-            >
-              Run ({runKeys.length})
-            </Button>
+                >
+                  {force ? "Select all on page" : "Select missing on page"} ({visibleSelectable.length})
+                </Button>
+              </Stack>
+              <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
+                {/* Only where there is money at stake. The other targets cost
+                    time and requests, which the confirmation already states. */}
+                {target === "ai_analysis" && (
+                  <Button
+                    size="small"
+                    disabled={runKeys.length === 0 || inlineEstimating}
+                    onClick={() => void runInlineEstimate()}
+                  >
+                    {inlineEstimating ? "Estimating…" : "Estimate cost"}
+                  </Button>
+                )}
+                <Button size="small" disabled={selected.size === 0} onClick={() => setSelected(new Set())}>
+                  Clear
+                </Button>
+                <Button
+                  variant="contained"
+                  size="small"
+                  disabled={runKeys.length === 0 || Boolean(notConfigured)}
+                  onClick={openConfirm}
+                >
+                  Run ({runKeys.length})
+                </Button>
+              </Stack>
+            </Stack>
           </Stack>
 
           {/* Deliberately says "roughly": a handful of the chosen items are
