@@ -390,13 +390,30 @@ export const TaskDetailsDialog = ({
                           {formatTime(phase.startedAt)}
                         </Typography>
                       </TableCell>
-                      <TableCell align="right" colSpan={2} sx={{ borderBottom: "none", py: 0.25 }}>
+                      {/*
+                        In the Elapsed column, and counting while it runs.
+
+                        This spanned Elapsed and Active, which put every
+                        duration under the wrong heading, and it only rendered
+                        once a phase had ended - so the phase actually running,
+                        the one whose number you want, was blank. A model call
+                        can hold a phase for twenty minutes, which read as
+                        nothing happening.
+
+                        Active stays empty: phases are not paused
+                        individually, so there is no second number to give.
+                      */}
+                      <TableCell align="right" sx={{ borderBottom: "none", py: 0.25 }}>
                         <Typography variant="caption" color="text.secondary">
-                          {phase.startedAt && phase.endedAt
-                            ? formatDuration(new Date(phase.endedAt).getTime() - new Date(phase.startedAt).getTime())
-                            : ""}
+                          {phase.startedAt
+                            ? formatDuration(
+                                (phase.endedAt ? new Date(phase.endedAt).getTime() : Date.now()) -
+                                  new Date(phase.startedAt).getTime()
+                              )
+                            : "-"}
                         </Typography>
                       </TableCell>
+                      <TableCell align="right" sx={{ borderBottom: "none", py: 0.25 }} />
                     </TableRow>
                   ))}
                   </Fragment>
