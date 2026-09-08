@@ -535,12 +535,6 @@ export const makePlaybackRouter = (contentManager: DigitalFoundryContentManager)
             .filter((name) => /^[a-z0-9_]{1,20}$/.test(name))
         : undefined;
     const client = { video: codecList(req.query.vcodecs), audio: codecList(req.query.acodecs) };
-    const plan = planTranscode(
-      meta?.videoStream,
-      meta?.audioStream,
-      playerConfig.transcode === "always",
-      client.video || client.audio ? client : undefined
-    );
     /*
      * Parsed defensively rather than trusted. This lands in an ffmpeg
      * argument, and a NaN or a negative would either fail the spawn or seek
@@ -559,6 +553,27 @@ export const makePlaybackRouter = (contentManager: DigitalFoundryContentManager)
       Number.isFinite(requestedHeight) && requestedHeight >= 144 && requestedHeight <= 4320
         ? Math.floor(requestedHeight)
         : undefined;
+    /*
+     * A smaller picture has to be re-encoded, even when the codec is fine.
+     *
+     * The plan is decided from what the browser can decode, which for an HEVC
+     * file on a device that plays HEVC is "copy the video through". That is
+     * the right answer for Original and the wrong one for every other rung:
+     * choosing 480p and getting the untouched 4K stream is the feature not
+     * working at all. Scaling is something only the encoder can do, so an
+     * explicit size overrides the copy - but only when the source is actually
+     * bigger, since re-encoding a 720p file to "720p" would cost a great deal
+     * to produce something slightly worse.
+     */
+    const sourceHeight = meta?.videoStream?.height;
+    const wantsSmaller = Boolean(maxHeight && sourceHeight && sourceHeight > maxHeight);
+    const planned = planTranscode(
+      meta?.videoStream,
+      meta?.audioStream,
+      playerConfig.transcode === "always",
+      client.video || client.audio ? client : undefined
+    );
+    const plan = wantsSmaller ? { ...planned, video: "encode" as const } : planned;
     const session = await startTranscode(filePath, startSeconds, plan, playerConfig, meta?.videoStream, {
       maxHeight,
       // Only worth targeting HEVC for a client that says it can decode it,

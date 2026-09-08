@@ -541,7 +541,13 @@ export const startTranscode = async (
     // Progress arrives as key=value blocks on the same channel as errors, so
     // it has to be taken out before the rest is treated as a problem.
     const lines = raw.split("\n");
-    const isProgress = (line: string) => /^[a-z_]+=/.test(line.trim());
+    /*
+     * Digits count. ffmpeg's progress keys include per-stream ones like
+     * `stream_0_0_q=-1.0`, and a pattern of letters and underscores alone
+     * missed every one of them - so they fell through to the error path and
+     * filled the log with warnings about a stream that was working perfectly.
+     */
+    const isProgress = (line: string) => /^[a-z0-9_]+=/.test(line.trim());
     const progress = lines.filter(isProgress);
     const speed = progress
       .map((line) => line.trim().match(/^speed=\s*([\d.]+)x$/))

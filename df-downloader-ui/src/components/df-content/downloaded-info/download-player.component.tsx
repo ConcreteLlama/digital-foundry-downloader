@@ -1370,7 +1370,21 @@ export const DownloadPlayer = ({
           <ClosedCaptionIcon fontSize="small" color={activeTrack >= 0 ? "primary" : "inherit"} />
         </IconButton>
       )}
-      <Menu anchorEl={captionsAnchor} open={Boolean(captionsAnchor)} onClose={() => setCaptionsAnchor(null)}>
+      {/*
+        Every popup here is given the player shell as its container.
+
+        MUI portals these to document.body by default, which is fine until the
+        shell is fullscreened: the browser only paints the fullscreen element
+        and its descendants, so a menu attached to the body opens somewhere
+        nobody can see - the button appears dead. Anchoring them inside the
+        element that goes fullscreen keeps them visible in both states.
+      */}
+      <Menu
+        container={playerShellRef.current}
+        anchorEl={captionsAnchor}
+        open={Boolean(captionsAnchor)}
+        onClose={() => setCaptionsAnchor(null)}
+      >
         {/*
           Driven straight at the element's text tracks, which is what the
           browser's own menu was doing before it was switched off.
@@ -1431,7 +1445,12 @@ export const DownloadPlayer = ({
           </IconButton>
         </Tooltip>
       )}
-      <Menu anchorEl={qualityAnchor} open={Boolean(qualityAnchor)} onClose={() => setQualityAnchor(null)}>
+      <Menu
+        container={playerShellRef.current}
+        anchorEl={qualityAnchor}
+        open={Boolean(qualityAnchor)}
+        onClose={() => setQualityAnchor(null)}
+      >
         <MenuItem selected={!quality} onClick={() => chooseQuality(undefined)}>
           Original{info.height ? ` (${info.height}p)` : ""}
         </MenuItem>
@@ -1484,6 +1503,7 @@ export const DownloadPlayer = ({
         </IconButton>
       </Tooltip>
       <Popover
+        container={playerShellRef.current}
         open={Boolean(detailsAnchor)}
         anchorEl={detailsAnchor}
         onClose={() => setDetailsAnchor(null)}

@@ -1,4 +1,6 @@
-import { Agent } from "undici";
+﻿import { Agent } from "undici";
+import fs from "fs";
+import path from "path";
 import { logger } from "df-downloader-common";
 import { AiLocalModels, AiLocalProviderConfig } from "df-downloader-common/config/ai-analysis-config.js";
 import { z } from "zod";
@@ -39,17 +41,18 @@ const MAX_OUTPUT_TOKENS = 16000;
  * character it stopped on, which says nothing about what the model spent an
  * hour and a half doing.
  *
- * Logged in full rather than sampled. The whole point is to read what it was
- * building, and a head-and-tail excerpt answers the easy version of that
- * question while hiding where a loop began. It is a large entry - sixteen
- * thousand tokens is tens of thousands of characters - but it is written only
- * when a run has already failed, which is rare and is exactly when the
- * evidence is worth more than the tidiness.
+ * The whole text goes to a file of its own; the log gets the measurements, the
+ * first and last of it, and where the rest was put.
  *
- * The one thing that is summarised is the repetition measure, since a person
- * scrolling a wall of text should not have to work out for themselves whether
- * it repeats.
+ * It was logged whole at first, which is how the 932 titles were found - but a
+ * single failure wrote 45KB into a log that rotates at 10MB, and three of them
+ * in a night pushed everything else out. The evidence is worth keeping; it is
+ * not worth keeping there. The tail is the half that matters and the half that
+ * would otherwise be lost, since a runaway looks reasonable at the start and it
+ * is the ending that repeats.
  */
+const SAMPLE_CHARS = 600;
+
 const describeUnreadableOutput = (model: string, text: string, reason: string, generated?: number) => {
   /*
    * Crude but honest, and the same reasoning as the transcript check in
@@ -60,12 +63,32 @@ const describeUnreadableOutput = (model: string, text: string, reason: string, g
   const words = text.split(/\s+/).filter(Boolean);
   const distinct = new Set(words.map((word) => word.toLowerCase())).size;
   const ratio = words.length ? Math.round((100 * distinct) / words.length) : 100;
+
+  /*
+   * Beside the logs, so it travels with a diagnostic report and is found by
+   * whoever is already looking at the log that mentions it. Best-effort: a
+   * failure to write this must not replace the error being reported with a
+   * different one about writing a file.
+   */
+  let savedTo: string | undefined;
+  try {
+    const dir = path.join(process.env.CONFIG_DIR || ".", "logs");
+    fs.mkdirSync(dir, { recursive: true });
+    savedTo = path.join(dir, `unreadable-${model}-${Date.now()}.txt`);
+    fs.writeFileSync(savedTo, text, "utf-8");
+  } catch (e) {
+    savedTo = undefined;
+    logger.log("debug", `Could not save the unreadable output to a file: ${e}`);
+  }
+
   logger.log(
     "error",
     `Local model ${model} ${reason}: ${generated ? `${generated} tokens, ` : ""}${text.length} characters, ` +
-      `${ratio}% of ${words.length} words distinct${ratio < 40 ? " - it was repeating itself" : ""}. Full output follows`
+      `${ratio}% of ${words.length} words distinct${ratio < 40 ? " - it was repeating itself" : ""}.` +
+      (savedTo ? ` Full output saved to ${savedTo}` : " The full output could not be saved")
   );
-  logger.log("error", `Unreadable output from ${model} in full:${String.fromCharCode(10)}${text}`);
+  logger.log("error", `It began: ${text.slice(0, SAMPLE_CHARS)}`);
+  logger.log("error", `It ended: ${text.slice(-SAMPLE_CHARS)}`);
 };
 
 /**

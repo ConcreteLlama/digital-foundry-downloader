@@ -2,102 +2,49 @@
 
 
 
-## 2.8.1 (2026-09-05)
+## 2.8.1 (2026-09-08)
 
-Subtitles and local analysis can now use a graphics card. One image covers NVIDIA, AMD and Intel - there is nothing vendor-specific to install - and it falls back to the processor on a machine with no usable card, saying so in the log rather than failing quietly. It is worth checking the log and comparing: on a low-end integrated GPU subtitles can be slightly slower than the processor, and both have a switch.
+Subtitles and local AI analysis can now use a graphics card, from a single image that works with NVIDIA, AMD and Intel - and falls back to the processor, saying so, on a machine without one. Worth reading the caveats below before turning it on for analysis.
 
-Downloads that came out silent here now play with sound. Some of them use an audio format no browser can decode, so playing one gave you picture and silence even though the file was fine - the app re-encodes just that part as you watch, and leaves everything else alone.
+Videos your browser cannot play now play anyway. Digital Foundry's downloads use audio no browser decodes, and about half of the 4K releases use HEVC video - both are converted as you watch, only where your particular device needs it, and you can pick a smaller picture for a thin connection.
 
-The image is also about 1.3GB smaller than 2.8.0 despite gaining all of that, because it no longer ships a compiler toolchain and a thousand megabytes of build-time dependencies that never ran.
+Local analysis has been made considerably harder to break: it can be stopped, it reports failure instead of storing nothing, and it can no longer spend an hour writing an answer that turns out to be unreadable.
+
+The image is also around 1.3GB smaller than 2.8.0 despite gaining all of this.
 
 ### Features
 - Use your graphics card for subtitles and local AI analysis
-  - For analysis this is off by default, and on an integrated Intel GPU it should stay off. That combination returns valid-looking but meaningless results - every video classified the same, every summary empty - and it is now understood rather than merely observed: the fault is in Intel's graphics driver, and it appears once the text being analysed passes a few hundred words. Anything real is far longer than that, so the setting cannot be used on such a machine. Subtitles are a separate switch and are not affected, since they never take the path that breaks
-  - The same model, the same settings and the same text are correct on an NVIDIA card and correct on the processor, which is how the driver was identified. Use Check it actually works below before trusting any local analysis on a graphics card
-  - Both now run on a GPU when there is one. Analysis is where it counts, since a single video can otherwise take tens of minutes
-  - Subtitles are worth measuring rather than assuming. The speech model is small and the processor build is well optimised for it, so on a modest integrated GPU transcribing can come out no faster, or slightly slower. A discrete card is a different story, and so is a larger speech model - which is why there is a switch for each rather than one for both
-  - One image, any card. It uses Vulkan rather than a vendor toolkit, so NVIDIA, AMD and Intel all work with nothing extra to install - you only have to pass the card through to the container
-  - Switches for each under Settings, in Subtitles and in AI Analysis. On by default, and worth turning off for whichever of the two you care less about if the same card is already busy transcoding for a media server, where competing for it can be slower than not using it
-  - A machine with no usable card carries on exactly as before, on the processor, and says so in the log instead of failing in a way that looks like the feature is broken
-  - The log says outright which one each is running on, and names the card - "is it using my GPU" should not need interpreting. It also distinguishes a card you turned off from one it could not use, and says how many of a model's layers actually fit, since a partial fit is often slower than not using the card at all
-  - In Docker this needs the card passed in - `--device=/dev/dri` for Intel and AMD, or the NVIDIA container toolkit with the graphics capability enabled. Without it nothing breaks; it simply stays on the processor
+  - One image for any card - it uses Vulkan rather than a vendor toolkit, so NVIDIA, AMD and Intel all work with nothing extra to install. In Docker you need to pass the card in; without one, everything carries on using the processor
+  - Analysis is off by default on a GPU, and on an integrated Intel chip it should stay off. That combination returns confident, well-formed, meaningless results - every video classified the same, every summary empty - which you would not notice without reading one. Use 'Check it actually works' before trusting it
+  - Subtitles are a separate switch and are unaffected, but worth measuring rather than assuming: the speech model is small and on a modest integrated GPU it can come out no faster than the processor
+  - The log says which one each is running on and names the card, and distinguishes a card you turned off from one it could not use
+- Play videos your browser cannot handle, at the size you choose
+  - Digital Foundry's files use AC-3 audio, which no browser decodes, so they played with picture and no sound. Only the part your browser rejects is converted, as you watch - usually just the audio, which costs almost nothing
+  - Your browser is asked what it can decode rather than assumed. Many devices play HEVC, and those now get the original 4K video untouched even when the sound has to be converted
+  - A quality button in the player, set to Original - the file exactly as it is. Smaller sizes are there for a thin connection or a device that struggles, and the menu says what you give up: seeking jumps to the nearest keyframe rather than landing exactly
+  - Where a smaller size is converted and your device supports HEVC, it is encoded to HEVC rather than H.264 - the same picture in roughly half the bandwidth
 - Check that local analysis actually works, in one click
-  - Under Settings, AI Analysis, on the local engine. It analyses a short built-in transcript and reads the answer, rather than only checking that one came back
-  - That distinction is the whole point. A model that has gone wrong still returns a perfectly well-formed reply, because the reply is checked against a schema - so a connection test passes, an analysis is saved, and nothing looks wrong until you read one. This asks something with a known answer and tells you whether the answer is right
-  - It also says which device it ran on and how fast it was, so how it is set up no longer has to be worked out from the log
-- Stop an analysis that is taking too long
-  - Analysis was the one job that could hold the machine to itself for half an hour and could not be taken back - the only way out was restarting the app
-  - It stops within a second or so rather than at the end of whatever it was doing, and stopping is recorded as stopping, so nothing is saved against the video and it stays eligible for a later run
-- Play videos whose audio your browser cannot handle
-  - Some Digital Foundry downloads use AC-3 audio, which no browser decodes. Played here those gave picture and silence - the file is perfectly good, and the same file plays with sound in Plex, Jellyfin or VLC, which made it look like the download was broken when it was not
-  - The app now re-encodes only the part your browser rejects, as you watch. For these files that is the audio alone; the video is passed through untouched, so it costs almost nothing and starts playing immediately
-  - Skipping ahead restarts it from the new point, which is unavoidable when the video is being made as you watch it - expect a brief pause and a small rewind to the nearest keyframe. Files your browser can already play are untouched and seek normally
-  - Settings under Application, Player, including turning it off if you would rather watch elsewhere, and a limit on how many can be re-encoded at once
-- Choose the picture size while you watch
-  - A quality button in the player, set to Original by default - the file exactly as it is, which is free to send and cannot be bettered. Smaller sizes are there for a thin connection or a device that struggles
-  - Only sizes below the original are offered, and the menu says what you give up: a smaller size is converted as you watch, so seeking jumps to the nearest keyframe instead of landing exactly. Original plays the file itself and seeks precisely
-  - Your choice is remembered in the browser you made it in, so a phone on mobile data and a desktop on the same network do not have to agree
-- Only convert what your device actually cannot play
-  - The player now tells the server what your browser can decode, having asked the browser itself rather than guessing from a list. Many devices play HEVC perfectly well, and those now get the original video untouched even when the sound has to be converted - which for these files is the common case
-  - Before this, a file with HEVC video and AC-3 audio had its video rebuilt to fix its audio, costing a great deal of time and a generation of quality for no reason on a device that could play it
-  - When something genuinely does need converting and your device supports HEVC, it is converted to HEVC rather than H.264 - about the same picture in half the bandwidth
-- Play 4K HEVC downloads in the browser, at full speed
-  - About half of Digital Foundry's 4K releases are HEVC, which no browser can play. Those needed the video itself converting as you watched, and converting 4K in software does not keep up with playback on a small machine - so the picture stalled every few seconds
-  - The app now ships an ffmpeg that can hand that work to your graphics card, which does it easily. Pass the card through to the container the same way as for subtitles, and it is used automatically; without one it falls back to the processor as before, and the log says which
-  - This is separate hardware from the part used for AI analysis, so it is unaffected by the problems described there - a machine where analysis on the GPU is unusable can still convert video on it perfectly well
-  - Worth knowing when choosing what to download: the app picks a format by resolution alone, so when a video is offered in both HEVC and H.264 at the same resolution, which one you get is arbitrary. H.264 plays here with no conversion at all
-  - Re-encoded video is sent at 1080p by default rather than at the original 4K. Sending 4K means encoding 4K and then asking the browser to decode it, which stutters at both ends on modest hardware for a picture few people are watching a browser tab at. Under Settings, Application, Player if you want it larger - and your file is untouched either way
-  - If it still cannot keep up, the log now says so outright, with the speed it is managing, rather than leaving you to work it out from a stuttering picture
-  - The image grows by about 270MB for this. It replaces a build that could only use the processor, and was chosen partly for being the smallest of the options that can do the job
+  - Under Settings, AI Analysis. It analyses a built-in transcript with a known answer and reads the answer, rather than only checking that one came back
+  - That distinction is the point: a model that has gone wrong still returns a well-formed reply, so a connection test passes and a meaningless analysis is stored without complaint
 ### Enhancements
-- A System page saying what this install actually is
-  - Under System, About. Version, branch, the commit it was built from, the machine, how much memory it has, which of the extra tools it found, where its folders are, and how much content you have
-  - Also the size and version of each stored file, which is what answers whether something is in a strange state after an upgrade - a store still on an old version, or one that has grown far past what it should be. Sizes and versions only; nothing of what they contain
-  - The commit is the useful part. A version number only changes at a release, so between two releases there was no way to look at a running install and tell whether a given fix was in it - which has already wasted an afternoon deciding whether a rebuild had worked
-  - Copy all puts the lot on the clipboard, for pasting into an issue
-- A diagnostic report you can attach to a bug report
-  - Under System, Logs. One zip with the log files, the system details above, and your settings - choose which parts go in
-  - Every key, token and cookie is removed from the settings first. Which fields those are is declared on the settings themselves, so the same declaration that hides a field on screen removes it from the report - one list, not two that can drift apart
-  - Anything whose name looks like a credential is removed whether or not it was declared, and a check refuses to build the app if a new credential-shaped setting is added without someone saying which it is
-  - Removed rather than deleted - you still see that a key was set, which is often the actual question. The log is not filtered though, so it is worth a look before posting one publicly
-  - The stored data itself can be included, but has to be ticked deliberately and is labelled for what it is. It holds where every file was saved, the text of every article found and what you have watched, none of which can be removed the way a password can - so it is for sending to someone looking into a data problem, not for attaching to a public issue
-- Pulling the audio out is now its own step, before transcribing
-  - On a long video that is minutes of work, and it was happening inside the transcription job - which meant holding the one local-model slot for all of it, so an analysis queued behind a transcription also waited through the audio extraction. It now runs on the general file queue instead
-  - It also shows as its own step with its own progress, rather than as a caption inside a row that claims to be transcribing when it has not started yet
-- The activity track shows what became of each part of a step
-  - A step made of several parts - an analysis is three model calls - already showed its divisions, but every division looked the same, so a part that was skipped and one that finished were indistinguishable without opening the details
-  - A skipped part is now hatched and a failed one is red, so a run that quietly dropped something is visible at a glance
-- Far less noise in the log
-  - Confirming what is already available no longer writes a line per item. On a thousand-item library that was a thousand lines in the same millisecond, every time your subscription tier was checked - it buried everything worth reading and made the log tedious to search or send to anyone
-  - The per-file detail from scanning your download folder has moved to debug as well. Both are still there if you turn the level up
-- The image is around 1.3GB smaller than the previous release
-  - It no longer ships the compiler toolchain used to build it, nor the build-time dependencies that were installed and then discarded - about a gigabyte of them were still being carried in an earlier layer despite being removed later
-  - Pulls and updates are correspondingly quicker, and it is smaller than 2.8.0 even with the graphics support added
+- A System page, and a diagnostic report you can attach to a bug report
+  - Under System. Version, the commit it was built from, the machine, which extra tools it found, where its folders are, and the size and version of each stored file
+  - The report is one zip with the logs, those details and your settings - every key, token and cookie removed first, and a check refuses to build the app if a new credential-shaped setting is added without being declared
+- See what each step of a job actually did
+  - The activity track shows the parts of a step as it works, and clicking one opens what it produced - a download's size and average speed, an analysis phase's summary and verdict
+- A much smaller image, and a much quieter log
+  - Around 1.3GB smaller than 2.8.0 despite everything above, because it no longer ships a compiler toolchain that never runs. The log no longer drowns itself when a local model is loading
 ### Bug Fixes
-- Stop an analysis running away and producing nothing
-  - Asked which games a video covered, a local model listed the real ones and then kept going - inventing numbered sequels until it filled its entire output budget. Ninety minutes of work, three times in a night, and what came back could not even be read, so the video was left with no analysis and the log said only that some JSON was malformed
-  - The answer the model is allowed to give is now bounded: a sensible ceiling on how many games, tags, platforms or issues it may list, and on how long each piece of text can be. These sit far above any real answer - a typical video produces five games and six tags - so nothing genuine is cut short, but a model that has lost its way is stopped in seconds rather than after an hour and a half
-  - This is enforced while the answer is being written rather than checked afterwards, so a run that would have wandered now returns a valid result instead of failing outright
-- A scheduled run no longer retries the same video over and over
-  - Scheduled analysis picks whatever has no analysis yet - and something that failed still has none, so it was picked again immediately, failed the same way, and did it all night while everything behind it waited. On a slow machine a single attempt can take an hour and a half
-  - A failure is now remembered: the same video is left alone for a day, then a week, then dropped from scheduled runs altogether. Analysing it by hand still works at any point - if you have decided it is worth another go, nothing here argues
-- Say when a local model has run away rather than blaming its punctuation
-  - A model that repeats itself until it hits its output limit produces an answer cut off mid-word, and the only thing reported was a JSON parser complaining about an unterminated string at some character position - a symptom several steps below the cause
-  - That case is now named plainly, with how many tokens it generated and what usually fixes it. An analysis needs a few hundred; the run that prompted this spent sixteen thousand over ninety minutes before failing
-- An analysis that produces nothing is now reported as a failure instead of being saved as a blank result
-  - A model can return perfectly well-formed output that says nothing - the reply is checked against a schema, so it is always valid, and an empty summary passes that check as readily as a real one. Saved as a success it then counted as done, and every later run skipped it, so one bad night quietly became permanent
-  - Each stage of a run now says what came back as it arrives, and warns when a stage returns nothing usable - so a run that has gone wrong is visible in the first minutes rather than at the end
-  - Tools then Maintenance has Clear Empty Analyses for anything already saved that way. Removing them puts those videos back in the queue, so a scheduled run redoes them overnight
-- The login page has its collage of thumbnails back
-  - The tiles slide into place from random directions again, at slightly different speeds, which is what it did before the interface was rebuilt - the effect belonged to an image library that was swapped out, and went with it
-  - A phone gets the collage too. It used to get a single thumbnail across the top and nothing below, which read as a broken header rather than a background
-  - Tiles fill their space instead of leaving a band under each one. On a tall or near-square screen - an unfolded foldable, say - that band appeared under every image at once and the whole thing looked letterboxed
-- Thumbnails no longer come up blank when they are already in your browser cache. The image finished loading before the page was ready to notice, so it was never faded in - most visible as a login page with no backdrop on a reload, but it applied anywhere thumbnails are shown
-- The search box on the content page could be squeezed to nothing on a narrow screen, sharing a row with seven buttons that would not shrink. The row wraps now
-- The record of finished jobs had grown to over 1.5MB, nearly all of it analyses. Each one archived its full result twice, and the trimming that was supposed to prevent this only dropped lists longer than twenty items - so a dozen large ones went in whole. Big fields are now dropped by size, keeping the status, timings and figures that make the history worth having. Existing history is trimmed on upgrade, with a backup kept
-- A job that failed could not be cleared from the activity list on its own. A finished one collapsed to a line with a clear button; a failed one kept its full card, and that card never had one - so the only way to remove the thing you most wanted rid of was Clear all, which threw away the history you were reading it against
-- When the local model server failed to start, the error said to go and look at the log for the reason - while the reason was thrown away. It now quotes what the server actually said, so a missing library or an unreadable model is answered where the question was asked. The test above also says what it is doing while it runs, rather than sitting silent for minutes on a slow machine
-- Half of the local model server's output was being discarded, including everything it says while loading a model - which is where it reports the hardware it found and how much of the model fitted on it. The log jumped straight from "loading model" to "model loaded" with nothing in between. It was also a potential stall on a chattier model, since output nobody reads eventually blocks the program producing it
+- Local analysis can no longer stall, run away, or quietly store nothing
+  - A model asked which games a video covered could list the real ones and then keep inventing more until it filled its entire output budget - ninety minutes of work, three times in a night, producing something that could not even be read. What it may answer is now bounded, so a run that loses its way ends in seconds with a valid result
+  - An analysis that produces nothing is reported as a failure instead of being saved as a blank result and skipped forever afterwards
+  - A run can be stopped. It was previously the one job that could hold the machine for half an hour with no way out but restarting the app
+  - A scheduled run that fails on a video now leaves it alone for a day, then a week, rather than retrying the same one all night while everything behind it waits
+- Smaller fixes
+  - The login page has its collage of thumbnails back, and thumbnails no longer come up blank when they are already in your browser cache
+  - The search box on the content page could be squeezed to nothing on a narrow screen
+  - A failed job can be cleared from the activity list on its own, and the record of finished jobs no longer grows to megabytes by archiving whole analyses
+  - When the local model server fails to start, the error says what happened rather than telling you to go and look at a log
 
 ## 2.8.0 (2026-08-30)
 
