@@ -32,7 +32,35 @@ import { z } from "zod";
  * types that carry no structured data.
  */
 
-const nullableString = () => z.string().nullable();
+/**
+ * Bounds on every field, and why they are not optional.
+ *
+ * The schema is compiled to a GBNF grammar and decoding is constrained to it,
+ * so the grammar is the only thing that can stop a model writing. Unbounded,
+ * it never has to: asked for the games covered by one video, a local model
+ * wrote 24 real titles and then counted - "Resident Evil Outbreak: Biohazard
+ * 2" through to 932 - until it hit the output cap 42,597 characters later,
+ * mid-string. That is not a valid answer truncated; it is an answer with no
+ * reason to end. Ninety minutes a go, three attempts in a night, and what it
+ * produced could not even be parsed.
+ *
+ * A cap turns that into a clipped but valid result the app can store and a
+ * person can read. Verified against llama.cpp rather than assumed: a request
+ * for 50 items under maxItems 3 returned exactly 3 and stopped cleanly, with
+ * maxLength truncating the last to the character. The grammar enforces it
+ * during decoding - nothing is checked and rejected afterwards.
+ *
+ * The numbers sit far above real answers rather than tight against them:
+ * observed runs produce 5 games, 6 tags, 5 platforms, 3 known issues. Any
+ * result that reaches one of these limits was going wrong regardless of where
+ * the limit sat.
+ */
+const NAME = 120;
+const LINE = 500;
+const QUOTE = 800;
+const PROSE = 6000;
+
+const nullableString = (max: number = LINE) => z.string().max(max).nullable();
 const nullableNumber = () => z.number().nullable();
 
 export const WireContentType = z.enum([
@@ -50,7 +78,7 @@ export const WireContentType = z.enum([
 export type WireContentType = z.infer<typeof WireContentType>;
 
 export const WireTag = z.object({
-  tag: z.string(),
+  tag: z.string().max(NAME),
   confidence: z.number().min(0).max(1),
 });
 
@@ -71,23 +99,23 @@ export const WireOverview = z.object({
    * just the few with a structured extraction - which is what previously
    * made a preview or a Switch 2 port analysis impossible to file.
    */
-  primaryGame: nullableString(),
+  primaryGame: nullableString(NAME),
   /**
    * Every game meaningfully covered, including primaryGame.
    *
    * A discussion show has no primary game but covers several; this is how
    * those still surface under each one.
    */
-  games: z.array(z.string()),
-  summary: nullableString(),
+  games: z.array(z.string().max(NAME)).max(20),
+  summary: nullableString(PROSE),
   /**
    * Nullable on purpose, and the prompt says so explicitly: hands-on
    * previews routinely decline to reach a verdict ("too early to judge"),
    * and manufacturing one would invent certainty the presenters
    * themselves disclaimed.
    */
-  conclusion: nullableString(),
-  tags: z.array(WireTag),
+  conclusion: nullableString(PROSE),
+  tags: z.array(WireTag).max(15),
 });
 export type WireOverview = z.infer<typeof WireOverview>;
 
@@ -102,24 +130,24 @@ export const WireTagOnly = z.object({
    * just the few with a structured extraction - which is what previously
    * made a preview or a Switch 2 port analysis impossible to file.
    */
-  primaryGame: nullableString(),
+  primaryGame: nullableString(NAME),
   /**
    * Every game meaningfully covered, including primaryGame.
    *
    * A discussion show has no primary game but covers several; this is how
    * those still surface under each one.
    */
-  games: z.array(z.string()),
-  tags: z.array(WireTag),
+  games: z.array(z.string().max(NAME)).max(20),
+  tags: z.array(WireTag).max(15),
 });
 export type WireTagOnly = z.infer<typeof WireTagOnly>;
 
 export const WirePlatformMode = z.object({
-  label: z.string(),
-  resolution: nullableString(),
+  label: z.string().max(NAME),
+  resolution: nullableString(NAME),
   fpsTarget: nullableNumber(),
   fpsMeasuredAvg: nullableNumber(),
-  notes: nullableString(),
+  notes: nullableString(LINE),
   /**
    * A span copied verbatim out of the transcript, or null if none exists.
    *
@@ -127,16 +155,16 @@ export const WirePlatformMode = z.object({
    * cite it. Locating the citation is this side's job, which is what makes
    * a wrong time impossible rather than merely unlikely.
    */
-  quote: nullableString(),
+  quote: nullableString(QUOTE),
 });
 
 export const WirePlatform = z.object({
-  platform: z.string(),
-  modes: z.array(WirePlatformMode),
+  platform: z.string().max(NAME),
+  modes: z.array(WirePlatformMode).max(8),
 });
 
 export const WireKnownIssue = z.object({
-  issue: z.string(),
+  issue: z.string().max(LINE),
   /**
    * A span copied verbatim out of the transcript, or null if none exists.
    *
@@ -144,17 +172,17 @@ export const WireKnownIssue = z.object({
    * cite it. Locating the citation is this side's job, which is what makes
    * a wrong time impossible rather than merely unlikely.
    */
-  quote: nullableString(),
+  quote: nullableString(QUOTE),
 });
 
 
 
 export const WireSetting = z.object({
-  name: z.string(),
-  levelsTested: z.array(z.string()),
+  name: z.string().max(NAME),
+  levelsTested: z.array(z.string().max(NAME)).max(10),
   perfDeltaPct: nullableNumber(),
-  consoleEquivalent: nullableString(),
-  recommendation: nullableString(),
+  consoleEquivalent: nullableString(NAME),
+  recommendation: nullableString(PROSE),
   /**
    * A span copied verbatim out of the transcript, or null if none exists.
    *
@@ -162,7 +190,7 @@ export const WireSetting = z.object({
    * cite it. Locating the citation is this side's job, which is what makes
    * a wrong time impossible rather than merely unlikely.
    */
-  quote: nullableString(),
+  quote: nullableString(QUOTE),
 });
 
 /**
@@ -176,13 +204,13 @@ export const WireSetting = z.object({
  * model to get wrong; analyse.ts reassembles it.
  */
 export const WirePcReviewSettings = z.object({
-  game: nullableString(),
-  engine: nullableString(),
-  verdict: nullableString(),
-  bottleneckType: nullableString(),
-  bottleneckDetail: nullableString(),
-  settings: z.array(WireSetting),
-  optimisedTestSystem: nullableString(),
+  game: nullableString(NAME),
+  engine: nullableString(NAME),
+  verdict: nullableString(PROSE),
+  bottleneckType: nullableString(NAME),
+  bottleneckDetail: nullableString(LINE),
+  settings: z.array(WireSetting).max(40),
+  optimisedTestSystem: nullableString(LINE),
   optimisedFpsBefore: nullableNumber(),
   optimisedFpsAfter: nullableNumber(),
   optimisedGainPct: nullableNumber(),
@@ -190,11 +218,11 @@ export const WirePcReviewSettings = z.object({
 export type WirePcReviewSettings = z.infer<typeof WirePcReviewSettings>;
 
 export const WireQaSegment = z.object({
-  topic: z.string(),
+  topic: z.string().max(LINE),
   /** The game this item is about, or null when it is not about one. */
-  game: nullableString(),
-  summary: nullableString(),
-  conclusion: nullableString(),
+  game: nullableString(NAME),
+  summary: nullableString(PROSE),
+  conclusion: nullableString(PROSE),
   /**
    * A span copied verbatim out of the transcript, or null if none exists.
    *
@@ -202,7 +230,7 @@ export const WireQaSegment = z.object({
    * cite it. Locating the citation is this side's job, which is what makes
    * a wrong time impossible rather than merely unlikely.
    */
-  quote: nullableString(),
+  quote: nullableString(QUOTE),
 });
 
 /**
@@ -214,53 +242,53 @@ export const WireQaSegment = z.object({
  * removes a classification decision that was wrong nine times out of twelve.
  */
 export const WirePlatformTechReview = z.object({
-  game: nullableString(),
-  developer: nullableString(),
-  platforms: z.array(WirePlatform),
+  game: nullableString(NAME),
+  developer: nullableString(NAME),
+  platforms: z.array(WirePlatform).max(10),
   /** What changed against a previous version, patch or platform. Null when nothing did. */
-  changeSummary: nullableString(),
-  knownIssues: z.array(WireKnownIssue),
-  recommendation: nullableString(),
+  changeSummary: nullableString(PROSE),
+  knownIssues: z.array(WireKnownIssue).max(15),
+  recommendation: nullableString(PROSE),
 });
 export type WirePlatformTechReview = z.infer<typeof WirePlatformTechReview>;
 
 export const WireHardwareProduct = z.object({
-  name: z.string(),
-  productClass: nullableString(),
-  verdict: nullableString(),
+  name: z.string().max(NAME),
+  productClass: nullableString(NAME),
+  verdict: nullableString(PROSE),
   /** A span copied verbatim out of the transcript, or null if none exists. */
-  quote: nullableString(),
+  quote: nullableString(QUOTE),
 });
 
 /** Second call, hardware_review branch. */
 export const WireHardwareReview = z.object({
-  products: z.array(WireHardwareProduct),
+  products: z.array(WireHardwareProduct).max(10),
   /** Titles used as benchmarks - instruments, not the subject. */
-  gamesTested: z.array(z.string()),
-  verdict: nullableString(),
-  knownIssues: z.array(WireKnownIssue),
+  gamesTested: z.array(z.string().max(NAME)).max(20),
+  verdict: nullableString(PROSE),
+  knownIssues: z.array(WireKnownIssue).max(15),
 });
 export type WireHardwareReview = z.infer<typeof WireHardwareReview>;
 
 export const WireObservation = z.object({
-  observation: z.string(),
+  observation: z.string().max(LINE),
   /** A span copied verbatim out of the transcript, or null if none exists. */
-  quote: nullableString(),
+  quote: nullableString(QUOTE),
 });
 
 /** Second call, hands_on_preview branch. No numbers table by design. */
 export const WirePreview = z.object({
-  game: nullableString(),
-  platforms: z.array(z.string()),
-  buildState: nullableString(),
-  observations: z.array(WireObservation),
-  caveats: nullableString(),
+  game: nullableString(NAME),
+  platforms: z.array(z.string().max(NAME)).max(10),
+  buildState: nullableString(LINE),
+  observations: z.array(WireObservation).max(25),
+  caveats: nullableString(PROSE),
 });
 export type WirePreview = z.infer<typeof WirePreview>;
 
 /** Second call, qa_roundtable branch. 3 union params. */
 export const WireQaSegments = z.object({
-  segments: z.array(WireQaSegment),
+  segments: z.array(WireQaSegment).max(30),
 });
 export type WireQaSegments = z.infer<typeof WireQaSegments>;
 

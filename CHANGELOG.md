@@ -74,6 +74,10 @@ The image is also about 1.3GB smaller than 2.8.0 despite gaining all of that, be
   - It no longer ships the compiler toolchain used to build it, nor the build-time dependencies that were installed and then discarded - about a gigabyte of them were still being carried in an earlier layer despite being removed later
   - Pulls and updates are correspondingly quicker, and it is smaller than 2.8.0 even with the graphics support added
 ### Bug Fixes
+- Stop an analysis running away and producing nothing
+  - Asked which games a video covered, a local model listed the real ones and then kept going - inventing numbered sequels until it filled its entire output budget. Ninety minutes of work, three times in a night, and what came back could not even be read, so the video was left with no analysis and the log said only that some JSON was malformed
+  - The answer the model is allowed to give is now bounded: a sensible ceiling on how many games, tags, platforms or issues it may list, and on how long each piece of text can be. These sit far above any real answer - a typical video produces five games and six tags - so nothing genuine is cut short, but a model that has lost its way is stopped in seconds rather than after an hour and a half
+  - This is enforced while the answer is being written rather than checked afterwards, so a run that would have wandered now returns a valid result instead of failing outright
 - A scheduled run no longer retries the same video over and over
   - Scheduled analysis picks whatever has no analysis yet - and something that failed still has none, so it was picked again immediately, failed the same way, and did it all night while everything behind it waited. On a slow machine a single attempt can take an hour and a half
   - A failure is now remembered: the same video is left alone for a day, then a week, then dropped from scheduled runs altogether. Analysing it by hand still works at any point - if you have decided it is worth another go, nothing here argues
