@@ -1,7 +1,7 @@
 versions:
   - version: "2.8.1"
     date: "2026-09-08"
-    notes: "Subtitles and local AI analysis can now use a graphics card, from a single image that works with NVIDIA, AMD and Intel - and falls back to the processor, saying so, on a machine without one. Worth reading the caveats below before turning it on for analysis.\n\nVideos your browser cannot play now play anyway. Digital Foundry's downloads use audio no browser decodes, and about half of the 4K releases use HEVC video - both are converted as you watch, only where your particular device needs it, and you can pick a smaller picture for a thin connection.\n\nLocal analysis has been made considerably harder to break: it can be stopped, it reports failure instead of storing nothing, and it can no longer spend an hour writing an answer that turns out to be unreadable.\n\nThe image is also around 1.3GB smaller than 2.8.0 despite gaining all of this."
+    notes: "Subtitles and local AI analysis can now use a graphics card. One image covers NVIDIA, AMD and Intel, and a machine without a usable card carries on using the processor and says so in the log. Worth reading the caveats below before turning it on for analysis.\n\nSome downloads never played properly in a browser. Digital Foundry's files carry audio no browser can decode, and depending on which format you download the video may be HEVC, which many browsers also refuse. Both now play: only the part your own device cannot handle is converted, as you watch. You can pick a smaller picture too, when the connection is thin.\n\nLocal analysis is considerably harder to break. A run can be stopped, a run that produces nothing is reported as a failure rather than stored, and one that loses its way can no longer spend an hour writing an answer nothing can read.\n\nThe image is also around 1.3GB smaller than 2.8.0, despite gaining all of this."
     changes:
       features:
         - "Use your graphics card for subtitles and local AI analysis":
@@ -19,6 +19,9 @@ versions:
           - "That distinction is the point: a model that has gone wrong still returns a well-formed reply, so a connection test passes and a meaningless analysis is stored without complaint"
 
       enhancements:
+        - "The backfill lists open on what still needs doing":
+          - "Not analysed and Upgradeable are shown together by default, and the state buttons add up rather than being one choice - complete items are most of the list and cannot be acted on without turning re-runs on"
+          - "The controls are grouped as well: what narrows the list, which states to show, and what to do about it. They were one long row that broke wherever the width ran out, which on a phone put a filter next to Run"
         - "A System page, and a diagnostic report you can attach to a bug report":
           - "Under System. Version, the commit it was built from, the machine, which extra tools it found, where its folders are, and the size and version of each stored file"
           - "The report is one zip with the logs, those details and your settings - every key, token and cookie removed first, and a check refuses to build the app if a new credential-shaped setting is added without being declared"
@@ -36,6 +39,7 @@ versions:
         - "Smaller fixes":
           - "The login page has its collage of thumbnails back, and thumbnails no longer come up blank when they are already in your browser cache"
           - "The search box on the content page could be squeezed to nothing on a narrow screen"
+          - "On screens above 1200px the left edge of switches and checkboxes was cut off, most visibly in Settings - the panel they sit in had started trimming anything that reached past its edge"
           - "A failed job can be cleared from the activity list on its own, and the record of finished jobs no longer grows to megabytes by archiving whole analyses"
           - "When the local model server fails to start, the error says what happened rather than telling you to go and look at a log"
 
