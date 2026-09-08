@@ -441,6 +441,23 @@ export const NavPage = () => {
           // in the same place on screen.
           minHeight: { lg: 0 },
           overflowY: { lg: "auto" },
+          /*
+            Room for controls that sit slightly left of the content box.
+
+            Setting overflow on one axis promotes the other from `visible` to
+            `auto`, so from lg this box also clips horizontally - and MUI puts
+            a switch or checkbox label at margin-left -11px so its ripple lines
+            up with the text above. Below lg that hangs harmlessly over the
+            row's padding; from lg it was cut off, with no scrollbar to reach
+            it because overflow to the left is never scrollable.
+
+            The negative margin and the padding cancel out, so nothing moves on
+            screen - the box simply starts 11px further left than it draws.
+            Measured before and after: the label sits at the same position and
+            the clipping goes from 11px to none.
+          */
+          marginLeft: { lg: "-11px" },
+          paddingLeft: { lg: "11px" },
         }}
         {...swipe}
       >
