@@ -151,19 +151,25 @@ export const BulkBackfillPage = () => {
   // Narrowing to what still needs doing is the common case - the list is
   // otherwise mostly rows that are already done and cannot be actioned.
   /**
-   * One question with mutually exclusive answers, rather than a switch each.
+   * Which states to show, added together rather than chosen between.
    *
-   * "Needs work" and "could be improved" were separate toggles, and turning
-   * both on always gave an empty list: the first keeps only items with no
-   * analysis, the second only items with one. They are two answers to the same
-   * question - what state is this in - so they are one control now, and the
-   * impossible combination stops existing rather than being something to
-   * notice and avoid.
+   * Every item is in exactly one state, so these are buckets rather than
+   * conditions - picking two shows both, and there is no combination that
+   * contradicts itself. That was the worry when this was made exclusive: as
+   * separate switches, "needs work" AND "could be improved" meant an item with
+   * no analysis and an analysis at once, which is nothing. Union rather than
+   * intersection has neither problem.
    *
-   * Sources stay independent below, because those genuinely combine: having a
-   * transcript and having an article are separate facts about an item.
+   * An empty set means no filter, which is what "All" selects - the same
+   * convention as the level chips in the log view, where selecting nothing and
+   * selecting everything are the same statement.
+   *
+   * Defaults to the two that need doing, because that is what this page is
+   * for: complete items are the bulk of the list and cannot be actioned.
    */
-  const [statusFilter, setStatusFilter] = useState<"all" | "needs" | "improvable" | "done">("all");
+  const [statusFilter, setStatusFilter] = useState<Set<"needs" | "improvable" | "done">>(
+    () => new Set(["needs", "improvable"] as const)
+  );
   /**
    * Narrow to what the analysis will have something to work from.
    *
@@ -319,13 +325,19 @@ export const BulkBackfillPage = () => {
     ];
   }, [target]);
 
-  // Switching target can strip the selected status out from under it, which
-  // would filter to nothing with no control on screen explaining why.
+  /*
+   * Switching target can strip a selected status out from under it - only
+   * analysis has "Upgradeable" - which would otherwise filter to nothing with
+   * no control on screen explaining why. Dropped rather than reset, so the
+   * rest of the selection survives moving between targets.
+   */
   useEffect(() => {
-    if (!statusOptions.some((option) => option.value === statusFilter)) {
-      setStatusFilter("all");
-    }
-  }, [statusOptions, statusFilter]);
+    setStatusFilter((current) => {
+      const allowed = new Set(statusOptions.map((option) => option.value));
+      const kept = [...current].filter((value) => allowed.has(value));
+      return kept.length === current.size ? current : new Set(kept);
+    });
+  }, [statusOptions]);
 
   /** Which bucket an item is in - exactly one of them, by construction. */
   const statusOf = useCallback(
@@ -354,7 +366,8 @@ export const BulkBackfillPage = () => {
   }, [sourceFiltered, statusOf]);
 
   const filtered = useMemo(
-    () => (statusFilter === "all" ? sourceFiltered : sourceFiltered.filter((c) => statusOf(c) === statusFilter)),
+    () =>
+      statusFilter.size === 0 ? sourceFiltered : sourceFiltered.filter((c) => statusFilter.has(statusOf(c))),
     [sourceFiltered, statusFilter, statusOf]
   );
 
@@ -391,6 +404,24 @@ export const BulkBackfillPage = () => {
   );
   const selectable = useMemo(() => filtered.filter(isSelectable), [filtered, isSelectable]);
   const visibleSelectable = useMemo(() => visible.filter(isSelectable), [visible, isSelectable]);
+
+  /*
+   * How many of the chosen items have already been analysed.
+   *
+   * Counted from the selection rather than inferred from the filter. It used
+   * to key off the filter being set to "Upgradeable" alone, which stopped
+   * being a safe proxy once the states could be combined: the default now
+   * shows what needs analysis and what could be improved together, so a
+   * select-all mixes both and half of it would be skipped in silence.
+   */
+  const selectedCount = selected.size;
+  const selectedImprovable = useMemo(
+    () =>
+      target === "ai_analysis"
+        ? candidates.filter((c) => selected.has(c.contentKey) && statusOf(c) === "improvable").length
+        : 0,
+    [candidates, selected, statusOf, target]
+  );
 
   /**
    * The selected items the run would actually do something with.
@@ -615,9 +646,20 @@ export const BulkBackfillPage = () => {
                 in front of you rather than an abstract total. */}
             <ToggleButtonGroup
               size="small"
-              exclusive
-              value={statusFilter}
-              onChange={(_, next) => next && setStatusFilter(next)}
+              value={statusFilter.size === 0 ? ["all"] : [...statusFilter]}
+              onChange={(_, next: string[]) => {
+                /*
+                 * "All" is the absence of a filter rather than a fourth state,
+                 * so choosing it clears the others and choosing another clears
+                 * it. Turning the last one off lands on the same place, which
+                 * is why an empty selection shows everything rather than
+                 * nothing - the alternative is a control that can hide the
+                 * whole list with no way to tell that is what happened.
+                 */
+                const clickedAll = next.includes("all") && statusFilter.size !== 0;
+                const picked = next.filter((value) => value !== "all") as ("needs" | "improvable" | "done")[];
+                setStatusFilter(clickedAll ? new Set() : new Set(picked));
+              }}
             >
               {statusOptions.map(({ value, label }) => (
                 <ToggleButton key={value} value={value} sx={{ paddingY: 0.25, textTransform: "none" }}>
@@ -705,10 +747,11 @@ export const BulkBackfillPage = () => {
           {/* These have all been analysed already, so a run skips every one of
               them unless re-analyse is on - which is the whole point of
               selecting them, and easy to miss. */}
-          {statusFilter === "improvable" && !force && (
+          {selectedImprovable > 0 && !force && (
             <Alert severity="warning" variant="outlined">
-              These have already been analysed, so turn on "Re-analyse items that have already been analysed" or the run
-              will skip all of them.
+              {selectedImprovable === selectedCount
+                ? "These have already been analysed, so turn on \"Re-analyse items that have already been analysed\" or the run will skip all of them."
+                : `${selectedImprovable} of the ${selectedCount} selected have already been analysed. Turn on "Re-analyse items that have already been analysed" or the run will skip those.`}
             </Alert>
           )}
           {inlineEstimate && (
