@@ -234,3 +234,46 @@ Worth keeping the silicon distinction in mind: Quick Sync is fixed-function medi
 hardware, entirely separate from the Vulkan compute path that causes the corruption
 above. A machine where local analysis on the GPU is unusable can still encode video on
 it perfectly well - which is exactly the case here.
+
+## NVIDIA under Docker Desktop for Windows: unconfirmed, do not document as working
+
+Tested 2026-09-10 on a dev box with an RTX 5080, chasing whether `--gpus all` actually
+gets llama.cpp onto an NVIDIA card. It does not, on this platform - but the negative
+result is about Docker Desktop, not about NVIDIA or about the real deployment target
+(a native Linux host, which is what Unraid is), and should not be written into
+user-facing docs or the UI until it has been checked on one.
+
+**What was tried.** `docker run --gpus all`, then again with
+`-e NVIDIA_DRIVER_CAPABILITIES=compute,utility,graphics` added - the exact fix the
+Dockerfile's own comment names for this: NVIDIA's Vulkan ICD is injected at runtime by
+the container toolkit only when the `graphics` capability is requested, and the default
+of `compute,utility` leaves Vulkan seeing no device.
+
+**What actually happened, both times.** `nvidia-smi` inside the container sees the card
+correctly - compute-style access works. Vulkan finds nothing:
+`llama-server -lv 4` logs `no usable GPU found`, and analysis falls back to the
+processor exactly as it does with no GPU passed in at all. Checked directly rather than
+inferred from that one log line:
+
+- No `nvidia_icd.json` anywhere in the image's filesystem, with or without the
+  `graphics` capability - only Mesa's own drivers and virtualised ones
+  (`gfxstream_vk_icd.json`, `virtio_icd.json`).
+- `docker info` reports the GPU device as `docker.com/gpu=webgpu` - Docker Desktop's own
+  virtualised abstraction, not a passthrough handle for the real card.
+
+**Why this is not the same question as "does NVIDIA work".** Docker Desktop on Windows
+runs containers inside its own Linux VM and mediates GPU access itself, differently for
+compute (CUDA-style, which is what `nvidia-smi` uses) and for graphics/Vulkan, which
+appears to go through a virtualised renderer rather than the vendor ICD regardless of
+which driver capability is requested. That is a property of Docker Desktop's
+virtualisation, not of the NVIDIA Container Toolkit mechanism the Dockerfile comment
+describes - which is the standard, widely-used way of doing this on a native Linux
+Docker host, Unraid included. Whether it actually works there is still open; this dev
+box cannot answer that question, only the Windows-specific one.
+
+**Do not act on this beyond recording it.** In particular: do not add
+`NVIDIA_DRIVER_CAPABILITIES=compute,utility,graphics` guidance to the README, the
+settings UI, or any user-facing doc as a confirmed fix for NVIDIA users on the strength
+of this test - it was never seen to produce a working Vulkan device anywhere, on any
+platform. Confirming it needs a native Linux Docker host with an NVIDIA card, which this
+investigation did not have access to.
