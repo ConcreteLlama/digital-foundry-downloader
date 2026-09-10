@@ -46,7 +46,52 @@ jobs:
         echo "TAG=${TAG}" >> $GITHUB_ENV
         echo "VERSION_TAG=${VERSION_TAG}" >> $GITHUB_ENV
 
+    - name: Check whether this commit is already built under another tag
+      # A promotion (experimental -> develop -> main) is usually a fast-forward
+      # with no new commits, so the image that was already tested is byte-for-
+      # byte what this push would build again - rebuilding just spends twenty
+      # minutes reproducing it. imagetools create copies the existing manifest
+      # onto the new tags without re-uploading a single layer.
+      #
+      # The git SHA matching is necessary but not sufficient: the candidate tag
+      # has to actually exist and carry a `commit` label that agrees, in case
+      # its own build failed, is still running, or predates this label being
+      # added. Checked against the registry rather than trusted from git alone.
+      #
+      # Only main and develop are candidates for reuse - experimental is always
+      # freshly built, since it is the branch this compares everything else
+      # against.
+      id: reuse
+      if: github.ref == 'refs/heads/develop' || github.ref == 'refs/heads/main'
+      run: |
+        CANDIDATE=""
+        if [ "${GITHUB_REF}" == "refs/heads/develop" ]; then
+          CANDIDATE="experimental"
+        elif [ "${GITHUB_REF}" == "refs/heads/main" ]; then
+          CANDIDATE="development"
+        fi
+        SOURCE=""
+        if [ -n "$CANDIDATE" ]; then
+          LABEL=$(docker buildx imagetools inspect "${{ vars.DOCKERHUB_USERNAME }}/digital-foundry-downloader:${CANDIDATE}" --format '{{.Image.Config.Labels.commit}}' 2>/dev/null || true)
+          if [ "$LABEL" == "${{ github.sha }}" ]; then
+            SOURCE="$CANDIDATE"
+            echo "Reusing $CANDIDATE - already built from this exact commit"
+          else
+            echo "Not reusing $CANDIDATE - its commit label is '$LABEL', this push is ${{ github.sha }}"
+          fi
+        fi
+        echo "source_tag=$SOURCE" >> "$GITHUB_OUTPUT"
+
+    - name: Re-tag the existing image rather than rebuilding it
+      if: steps.reuse.outputs.source_tag != ''
+      run: |
+        docker buildx imagetools create \
+          --tag ${{ vars.DOCKERHUB_USERNAME }}/digital-foundry-downloader:${{ env.TAG }} \
+          --tag ${{ vars.DOCKERHUB_USERNAME }}/digital-foundry-downloader:${{ env.VERSION_TAG }} \
+          ${{ vars.DOCKERHUB_USERNAME }}/digital-foundry-downloader:${{ steps.reuse.outputs.source_tag }}
+
     - name: Build and push Docker image
+      if: steps.reuse.outputs.source_tag == ''
       uses: docker/build-push-action@v6
       with:
         context: .
@@ -56,6 +101,7 @@ jobs:
           ${{ vars.DOCKERHUB_USERNAME }}/digital-foundry-downloader:${{ env.VERSION_TAG }}
         labels: |
           version=${{ env.VERSION }}
+          commit=${{ github.sha }}
         build-args: |
           GIT_BRANCH=${{ github.ref_name }}
           GIT_COMMIT=${{ github.sha }}

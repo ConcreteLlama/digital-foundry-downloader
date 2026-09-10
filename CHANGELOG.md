@@ -4,22 +4,16 @@
 
 ## 2.8.1 (2026-09-08)
 
-Subtitles and local AI analysis can now use a graphics card. One image covers NVIDIA, AMD and Intel, and a machine without a usable card carries on using the processor and says so in the log. Worth reading the caveats below before turning it on for analysis.
-
-Some downloads never played properly in a browser. Digital Foundry's files carry audio no browser can decode, and depending on which format you download the video may be HEVC, which many browsers also refuse. Both now play: only the part your own device cannot handle is converted, as you watch. You can pick a smaller picture too, when the connection is thin.
-
-Local analysis is considerably harder to break. A run can be stopped, a run that produces nothing is reported as a failure rather than stored, and one that loses its way can no longer spend an hour writing an answer nothing can read.
-
-The image is also around 1.3GB smaller than 2.8.0, despite gaining all of this.
+Subtitles and local AI analysis can now use a graphics card if you pass one into the container. The web player can now transcode audio or video your browser won't play (some downloads use AC-3 audio, for example) and lets you change quality on the fly. Local analysis can be stopped, reports failure instead of storing nothing, and can no longer run away producing something unreadable. The image is also about 1.3GB smaller.
 
 ### Features
 - Use your graphics card for subtitles and local AI analysis
-  - One image for any card - it uses Vulkan rather than a vendor toolkit, so NVIDIA, AMD and Intel all work with nothing extra to install. In Docker you need to pass the card in; without one, everything carries on using the processor
+  - In Docker, pass the card in: --device=/dev/dri for Intel or AMD, or the NVIDIA container toolkit with the graphics capability enabled. Without one, everything carries on using the processor
   - Analysis is off by default on a GPU, and on an integrated Intel chip it should stay off. That combination returns confident, well-formed, meaningless results - every video classified the same, every summary empty - which you would not notice without reading one. Use 'Check it actually works' before trusting it
   - Subtitles are a separate switch and are unaffected, but worth measuring rather than assuming: the speech model is small and on a modest integrated GPU it can come out no faster than the processor
   - The log says which one each is running on and names the card, and distinguishes a card you turned off from one it could not use
 - Play videos your browser cannot handle, at the size you choose
-  - Digital Foundry's files use AC-3 audio, which no browser decodes, so they played with picture and no sound. Only the part your browser rejects is converted, as you watch - usually just the audio, which costs almost nothing
+  - Some Digital Foundry downloads use AC-3 audio, which no browser decodes, so those played with picture and no sound. Only the part your browser rejects is converted, as you watch - usually just the audio, which costs almost nothing
   - Your browser is asked what it can decode rather than assumed. Many devices play HEVC, and those now get the original 4K video untouched even when the sound has to be converted
   - A quality button in the player, set to Original - the file exactly as it is. Smaller sizes are there for a thin connection or a device that struggles, and the menu says what you give up: seeking jumps to the nearest keyframe rather than landing exactly
   - Where a smaller size is converted and your device supports HEVC, it is encoded to HEVC rather than H.264 - the same picture in roughly half the bandwidth
