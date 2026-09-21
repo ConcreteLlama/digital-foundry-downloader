@@ -202,6 +202,16 @@ const decodableCodecs = () => {
  * Only rungs below the source appear - offering to "upscale" a 1080p file to
  * 4K would cost the machine a great deal to produce something no better.
  */
+/**
+ * How long the transport waits, in fullscreen, before getting out of the way.
+ *
+ * Three seconds is what the native players settle on, and it is the right
+ * trade in both directions: long enough that reaching for the scrubber does
+ * not become a race, short enough that it is gone before it starts to feel
+ * like part of the picture.
+ */
+const CONTROLS_IDLE_MS = 3000;
+
 const QUALITY_RUNGS = [1440, 1080, 720, 480];
 
 /**
@@ -560,6 +570,16 @@ export const DownloadPlayer = ({
     document.addEventListener("fullscreenchange", onChange);
     return () => document.removeEventListener("fullscreenchange", onChange);
   }, []);
+  /**
+   * Whether the transport has faded out because nobody is doing anything.
+   *
+   * Fullscreen only. In a page the bar sits under the picture as part of the
+   * layout, so hiding it would collapse the thing around it for no gain -
+   * there is nothing underneath to reveal. Over the picture it is covering
+   * video, which is the whole reason to take it away.
+   */
+  const [controlsIdle, setControlsIdle] = useState(false);
+  const idleTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const [captionsAnchor, setCaptionsAnchor] = useState<HTMLElement | null>(null);
   const [activeTrack, setActiveTrack] = useState(0);
   const transcodingRef = useRef(false);
@@ -610,6 +630,50 @@ export const DownloadPlayer = ({
    */
   const [quality, setQuality] = useState<number | undefined>(readStoredQuality);
   const [qualityAnchor, setQualityAnchor] = useState<HTMLElement | null>(null);
+  /*
+   * Any popup being open holds the transport open with it.
+   *
+   * They are anchored to the bar, so fading it out would take the menu the
+   * viewer is halfway through reading along with it.
+   */
+  const menuOpen = Boolean(captionsAnchor || qualityAnchor || detailsAnchor);
+  /**
+   * Brings the transport back and starts the clock again.
+   *
+   * Called from anything that counts as a sign of life - the pointer moving,
+   * a key, a touch. Deliberately not from playback progress: a video playing
+   * is exactly when the controls should be getting out of the way.
+   */
+  const wakeControls = useCallback(() => {
+    setControlsIdle(false);
+    if (idleTimerRef.current) {
+      clearTimeout(idleTimerRef.current);
+      idleTimerRef.current = undefined;
+    }
+    /*
+     * Fullscreen only, and never while paused. In a page the bar is part of
+     * the layout with nothing behind it to uncover; paused is someone reading
+     * the screen or deciding what to do next, which every other player treats
+     * as a reason to leave the controls alone.
+     */
+    if (!isFullscreen || !playing || menuOpen) {
+      return;
+    }
+    idleTimerRef.current = setTimeout(() => setControlsIdle(true), CONTROLS_IDLE_MS);
+  }, [isFullscreen, playing, menuOpen]);
+  /*
+   * Run on the conditions changing, not only on movement - so pausing brings
+   * the bar straight back, closing a menu restarts the countdown, and playing
+   * again starts it without having to jiggle the mouse first.
+   */
+  useEffect(() => {
+    wakeControls();
+    return () => {
+      if (idleTimerRef.current) {
+        clearTimeout(idleTimerRef.current);
+      }
+    };
+  }, [wakeControls]);
   /*
    * A rung below the source is only meaningful if the source is bigger than
    * it. Anything else would be an offer to spend the machine's time making
@@ -1288,6 +1352,28 @@ export const DownloadPlayer = ({
               zIndex: 2,
               paddingBottom: 1,
               background: "linear-gradient(to top, rgba(0,0,0,0.75) 0%, rgba(0,0,0,0) 100%)",
+              /*
+               * Faded rather than unmounted, so it can animate out and so the
+               * focus it may be holding is not thrown away mid-keystroke.
+               * pointerEvents follows opacity: an invisible bar that still
+               * swallows clicks would eat the click meant to pause.
+               */
+              opacity: controlsIdle ? 0 : 1,
+              pointerEvents: controlsIdle ? "none" : "auto",
+              transition: "opacity 200ms ease",
+              /*
+               * Keyboard focus pins the bar open; a mouse click does not.
+               *
+               * :focus-within was the obvious way to write this and was
+               * wrong: clicking the fullscreen button leaves focus sitting on
+               * it, so the bar held itself open forever and only started
+               * fading once you clicked the picture and moved focus off it.
+               * :focus-visible is the distinction that was actually wanted -
+               * it matches someone tabbing through the controls, who would be
+               * stranded on something invisible, and not someone who just
+               * pressed a button with the pointer.
+               */
+              "&:has(:focus-visible)": { opacity: 1, pointerEvents: "auto" },
             }
           : {}),
       }}
@@ -1482,6 +1568,12 @@ export const DownloadPlayer = ({
             return;
           }
           void playerShellRef.current?.requestFullscreen().catch(() => {});
+          /*
+           * Hand focus to the shell on the way in, so the keyboard shortcuts
+           * work without having to click the picture first - and so focus is
+           * not left on a button that is about to fade out from under it.
+           */
+          playerShellRef.current?.focus();
         }}
       >
         <FullscreenIcon fontSize="small" />
@@ -1608,7 +1700,19 @@ export const DownloadPlayer = ({
       // picture focuses it, which is what a viewer does before reaching for
       // the space bar anyway.
       tabIndex={0}
-      onKeyDown={onPlayerKeyDown}
+      onKeyDown={(event) => {
+        wakeControls();
+        onPlayerKeyDown(event);
+      }}
+      /*
+       * Anything the viewer does brings the transport back. Pointer events
+       * rather than mouse ones so a pen or a touch counts, and mouseLeave
+       * hides it immediately - the pointer being off the video entirely is a
+       * clearer "done with this" than any timer.
+       */
+      onPointerMove={wakeControls}
+      onPointerDown={wakeControls}
+      onMouseLeave={() => isFullscreen && playing && !menuOpen && setControlsIdle(true)}
       sx={{
         width: "100%",
         minWidth: 0,
@@ -1616,6 +1720,9 @@ export const DownloadPlayer = ({
         borderRadius: 1,
         "&:focus": { outline: "none" },
         "&:focus-visible": { outline: "2px solid", outlineColor: "primary.main" },
+        // The cursor goes with the bar. Leaving an arrow sitting on the
+        // picture is the tell that a player has only half-implemented this.
+        ...(isFullscreen && controlsIdle ? { cursor: "none" } : {}),
         // Fills the screen, with the transport laid over the picture rather
         // than stacked under it - a bar taking a strip of a phone screen is a
         // strip of video nobody gets to see.
