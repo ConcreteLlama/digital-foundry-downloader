@@ -1,5 +1,5 @@
 import { Box, Stack, Typography } from "@mui/material";
-import { DfContentInfoUtils, STARTED_FRACTION, secondsToHHMMSS } from "df-downloader-common";
+import { DfContentInfoUtils, STARTED_FRACTION, WATCHED_FRACTION, secondsToHHMMSS } from "df-downloader-common";
 import { useSelector } from "react-redux";
 import { useDfContentEntry } from "../../../hooks/use-df-content-entry.ts";
 import { selectContentBadges } from "../../../store/df-content/df-content.selector.ts";
@@ -38,8 +38,17 @@ export const ContentGridCard = ({ dfContentName, onClick }: ContentGridCardProps
     Watched fills the bar rather than showing wherever you stopped: people
     routinely leave the last thirty seconds of credits, and a bar sitting at
     96% reads as unfinished business when it is not.
+
+    Unless you are genuinely back in the middle of it. The watched flag is
+    sticky by design - only "mark as unwatched" clears it - so starting
+    something again leaves the flag set while the position walks back up from
+    the beginning, and a full green bar on a video you are forty per cent
+    through is simply wrong. Below the watched threshold the real position
+    wins, and the bar takes the in-progress colour to say so.
   */
-  const watchProgress = badges?.watched ? 1 : badges?.watchedFraction ?? 0;
+  const watchedFraction = badges?.watchedFraction ?? 0;
+  const rewatching = Boolean(badges?.watched) && watchedFraction > STARTED_FRACTION && watchedFraction < WATCHED_FRACTION;
+  const watchProgress = rewatching ? watchedFraction : badges?.watched ? 1 : watchedFraction;
 
   return (
     <Box
@@ -114,7 +123,7 @@ export const ContentGridCard = ({ dfContentName, onClick }: ContentGridCardProps
               sx={{
                 width: `${watchProgress * 100}%`,
                 height: "100%",
-                backgroundColor: badges?.watched ? "success.main" : "primary.main",
+                backgroundColor: badges?.watched && !rewatching ? "success.main" : "primary.main",
               }}
             />
           </Box>

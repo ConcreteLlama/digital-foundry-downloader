@@ -9,9 +9,12 @@ versions:
           - "They fade out while the video is playing and come back when you move the mouse, in a page as well as in fullscreen, so they are not sitting over the video you are trying to watch"
           - "Skipping while paused leaves you paused, except on a video being converted as you watch, where any jump has to restart the stream and so starts it playing"
         - "Resume or start again, as a choice rather than a guess":
-          - "A part-watched video now says where it would pick up and shows how far through you are, and gives you a button for each - resume, or play from the start. Pressing the picture resumes, as it always did"
+          - "A part-watched video shows how far through you are and puts two buttons on the thumbnail - resume from where you stopped, or play from the start. Anything you have not started still plays on a press, as it always did"
           - "The time offered is the one you actually stopped at, including when you have only just closed the player"
       bugfixes:
+        - "A video you are watching again no longer looks finished in the lists":
+          - "Marking something watched is deliberately sticky, so starting it again left the row showing a tick and a full progress bar while you were only part way back through it. The row now shows both - that you have seen it, and where you actually are"
+          - "A video left sitting on the credits still just reads as watched, which is what it is"
         - "The player's controls get out of the way in fullscreen":
           - "They fade out after a few seconds and come back on any movement, keypress or touch - the mouse pointer goes with them. Nothing changes in a page, where the controls sit under the picture rather than over it"
           - "They stay put while paused, while a menu is open, and while you are tabbing through them, since those are all moments where having them vanish would be worse than leaving them"

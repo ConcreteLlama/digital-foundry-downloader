@@ -1,9 +1,9 @@
 import PlayArrowIcon from "@mui/icons-material/PlayArrow";
 import ReplayIcon from "@mui/icons-material/Replay";
-import { Box, Button, ToggleButton, ToggleButtonGroup, Typography } from "@mui/material";
+import { Box, Button, Stack, ToggleButton, ToggleButtonGroup, Typography } from "@mui/material";
 import OpenInNewIcon from "@mui/icons-material/OpenInNew";
 import { WatchElsewhereDialog } from "../downloaded-info/watch-elsewhere.component.tsx";
-import { DfContentEntry, DfContentInfoUtils, STARTED_FRACTION, WatchState, secondsToHHMMSS } from "df-downloader-common";
+import { DfContentEntry, DfContentInfoUtils, WatchState, secondsToHHMMSS } from "df-downloader-common";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { VideoPlayerDialog } from "../downloaded-info/video-player-dialog.component.tsx";
 import { Thumb } from "../../general/thumb.component.tsx";
@@ -133,29 +133,33 @@ export const ContentMedia = ({ contentEntry, onPlayFromReady, onPlayerOpenChange
   }, [contentEntry.key, playerOpen]);
 
   /*
-   * Whether there is a part-watched position worth offering, and where.
+   * Whether pressing play would pick up somewhere other than the beginning.
+   *
+   * That question, and not "is this part-watched", is what decides whether
+   * the two buttons appear - because the fallback when they do not is a
+   * plain play button that resumes anyway. Any rule stricter than the
+   * player's own leaves the poster showing a normal play icon and then
+   * jumping into the middle of the video, which is the confusion these
+   * buttons exist to remove. So the test is the player's: at least five
+   * seconds in, and far enough from the end that it would not drop you on
+   * the credits.
+   *
+   * Deliberately not keyed on the watched flag. It sticks once set and is
+   * not reset by a later position, so a video marked watched can be sitting
+   * at forty per cent - and the player will still resume it.
    *
    * The tab's own memory wins when it has an answer, for the same reason it
    * does inside the player: it is this session, to the second, while the
-   * service's copy is a poll behind. STARTED_FRACTION is the shared line
-   * every other watched marker in the app is drawn at, so the poster cannot
-   * offer to resume something the row badges call unwatched. The floor of
-   * five seconds matches the player, which ignores anything closer to the
-   * start than that - offering a resume it would then decline to honour is
-   * worse than not offering one.
+   * service's copy is a poll behind.
    */
   const resume = useMemo(() => {
     const local = activeDownload ? rememberedPlaybackPosition(activeDownload.downloadLocation) : undefined;
     const seconds = local ?? watchState?.positionSeconds;
     const duration = watchState?.durationSeconds || DfContentInfoUtils.getDurationSeconds(contentInfo);
-    if (seconds == null || seconds < 5 || !duration || duration <= 0) {
+    if (seconds == null || seconds < 5 || !duration || duration <= 0 || seconds > duration - 15) {
       return undefined;
     }
-    const fraction = Math.min(1, seconds / duration);
-    if (watchState?.watched || fraction <= STARTED_FRACTION) {
-      return undefined;
-    }
-    return { seconds, fraction };
+    return { seconds, fraction: Math.min(1, seconds / duration) };
     // playerOpen is a dependency because rememberedPlaybackPosition is a
     // plain Map read, not reactive: closing the player is the moment its
     // answer changes, and the refetch above may legitimately never land.
@@ -287,29 +291,39 @@ export const ContentMedia = ({ contentEntry, onPlayFromReady, onPlayerOpenChange
     return (
       <Box sx={{ minWidth: 0 }}>
         <Box
-          role="button"
-          tabIndex={0}
-          aria-label={
-            resume
-              ? `Resume ${contentInfo.title} at ${secondsToHHMMSS(Math.floor(resume.seconds))}`
-              : `Play ${contentInfo.title}`
-          }
-          onClick={() => playFrom(undefined)}
-          onKeyDown={(event) => {
-            if (event.key === "Enter" || event.key === " ") {
-              event.preventDefault();
-              playFrom(undefined);
-            }
-          }}
+          /*
+            The whole picture is the button, but only while it has one thing
+            to do. Part-watched puts two real buttons on the overlay, and a
+            button wrapping buttons is the arrangement where Enter fires both
+            and a screen reader can describe neither.
+          */
+          {...(resume
+            ? {}
+            : {
+                role: "button",
+                tabIndex: 0,
+                "aria-label": `Play ${contentInfo.title}`,
+                onClick: () => playFrom(undefined),
+                onKeyDown: (event: React.KeyboardEvent) => {
+                  if (event.key === "Enter" || event.key === " ") {
+                    event.preventDefault();
+                    playFrom(undefined);
+                  }
+                },
+              })}
           sx={{
             position: "relative",
             display: "block",
-            cursor: "pointer",
             borderRadius: 1,
             overflow: "hidden",
             lineHeight: 0,
-            "&:hover .play-overlay, &:focus-visible .play-overlay": { backgroundColor: "rgba(0, 0, 0, 0.45)" },
-            "&:focus-visible": { outline: "2px solid", outlineColor: "primary.main", outlineOffset: 2 },
+            ...(resume
+              ? {}
+              : {
+                  cursor: "pointer",
+                  "&:hover .play-overlay, &:focus-visible .play-overlay": { backgroundColor: "rgba(0, 0, 0, 0.45)" },
+                  "&:focus-visible": { outline: "2px solid", outlineColor: "primary.main", outlineOffset: 2 },
+                }),
           }}
         >
           <Thumb src={DfContentInfoUtils.getThumbnailUrl(contentInfo, 1200, 675)} alt={contentInfo.title} width="100%" />
@@ -326,20 +340,46 @@ export const ContentMedia = ({ contentEntry, onPlayFromReady, onPlayerOpenChange
               transition: "background-color 150ms",
             }}
           >
-            <PlayArrowIcon sx={{ fontSize: 72, color: "common.white" }} />
-            {resume && (
-              <Typography
-                sx={{
-                  paddingX: 0.75,
-                  paddingY: 0.25,
-                  borderRadius: 0.5,
-                  backgroundColor: "rgba(0, 0, 0, 0.6)",
-                  color: "common.white",
-                  fontSize: "0.75rem",
-                }}
+            {resume ? (
+              <Stack
+                direction="row"
+                spacing={1.5}
+                sx={{ flexWrap: "wrap", justifyContent: "center", rowGap: 1, paddingX: 1 }}
               >
-                Resume at {secondsToHHMMSS(Math.floor(resume.seconds))}
-              </Typography>
+                <Button
+                  variant="contained"
+                  startIcon={<PlayArrowIcon />}
+                  onClick={() => playFrom(undefined)}
+                  sx={{ textTransform: "none" }}
+                >
+                  Resume from {secondsToHHMMSS(Math.floor(resume.seconds))}
+                </Button>
+                {/*
+                  Zero rather than undefined, and the difference matters: the
+                  player treats an explicit moment as a deliberate request and
+                  seeks to it, while undefined means "wherever I left off".
+                */}
+                <Button
+                  variant="contained"
+                  startIcon={<ReplayIcon />}
+                  onClick={() => playFrom(0)}
+                  /*
+                    Its own scrim rather than a plain text button: this sits
+                    on a video thumbnail, and a thumbnail is under no
+                    obligation to be dark where the button lands.
+                  */
+                  sx={{
+                    textTransform: "none",
+                    color: "common.white",
+                    backgroundColor: "rgba(0, 0, 0, 0.65)",
+                    "&:hover": { backgroundColor: "rgba(0, 0, 0, 0.82)" },
+                  }}
+                >
+                  Play from the start
+                </Button>
+              </Stack>
+            ) : (
+              <PlayArrowIcon sx={{ fontSize: 72, color: "common.white" }} />
             )}
           </Box>
           {/*
@@ -362,33 +402,6 @@ export const ContentMedia = ({ contentEntry, onPlayFromReady, onPlayerOpenChange
             </Box>
           )}
         </Box>
-        {resume && (
-          <Box sx={{ display: "flex", alignItems: "center", gap: 1, marginTop: 1, flexWrap: "wrap" }}>
-            <Button
-              size="small"
-              variant="contained"
-              startIcon={<PlayArrowIcon />}
-              onClick={() => playFrom(undefined)}
-              sx={{ textTransform: "none" }}
-            >
-              Resume from {secondsToHHMMSS(Math.floor(resume.seconds))}
-            </Button>
-            {/*
-              Zero rather than undefined, and the difference matters: the
-              player treats an explicit moment as a deliberate request and
-              seeks to it, while undefined means "wherever I left off".
-            */}
-            <Button
-              size="small"
-              variant="text"
-              startIcon={<ReplayIcon />}
-              onClick={() => playFrom(0)}
-              sx={{ textTransform: "none" }}
-            >
-              Play from the start
-            </Button>
-          </Box>
-        )}
         {switcher}
         {playerDialog}
       {watchElsewhereDialog}

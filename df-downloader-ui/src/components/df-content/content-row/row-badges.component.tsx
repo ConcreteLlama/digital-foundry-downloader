@@ -2,7 +2,7 @@ import ArticleIcon from "@mui/icons-material/Article";
 import AutoAwesomeIcon from "@mui/icons-material/AutoAwesome";
 import CheckCircleIcon from "@mui/icons-material/CheckCircle";
 import { Box, CircularProgress, Stack, Tooltip } from "@mui/material";
-import { AiEvidenceSourceLabels, DfContentBadgeState, STARTED_FRACTION } from "df-downloader-common";
+import { AiEvidenceSourceLabels, DfContentBadgeState, STARTED_FRACTION, WATCHED_FRACTION } from "df-downloader-common";
 import { useSelector } from "react-redux";
 import { selectContentBadges } from "../../../store/df-content/df-content.selector.ts";
 
@@ -46,9 +46,17 @@ export const RowBadges = ({ contentKey }: { contentKey: string }) => {
     then carries the answer to the question actually being asked - "how far in
     was I" - without a tooltip. Below a couple of percent it is treated as not
     started: opening something and closing it should not mark the row.
+
+    It can sit beside the watched tick rather than being suppressed by it.
+    The flag is sticky by design - only "mark as unwatched" clears it - so a
+    video you have finished and started again keeps the tick while its
+    position climbs from the beginning, and hiding the ring there left the
+    row claiming you were done with something you were forty per cent
+    through. Past the watched threshold the ring is dropped again: that is
+    someone who left the credits running, not a rewatch.
   */
   const fraction = badges.watchedFraction ?? 0;
-  const inProgress = !badges.watched && fraction > STARTED_FRACTION;
+  const inProgress = fraction > STARTED_FRACTION && (!badges.watched || fraction < WATCHED_FRACTION);
 
   const strong = isStrongEvidence(badges.analysisEvidence);
   const readLabels = badges.analysisEvidence.map((source) => AiEvidenceSourceLabels[source]);
@@ -81,7 +89,7 @@ export const RowBadges = ({ contentKey }: { contentKey: string }) => {
         </Tooltip>
       )}
       {inProgress && (
-        <Tooltip title={`${Math.round(fraction * 100)}% watched`}>
+        <Tooltip title={badges.watched ? `Watched - ${Math.round(fraction * 100)}% back through it` : `${Math.round(fraction * 100)}% watched`}>
           <Box sx={{ display: "flex", alignItems: "center" }}>
             <CircularProgress
               variant="determinate"
