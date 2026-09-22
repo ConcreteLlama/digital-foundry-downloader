@@ -1,10 +1,12 @@
-import { Alert, Box, Button, CircularProgress, Divider, IconButton, Menu, MenuItem, Popover, Slider, Stack, Tooltip, Typography } from "@mui/material";
+import { Alert, Box, Button, CircularProgress, Divider, IconButton, Menu, MenuItem, Popover, Slider, Stack, SxProps, Theme, Tooltip, Typography } from "@mui/material";
 import ClosedCaptionIcon from "@mui/icons-material/ClosedCaption";
 import FourKIcon from "@mui/icons-material/FourK";
 import HdIcon from "@mui/icons-material/Hd";
 import SdIcon from "@mui/icons-material/Sd";
 import InfoOutlinedIcon from "@mui/icons-material/InfoOutlined";
 import FullscreenIcon from "@mui/icons-material/Fullscreen";
+import Forward10Icon from "@mui/icons-material/Forward10";
+import Replay10Icon from "@mui/icons-material/Replay10";
 import PauseIcon from "@mui/icons-material/Pause";
 import PlayArrowIcon from "@mui/icons-material/PlayArrow";
 import VolumeOffIcon from "@mui/icons-material/VolumeOff";
@@ -31,6 +33,22 @@ import { monoFontFamily } from "../../../themes/build-theme";
 
 /** How much playback has to move before the service is told again. */
 const REPORT_INTERVAL_SECONDS = 10;
+
+/** The step the skip buttons and the arrow keys take. */
+const SKIP_SECONDS = 10;
+
+/**
+ * The buttons in the middle of the frame sit over whatever the video happens
+ * to be showing, so they carry their own scrim rather than trusting the frame
+ * behind them to be dark enough for white icons.
+ */
+const overlayButtonSx: SxProps<Theme> = {
+  pointerEvents: "auto",
+  color: "common.white",
+  backgroundColor: "rgba(0, 0, 0, 0.45)",
+  "&:hover": { backgroundColor: "rgba(0, 0, 0, 0.65)" },
+  "&.Mui-disabled": { color: "rgba(255, 255, 255, 0.35)" },
+};
 
 
 export type DownloadPlayerProps = {
@@ -651,16 +669,21 @@ export const DownloadPlayer = ({
       idleTimerRef.current = undefined;
     }
     /*
-     * Fullscreen only, and never while paused. In a page the bar is part of
-     * the layout with nothing behind it to uncover; paused is someone reading
-     * the screen or deciding what to do next, which every other player treats
-     * as a reason to leave the controls alone.
+     * Never while paused, and never with a menu open: paused is someone
+     * reading the screen or deciding what to do next, which every other
+     * player treats as a reason to leave the controls alone.
+     *
+     * Not gated on fullscreen, because two things follow this clock now. The
+     * bar only fades in fullscreen, where it sits over the picture - in a
+     * page it is part of the layout with nothing behind it to uncover - but
+     * the skip/pause group in the middle of the frame is over the picture
+     * either way, and has to get out of the way either way.
      */
-    if (!isFullscreen || !playing || menuOpen) {
+    if (!playing || menuOpen) {
       return;
     }
     idleTimerRef.current = setTimeout(() => setControlsIdle(true), CONTROLS_IDLE_MS);
-  }, [isFullscreen, playing, menuOpen]);
+  }, [playing, menuOpen]);
   /*
    * Run on the conditions changing, not only on movement - so pausing brings
    * the bar straight back, closing a menu restarts the countdown, and playing
@@ -984,6 +1007,39 @@ export const DownloadPlayer = ({
   useEffect(() => {
     onSeekReady?.(seekTo);
   }, [onSeekReady, seekTo]);
+
+  /*
+   * A fixed step along the timeline, for the skip buttons and the arrow keys.
+   *
+   * Shared between the two so they cannot drift apart, and clamped at both
+   * ends because a transcoded stream is generated from the position asked
+   * for - a request past the end has nothing to produce.
+   *
+   * Skipping while paused leaves you paused on a file that plays directly.
+   * seekTo starts playing because its other callers - chapters, analysis
+   * jumps - are asking to go and watch something, which a nudge along the
+   * timeline is not. The transcoded path cannot honour that, since the seek
+   * there is a reload and the element comes back with nothing buffered.
+   */
+  const skipBy = useCallback(
+    (deltaSeconds: number) => {
+      const video = videoRef.current;
+      if (!video) {
+        return;
+      }
+      const total = transcodingRef.current ? probedDurationRef.current : video.duration;
+      let target = Math.max(0, positionSeconds + deltaSeconds);
+      if (total && Number.isFinite(total) && total > 1) {
+        target = Math.min(target, total - 1);
+      }
+      const wasPaused = video.paused;
+      seekTo(target * 1000);
+      if (wasPaused && !transcodingRef.current) {
+        video.pause();
+      }
+    },
+    [positionSeconds, seekTo]
+  );
 
   /*
    * Resuming, for either kind of stream.
@@ -1669,11 +1725,11 @@ export const DownloadPlayer = ({
         return;
       case "ArrowLeft":
         handled();
-        seekTo(Math.max(0, positionSeconds - 10) * 1000);
+        skipBy(-SKIP_SECONDS);
         return;
       case "ArrowRight":
         handled();
-        seekTo((positionSeconds + 10) * 1000);
+        skipBy(SKIP_SECONDS);
         return;
       case "m":
         handled();
@@ -1712,7 +1768,7 @@ export const DownloadPlayer = ({
        */
       onPointerMove={wakeControls}
       onPointerDown={wakeControls}
-      onMouseLeave={() => isFullscreen && playing && !menuOpen && setControlsIdle(true)}
+      onMouseLeave={() => playing && !menuOpen && setControlsIdle(true)}
       sx={{
         width: "100%",
         minWidth: 0,
@@ -1763,29 +1819,74 @@ export const DownloadPlayer = ({
         }}
       >
         {videoSurface}
-        {(!playing || buffering) && (
-          <Box
-            sx={{
-              position: "absolute",
-              inset: 0,
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              pointerEvents: "none",
+        {/*
+          The group in the middle of the frame: back ten, play/pause, forward
+          ten. Faded rather than unmounted so it can animate, and so a press
+          landing as it goes still lands on a button.
+
+          It is over the picture, and the picture is what a click pauses, so
+          the container takes no pointer events and the buttons take their
+          own - otherwise the skip would be followed by a pause.
+        */}
+        <Stack
+          direction="row"
+          spacing={{ xs: 2, sm: 4 }}
+          sx={{
+            position: "absolute",
+            inset: 0,
+            alignItems: "center",
+            justifyContent: "center",
+            zIndex: 1,
+            pointerEvents: "none",
+            opacity: buffering || !controlsIdle ? 1 : 0,
+            transition: "opacity 200ms ease",
+          }}
+        >
+          <IconButton
+            aria-label={`Back ${SKIP_SECONDS} seconds`}
+            onClick={(event) => {
+              event.stopPropagation();
+              wakeControls();
+              skipBy(-SKIP_SECONDS);
             }}
+            sx={overlayButtonSx}
+            disabled={buffering}
           >
-            {/*
-              Buffering wins over the play arrow. Both mean "not playing", but
-              only one of them is waiting for you - showing a play button while
-              the video is fetching invites a press that does nothing.
-            */}
-            {buffering ? (
-              <CircularProgress size={48} sx={{ color: "common.white", opacity: 0.85 }} />
-            ) : (
-              <PlayArrowIcon sx={{ fontSize: 64, color: "common.white", opacity: 0.85 }} />
-            )}
-          </Box>
-        )}
+            <Replay10Icon sx={{ fontSize: 36 }} />
+          </IconButton>
+          {/*
+            Buffering wins over the play arrow. Both mean "not playing", but
+            only one of them is waiting for you - showing a play button while
+            the video is fetching invites a press that does nothing.
+          */}
+          {buffering ? (
+            <CircularProgress size={48} sx={{ color: "common.white", opacity: 0.85 }} />
+          ) : (
+            <IconButton
+              aria-label={playing ? "Pause" : "Play"}
+              onClick={(event) => {
+                event.stopPropagation();
+                wakeControls();
+                togglePlay();
+              }}
+              sx={overlayButtonSx}
+            >
+              {playing ? <PauseIcon sx={{ fontSize: 48 }} /> : <PlayArrowIcon sx={{ fontSize: 48 }} />}
+            </IconButton>
+          )}
+          <IconButton
+            aria-label={`Forward ${SKIP_SECONDS} seconds`}
+            onClick={(event) => {
+              event.stopPropagation();
+              wakeControls();
+              skipBy(SKIP_SECONDS);
+            }}
+            sx={overlayButtonSx}
+            disabled={buffering}
+          >
+            <Forward10Icon sx={{ fontSize: 36 }} />
+          </IconButton>
+        </Stack>
       </Box>
       {playerControls}
     </Stack>

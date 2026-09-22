@@ -2,10 +2,18 @@
 
 
 
-## 2.8.2 (2026-09-21)
+## 2.8.2 (2026-09-22)
 
-A fix for the video player in fullscreen: the controls now fade out while you watch, instead of sitting over the picture the whole time.
+Player improvements: buttons to skip back and forward ten seconds, and a clear choice between resuming a part-watched video and starting it again. The controls also get out of the way now instead of sitting over the picture the whole time.
 
+### Features
+- Skip back and forward ten seconds
+  - Buttons either side of the play control, on the picture itself. The arrow keys have always done this and still do - the buttons are for when your hands are not on a keyboard
+  - They fade out while the video is playing and come back when you move the mouse, in a page as well as in fullscreen, so they are not sitting over the video you are trying to watch
+  - Skipping while paused leaves you paused, except on a video being converted as you watch, where any jump has to restart the stream and so starts it playing
+- Resume or start again, as a choice rather than a guess
+  - A part-watched video now says where it would pick up and shows how far through you are, and gives you a button for each - resume, or play from the start. Pressing the picture resumes, as it always did
+  - The time offered is the one you actually stopped at, including when you have only just closed the player
 ### Bug Fixes
 - The player's controls get out of the way in fullscreen
   - They fade out after a few seconds and come back on any movement, keypress or touch - the mouse pointer goes with them. Nothing changes in a page, where the controls sit under the picture rather than over it
