@@ -2,7 +2,7 @@
 
 
 
-## 2.8.2 (2026-09-22)
+## 2.8.2 (2026-09-24)
 
 Player improvements: buttons to skip back and forward ten seconds, and a clear choice between resuming a part-watched video and starting it again. The controls also get out of the way now instead of sitting over the picture the whole time.
 
